@@ -1,0 +1,76 @@
+.loginPage {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--color-base) 0%, var(--color-base-dark) 50%, #F0EACC 100%);
+    padding: var(--space-4);
+}
+
+.loginCard {
+    width: 100%;
+    max-width: 420px;
+    background: var(--color-white);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+    animation: slideUp 0.4s ease;
+}
+
+.logoSection {
+    text-align: center;
+    padding: var(--space-10) var(--space-8) var(--space-6);
+    background: var(--color-secondary);
+    color: var(--color-white);
+}
+
+.logo {
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-4);
+    filter: brightness(0) invert(1);
+}
+
+.title {
+    font-family: var(--font-heading);
+    font-size: var(--text-2xl);
+    color: var(--color-white);
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-1);
+}
+
+.subtitle {
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+}
+
+.form {
+    padding: var(--space-8);
+}
+
+.errorAlert {
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-danger-bg);
+    color: #991B1B;
+    border-radius: var(--radius-md);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-4);
+    border-left: 3px solid var(--color-danger);
+}
+
+.loginBtn {
+    width: 100%;
+    margin-top: var(--space-2);
+    font-size: var(--text-base);
+    min-height: 52px;
+}
+
+.footer {
+    margin-top: var(--space-8);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    color: var(--color-gray-400);
+}

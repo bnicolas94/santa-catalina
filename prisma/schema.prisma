@@ -1,0 +1,296 @@
+// Prisma Schema — Santa Catalina Sistema de Gestión
+// Base de datos: SQLite (desarrollo) → PostgreSQL (producción)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS (simulados como strings en SQLite)
+// ============================================
+
+// Roles: ADMIN, COORD_PROD, OPERARIO, LOGISTICA, ADMIN_OPS
+// Unidades: kg, u, lt, g
+// Zonas cliente: A, B, C, D
+// Segmentos: A, B, C
+// Estado lote: en_camara, distribuido, merma, vencido
+// Tipo movimiento: entrada, salida
+// Estado pedido: pendiente, confirmado, en_ruta, entregado, rechazado
+
+// ============================================
+// MODELOS
+// ============================================
+
+model Empleado {
+  id          String   @id @default(uuid())
+  nombre      String
+  email       String   @unique
+  password    String   // Hash bcrypt
+  rol         String   // ADMIN, COORD_PROD, OPERARIO, LOGISTICA, ADMIN_OPS
+  telefono    String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  lotesCoordinados Lote[]  @relation("CoordinadorLote")
+  rutasChofer      Ruta[]  @relation("ChoferRuta")
+
+  @@map("empleados")
+}
+
+model Proveedor {
+  id         String   @id @default(uuid())
+  nombre     String
+  contacto   String?
+  telefono   String?
+  email      String?
+  direccion  String?
+  activo     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relaciones
+  insumos           Insumo[]
+  movimientosStock  MovimientoStock[]
+
+  @@map("proveedores")
+}
+
+model Producto {
+  id                  String   @id @default(uuid())
+  nombre              String
+  codigoInterno       String   @unique @map("codigo_interno")
+  costoUnitario       Float    @default(0) @map("costo_unitario")
+  planchasPorPaquete  Int      @default(6) @map("planchas_por_paquete")
+  paquetesPorRonda    Int      @default(14) @map("paquetes_por_ronda")
+  vidaUtilHoras       Int      @default(48) @map("vida_util_horas")
+  tempConservacionMax Float    @default(4) @map("temp_conservacion_max")
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relaciones
+  presentaciones Presentacion[]
+  fichasTecnicas FichaTecnica[]
+  lotes          Lote[]
+
+  @@map("productos")
+}
+
+model Presentacion {
+  id           String   @id @default(uuid())
+  cantidad     Int                          // 48, 24, 8, etc.
+  precioVenta  Float    @map("precio_venta")
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  productoId     String   @map("id_producto")
+  producto       Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  detallePedidos DetallePedido[]
+
+  @@unique([productoId, cantidad])
+  @@map("presentaciones")
+}
+
+model FamiliaInsumo {
+  id        String   @id @default(uuid())
+  nombre    String   @unique
+  color     String?  // Color hex para UI (ej: #2ECC71)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  insumos Insumo[]
+
+  @@map("familias_insumo")
+}
+
+model Insumo {
+  id              String   @id @default(uuid())
+  nombre          String
+  unidadMedida    String   @map("unidad_medida") // kg, u, lt, g
+  stockActual     Float    @default(0) @map("stock_actual")
+  stockMinimo     Float    @default(0) @map("stock_minimo")
+  precioUnitario  Float    @default(0) @map("precio_unitario")
+  diasReposicion  Int      @default(1) @map("dias_reposicion")
+  activo          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relaciones
+  proveedorId     String?  @map("id_proveedor")
+  proveedor       Proveedor? @relation(fields: [proveedorId], references: [id])
+  familiaId       String?  @map("id_familia")
+  familia         FamiliaInsumo? @relation(fields: [familiaId], references: [id])
+  fichasTecnicas  FichaTecnica[]
+  movimientos     MovimientoStock[]
+
+  @@map("insumos")
+}
+
+model FichaTecnica {
+  id               String  @id @default(uuid())
+  cantidadPorUnidad Float  @map("cantidad_por_unidad")
+  unidadMedida     String  @map("unidad_medida")
+
+  // Relaciones
+  productoId String  @map("id_producto")
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  insumoId   String  @map("id_insumo")
+  insumo     Insumo   @relation(fields: [insumoId], references: [id])
+
+  @@unique([productoId, insumoId])
+  @@map("fichas_tecnicas")
+}
+
+model Lote {
+  id                  String   @id // Formato: SC-YYYYMMDD-COD-NN
+  fechaProduccion     DateTime @map("fecha_produccion")
+  horaInicio          DateTime? @map("hora_inicio")
+  horaFin             DateTime? @map("hora_fin")
+  unidadesProducidas  Int      @default(0) @map("unidades_producidas")
+  unidadesRechazadas  Int      @default(0) @map("unidades_rechazadas")
+  motivoRechazo       String?  @map("motivo_rechazo")
+  empleadosRonda      Int      @default(1) @map("empleados_ronda")
+  estado              String   @default("en_camara") // en_camara, distribuido, merma, vencido
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relaciones
+  productoId      String   @map("id_producto")
+  producto        Producto @relation(fields: [productoId], references: [id])
+  coordinadorId   String?  @map("id_empleado_coord")
+  coordinador     Empleado? @relation("CoordinadorLote", fields: [coordinadorId], references: [id])
+  movimientosStock MovimientoStock[]
+  detallePedidos  DetallePedido[]
+
+  @@map("lotes")
+}
+
+model MovimientoStock {
+  id            String   @id @default(uuid())
+  tipo          String   // entrada, salida
+  cantidad      Float
+  fecha         DateTime @default(now())
+  observaciones String?
+  createdAt     DateTime @default(now())
+
+  // Relaciones
+  insumoId    String  @map("id_insumo")
+  insumo      Insumo  @relation(fields: [insumoId], references: [id])
+  loteOrigenId String? @map("id_lote_origen")
+  loteOrigen  Lote?   @relation(fields: [loteOrigenId], references: [id])
+  proveedorId String? @map("id_proveedor")
+  proveedor   Proveedor? @relation(fields: [proveedorId], references: [id])
+
+  @@map("movimientos_stock")
+}
+
+model Cliente {
+  id                String   @id @default(uuid())
+  nombreComercial   String   @map("nombre_comercial")
+  contactoNombre    String?  @map("contacto_nombre")
+  contactoTelefono  String?  @map("contacto_telefono")
+  direccion         String?
+  latitud           Float?
+  longitud          Float?
+  zona              String?  // A, B, C, D
+  segmento          String?  // A, B, C
+  frecuenciaSemanal Int      @default(0) @map("frecuencia_semanal")
+  pedidoPromedioU   Int      @default(0) @map("pedido_promedio_u")
+  precioDiferencial Boolean  @default(false) @map("precio_diferencial")
+  activo            Boolean  @default(true)
+  fechaAlta         DateTime @default(now()) @map("fecha_alta")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relaciones
+  pedidos   Pedido[]
+  entregas  Entrega[]
+
+  @@map("clientes")
+}
+
+model Pedido {
+  id             String   @id @default(uuid())
+  fechaPedido    DateTime @map("fecha_pedido")
+  fechaEntrega   DateTime @map("fecha_entrega")
+  estado         String   @default("pendiente") // pendiente, confirmado, en_ruta, entregado, rechazado
+  totalUnidades  Int      @default(0) @map("total_unidades")
+  totalImporte   Float    @default(0) @map("total_importe")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relaciones
+  clienteId String  @map("id_cliente")
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+  detalles  DetallePedido[]
+  entregas  Entrega[]
+
+  @@map("pedidos")
+}
+
+model DetallePedido {
+  id              String @id @default(uuid())
+  cantidad        Int    // Cantidad de presentaciones pedidas
+  precioUnitario  Float  @map("precio_unitario")
+
+  // Relaciones
+  pedidoId       String       @map("id_pedido")
+  pedido         Pedido       @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  presentacionId String       @map("id_presentacion")
+  presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
+  loteId         String?      @map("id_lote")
+  lote           Lote?        @relation(fields: [loteId], references: [id])
+
+  @@map("detalle_pedidos")
+}
+
+model Ruta {
+  id              String    @id @default(uuid())
+  fecha           DateTime
+  zona            String?
+  horaSalida      DateTime? @map("hora_salida")
+  horaRegreso     DateTime? @map("hora_regreso")
+  kmRecorridos    Float     @default(0) @map("km_recorridos")
+  costoCombustible Float    @default(0) @map("costo_combustible")
+  tempSalida      Float?    @map("temp_salida")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relaciones
+  choferId  String   @map("id_empleado_chofer")
+  chofer    Empleado @relation("ChoferRuta", fields: [choferId], references: [id])
+  entregas  Entrega[]
+
+  @@map("rutas")
+}
+
+model Entrega {
+  id                  String   @id @default(uuid())
+  horaEntrega         DateTime? @map("hora_entrega")
+  dentroVentana       Boolean  @default(false) @map("dentro_ventana")
+  tempEntrega         Float?   @map("temp_entrega")
+  unidadesRechazadas  Int      @default(0) @map("unidades_rechazadas")
+  motivoRechazo       String?  @map("motivo_rechazo")
+  observaciones       String?
+  createdAt           DateTime @default(now())
+
+  // Relaciones
+  rutaId    String  @map("id_ruta")
+  ruta      Ruta    @relation(fields: [rutaId], references: [id])
+  pedidoId  String  @map("id_pedido")
+  pedido    Pedido  @relation(fields: [pedidoId], references: [id])
+  clienteId String  @map("id_cliente")
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+
+  @@map("entregas")
+}
