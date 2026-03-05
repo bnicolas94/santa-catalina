@@ -51,7 +51,7 @@ export default function EmpleadoDetailPage() {
                         <div style={{
                             width: 64, height: 64, borderRadius: '50%',
                             backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)',
-                            display: 'flex', items: 'center', justifyContent: 'center',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: 'var(--text-3xl)', fontWeight: 'bold'
                         }}>
                             {empleado.nombre.charAt(0)}{empleado.apellido?.charAt(0) || ''}
