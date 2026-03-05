@@ -45,6 +45,6 @@ export async function DELETE(
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error('Error deleting producto:', error)
-        return NextResponse.json({ error: 'Error al eliminar producto. Puede tener lotes o pedidos asociados.' }, { status: 500 })
+        return NextResponse.json({ error: 'No se puede eliminar el producto. Verifica que no tenga lotes o pedidos asociados.' }, { status: 400 })
     }
 }

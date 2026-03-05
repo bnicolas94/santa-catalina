@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId } = body
+        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto } = body
 
         if (!insumoId || !tipo || !cantidad) {
             return NextResponse.json({ error: 'Insumo, tipo y cantidad son requeridos' }, { status: 400 })
@@ -39,30 +39,67 @@ export async function POST(request: Request) {
         }
 
         const cant = parseFloat(cantidad)
+        const costoTotalFloat = costoTotal ? parseFloat(costoTotal) : null
+        const estado = tipo === 'entrada' ? (estadoPago || 'pagado') : null
 
-        // Crear movimiento
-        const movimiento = await prisma.movimientoStock.create({
-            data: {
-                insumoId,
-                tipo,
-                cantidad: cant,
-                observaciones: observaciones || null,
-                proveedorId: proveedorId || null,
-            },
-            include: {
-                insumo: { select: { id: true, nombre: true, unidadMedida: true } },
-                proveedor: { select: { id: true, nombre: true } },
-            },
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Si es entrada y está pagado, creamos el gasto
+            let gastoId = null
+            if (tipo === 'entrada' && costoTotalFloat && estado === 'pagado') {
+                // Buscar o crear categoria "Proveedores"
+                let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
+                if (!cat) {
+                    cat = await tx.categoriaGasto.create({ data: { nombre: 'Proveedores', color: '#3498DB' } })
+                }
+
+                const gasto = await tx.gastoOperativo.create({
+                    data: {
+                        fecha: new Date(),
+                        monto: costoTotalFloat,
+                        descripcion: `Compra de Insumos - ${observaciones || 'Directa'}`,
+                        categoriaId: cat.id
+                    }
+                })
+                gastoId = gasto.id
+            }
+
+            // 2. Crear MovimientoStock
+            const movimiento = await tx.movimientoStock.create({
+                data: {
+                    insumoId,
+                    tipo,
+                    cantidad: cant,
+                    observaciones: observaciones || null,
+                    proveedorId: proveedorId || null,
+                    costoTotal: costoTotalFloat,
+                    estadoPago: estado,
+                    gastoId
+                },
+                include: {
+                    insumo: { select: { id: true, nombre: true, unidadMedida: true } },
+                    proveedor: { select: { id: true, nombre: true } },
+                },
+            })
+
+            // 3. Actualizar stock del insumo y precio unitario si corresponde
+            const delta = tipo === 'entrada' ? cant : -cant
+            const dataInsumo: { stockActual: { increment: number }; precioUnitario?: number } = { stockActual: { increment: delta } }
+
+            if (tipo === 'entrada' && costoTotalFloat && actualizarCosto) {
+                if (costoTotalFloat > 0 && cant > 0) {
+                    dataInsumo.precioUnitario = costoTotalFloat / cant
+                }
+            }
+
+            await tx.insumo.update({
+                where: { id: insumoId },
+                data: dataInsumo,
+            })
+
+            return movimiento
         })
 
-        // Actualizar stock del insumo
-        const delta = tipo === 'entrada' ? cant : -cant
-        await prisma.insumo.update({
-            where: { id: insumoId },
-            data: { stockActual: { increment: delta } },
-        })
-
-        return NextResponse.json(movimiento, { status: 201 })
+        return NextResponse.json(result, { status: 201 })
     } catch (error) {
         console.error('Error creating movimiento:', error)
         return NextResponse.json({ error: 'Error al registrar movimiento' }, { status: 500 })

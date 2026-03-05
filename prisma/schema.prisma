@@ -29,17 +29,41 @@ datasource db {
 model Empleado {
   id          String   @id @default(uuid())
   nombre      String
+  apellido    String?
+  dni         String?  @unique
   email       String   @unique
-  password    String   // Hash bcrypt
+  password    String?  // Hash bcrypt (opcional para operarios que solo usan reloj)
   rol         String   // ADMIN, COORD_PROD, OPERARIO, LOGISTICA, ADMIN_OPS
   telefono    String?
   activo      Boolean  @default(true)
+  fechaIngreso DateTime? @map("fecha_ingreso")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // --- Campos Salariales y Administrativos ---
+  sueldoBaseMensual   Float    @default(0) @map("sueldo_base_mensual")
+  valorHoraNormal     Float?   @map("valor_hora_normal")
+  cicloPago           String   @default("SEMANAL") @map("ciclo_pago") // SEMANAL, QUINCENAL, MENSUAL
+  porcentajeHoraExtra Float    @default(50) @map("porcentaje_hora_extra")
+  porcentajeFeriado   Float    @default(100) @map("porcentaje_feriado")
+  horasTrabajoDiarias Float    @default(8) @map("horas_trabajo_diarias")
+  diasTrabajoSemana   String   @default("Lunes a Viernes") @map("dias_trabajo_semana")
+  horarioEntrada      String?  @map("horario_entrada") // ej: "08:00"
+  horarioSalida       String?  @map("horario_salida")  // ej: "17:00"
+  
+  // --- Reloj Biométrico ---
+  codigoBiometrico    String?  @unique @map("codigo_biometrico")
+
+  ubicacionId String?  @map("id_ubicacion")
+  ubicacion   Ubicacion? @relation(fields: [ubicacionId], references: [id])
 
   // Relaciones
   lotesCoordinados Lote[]  @relation("CoordinadorLote")
   rutasChofer      Ruta[]  @relation("ChoferRuta")
+  rendiciones      RendicionChofer[] @relation("RendicionesChofer")
+  fichadas         FichadaEmpleado[]
+  prestamos        PrestamoEmpleado[]
+  liquidaciones    LiquidacionSueldo[]
 
   @@map("empleados")
 }
@@ -79,6 +103,8 @@ model Producto {
   presentaciones Presentacion[]
   fichasTecnicas FichaTecnica[]
   lotes          Lote[]
+  stockUbicaciones    StockProducto[]
+  movimientosProducto MovimientoProducto[]
 
   @@map("productos")
 }
@@ -87,6 +113,7 @@ model Presentacion {
   id           String   @id @default(uuid())
   cantidad     Int                          // 48, 24, 8, etc.
   precioVenta  Float    @map("precio_venta")
+  stockMinimo  Int      @default(0) @map("stock_minimo")
   activo       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -95,6 +122,8 @@ model Presentacion {
   productoId     String   @map("id_producto")
   producto       Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
   detallePedidos DetallePedido[]
+  stocks         StockProducto[]
+  movimientos    MovimientoProducto[]
 
   @@unique([productoId, cantidad])
   @@map("presentaciones")
@@ -165,14 +194,71 @@ model Lote {
   updatedAt           DateTime @updatedAt
 
   // Relaciones
+  ubicacionId     String   @map("id_ubicacion")
+  ubicacion       Ubicacion @relation(fields: [ubicacionId], references: [id])
   productoId      String   @map("id_producto")
   producto        Producto @relation(fields: [productoId], references: [id])
   coordinadorId   String?  @map("id_empleado_coord")
   coordinador     Empleado? @relation("CoordinadorLote", fields: [coordinadorId], references: [id])
   movimientosStock MovimientoStock[]
+  movimientosProducto MovimientoProducto[]
   detallePedidos  DetallePedido[]
 
   @@map("lotes")
+}
+
+model Ubicacion {
+  id        String   @id @default(uuid())
+  nombre    String   @unique
+  tipo      String   // "FABRICA" | "LOCAL"
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  empleados           Empleado[]
+  lotes              Lote[]
+  stocks             StockProducto[]
+  movimientosProducto MovimientoProducto[]
+
+  @@map("ubicaciones")
+}
+
+model StockProducto {
+  id          String   @id @default(uuid())
+  cantidad    Int      @default(0) // paquetes disponibles
+  updatedAt   DateTime @updatedAt
+
+  ubicacionId String   @map("id_ubicacion")
+  ubicacion   Ubicacion @relation(fields: [ubicacionId], references: [id])
+  productoId  String   @map("id_producto")
+  producto    Producto @relation(fields: [productoId], references: [id])
+  presentacionId String @map("id_presentacion")
+  presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
+
+  @@unique([productoId, presentacionId, ubicacionId])
+  @@map("stock_productos")
+}
+
+model MovimientoProducto {
+  id            String   @id @default(uuid())
+  tipo          String   // "produccion", "reparto", "traslado", "venta_local", "merma", "ajuste"
+  cantidad      Int      // siempre positivo
+  signo         String   // "entrada" o "salida" (si suma o resta del stock de esa ubicacion)
+  fecha         DateTime @default(now())
+  observaciones String?
+  createdAt     DateTime @default(now())
+
+  ubicacionId   String   @map("id_ubicacion")
+  ubicacion     Ubicacion @relation(fields: [ubicacionId], references: [id])
+  productoId    String   @map("id_producto")
+  producto      Producto @relation(fields: [productoId], references: [id])
+  presentacionId String  @map("id_presentacion")
+  presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
+  loteId        String?  @map("id_lote")
+  lote          Lote?    @relation(fields: [loteId], references: [id])
+
+  @@map("movimientos_producto")
 }
 
 model MovimientoStock {
@@ -181,15 +267,19 @@ model MovimientoStock {
   cantidad      Float
   fecha         DateTime @default(now())
   observaciones String?
+  costoTotal    Float?   @map("costo_total")
+  estadoPago    String?  @default("pagado") // "pagado", "pendiente"
   createdAt     DateTime @default(now())
 
   // Relaciones
-  insumoId    String  @map("id_insumo")
-  insumo      Insumo  @relation(fields: [insumoId], references: [id])
-  loteOrigenId String? @map("id_lote_origen")
-  loteOrigen  Lote?   @relation(fields: [loteOrigenId], references: [id])
-  proveedorId String? @map("id_proveedor")
-  proveedor   Proveedor? @relation(fields: [proveedorId], references: [id])
+  insumoId      String   @map("id_insumo")
+  insumo        Insumo   @relation(fields: [insumoId], references: [id])
+  loteOrigenId  String?  @map("id_lote_origen")
+  loteOrigen    Lote?    @relation(fields: [loteOrigenId], references: [id])
+  proveedorId   String?  @map("id_proveedor")
+  proveedor     Proveedor? @relation(fields: [proveedorId], references: [id])
+  gastoId       String?  @map("id_gasto") @unique
+  gasto         GastoOperativo? @relation(fields: [gastoId], references: [id])
 
   @@map("movimientos_stock")
 }
@@ -224,24 +314,29 @@ model Pedido {
   fechaPedido    DateTime @map("fecha_pedido")
   fechaEntrega   DateTime @map("fecha_entrega")
   estado         String   @default("pendiente") // pendiente, confirmado, en_ruta, entregado, rechazado
+  medioPago      String?  @default("efectivo") @map("medio_pago") // efectivo, transferencia
+  esRetiro       Boolean  @default(false) @map("es_retiro") // Indica si el cliente retira por el local
   totalUnidades  Int      @default(0) @map("total_unidades")
   totalImporte   Float    @default(0) @map("total_importe")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   // Relaciones
-  clienteId String  @map("id_cliente")
-  cliente   Cliente @relation(fields: [clienteId], references: [id])
-  detalles  DetallePedido[]
-  entregas  Entrega[]
+  clienteId        String  @map("id_cliente")
+  cliente          Cliente @relation(fields: [clienteId], references: [id])
+  detalles         DetallePedido[]
+  entregas         Entrega[]
+  movimientosCaja  MovimientoCaja[]
 
   @@map("pedidos")
 }
 
+
 model DetallePedido {
-  id              String @id @default(uuid())
-  cantidad        Int    // Cantidad de presentaciones pedidas
-  precioUnitario  Float  @map("precio_unitario")
+  id              String  @id @default(uuid())
+  cantidad        Int     // Cantidad de presentaciones pedidas
+  precioUnitario  Float   @map("precio_unitario")
+  observaciones   String? // Notas especificas del detalle, ej: 'sin aceituna'
 
   // Relaciones
   pedidoId       String       @map("id_pedido")
@@ -258,6 +353,7 @@ model Ruta {
   id              String    @id @default(uuid())
   fecha           DateTime
   zona            String?
+  turno           String?   // MANANA, SIESTA, TARDE
   horaSalida      DateTime? @map("hora_salida")
   horaRegreso     DateTime? @map("hora_regreso")
   kmRecorridos    Float     @default(0) @map("km_recorridos")
@@ -293,4 +389,170 @@ model Entrega {
   cliente   Cliente @relation(fields: [clienteId], references: [id])
 
   @@map("entregas")
+}
+
+model CategoriaGasto {
+  id          String   @id @default(uuid())
+  nombre      String   @unique
+  descripcion String?
+  color       String?
+  gastos      GastoOperativo[]
+
+  @@map("categorias_gasto")
+}
+
+model GastoOperativo {
+  id          String   @id @default(uuid())
+  fecha       DateTime
+  monto       Float
+  descripcion String
+  recurrente  Boolean  @default(false)
+
+  // Relaciones
+  categoriaId String   @map("id_categoria")
+  categoria   CategoriaGasto @relation(fields: [categoriaId], references: [id])
+  movimientoStock MovimientoStock?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("gastos_operativos")
+}
+
+model MovimientoCaja {
+  id          String   @id @default(uuid())
+  fecha       DateTime @default(now())
+  tipo        String   // ingreso, egreso
+  concepto    String   // cobro_pedido, rendicion_chofer, pago_proveedor, caja_chica, otro
+  monto       Float
+  medioPago   String   @default("efectivo") @map("medio_pago") // efectivo, transferencia
+  cajaOrigen  String?  @map("caja_origen") // caja_madre, caja_chica, local
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  // Relaciones opcionales
+  pedidoId     String?  @map("id_pedido")
+  pedido       Pedido?  @relation(fields: [pedidoId], references: [id])
+  gastoId      String?  @map("id_gasto")
+  rendicionId  String?  @map("id_rendicion")
+  rendicion    RendicionChofer? @relation(fields: [rendicionId], references: [id])
+
+  @@map("movimientos_caja")
+}
+
+model RendicionChofer {
+  id              String   @id @default(uuid())
+  fecha           DateTime @default(now())
+  montoEsperado   Float    @default(0) @map("monto_esperado")
+  montoEntregado  Float?   @map("monto_entregado")
+  diferencia      Float?
+  estado          String   @default("pendiente") // pendiente, controlado
+  observaciones   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relaciones
+  choferId         String   @map("id_chofer")
+  chofer           Empleado @relation("RendicionesChofer", fields: [choferId], references: [id])
+  movimientosCaja  MovimientoCaja[]
+
+  @@map("rendiciones_chofer")
+}
+
+model SaldoCaja {
+  id        String   @id @default(uuid())
+  tipo      String   @unique // caja_madre, caja_chica
+  saldo     Float    @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("saldos_caja")
+}
+
+model ConceptoCaja {
+  id     String  @id @default(uuid())
+  clave  String  @unique // slug interno
+  nombre String  // nombre visible con emoji
+  activo Boolean @default(true)
+
+  @@map("conceptos_caja")
+}
+
+// ============================================
+// MÓDULO DE EMPLEADOS (RRHH)
+// ============================================
+
+model FichadaEmpleado {
+  id          String   @id @default(uuid())
+  fechaHora   DateTime @map("fecha_hora")
+  tipo        String   // "entrada", "salida"
+  origen      String   @default("reloj") // "reloj", "manual", "importado"
+  createdAt   DateTime @default(now())
+  
+  // Relacion
+  empleadoId  String   @map("id_empleado")
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("fichadas_empleados")
+}
+
+model PrestamoEmpleado {
+  id               String   @id @default(uuid())
+  fechaSolicitud   DateTime @default(now()) @map("fecha_solicitud")
+  montoTotal       Float    @map("monto_total")
+  cantidadCuotas   Int      @map("cantidad_cuotas")
+  estado           String   @default("activo") // "activo", "pagado", "cancelado"
+  observaciones    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relaciones
+  empleadoId       String   @map("id_empleado")
+  empleado         Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  cuotas           CuotaPrestamo[]
+
+  @@map("prestamos_empleados")
+}
+
+model CuotaPrestamo {
+  id               String   @id @default(uuid())
+  numeroCuota      Int      @map("numero_cuota")
+  monto            Float
+  estado           String   @default("pendiente") // "pendiente", "pagada"
+  mesAnio          String   @map("mes_anio") // ej: "10-2023" (mes/año al que corresponde)
+  fechaPago        DateTime? @map("fecha_pago")
+
+  // Relaciones
+  prestamoId       String   @map("id_prestamo")
+  prestamo         PrestamoEmpleado @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  liquidacionId    String?  @map("id_liquidacion")
+  liquidacion      LiquidacionSueldo? @relation(fields: [liquidacionId], references: [id])
+
+  @@map("cuotas_prestamos")
+}
+
+model LiquidacionSueldo {
+  id                    String   @id @default(uuid())
+  periodo               String   // "Semana 1", "01-15 Oct", "Octubre 2023"
+  fechaGeneracion       DateTime @default(now()) @map("fecha_generacion")
+  
+  // Conceptos
+  sueldoProporcional    Float    @default(0) @map("sueldo_proporcional") // Base para el periodo
+  horasNormales         Float    @default(0) @map("horas_normales")
+  montoHorasNormales    Float    @default(0) @map("monto_horas_normales")
+  horasExtras           Float    @default(0) @map("horas_extras")
+  montoHorasExtras      Float    @default(0) @map("monto_horas_extras")
+  horasFeriado          Float    @default(0) @map("horas_feriado")
+  montoHorasFeriado     Float    @default(0) @map("monto_horas_feriado")
+  descuentosPrestamos   Float    @default(0) @map("descuentos_prestamos")
+  
+  // Total
+  totalNeto             Float    @default(0) @map("total_neto")
+  estado                String   @default("generado") // "generado", "pagado"
+
+  // Relaciones
+  empleadoId            String   @map("id_empleado")
+  empleado              Empleado @relation(fields: [empleadoId], references: [id])
+  cuotasDescontadas     CuotaPrestamo[]
+
+  @@map("liquidaciones_sueldos")
 }

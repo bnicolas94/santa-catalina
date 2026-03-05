@@ -13,8 +13,9 @@ export async function PUT(
         const presentacion = await prisma.presentacion.update({
             where: { id },
             data: {
-                ...(body.cantidad !== undefined && { cantidad: parseInt(body.cantidad) }),
-                ...(body.precioVenta !== undefined && { precioVenta: parseFloat(body.precioVenta) }),
+                ...(body.cantidad !== undefined && { cantidad: parseInt(String(body.cantidad)) }),
+                ...(body.precioVenta !== undefined && { precioVenta: parseFloat(String(body.precioVenta)) }),
+                ...(body.stockMinimo !== undefined && { stockMinimo: parseInt(String(body.stockMinimo)) }),
                 ...(body.activo !== undefined && { activo: body.activo }),
             },
         })
@@ -37,6 +38,6 @@ export async function DELETE(
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error('Error deleting presentacion:', error)
-        return NextResponse.json({ error: 'Error al eliminar presentación. Puede tener pedidos asociados.' }, { status: 500 })
+        return NextResponse.json({ error: 'No se puede eliminar la presentación: Tiene pedidos asociados.' }, { status: 400 })
     }
 }

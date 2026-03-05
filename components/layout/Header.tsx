@@ -14,7 +14,7 @@ export default function Header() {
         ADMIN_OPS: 'Administrativo',
     }
 
-    const userRol = (session?.user as any)?.rol || ''
+    const userRol = ((session?.user as { rol?: string })?.rol) || ''
 
     return (
         <header className={styles.header}>

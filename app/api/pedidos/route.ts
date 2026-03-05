@@ -30,7 +30,7 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { clienteId, fechaEntrega, detalles } = body
+        const { clienteId, fechaEntrega, detalles, medioPago } = body
 
         if (!clienteId || !fechaEntrega || !detalles?.length) {
             return NextResponse.json({ error: 'Cliente, fecha de entrega y al menos un producto son requeridos' }, { status: 400 })
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
                 clienteId,
                 fechaPedido: new Date(),
                 fechaEntrega: new Date(fechaEntrega),
+                medioPago: medioPago || 'efectivo',
                 totalUnidades,
                 totalImporte,
                 detalles: { create: detallesCreate },

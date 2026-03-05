@@ -6,7 +6,15 @@ import Image from 'next/image'
 import { useState } from 'react'
 import styles from './Sidebar.module.css'
 
-const menuItems = [
+interface MenuItem {
+    label: string;
+    href: string;
+    icon: string;
+    roles: string[];
+    disabled?: boolean;
+}
+
+const menuItems: MenuItem[] = [
     {
         label: 'Dashboard',
         href: '/',
@@ -60,21 +68,24 @@ const menuItems = [
         href: '/logistica',
         icon: '🚚',
         roles: ['ADMIN', 'LOGISTICA'],
-        disabled: true, // Fase 2
     },
     {
         label: 'Costos',
         href: '/costos',
         icon: '💰',
         roles: ['ADMIN'],
-        disabled: true, // Fase 3
+    },
+    {
+        label: 'Caja',
+        href: '/caja',
+        icon: '🏦',
+        roles: ['ADMIN'],
     },
     {
         label: 'Reportes',
         href: '/reportes',
         icon: '📈',
         roles: ['ADMIN'],
-        disabled: true, // Fase 2
     },
     {
         label: 'Empleados',

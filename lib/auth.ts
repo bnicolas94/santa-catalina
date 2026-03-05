@@ -24,6 +24,10 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Credenciales inválidas')
                 }
 
+                if (!empleado.password) {
+                    throw new Error('Esta cuenta no tiene acceso al sistema web')
+                }
+
                 const isPasswordValid = await bcrypt.compare(
                     credentials.password,
                     empleado.password
@@ -46,14 +50,14 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id
-                token.rol = (user as any).rol
+                token.rol = (user as { rol?: string }).rol
             }
             return token
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).id = token.id
-                    ; (session.user as any).rol = token.rol
+                (session.user as { id?: string; rol?: unknown }).id = token.id as string
+                (session.user as { id?: string; rol?: unknown }).rol = token.rol
             }
             return session
         },

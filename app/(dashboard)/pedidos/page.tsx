@@ -13,7 +13,7 @@ interface DetallePedido {
 }
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
-    totalUnidades: number; totalImporte: number
+    medioPago: string | null; totalUnidades: number; totalImporte: number
     cliente: Cliente; detalles: DetallePedido[]
 }
 interface Producto {
@@ -41,9 +41,12 @@ export default function PedidosPage() {
     const [showModal, setShowModal] = useState(false)
     const [filterEstado, setFilterEstado] = useState('')
     const [detalles, setDetalles] = useState<{ presentacionId: string; cantidad: string }[]>([{ presentacionId: '', cantidad: '1' }])
-    const [form, setForm] = useState({ clienteId: '', fechaEntrega: '' })
+    const [form, setForm] = useState({ clienteId: '', fechaEntrega: '', medioPago: 'efectivo' })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const [editingPedido, setEditingPedido] = useState<Pedido | null>(null)
+    const [editForm, setEditForm] = useState({ fechaEntrega: '', medioPago: 'efectivo', estado: 'pendiente' })
+    const [showEditModal, setShowEditModal] = useState(false)
 
     useEffect(() => { fetchData() }, [])
 
@@ -84,7 +87,7 @@ export default function PedidosPage() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Pedido creado')
             setShowModal(false)
-            setForm({ clienteId: '', fechaEntrega: '' })
+            setForm({ clienteId: '', fechaEntrega: '', medioPago: 'efectivo' })
             setDetalles([{ presentacionId: '', cantidad: '1' }])
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
@@ -102,6 +105,45 @@ export default function PedidosPage() {
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al actualizar estado') }
+    }
+
+    function startEditPedido(ped: Pedido) {
+        setEditingPedido(ped)
+        setEditForm({
+            fechaEntrega: new Date(ped.fechaEntrega).toISOString().split('T')[0],
+            medioPago: ped.medioPago || 'efectivo',
+            estado: ped.estado,
+        })
+        setShowEditModal(true)
+    }
+
+    async function handleEditPedido(e: React.FormEvent) {
+        e.preventDefault()
+        if (!editingPedido) return
+        try {
+            const res = await fetch(`/api/pedidos/${editingPedido.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editForm),
+            })
+            if (!res.ok) throw new Error()
+            setSuccess('Pedido actualizado')
+            setShowEditModal(false)
+            setEditingPedido(null)
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch { setError('Error al editar pedido') }
+    }
+
+    async function handleDeletePedido(id: string) {
+        if (!confirm('¿Eliminar este pedido? Se borrarán todos sus detalles.')) return
+        try {
+            const res = await fetch(`/api/pedidos/${id}`, { method: 'DELETE' })
+            if (!res.ok) throw new Error()
+            setSuccess('Pedido eliminado')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch { setError('Error al eliminar pedido') }
     }
 
     function addDetalle() { setDetalles([...detalles, { presentacionId: '', cantidad: '1' }]) }
@@ -163,13 +205,14 @@ export default function PedidosPage() {
                             <th>Detalle</th>
                             <th>Sándwiches</th>
                             <th>Importe</th>
+                            <th>Pago</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filtered.length === 0 ? (
-                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem' }}>No hay pedidos</td></tr>
+                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>No hay pedidos</td></tr>
                         ) : filtered.map((ped) => {
                             const est = getEstadoInfo(ped.estado)
                             const nextStates: Record<string, string[]> = {
@@ -194,6 +237,16 @@ export default function PedidosPage() {
                                     <td style={{ fontWeight: 600 }}>{ped.totalUnidades.toLocaleString()}</td>
                                     <td>${ped.totalImporte.toLocaleString('es-AR')}</td>
                                     <td>
+                                        <span className="badge" style={{
+                                            backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB15' : '#27AE6015',
+                                            color: ped.medioPago === 'transferencia' ? '#2980B9' : '#27AE60',
+                                            border: `1px solid ${ped.medioPago === 'transferencia' ? '#3498DB40' : '#27AE6040'}`,
+                                            fontSize: '0.7rem',
+                                        }}>
+                                            {ped.medioPago === 'transferencia' ? '🏦 Transf.' : '💵 Efectivo'}
+                                        </span>
+                                    </td>
+                                    <td>
                                         <span className="badge" style={{ backgroundColor: `${est.color}20`, color: est.color, border: `1px solid ${est.color}40` }}>
                                             {est.emoji} {est.label}
                                         </span>
@@ -209,6 +262,10 @@ export default function PedidosPage() {
                                                     </button>
                                                 )
                                             })}
+                                            <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '11px' }}
+                                                onClick={() => startEditPedido(ped)}>✏️</button>
+                                            <button className="btn btn-ghost btn-sm" title="Eliminar" style={{ fontSize: '11px', color: 'var(--color-danger)' }}
+                                                onClick={() => handleDeletePedido(ped.id)}>🗑️</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -239,6 +296,23 @@ export default function PedidosPage() {
                                     <div className="form-group">
                                         <label className="form-label">Fecha entrega</label>
                                         <input type="date" className="form-input" value={form.fechaEntrega} onChange={(e) => setForm({ ...form, fechaEntrega: e.target.value })} required />
+                                    </div>
+                                </div>
+
+                                {/* Medio de Pago */}
+                                <div className="form-group" style={{ marginTop: 'var(--space-3)' }}>
+                                    <label className="form-label">Medio de Pago</label>
+                                    <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                        <button type="button" className="btn btn-sm"
+                                            onClick={() => setForm({ ...form, medioPago: 'efectivo' })}
+                                            style={{ flex: 1, backgroundColor: form.medioPago === 'efectivo' ? '#27AE60' : '#27AE6018', color: form.medioPago === 'efectivo' ? '#fff' : '#27AE60', border: '2px solid #27AE60', fontWeight: 600 }}>
+                                            💵 Efectivo
+                                        </button>
+                                        <button type="button" className="btn btn-sm"
+                                            onClick={() => setForm({ ...form, medioPago: 'transferencia' })}
+                                            style={{ flex: 1, backgroundColor: form.medioPago === 'transferencia' ? '#2980B9' : '#2980B918', color: form.medioPago === 'transferencia' ? '#fff' : '#2980B9', border: '2px solid #2980B9', fontWeight: 600 }}>
+                                            🏦 Transferencia
+                                        </button>
                                     </div>
                                 </div>
 
@@ -286,6 +360,62 @@ export default function PedidosPage() {
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancelar</button>
                                 <button type="submit" className="btn btn-primary">Crear pedido</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Editar Pedido */}
+            {showEditModal && editingPedido && (
+                <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 450 }}>
+                        <div className="modal-header">
+                            <h2>✏️ Editar Pedido</h2>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowEditModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleEditPedido}>
+                            <div className="modal-body">
+                                <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)' }}>Cliente</div>
+                                    <div style={{ fontWeight: 700 }}>{editingPedido.cliente.nombreComercial}</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginTop: 4 }}>
+                                        {editingPedido.totalUnidades} sándwiches — ${editingPedido.totalImporte.toLocaleString('es-AR')}
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Fecha Entrega</label>
+                                    <input type="date" className="form-input" value={editForm.fechaEntrega}
+                                        onChange={(e) => setEditForm({ ...editForm, fechaEntrega: e.target.value })} required />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Medio de Pago</label>
+                                    <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                        <button type="button" className="btn btn-sm"
+                                            onClick={() => setEditForm({ ...editForm, medioPago: 'efectivo' })}
+                                            style={{ flex: 1, backgroundColor: editForm.medioPago === 'efectivo' ? '#27AE60' : '#27AE6018', color: editForm.medioPago === 'efectivo' ? '#fff' : '#27AE60', border: '2px solid #27AE60', fontWeight: 600 }}>
+                                            💵 Efectivo
+                                        </button>
+                                        <button type="button" className="btn btn-sm"
+                                            onClick={() => setEditForm({ ...editForm, medioPago: 'transferencia' })}
+                                            style={{ flex: 1, backgroundColor: editForm.medioPago === 'transferencia' ? '#2980B9' : '#2980B918', color: editForm.medioPago === 'transferencia' ? '#fff' : '#2980B9', border: '2px solid #2980B9', fontWeight: 600 }}>
+                                            🏦 Transferencia
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Estado</label>
+                                    <select className="form-select" value={editForm.estado}
+                                        onChange={(e) => setEditForm({ ...editForm, estado: e.target.value })}>
+                                        {ESTADOS_PEDIDO.map(est => (
+                                            <option key={est.value} value={est.value}>{est.emoji} {est.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowEditModal(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary">Guardar</button>
                             </div>
                         </form>
                     </div>

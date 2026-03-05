@@ -40,10 +40,15 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params
+
+        // Delete related dependencies manually to mimic Cascade and avoid 500 error
+        await prisma.fichaTecnica.deleteMany({ where: { insumoId: id } })
+        await prisma.movimientoStock.deleteMany({ where: { insumoId: id } })
+
         await prisma.insumo.delete({ where: { id } })
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error('Error deleting insumo:', error)
-        return NextResponse.json({ error: 'Error al eliminar insumo' }, { status: 500 })
+        return NextResponse.json({ error: 'Error al eliminar: Verifica que el insumo no tenga otras dependencias' }, { status: 400 })
     }
 }

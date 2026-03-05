@@ -7,9 +7,14 @@ export async function GET() {
         const lotes = await prisma.lote.findMany({
             orderBy: { fechaProduccion: 'desc' },
             include: {
-                producto: true,
+                producto: { include: { presentaciones: true } },
                 coordinador: { select: { id: true, nombre: true } },
+                ubicacion: { select: { id: true, nombre: true } },
                 _count: { select: { detallePedidos: true } },
+                movimientosProducto: {
+                    where: { tipo: 'produccion', signo: 'entrada' },
+                    select: { presentacionId: true, cantidad: true }
+                }
             },
         })
         return NextResponse.json(lotes)
@@ -23,10 +28,10 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { productoId, fechaProduccion, unidadesProducidas, empleadosRonda, coordinadorId } = body
+        const { productoId, fechaProduccion, unidadesProducidas, empleadosRonda, coordinadorId, estado, ubicacionId } = body
 
-        if (!productoId || !fechaProduccion || !unidadesProducidas) {
-            return NextResponse.json({ error: 'Producto, fecha y unidades son requeridos' }, { status: 400 })
+        if (!productoId || !fechaProduccion || !unidadesProducidas || !ubicacionId) {
+            return NextResponse.json({ error: 'Producto, fecha, unidades y ubicación son requeridos' }, { status: 400 })
         }
 
         // Generar ID de lote: SC-YYYYMMDD-COD-NN
@@ -53,20 +58,101 @@ export async function POST(request: Request) {
 
         const loteId = `SC-${yyyymmdd}-${producto.codigoInterno}-${String(countHoy + 1).padStart(2, '0')}`
 
-        const lote = await prisma.lote.create({
-            data: {
-                id: loteId,
-                fechaProduccion: fecha,
-                horaInicio: new Date(),
-                unidadesProducidas: parseInt(unidadesProducidas),
-                empleadosRonda: parseInt(empleadosRonda) || 1,
-                productoId,
-                coordinadorId: coordinadorId || null,
-            },
-            include: {
-                producto: true,
-                coordinador: { select: { id: true, nombre: true } },
-            },
+        // Receta para descontar stock (usar transacción)
+        const fichasT = await prisma.fichaTecnica.findMany({
+            where: { productoId }
+        })
+        // La ficha técnica normalmente detalla la cantidad por PLANCHA o por SÁNDWICH?
+        // En la UI de producto dice "Cantidad por sándwich" que es lo mismo que por paquete (x1).
+        // En realidad la UI de Producto[id] dice: `addInsumoToFicha`
+        // Y en el form dice "Cantidad por sándwich/unidad", es decir por 1 paquete de x1.
+        // Pero en la base de datos `unidadesProducidas` son "paquetes".
+        // Entonces Insumo Descontado = (CantidadPorUnidad en ficha) * unidadesProducidas * planchasPorPaquete ?? 
+        // Asumamos que `cantidadPorUnidad` es literalmente por PAQUETE para simplificar, o miremos UI. 
+        // La UI decía `const cdi = producto.fichasTecnicas.reduce((acc, f) => acc + f.cantidadPorUnidad * f.insumo.precioUnitario, 0)`.
+        // Como ese es el CDI, significa que `cantidadPorUnidad` es la cantidad DE INSUMO por 1 PAQUETE de producto. 
+
+        const qtyPaquetes = parseInt(unidadesProducidas)
+
+        const lote = await prisma.$transaction(async (tx) => {
+            const nuevoLote = await tx.lote.create({
+                data: {
+                    id: loteId,
+                    fechaProduccion: fecha,
+                    horaInicio: new Date(),
+                    unidadesProducidas: qtyPaquetes,
+                    empleadosRonda: parseInt(empleadosRonda) || 1,
+                    estado: estado || 'en_camara',
+                    productoId,
+                    coordinadorId: coordinadorId || null,
+                    ubicacionId,
+                },
+                include: {
+                    producto: true,
+                    coordinador: { select: { id: true, nombre: true } },
+                },
+            })
+
+            // Descontar insumos
+            if (fichasT.length > 0) {
+                const movimientosData = fichasT.map(f => ({
+                    insumoId: f.insumoId,
+                    tipo: 'salida',
+                    cantidad: f.cantidadPorUnidad * qtyPaquetes,
+                    observaciones: `Consumo automático por Lote ${loteId}`,
+                    loteOrigenId: loteId
+                }))
+
+                await tx.movimientoStock.createMany({
+                    data: movimientosData
+                })
+
+                // Actualizar saldos de los insumos
+                for (const f of fichasT) {
+                    await tx.insumo.update({
+                        where: { id: f.insumoId },
+                        data: {
+                            stockActual: {
+                                decrement: f.cantidadPorUnidad * qtyPaquetes
+                            }
+                        }
+                    })
+                }
+            }
+
+            // Sumar producto terminado al stock de fábrica SOLO si ya está terminado
+            const estadoInicial = estado || 'en_camara'
+            if (estadoInicial !== 'en_produccion') {
+                // By default, use the largest presentacion available for this product
+                const presentacion = await tx.presentacion.findFirst({
+                    where: { productoId },
+                    orderBy: { cantidad: 'desc' }
+                })
+
+                if (presentacion) {
+                    await tx.stockProducto.upsert({
+                        where: { productoId_presentacionId_ubicacionId: { productoId, presentacionId: presentacion.id, ubicacionId } },
+                        create: { productoId, presentacionId: presentacion.id, ubicacionId, cantidad: qtyPaquetes },
+                        update: { cantidad: { increment: qtyPaquetes } },
+                    })
+
+                    // Registrar movimiento de producto terminado
+                    await tx.movimientoProducto.create({
+                        data: {
+                            productoId,
+                            presentacionId: presentacion.id,
+                            tipo: 'produccion',
+                            cantidad: qtyPaquetes,
+                            ubicacionId,
+                            signo: 'entrada',
+                            observaciones: `Producción Lote ${loteId}`,
+                            loteId,
+                        },
+                    })
+                }
+            }
+
+            return nuevoLote
         })
 
         return NextResponse.json(lote, { status: 201 })
