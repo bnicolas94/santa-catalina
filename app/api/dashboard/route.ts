@@ -40,9 +40,10 @@ export async function GET() {
                 _count: true,
             }),
             // Insumos bajo mínimo
-            prisma.$queryRawUnsafe<{ count: number }[]>(
-                `SELECT COUNT(*) as count FROM insumos WHERE activo = 1 AND stock_actual < stock_minimo AND stock_minimo > 0`
-            ),
+            prisma.insumo.findMany({
+                where: { activo: true, stockMinimo: { gt: 0 } },
+                select: { stockActual: true, stockMinimo: true }
+            }),
             // Entregas del día
             prisma.entrega.count({
                 where: { createdAt: { gte: startOfDay, lte: endOfDay } }
@@ -95,7 +96,7 @@ export async function GET() {
             lotes: l._count
         }))
 
-        const insumosAlertaCount = insumosAlerta?.[0]?.count ?? 0
+        const insumosAlertaCount = insumosAlerta.filter((i) => i.stockActual < i.stockMinimo).length;
 
         return NextResponse.json({
             pedidosHoy,
@@ -105,7 +106,7 @@ export async function GET() {
             lotesHoy: lotesHoyPorUbi.reduce((acc, l) => acc + l._count, 0),
             unidadesHoy: lotesHoyPorUbi.reduce((acc, l) => acc + (l._sum.unidadesProducidas || 0), 0),
             produccionPorUbicacion,
-            insumosAlerta: Number(insumosAlertaCount),
+            insumosAlerta: insumosAlertaCount,
             entregasHoy,
             gastosMes: gastosMes._sum.monto ?? 0,
             comprasPendientes,
