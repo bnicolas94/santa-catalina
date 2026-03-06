@@ -452,30 +452,38 @@ export default function ProduccionPage() {
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                            {Object.entries(sp.ubicaciones || {}).map(([ubiName, qty]) => {
-                                                const ubi = ubicaciones.find(x => x.nombre === ubiName)
-                                                const isFab = ubi?.tipo === 'FABRICA'
-                                                const color = isFab ? (isLowStock ? '#E74C3C' : '#2ECC71') : '#3498DB'
+                                            {Object.entries(sp.ubicaciones || {})
+                                                .sort(([nameA], [nameB]) => {
+                                                    const ubiA = ubicaciones.find(x => x.nombre === nameA)
+                                                    const ubiB = ubicaciones.find(x => x.nombre === nameB)
+                                                    if (ubiA?.tipo === 'FABRICA' && ubiB?.tipo !== 'FABRICA') return -1
+                                                    if (ubiA?.tipo !== 'FABRICA' && ubiB?.tipo === 'FABRICA') return 1
+                                                    return nameA.localeCompare(nameB)
+                                                })
+                                                .map(([ubiName, qty]) => {
+                                                    const ubi = ubicaciones.find(x => x.nombre === ubiName)
+                                                    const isFab = ubi?.tipo === 'FABRICA'
+                                                    const color = isFab ? (isLowStock ? '#E74C3C' : '#2ECC71') : '#3498DB'
 
-                                                return (
-                                                    <div key={ubiName}
-                                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', background: 'var(--white)', border: '1px solid var(--color-gray-100)', borderRadius: '4px', cursor: 'pointer' }}
-                                                        onClick={() => {
-                                                            setMovForm({ productoId: sp.productoId, presentacionId: sp.presentacionId, tipo: 'ajuste', cantidad: String(qty), observaciones: '' })
-                                                            setMovExtraForm({ ubicacionId: ubi?.id || '', destinoUbicacionId: '' })
-                                                            setShowMovModal(true)
-                                                        }}
-                                                        title={`Ajustar stock en ${ubiName}`}
-                                                    >
-                                                        <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
-                                                            {isFab ? '🏭' : '🏪'} {ubiName}
-                                                        </span>
-                                                        <span style={{ fontWeight: 700, color: color, fontSize: '14px' }}>
-                                                            {qty} <span style={{ fontSize: '10px', opacity: 0.5 }}>✏️</span>
-                                                        </span>
-                                                    </div>
-                                                )
-                                            })}
+                                                    return (
+                                                        <div key={ubiName}
+                                                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', background: 'var(--white)', border: '1px solid var(--color-gray-100)', borderRadius: '4px', cursor: 'pointer' }}
+                                                            onClick={() => {
+                                                                setMovForm({ productoId: sp.productoId, presentacionId: sp.presentacionId, tipo: 'ajuste', cantidad: String(qty), observaciones: '' })
+                                                                setMovExtraForm({ ubicacionId: ubi?.id || '', destinoUbicacionId: '' })
+                                                                setShowMovModal(true)
+                                                            }}
+                                                            title={`Ajustar stock en ${ubiName}`}
+                                                        >
+                                                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                                                                {isFab ? '🏭' : '🏪'} {ubiName}
+                                                            </span>
+                                                            <span style={{ fontWeight: 700, color: color, fontSize: '14px' }}>
+                                                                {qty} <span style={{ fontSize: '10px', opacity: 0.5 }}>✏️</span>
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                })}
                                             {Object.keys(sp.ubicaciones || {}).length === 0 && (
                                                 <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', textAlign: 'center', fontStyle: 'italic' }}>Sin stock registrado</div>
                                             )}
