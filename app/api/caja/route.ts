@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
         const body = await request.json()
         console.log('[CAJA API] Recibido POST:', body)
-        const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen } = body
+        const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen, choferId } = body
 
         if (!tipo || !concepto || monto === undefined || monto === null || monto === '') {
             return NextResponse.json({ error: 'Tipo, concepto y monto son requeridos' }, { status: 400 })
@@ -88,6 +88,33 @@ export async function POST(request: Request) {
         const numericMonto = parseFloat(monto)
         if (isNaN(numericMonto)) {
             return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
+        }
+
+        let rendicionId = null
+        // Si es rendición de chofer y viene un choferId, buscamos o creamos la rendición de hoy
+        if (concepto === 'rendicion_chofer' && choferId) {
+            const now = new Date()
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+
+            let rendicion = await prisma.rendicionChofer.findFirst({
+                where: {
+                    choferId,
+                    fecha: { gte: startOfDay, lte: endOfDay }
+                }
+            })
+
+            if (!rendicion) {
+                rendicion = await prisma.rendicionChofer.create({
+                    data: {
+                        choferId,
+                        fecha: now,
+                        montoEsperado: 0, // Se asume 0 si es carga manual inicial o se actualizará luego
+                        estado: 'pendiente'
+                    }
+                })
+            }
+            rendicionId = rendicion.id
         }
 
         const mov = await prisma.movimientoCaja.create({
@@ -100,6 +127,7 @@ export async function POST(request: Request) {
                 descripcion: descripcion || null,
                 pedidoId: pedidoId || null,
                 gastoId: gastoId || null,
+                rendicionId: rendicionId,
             },
         })
 

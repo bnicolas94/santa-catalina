@@ -6,7 +6,7 @@ interface MovCaja {
     id: string; tipo: string; concepto: string; monto: number; medioPago: string
     cajaOrigen: string | null; descripcion: string | null; fecha: string
     pedido: { id: string; totalImporte: number; cliente: { nombreComercial: string } } | null
-    rendicion: { id: string; chofer: { nombre: string } } | null
+    rendicion: { id: string; chofer: { id: string, nombre: string } } | null
 }
 
 interface Rendicion {
@@ -41,14 +41,17 @@ export default function CajaPage() {
     const [showModal, setShowModal] = useState(false)
     const [showRendicionModal, setShowRendicionModal] = useState<Rendicion | null>(null)
     const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0])
-    const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre' })
+    const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' })
     const [rendForm, setRendForm] = useState({ montoEntregado: '', observaciones: '' })
+
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [conceptos, setConceptos] = useState<Concepto[]>([])
     const [showConceptosModal, setShowConceptosModal] = useState(false)
     const [nuevoConcepto, setNuevoConcepto] = useState('')
     const [editingMov, setEditingMov] = useState<MovCaja | null>(null)
+    const [choferes, setChoferes] = useState<any[]>([])
+
 
     useEffect(() => { fetchData() }, [fechaFiltro])
 
@@ -71,7 +74,12 @@ export default function CajaPage() {
             const conceptosRes = await fetch('/api/caja/conceptos')
             const conceptosData = await conceptosRes.json()
             if (Array.isArray(conceptosData)) setConceptos(conceptosData)
+
+            const empRes = await fetch('/api/empleados')
+            const empData = await empRes.json()
+            if (Array.isArray(empData)) setChoferes(empData)
         } catch { setError('Error al cargar datos') } finally { setLoading(false) }
+
     }
 
     async function updateSaldo(tipo: string) {
@@ -104,8 +112,9 @@ export default function CajaPage() {
             }
             setSuccess('Movimiento registrado')
             setShowModal(false)
-            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre' })
+            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' })
             fetchData()
+
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
             console.error('[FRONTEND CAJA] Error en handleSubmit:', err)
@@ -127,7 +136,8 @@ export default function CajaPage() {
             setSuccess('Movimiento actualizado')
             setShowModal(false)
             setEditingMov(null)
-            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre' })
+            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' })
+
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -153,7 +163,9 @@ export default function CajaPage() {
             medioPago: m.medioPago,
             descripcion: m.descripcion || '',
             cajaOrigen: m.cajaOrigen || 'caja_madre',
+            choferId: m.rendicion ? m.rendicion.chofer.id : '',
         })
+
         setShowModal(true)
     }
 
@@ -197,7 +209,8 @@ export default function CajaPage() {
                         style={{ fontSize: '1.2rem' }}>
                         {showMontos ? '👁️' : '🙈'}
                     </button>
-                    <button className="btn btn-primary" onClick={() => { setEditingMov(null); setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre' }); setShowModal(true) }}>+ Registrar Movimiento</button>
+                    <button className="btn btn-primary" onClick={() => { setEditingMov(null); setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' }); setShowModal(true) }}>+ Registrar Movimiento</button>
+
                 </div>
             </div>
 
@@ -370,7 +383,15 @@ export default function CajaPage() {
                                         {m.tipo === 'ingreso' ? '⬆️' : '⬇️'} {m.tipo}
                                     </span>
                                 </td>
-                                <td style={{ fontWeight: 600 }}>{conceptos.find(c => c.clave === m.concepto)?.nombre || m.concepto}</td>
+                                <td style={{ fontWeight: 600 }}>
+                                    {conceptos.find(c => c.clave === m.concepto)?.nombre || m.concepto}
+                                    {m.rendicion && (
+                                        <div style={{ fontSize: '0.7rem', color: '#E67E22', fontWeight: 600 }}>
+                                            🧑‍✈️ {m.rendicion.chofer.nombre}
+                                        </div>
+                                    )}
+                                </td>
+
                                 <td style={{ fontWeight: 700, color: m.tipo === 'ingreso' ? '#27AE60' : '#E74C3C' }}>
                                     {m.tipo === 'ingreso' ? '+' : '-'}{formatCurrency(m.monto, showMontos)}
                                 </td>
@@ -448,11 +469,30 @@ export default function CajaPage() {
                                             onClick={() => setShowConceptosModal(true)}>⚙️ Gestionar</button>
                                     </div>
                                     <select className="form-select" value={form.concepto} onChange={(e) => setForm({ ...form, concepto: e.target.value })} required>
+                                        <option value="">Seleccionar concepto...</option>
                                         {conceptos.filter(c => c.activo).map(c => (
                                             <option key={c.id} value={c.clave}>{c.nombre}</option>
                                         ))}
                                     </select>
                                 </div>
+                                {form.concepto === 'rendicion_chofer' && (
+                                    <div className="form-group">
+                                        <label className="form-label">Chofer que rinde</label>
+                                        <select
+                                            className="form-select"
+                                            value={form.choferId}
+                                            onChange={(e) => setForm({ ...form, choferId: e.target.value })}
+                                            required
+                                            style={{ border: '2px solid #F39C12' }}
+                                        >
+                                            <option value="">Seleccionar chofer...</option>
+                                            {choferes.filter(e => e.activo && e.rol === 'LOGISTICA').map(c => (
+                                                <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <div className="form-group">
                                     <label className="form-label">Monto ($)</label>
                                     <input type="number" step="0.01" min="0" className="form-input" value={form.monto}
