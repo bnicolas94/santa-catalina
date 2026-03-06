@@ -1,9 +1,18 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET /api/caja — Movimientos de caja del día (o fecha especificada)
 export async function GET(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+            return NextResponse.json({ error: 'No tienes permiso para ver la caja' }, { status: 403 })
+        }
         const { searchParams } = new URL(request.url)
         const fechaParam = searchParams.get('fecha')
 
@@ -60,6 +69,14 @@ export async function GET(request: Request) {
 // POST /api/caja — Registrar movimiento manual
 export async function POST(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+            return NextResponse.json({ error: 'No tienes permiso para operar en caja' }, { status: 403 })
+        }
+
         const body = await request.json()
         console.log('[CAJA API] Recibido POST:', body)
         const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen } = body
@@ -100,6 +117,14 @@ export async function POST(request: Request) {
 // PUT /api/caja — Editar movimiento
 export async function PUT(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+            return NextResponse.json({ error: 'No tienes permiso para editar caja' }, { status: 403 })
+        }
+
         const body = await request.json()
         const { id, tipo, concepto, monto, medioPago, cajaOrigen, descripcion } = body
 
@@ -126,6 +151,14 @@ export async function PUT(request: Request) {
 // DELETE /api/caja — Eliminar movimiento
 export async function DELETE(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+            return NextResponse.json({ error: 'No tienes permiso para eliminar en caja' }, { status: 403 })
+        }
+
         const { searchParams } = new URL(request.url)
         const id = searchParams.get('id')
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })

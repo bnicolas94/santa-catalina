@@ -1,9 +1,18 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET /api/lotes
 export async function GET() {
     try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoProduccion) {
+            return NextResponse.json({ error: 'No tienes permiso para ver producción' }, { status: 403 })
+        }
         const lotes = await prisma.lote.findMany({
             orderBy: { fechaProduccion: 'desc' },
             include: {
@@ -27,6 +36,14 @@ export async function GET() {
 // POST /api/lotes
 export async function POST(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoProduccion) {
+            return NextResponse.json({ error: 'No tienes permiso para registrar producción' }, { status: 403 })
+        }
+
         const body = await request.json()
         const { productoId, fechaProduccion, unidadesProducidas, empleadosRonda, coordinadorId, estado, ubicacionId } = body
 

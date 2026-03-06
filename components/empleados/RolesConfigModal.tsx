@@ -7,6 +7,12 @@ interface Role {
     nombre: string
     descripcion: string | null
     color: string | null
+    permisoDashboard: boolean
+    permisoStock: boolean
+    permisoCaja: boolean
+    permisoPersonal: boolean
+    permisoProduccion: boolean
+    permisoCostos: boolean
 }
 
 interface RolesConfigModalProps {
@@ -116,6 +122,30 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                 onChange={e => setEditRole({ ...editRole, descripcion: e.target.value })}
                             />
                         </div>
+
+                        <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f5f5f5', borderRadius: '8px' }}>
+                            <h4 style={{ margin: '0 0 1rem 0' }}>Permisos de Acceso</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                {[
+                                    { id: 'permisoDashboard', label: '🏠 Dashboard', color: '#f39c12' },
+                                    { id: 'permisoStock', label: '📦 Stock', color: '#2ecc71' },
+                                    { id: 'permisoCaja', label: '💰 Caja', color: '#f1c40f' },
+                                    { id: 'permisoPersonal', label: '👥 Personal', color: '#e74c3c' },
+                                    { id: 'permisoProduccion', label: '🏗️ Producción', color: '#3498db' },
+                                    { id: 'permisoCostos', label: '📉 Costos', color: '#9b59b6' },
+                                ].map(p => (
+                                    <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!(editRole as any)[p.id]}
+                                            onChange={e => setEditRole({ ...editRole, [p.id]: e.target.checked })}
+                                        />
+                                        {p.label}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button type="submit" className="btn btn-primary">Guardar</button>
                             <button type="button" className="btn btn-secondary" onClick={() => setEditRole(null)}>Cancelar</button>

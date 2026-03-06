@@ -18,6 +18,7 @@ export const authOptions: NextAuthOptions = {
 
                 const empleado = await prisma.empleado.findUnique({
                     where: { email: credentials.email },
+                    include: { rolRel: true }
                 })
 
                 if (!empleado || !empleado.activo) {
@@ -42,6 +43,14 @@ export const authOptions: NextAuthOptions = {
                     name: empleado.nombre,
                     email: empleado.email,
                     rol: empleado.rol,
+                    permisos: empleado.rolRel ? {
+                        permisoDashboard: empleado.rolRel.permisoDashboard,
+                        permisoStock: empleado.rolRel.permisoStock,
+                        permisoCaja: empleado.rolRel.permisoCaja,
+                        permisoPersonal: empleado.rolRel.permisoPersonal,
+                        permisoProduccion: empleado.rolRel.permisoProduccion,
+                        permisoCostos: empleado.rolRel.permisoCostos,
+                    } : null
                 }
             },
         }),
@@ -50,14 +59,16 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id
-                token.rol = (user as { rol?: string }).rol
+                token.rol = (user as any).rol
+                token.permisos = (user as any).permisos
             }
             return token
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as { id?: string; rol?: unknown }).id = token.id as string
-                (session.user as { id?: string; rol?: unknown }).rol = token.rol
+                (session.user as any).id = token.id;
+                (session.user as any).rol = token.rol;
+                (session.user as any).permisos = token.permisos;
             }
             return session
         },

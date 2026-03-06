@@ -33,14 +33,24 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-        const { nombre, descripcion, color } = body
+        const { nombre, descripcion, color, permisoDashboard, permisoStock, permisoCaja, permisoPersonal, permisoProduccion, permisoCostos } = body
 
         if (!nombre) {
             return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
         }
 
         const nuevoRol = await prisma.rolEmpleado.create({
-            data: { nombre, descripcion, color }
+            data: {
+                nombre,
+                descripcion,
+                color,
+                permisoDashboard: !!permisoDashboard,
+                permisoStock: !!permisoStock,
+                permisoCaja: !!permisoCaja,
+                permisoPersonal: !!permisoPersonal,
+                permisoProduccion: !!permisoProduccion,
+                permisoCostos: !!permisoCostos
+            }
         })
 
         return NextResponse.json(nuevoRol)

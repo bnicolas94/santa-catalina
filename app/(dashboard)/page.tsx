@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import styles from './page.module.css'
 
 interface DashboardData {
@@ -39,26 +41,58 @@ function formatCurrency(n: number) {
 }
 
 export default function DashboardPage() {
+    const { data: session, status } = useSession()
+    const router = useRouter()
+
     const [data, setData] = useState<DashboardData | null>(null)
     const [loading, setLoading] = useState(true)
 
+    // Redirección por roles/permisos
     useEffect(() => {
-        const fetchData = () => {
-            fetch('/api/dashboard')
-                .then((r) => r.json())
-                .then((d) => setData(d))
-                .catch(() => { })
-                .finally(() => setLoading(false))
+        if (status === 'authenticated' && session?.user) {
+            const user = session.user as any
+            const rol = user.rol
+            const permisos = user.permisos || {}
+
+            if (rol !== 'ADMIN' && !permisos.permisoDashboard) {
+                if (permisos.permisoProduccion || rol === 'COORD_PROD' || rol === 'OPERARIO') {
+                    router.replace('/produccion')
+                } else if (permisos.permisoStock || rol === 'ADMIN_OPS') {
+                    router.replace('/stock')
+                } else if (permisos.permisoCaja) {
+                    router.replace('/caja')
+                } else if (permisos.permisoPersonal) {
+                    router.replace('/empleados')
+                } else if (rol === 'LOGISTICA') {
+                    router.replace('/logistica')
+                } else {
+                    router.replace('/login')
+                }
+            }
         }
+    }, [session, status, router])
 
-        fetchData()
-        const interval = setInterval(fetchData, 5000)
-        return () => clearInterval(interval)
-    }, [])
+    useEffect(() => {
+        // Solo obtener datos si el usuario tiene acceso al dashboard
+        const user = session?.user as any
+        if (status === 'authenticated' && (user?.rol === 'ADMIN' || user?.permisos?.permisoDashboard)) {
+            const fetchData = () => {
+                fetch('/api/dashboard')
+                    .then((r) => r.json())
+                    .then((d) => setData(d))
+                    .catch(() => { })
+                    .finally(() => setLoading(false))
+            }
 
-    if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando dashboard...</p></div>
+            fetchData()
+            const interval = setInterval(fetchData, 5000)
+            return () => clearInterval(interval)
+        }
+    }, [session, status])
 
-    if (!data) return <div className="empty-state"><p>Error al cargar el dashboard</p></div>
+    if (status === 'loading' || loading) return <div className="empty-state"><div className="spinner" /><p>Cargando dashboard...</p></div>
+
+    if (!data) return null
 
     const margenNeto = data.ingresosMes - data.gastosMes
 

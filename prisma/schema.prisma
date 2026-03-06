@@ -562,10 +562,19 @@ model LiquidacionSueldo {
 }
 
 model RolEmpleado {
-  id        String   @id @default(uuid())
-  nombre    String   @unique
+  id          String   @id @default(uuid())
+  nombre      String   @unique
   descripcion String?
   color       String?  // Ej: para insignias en la UI
+  
+  // Permisos dinámicos
+  permisoDashboard  Boolean @default(false)
+  permisoStock      Boolean @default(false)
+  permisoCaja       Boolean @default(false)
+  permisoPersonal   Boolean @default(false)
+  permisoProduccion Boolean @default(false)
+  permisoCostos     Boolean @default(false)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

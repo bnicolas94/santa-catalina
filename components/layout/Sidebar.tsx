@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import styles from './Sidebar.module.css'
 
 interface MenuItem {
@@ -11,6 +12,7 @@ interface MenuItem {
     href: string;
     icon: string;
     roles: string[];
+    permissionKey?: string;
     disabled?: boolean;
 }
 
@@ -20,12 +22,14 @@ const menuItems: MenuItem[] = [
         href: '/',
         icon: '🏠',
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
+        permissionKey: 'permisoDashboard',
     },
     {
         label: 'Producción',
         href: '/produccion',
-        icon: '🏭',
+        icon: '🏗️',
         roles: ['ADMIN', 'COORD_PROD', 'OPERARIO'],
+        permissionKey: 'permisoProduccion',
     },
     {
         label: 'Productos',
@@ -38,12 +42,14 @@ const menuItems: MenuItem[] = [
         href: '/insumos',
         icon: '📦',
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
+        permissionKey: 'permisoStock',
     },
     {
         label: 'Stock',
         href: '/stock',
         icon: '📊',
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
+        permissionKey: 'permisoStock',
     },
     {
         label: 'Proveedores',
@@ -72,14 +78,16 @@ const menuItems: MenuItem[] = [
     {
         label: 'Costos',
         href: '/costos',
-        icon: '💰',
+        icon: '📉',
         roles: ['ADMIN'],
+        permissionKey: 'permisoCostos',
     },
     {
         label: 'Caja',
         href: '/caja',
-        icon: '🏦',
+        icon: '💰',
         roles: ['ADMIN'],
+        permissionKey: 'permisoCaja',
     },
     {
         label: 'Reportes',
@@ -90,14 +98,32 @@ const menuItems: MenuItem[] = [
     {
         label: 'Empleados',
         href: '/empleados',
-        icon: '⚙️',
+        icon: '👥',
         roles: ['ADMIN'],
+        permissionKey: 'permisoPersonal',
     },
 ]
 
 export default function Sidebar() {
     const pathname = usePathname()
+    const { data: session } = useSession()
     const [collapsed, setCollapsed] = useState(false)
+
+    const userRol = (session?.user as any)?.rol
+    const permisos = (session?.user as any)?.permisos || {}
+
+    const filteredItems = menuItems.filter(item => {
+        // ADMIN siempre ve todo
+        if (userRol === 'ADMIN') return true
+
+        // Si tiene un permiso específico para esta sección, y está activo, lo dejamos pasar
+        if (item.permissionKey && permisos[item.permissionKey]) {
+            return true
+        }
+
+        // Fallback a los roles hardcodeados antiguos si no hay permiso dinámico seteado
+        return item.roles.includes(userRol)
+    })
 
     return (
         <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
@@ -122,7 +148,7 @@ export default function Sidebar() {
 
             {/* Navigation */}
             <nav className={styles.nav}>
-                {menuItems.map((item) => {
+                {filteredItems.map((item) => {
                     const isActive = pathname === item.href ||
                         (item.href !== '/' && pathname?.startsWith(item.href))
 
