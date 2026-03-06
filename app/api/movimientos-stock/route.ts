@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto } = body
+        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento } = body
 
         if (!insumoId || !tipo || !cantidad) {
             return NextResponse.json({ error: 'Insumo, tipo y cantidad son requeridos' }, { status: 400 })
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
                     proveedorId: proveedorId || null,
                     costoTotal: costoTotalFloat,
                     estadoPago: estado,
+                    fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
                     gastoId
                 },
                 include: {

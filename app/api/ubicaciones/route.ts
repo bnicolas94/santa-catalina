@@ -24,3 +24,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Error al crear ubicacion' }, { status: 500 })
     }
 }
+export async function DELETE(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url)
+        const id = searchParams.get('id')
+        if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+
+        await prisma.ubicacion.delete({ where: { id } })
+        return NextResponse.json({ ok: true })
+    } catch (error) {
+        return NextResponse.json({ error: 'Error al eliminar ubicacion' }, { status: 500 })
+    }
+}

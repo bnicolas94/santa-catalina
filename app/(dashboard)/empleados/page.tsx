@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Empleado } from '@prisma/client'
 import { EmpleadoDialog } from '@/components/empleados/EmpleadoDialog'
+import RolesConfigModal from '@/components/empleados/RolesConfigModal'
+import { MassLiquidationModal } from '@/components/empleados/MassLiquidationModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -10,8 +12,12 @@ export default function EmpleadosPage() {
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedEmpleado, setSelectedEmpleado] = useState<Empleado | null>(null)
+    const [showRolesModal, setShowRolesModal] = useState(false)
     const [importLoading, setImportLoading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const [reviewModalOpen, setReviewModalOpen] = useState(false)
+    const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
+    const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -79,31 +85,90 @@ export default function EmpleadosPage() {
 
         setImportLoading(true)
         try {
-            // Simulamos la lectura de un Excel
-            const mockRegistrosExtraidos = [
-                { codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(8, 0)).toISOString(), tipo: "entrada" },
-                { codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(18, 0)).toISOString(), tipo: "salida" }
-            ]
+            let registrosExtraidos: any[] = []
 
+            if (file.name.endsWith('.txt')) {
+                const text = await file.text()
+                const lines = text.split('\n')
+                const marcasPorDia: Record<string, string[]> = {}
+
+                lines.forEach(line => {
+                    const columns = line.split('\t').map(c => c.trim()).filter(c => c !== '')
+                    if (columns.length >= 4) {
+                        const rawCode = columns[2]
+                        if (rawCode && /^\d+$/.test(rawCode)) {
+                            const cleanCode = parseInt(rawCode, 10).toString()
+                            const dateCol = columns.find(c => c.includes('/') || c.match(/^\d{4}-\d{2}-\d{2}/))
+                            if (dateCol) {
+                                const dateTimeStr = dateCol.replace(/\s+/g, ' ')
+                                const [fecha] = dateTimeStr.split(' ')
+                                const key = `${cleanCode}_${fecha}`
+                                if (!marcasPorDia[key]) marcasPorDia[key] = []
+                                marcasPorDia[key].push(dateTimeStr)
+                            }
+                        }
+                    }
+                })
+
+                Object.entries(marcasPorDia).forEach(([key, marcas]) => {
+                    const [codigo] = key.split('_')
+                    marcas.sort()
+                    marcas.forEach((m, idx) => {
+                        const tipo = idx % 2 === 0 ? 'entrada' : 'salida'
+                        registrosExtraidos.push({
+                            idTemp: Math.random().toString(36).substr(2, 9),
+                            codigoBiometrico: codigo,
+                            fechaHora: new Date(m.replace(/\//g, '-')).toISOString(),
+                            tipo,
+                            originalStr: m
+                        })
+                    })
+                })
+            } else {
+                // Placeholder para Excel
+                registrosExtraidos = [
+                    { idTemp: '1', codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(8, 0)).toISOString(), tipo: "entrada" },
+                    { idTemp: '2', codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(18, 0)).toISOString(), tipo: "salida" }
+                ]
+            }
+
+            if (registrosExtraidos.length === 0) {
+                alert('No se encontraron registros válidos en el archivo.')
+                return
+            }
+
+            setPendingRegistros(registrosExtraidos)
+            setReviewModalOpen(true)
+
+        } catch (error) {
+            console.error(error)
+            alert('Falló el procesamiento del archivo.')
+        } finally {
+            setImportLoading(false)
+            if (fileInputRef.current) fileInputRef.current.value = ''
+        }
+    }
+
+    const handleConfirmImport = async (finalRegistros: any[]) => {
+        try {
+            setImportLoading(true)
             const res = await fetch('/api/fichadas/importar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ registros: mockRegistrosExtraidos })
+                body: JSON.stringify({ registros: finalRegistros })
             })
 
             const dat = await res.json()
             if (dat.success) {
-                alert(dat.mensaje)
-                // Si la tabla principal mostrara horas, aquí se llamaría a fetchEmpleados()
+                alert(`¡Éxito! ${dat.mensaje}`)
+                setReviewModalOpen(false)
             } else {
                 alert('Error en importación: ' + dat.error)
             }
         } catch (error) {
-            console.error(error)
-            alert('Falló el procesamiento del archivo')
+            alert('Error al conectar con el servidor.')
         } finally {
             setImportLoading(false)
-            if (fileInputRef.current) fileInputRef.current.value = ''
         }
     }
 
@@ -122,18 +187,26 @@ export default function EmpleadosPage() {
                         ref={fileInputRef}
                         onChange={handleFileSelected}
                         style={{ display: 'none' }}
-                        accept=".csv, .xls, .xlsx"
+                        accept=".txt, .csv, .xls, .xlsx"
                     />
+                    <button
+                        onClick={() => setMassLiquidationOpen(true)}
+                        className="btn btn-outline"
+                    >
+                        🏢 Liquidación Masiva
+                    </button>
                     <button
                         onClick={handleImportarClic}
                         disabled={importLoading}
                         className="btn btn-outline"
                     >
-                        {importLoading ? (
-                            <><span className="spinner" style={{ width: '16px', height: '16px', borderTopColor: 'var(--color-primary)', opacity: 0.8 }}></span> Importando...</>
-                        ) : (
-                            <><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> Subir Excel del Reloj</>
-                        )}
+                        {importLoading ? 'Importando...' : '📥 Importar'}
+                    </button>
+                    <button
+                        onClick={() => setShowRolesModal(true)}
+                        className="btn btn-outline"
+                    >
+                        ⚙️ Roles
                     </button>
                     <button
                         onClick={() => handleOpenDialog()}
@@ -240,6 +313,23 @@ export default function EmpleadosPage() {
                 </div>
             )}
 
+            {reviewModalOpen && (
+                <ReviewImportModal
+                    registros={pendingRegistros}
+                    empleados={empleados}
+                    onClose={() => setReviewModalOpen(false)}
+                    onConfirm={handleConfirmImport}
+                />
+            )}
+
+            {massLiquidationOpen && (
+                <MassLiquidationModal
+                    empleados={empleados}
+                    onClose={() => setMassLiquidationOpen(false)}
+                    onSuccess={() => fetchEmpleados()}
+                />
+            )}
+
             {dialogOpen && (
                 <EmpleadoDialog
                     empleado={selectedEmpleado}
@@ -247,6 +337,146 @@ export default function EmpleadosPage() {
                     onSave={handleSave}
                 />
             )}
+
+            {showRolesModal && (
+                <RolesConfigModal
+                    onClose={() => setShowRolesModal(false)}
+                    onRolesChanged={() => {
+                        // Refresh logic if needed
+                    }}
+                />
+            )}
+        </div>
+    )
+}
+
+function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { registros: any[], empleados: any[], onClose: () => void, onConfirm: (data: any[]) => void }) {
+    const [localRegistros, setLocalRegistros] = useState(registros)
+
+    const handleUpdateFichada = (idTemp: string, newTime: string) => {
+        setLocalRegistros(prev => prev.map(r => {
+            if (r.idTemp === idTemp) {
+                // Mantenemos la fecha original pero cambiamos la hora
+                const d = new Date(r.fechaHora)
+                const [h, m] = newTime.split(':')
+                d.setHours(parseInt(h), parseInt(m))
+                return { ...r, fechaHora: d.toISOString() }
+            }
+            return r
+        }))
+    }
+
+    const handleAddMissing = (baseRegistro: any, type: 'entrada' | 'salida') => {
+        const newReg = {
+            idTemp: Math.random().toString(36).substr(2, 9),
+            codigoBiometrico: baseRegistro.codigoBiometrico,
+            fechaHora: baseRegistro.fechaHora, // Por defecto misma hora para que el usuario la ajuste
+            tipo: type,
+            originalStr: 'Manual'
+        }
+        setLocalRegistros(prev => [...prev, newReg].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora)))
+    }
+
+    const handleDelete = (idTemp: string) => {
+        setLocalRegistros(prev => prev.filter(r => r.idTemp !== idTemp))
+    }
+
+    // Agrupar por empleado y día para visualizar inconsistencias
+    const agrupados: Record<string, any[]> = {}
+    localRegistros.forEach(r => {
+        const emp = empleados.find(e => e.codigoBiometrico === r.codigoBiometrico)
+        const nombre = emp ? `${emp.nombre} ${emp.apellido || ''}` : `Código ${r.codigoBiometrico} (No vinculado)`
+        const fecha = new Date(r.fechaHora).toLocaleDateString()
+        const key = `${nombre} - ${fecha}`
+        if (!agrupados[key]) agrupados[key] = []
+        agrupados[key].push(r)
+    })
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', overflow: 'hidden' }}>
+                <div className="modal-header">
+                    <div>
+                        <h2>🛡️ Asistente de Validación</h2>
+                        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Revisa y corrige las fichadas antes de guardarlas.</p>
+                    </div>
+                    <button onClick={onClose} className="btn btn-ghost btn-icon">✕</button>
+                </div>
+                <div className="modal-body" style={{ overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                        {Object.entries(agrupados).map(([key, marcas]) => {
+                            const isOdd = marcas.length % 2 !== 0
+                            const hasConflict = isOdd || marcas.some((m, idx) => {
+                                // Verificar secuencia entrada -> salida
+                                if (idx % 2 === 0 && m.tipo !== 'entrada') return true
+                                if (idx % 2 !== 0 && m.tipo !== 'salida') return true
+                                return false
+                            })
+
+                            return (
+                                <div key={key} className="card" style={{ borderLeft: hasConflict ? '4px solid var(--color-danger)' : '4px solid var(--color-success)' }}>
+                                    <div className="card-body" style={{ padding: 'var(--space-3)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
+                                            <span style={{ fontWeight: 700 }}>{key}</span>
+                                            {isOdd && <span className="badge badge-danger">Falta una marca</span>}
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                                            {marcas.sort((a, b) => a.fechaHora.localeCompare(b.fechaHora)).map((m) => (
+                                                <div key={m.idTemp} style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    backgroundColor: 'var(--color-gray-50)',
+                                                    padding: '4px 8px',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    border: '1px solid var(--color-gray-200)'
+                                                }}>
+                                                    <span className={`badge ${m.tipo === 'entrada' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '10px' }}>
+                                                        {m.tipo.toUpperCase()}
+                                                    </span>
+                                                    <input
+                                                        type="time"
+                                                        value={new Date(m.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                                                        onChange={(e) => handleUpdateFichada(m.idTemp, e.target.value)}
+                                                        style={{ border: 'none', background: 'transparent', fontWeight: 600, width: '70px' }}
+                                                    />
+                                                    <button onClick={() => handleDelete(m.idTemp)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>✕</button>
+                                                </div>
+                                            ))}
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                <button className="btn btn-ghost btn-sm" onClick={() => handleAddMissing(marcas[0], 'entrada')}>+ Ent.</button>
+                                                <button className="btn btn-ghost btn-sm" onClick={() => handleAddMissing(marcas[0], 'salida')}>+ Sal.</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+                    <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+                    <button className="btn btn-primary" onClick={() => onConfirm(localRegistros)}>Confirmar e Importar ({localRegistros.length})</button>
+                </div>
+            </div>
+            <style jsx>{`
+                .modal-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                    backdrop-filter: blur(2px);
+                }
+                .modal {
+                    background: white;
+                    border-radius: var(--radius-lg);
+                    display: flex;
+                    flex-direction: column;
+                }
+            `}</style>
         </div>
     )
 }

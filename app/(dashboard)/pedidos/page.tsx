@@ -295,7 +295,7 @@ export default function PedidosPage() {
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Fecha entrega</label>
-                                        <input type="date" className="form-input" value={form.fechaEntrega} onChange={(e) => setForm({ ...form, fechaEntrega: e.target.value })} required />
+                                        <input type="date" className="form-input" value={form.fechaEntrega} onChange={(e) => setForm({ ...form, fechaEntrega: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
                                 </div>
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Empleado } from '@prisma/client'
 
 interface EmpleadoDialogProps {
@@ -13,6 +13,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
     const isEdit = !!empleado
     const [loading, setLoading] = useState(false)
     const [tab, setTab] = useState('personal')
+    const [roles, setRoles] = useState<any[]>([])
 
     // Estado local del form
     const [formData, setFormData] = useState({
@@ -35,8 +36,59 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         codigoBiometrico: empleado?.codigoBiometrico || ''
     })
 
+    useEffect(() => {
+        const fetchRoles = async () => {
+            try {
+                const res = await fetch('/api/empleados/roles')
+                const data = await res.json()
+                setRoles(data)
+
+                // Si estamos creando y ya hay roles, y el rol actual no está en la lista (o es el default)
+                // nos aseguramos de que el valor inicial sea válido si es necesario.
+            } catch (error) {
+                console.error('Error fetching roles:', error)
+            }
+        }
+        fetchRoles()
+    }, [])
+
+    // Estado local para el input de remuneración para que no "salte" con los decimales mientras tipea
+    const initialMonto = (
+        formData.cicloPago === 'SEMANAL'
+            ? (parseFloat(formData.sueldoBaseMensual) || 0) / 4.3
+            : formData.cicloPago === 'QUINCENAL'
+                ? (parseFloat(formData.sueldoBaseMensual) || 0) / 2
+                : (parseFloat(formData.sueldoBaseMensual) || 0)
+    ).toString()
+    const [montoInput, setMontoInput] = useState(initialMonto)
+
+    const calculateHours = (entrada: string, salida: string) => {
+        if (!entrada || !salida) return null
+        const [h1, m1] = entrada.split(':').map(Number)
+        const [h2, m2] = salida.split(':').map(Number)
+
+        let diffMs = (h2 * 60 + m2) - (h1 * 60 + m1)
+        if (diffMs < 0) diffMs += 24 * 60 // Caso nocturno si aplica
+
+        return (diffMs / 60).toFixed(1)
+    }
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value })
+        const { name, value } = e.target
+        let newFormData = { ...formData, [name]: value }
+
+        // Si cambia horario, recalcular horas diarias
+        if (name === 'horarioEntrada' || name === 'horarioSalida') {
+            const horas = calculateHours(
+                name === 'horarioEntrada' ? value : formData.horarioEntrada,
+                name === 'horarioSalida' ? value : formData.horarioSalida
+            )
+            if (horas) {
+                newFormData.horasTrabajoDiarias = horas
+            }
+        }
+
+        setFormData(newFormData)
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -45,9 +97,9 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         try {
             await onSave(formData)
             onClose()
-        } catch (error) {
+        } catch (error: any) {
             console.error(error)
-            alert('Ocurrió un error al guardar')
+            alert(error.message || 'Ocurrió un error al guardar')
         } finally {
             setLoading(false)
         }
@@ -160,7 +212,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                 </div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                     <label className="form-label">Email</label>
-                                    <input required type="email" name="email" value={formData.email} onChange={handleChange} className="form-input" />
+                                    <input type="email" name="email" value={formData.email} onChange={handleChange} className="form-input" />
                                 </div>
                                 {!isEdit && (
                                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -177,16 +229,24 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                 <div className="form-group">
                                     <label className="form-label">Rol</label>
                                     <select name="rol" value={formData.rol} onChange={handleChange} className="form-select">
-                                        <option value="OPERARIO">OPERARIO</option>
-                                        <option value="LOGISTICA">LOGÍSTICA / CHOFER</option>
-                                        <option value="COORD_PROD">COORD. PRODUCCIÓN</option>
-                                        <option value="ADMIN_OPS">ADMINISTRATIVO</option>
-                                        <option value="ADMIN">ADMIN GENERAL</option>
+                                        {roles.length > 0 ? (
+                                            roles.map(r => (
+                                                <option key={r.id} value={r.nombre}>{r.nombre}</option>
+                                            ))
+                                        ) : (
+                                            <>
+                                                <option value="OPERARIO">OPERARIO</option>
+                                                <option value="LOGISTICA">LOGÍSTICA / CHOFER</option>
+                                                <option value="COORD_PROD">COORD. PRODUCCIÓN</option>
+                                                <option value="ADMIN_OPS">ADMINISTRATIVO</option>
+                                                <option value="ADMIN">ADMIN GENERAL</option>
+                                            </>
+                                        )}
                                     </select>
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Fecha de Ingreso</label>
-                                    <input type="date" name="fechaIngreso" value={formData.fechaIngreso} onChange={handleChange} className="form-input" />
+                                    <input type="date" name="fechaIngreso" value={formData.fechaIngreso} onChange={handleChange} onClick={(e) => e.currentTarget.showPicker?.()} className="form-input" />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Días de Trabajo</label>
@@ -211,14 +271,44 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                         {tab === 'salarial' && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                 <div className="form-group">
-                                    <label className="form-label">Sueldo Base Mensual ($)</label>
-                                    <input type="number" step="0.01" name="sueldoBaseMensual" value={formData.sueldoBaseMensual} onChange={handleChange} className="form-input" />
+                                    <label className="form-label">Remuneración por Periodo ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={montoInput}
+                                        onChange={(e) => {
+                                            const valStr = e.target.value
+                                            setMontoInput(valStr)
+                                            const val = parseFloat(valStr) || 0
+                                            let monthly = val
+                                            if (formData.cicloPago === 'SEMANAL') monthly = val * 4.3
+                                            if (formData.cicloPago === 'QUINCENAL') monthly = val * 2
+                                            setFormData(prev => ({ ...prev, sueldoBaseMensual: monthly.toString() }))
+                                        }}
+                                        className="form-input"
+                                        placeholder="Ingrese el monto que cobra en mano por ciclo"
+                                    />
+                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px' }}>Ej: Si cobra $50.000 x semana, ingrese 50000.</p>
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Ciclo de Cobro</label>
-                                    <select name="cicloPago" value={formData.cicloPago} onChange={handleChange} className="form-select">
-                                        <option value="SEMANAL">SEMANAL</option>
-                                        <option value="QUINCENAL">QUINCENAL</option>
+                                    <select
+                                        name="cicloPago"
+                                        value={formData.cicloPago}
+                                        onChange={(e) => {
+                                            const newCiclo = e.target.value
+                                            // Al cambiar el ciclo, recalculamos el montoInput basado en el sueldoBaseMensual actual
+                                            const monthly = parseFloat(formData.sueldoBaseMensual) || 0
+                                            let newMonto = monthly
+                                            if (newCiclo === 'SEMANAL') newMonto = monthly / 4.3
+                                            if (newCiclo === 'QUINCENAL') newMonto = monthly / 2
+                                            setMontoInput(newMonto.toFixed(2))
+                                            setFormData(prev => ({ ...prev, cicloPago: newCiclo }))
+                                        }}
+                                        className="form-select"
+                                    >
+                                        <option value="SEMANAL">SEMANAL (x4.3)</option>
+                                        <option value="QUINCENAL">QUINCENAL (x2)</option>
                                         <option value="MENSUAL">MENSUAL</option>
                                     </select>
                                 </div>
@@ -241,22 +331,16 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                     <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px' }}>Gralmente 100% adicional sobre hs base.</p>
                                 </div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1', backgroundColor: 'var(--color-success-bg)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-success)' }}>
-                                    <label className="form-label" style={{ color: 'var(--color-gray-800)', fontWeight: 600 }}>Sueldo proporcional a pagar por periodo ({formData.cicloPago}):</label>
+                                    <label className="form-label" style={{ color: 'var(--color-gray-800)', fontWeight: 600 }}>Sueldo Base Mensual Proyectado (en DB):</label>
                                     <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'bold', color: 'var(--color-success)' }}>
-                                        ${(
-                                            formData.cicloPago === 'SEMANAL'
-                                                ? (parseFloat(formData.sueldoBaseMensual) || 0) / 4.3
-                                                : formData.cicloPago === 'QUINCENAL'
-                                                    ? (parseFloat(formData.sueldoBaseMensual) || 0) / 2
-                                                    : (parseFloat(formData.sueldoBaseMensual) || 0)
-                                        ).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        ${(parseFloat(formData.sueldoBaseMensual) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </div>
                                     <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', marginTop: 'var(--space-1)' }}>
                                         {formData.cicloPago === 'SEMANAL'
-                                            ? 'Calculado como: Sueldo Base Mensual ÷ 4.3'
+                                            ? 'Calculado como: Monto semanal × 4.3 semanas'
                                             : formData.cicloPago === 'QUINCENAL'
-                                                ? 'Calculado como: Sueldo Base Mensual ÷ 2'
-                                                : 'El recibo se emitirá por el total mensual ingresado.'}
+                                                ? 'Calculado como: Monto quincenal × 2 quincenas'
+                                                : 'Se toma el monto mensual directo.'}
                                     </p>
                                 </div>
                             </div>

@@ -8,6 +8,21 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
     const [loading, setLoading] = useState(true)
     const [generando, setGenerando] = useState(false)
     const [mes, setMes] = useState(new Date().toISOString().substring(0, 7)) // YYYY-MM
+    const [fechaDesde, setFechaDesde] = useState(() => {
+        const d = new Date()
+        d.setDate(d.getDate() - 7)
+        return d.toISOString().split('T')[0]
+    })
+    const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
+    const [tipoPeriodo, setTipoPeriodo] = useState(empleadoDatos.cicloPago === 'SEMANAL' ? 'semana' : 'mes')
+
+    const [cajas, setCajas] = useState<any[]>([])
+    const [cajaSeleccionada, setCajaSeleccionada] = useState('caja_madre')
+    const [conceptos, setConceptos] = useState<any[]>([])
+    const [conceptoSeleccionado, setConceptoSeleccionado] = useState('pago_sueldo')
+
+    const [alertas, setAlertas] = useState<string[]>([])
+    const [escaneando, setEscaneando] = useState(false)
 
     const fetchLiquidaciones = async () => {
         setLoading(true)
@@ -22,35 +37,125 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
         }
     }
 
+    const scanFichadas = async () => {
+        setEscaneando(true)
+        setAlertas([])
+        try {
+            let start, end
+            if (tipoPeriodo === 'mes') {
+                start = `${mes}-01T00:00:00.000Z`
+                let d = new Date(start)
+                d.setMonth(d.getMonth() + 1)
+                end = d.toISOString()
+            } else {
+                start = new Date(`${fechaDesde}T00:00:00.000Z`).toISOString()
+                end = new Date(`${fechaHasta}T23:59:59.999Z`).toISOString()
+            }
+
+            // Llamamos a las fichadas del empleado en ese rango
+            const res = await fetch(`/api/fichadas?empleadoId=${empleadoId}&inicio=${start}&fin=${end}`)
+            const fichadas = await res.json()
+
+            if (fichadas.length === 0) {
+                setAlertas(['No hay fichadas registradas en este periodo.'])
+                return
+            }
+
+            // Agrupar por día (usando la lógica de horas.ts simplificada aquí o trayendo la utilidad)
+            const marcasPorDia: Record<string, any[]> = {}
+            fichadas.forEach((f: any) => {
+                const d = new Date(f.fechaHora)
+                const fecha = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                if (!marcasPorDia[fecha]) marcasPorDia[fecha] = []
+                marcasPorDia[fecha].push(f)
+            })
+
+            const nuevasAlertas: string[] = []
+            Object.entries(marcasPorDia).forEach(([fecha, marcas]) => {
+                if (marcas.length % 2 !== 0) {
+                    nuevasAlertas.push(`Día ${fecha.split('-').reverse().join('/')}: Tiene marcas impares (información incompleta).`)
+                }
+            })
+
+            setAlertas(nuevasAlertas)
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setEscaneando(false)
+        }
+    }
+
+    const fetchCajas = async () => {
+        try {
+            const res = await fetch('/api/caja/saldos')
+            const data = await res.json()
+            const lista = [
+                { id: 'caja_madre', nombre: 'Caja Madre', saldo: data.cajaMadre?.saldo || 0 },
+                { id: 'caja_chica', nombre: 'Caja Chica', saldo: data.cajaChica?.saldo || 0 },
+                { id: 'local', nombre: 'Caja Local', saldo: data.local?.saldo || 0 }
+            ]
+            setCajas(lista)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    const fetchConceptos = async () => {
+        try {
+            const res = await fetch('/api/caja/conceptos')
+            const data = await res.json()
+            setConceptos(data)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
     useEffect(() => {
         fetchLiquidaciones()
+        fetchCajas()
+        fetchConceptos()
     }, [empleadoId])
 
+    useEffect(() => {
+        scanFichadas()
+    }, [mes, fechaDesde, fechaHasta, tipoPeriodo, empleadoId])
+
     const handleGenerar = async () => {
-        if (!confirm(`¿Generar liquidación de ${empleadoDatos.cicloPago} para el periodo ${mes}? Se cerrarán las horas y se descontarán las cuotas de préstamos activos.`)) return
+        if (!confirm(`¿Generar liquidación de ${empleadoDatos.cicloPago} para el periodo ${mes}? Se descontará de ${cajas.find(c => c.id === cajaSeleccionada)?.nombre}.`)) return
 
         setGenerando(true)
         try {
-            // Calculamos inicio y fin de mes simples para el demo
-            const fechaInicio = `${mes}-01T00:00:00.000Z`
-            let d = new Date(fechaInicio)
-            d.setMonth(d.getMonth() + 1)
-            const fechaFin = d.toISOString()
+            let start, end, perName
+
+            if (tipoPeriodo === 'mes') {
+                start = `${mes}-01T00:00:00.000Z`
+                let d = new Date(start)
+                d.setMonth(d.getMonth() + 1)
+                end = d.toISOString()
+                perName = `${empleadoDatos.cicloPago} - ${mes}`
+            } else {
+                start = new Date(`${fechaDesde}T00:00:00.000Z`).toISOString()
+                end = new Date(`${fechaHasta}T23:59:59.999Z`).toISOString()
+                perName = `${empleadoDatos.cicloPago} del ${fechaDesde.split('-').reverse().join('/')} al ${fechaHasta.split('-').reverse().join('/')}`
+            }
 
             const res = await fetch('/api/liquidaciones', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     empleadoId,
-                    periodo: `${empleadoDatos.cicloPago} - ${mes}`,
-                    fechaInicio,
-                    fechaFin
+                    periodo: perName,
+                    fechaInicio: start,
+                    fechaFin: end,
+                    cajaId: cajaSeleccionada,
+                    concepto: conceptoSeleccionado
                 })
             })
 
             if (res.ok) {
-                alert('Liquidación generada con éxito')
+                alert('Liquidación generada con éxito y descontada de caja')
                 fetchLiquidaciones()
+                fetchCajas()
             } else {
                 const err = await res.json()
                 alert(err.error || 'Error al generar')
@@ -60,6 +165,28 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
             alert('Error en la petición')
         } finally {
             setGenerando(false)
+        }
+    }
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('¿Estás seguro de eliminar esta liquidación? Se devolverá el dinero a la caja y las cuotas de préstamos volverán a estar pendientes.')) return
+
+        try {
+            const res = await fetch(`/api/liquidaciones?id=${id}`, {
+                method: 'DELETE'
+            })
+
+            if (res.ok) {
+                alert('Liquidación eliminada correctamente')
+                fetchLiquidaciones()
+                fetchCajas()
+            } else {
+                const err = await res.json()
+                alert(err.error || 'Error al eliminar')
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Error al eliminar liquidación')
         }
     }
 
@@ -108,7 +235,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Sueldo Base (${empleadoDatos.cicloPago})</td>
+                            <td>Sueldo Proporcional (${empleadoDatos.cicloPago})</td>
                             <td>1</td>
                             <td style="text-align: right">$${liq.sueldoProporcional.toFixed(2)}</td>
                             <td></td>
@@ -166,27 +293,123 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
             <div className="card">
-                <div className="card-body" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-6)', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Cerrar Periodo</h3>
-                        <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)', maxWidth: '400px' }}>Genera la liquidación tomando el sueldo base, compensación por horas extras/feriados y deduciendo cuotas de préstamos.</p>
+                <div className="card-body">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-6)', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Cerrar Periodo</h3>
+                            <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', marginTop: 'var(--space-1)', maxWidth: '400px' }}>Genera la liquidación tomando el sueldo base, compensación por horas extras/feriados y deduciendo cuotas de préstamos.</p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label" style={{ fontSize: '10px' }}>Caja de Pago</label>
+                                <select className="form-select" value={cajaSeleccionada} onChange={e => setCajaSeleccionada(e.target.value)}>
+                                    {cajas.map(c => (
+                                        <option key={c.id} value={c.id}>{c.nombre} (${c.saldo.toLocaleString()})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label" style={{ fontSize: '10px' }}>Concepto</label>
+                                <select className="form-select" value={conceptoSeleccionado} onChange={e => setConceptoSeleccionado(e.target.value)}>
+                                    <option value="pago_sueldo">💸 Pago Sueldo</option>
+                                    {conceptos.filter(c => c.clave !== 'pago_sueldo').map(c => (
+                                        <option key={c.id} value={c.clave}>{c.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label" style={{ fontSize: '10px' }}>Tipo</label>
+                                <select className="form-select" value={tipoPeriodo} onChange={e => setTipoPeriodo(e.target.value)}>
+                                    <option value="mes">Mensual completo</option>
+                                    <option value="semana">Rango Personalizado</option>
+                                </select>
+                            </div>
+
+                            {tipoPeriodo === 'mes' ? (
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label className="form-label" style={{ fontSize: '10px' }}>Mes</label>
+                                    <input
+                                        type="month"
+                                        value={mes}
+                                        onChange={(e) => setMes(e.target.value)}
+                                        onClick={(e) => e.currentTarget.showPicker?.()}
+                                        className="form-input"
+                                        style={{ width: 'auto' }}
+                                    />
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label className="form-label" style={{ fontSize: '10px' }}>Desde</label>
+                                        <input
+                                            type="date"
+                                            value={fechaDesde}
+                                            onChange={(e) => setFechaDesde(e.target.value)}
+                                            onClick={(e) => e.currentTarget.showPicker?.()}
+                                            className="form-input"
+                                            style={{ width: '130px' }}
+                                        />
+                                    </div>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label className="form-label" style={{ fontSize: '10px' }}>Hasta</label>
+                                        <input
+                                            type="date"
+                                            value={fechaHasta}
+                                            onChange={(e) => setFechaHasta(e.target.value)}
+                                            onClick={(e) => e.currentTarget.showPicker?.()}
+                                            className="form-input"
+                                            style={{ width: '130px' }}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            <button
+                                onClick={handleGenerar}
+                                disabled={generando || escaneando || alertas.length > 0}
+                                className="btn btn-primary"
+                            >
+                                {generando ? 'Procesando...' : (escaneando ? 'Validando...' : 'Liquidar y Generar')}
+                            </button>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <input
-                            type="month"
-                            value={mes}
-                            onChange={(e) => setMes(e.target.value)}
-                            className="form-input"
-                            style={{ width: 'auto' }}
-                        />
-                        <button
-                            onClick={handleGenerar}
-                            disabled={generando}
-                            className="btn btn-primary"
-                        >
-                            {generando ? 'Procesando...' : 'Liquidar y Generar Recibo'}
-                        </button>
-                    </div>
+
+                    {/* Banner de Validación */}
+                    {(escaneando || alertas.length > 0) && (
+                        <div style={{
+                            marginTop: 'var(--space-4)',
+                            padding: 'var(--space-3) var(--space-4)',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: alertas.length > 0 ? 'var(--color-danger-bg)' : 'var(--color-info-bg)',
+                            color: alertas.length > 0 ? 'var(--color-danger)' : 'var(--color-info)',
+                            border: alertas.length > 0 ? '1px solid var(--color-danger)' : '1px solid var(--color-info)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--space-3)'
+                        }}>
+                            {escaneando ? (
+                                <>
+                                    <span className="spinner" style={{ width: '16px', height: '16px', borderTopColor: 'currentColor' }}></span>
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>Validando datos de asistencia...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span style={{ fontSize: '20px' }}>⚠️</span>
+                                    <div style={{ flex: 1 }}>
+                                        <p style={{ fontWeight: 700, fontSize: 'var(--text-sm)', marginBottom: '4px' }}>Inconsistencias detectadas:</p>
+                                        <ul style={{ margin: 0, paddingLeft: 'var(--space-4)', fontSize: 'var(--text-xs)' }}>
+                                            {alertas.map((a, i) => (
+                                                <li key={i}>{a}</li>
+                                            ))}
+                                        </ul>
+                                        <p style={{ fontSize: '10px', marginTop: '4px', opacity: 0.8 }}>Debes corregir estas marcas en la pestaña 'Fichadas' antes de liquidar.</p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -206,13 +429,23 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                                         <div className="badge badge-success" style={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                             {liq.periodo}
                                         </div>
-                                        <button
-                                            onClick={() => printRecibo(liq)}
-                                            className="btn btn-ghost btn-icon btn-sm"
-                                            title="Imprimir PDF"
-                                        >
-                                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                                        </button>
+                                        <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+                                            <button
+                                                onClick={() => printRecibo(liq)}
+                                                className="btn btn-ghost btn-icon btn-sm"
+                                                title="Imprimir PDF"
+                                            >
+                                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(liq.id)}
+                                                className="btn btn-ghost btn-icon btn-sm text-danger"
+                                                title="Eliminar Liquidación"
+                                                style={{ color: 'var(--color-danger)' }}
+                                            >
+                                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>

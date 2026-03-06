@@ -175,7 +175,7 @@ export default function PlanificacionRutasPage() {
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Fecha de Ruta</label>
-                                        <input type="date" className="form-input" value={formRuta.fecha} onChange={e => setFormRuta({ ...formRuta, fecha: e.target.value })} required />
+                                        <input type="date" className="form-input" value={formRuta.fecha} onChange={e => setFormRuta({ ...formRuta, fecha: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Zona (opcional)</label>

@@ -31,7 +31,7 @@ model Empleado {
   nombre      String
   apellido    String?
   dni         String?  @unique
-  email       String   @unique
+  email       String?  @unique
   password    String?  // Hash bcrypt (opcional para operarios que solo usan reloj)
   rol         String   // ADMIN, COORD_PROD, OPERARIO, LOGISTICA, ADMIN_OPS
   telefono    String?
@@ -56,6 +56,9 @@ model Empleado {
 
   ubicacionId String?  @map("id_ubicacion")
   ubicacion   Ubicacion? @relation(fields: [ubicacionId], references: [id])
+
+  rolId       String?  @map("id_rol")
+  rolRel      RolEmpleado? @relation(fields: [rolId], references: [id])
 
   // Relaciones
   lotesCoordinados Lote[]  @relation("CoordinadorLote")
@@ -269,6 +272,7 @@ model MovimientoStock {
   observaciones String?
   costoTotal    Float?   @map("costo_total")
   estadoPago    String?  @default("pagado") // "pagado", "pendiente"
+  fechaVencimiento DateTime? @map("fecha_vencimiento")
   createdAt     DateTime @default(now())
 
   // Relaciones
@@ -555,4 +559,17 @@ model LiquidacionSueldo {
   cuotasDescontadas     CuotaPrestamo[]
 
   @@map("liquidaciones_sueldos")
+}
+
+model RolEmpleado {
+  id        String   @id @default(uuid())
+  nombre    String   @unique
+  descripcion String?
+  color       String?  // Ej: para insignias en la UI
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  empleados Empleado[]
+
+  @@map("roles_empleado")
 }

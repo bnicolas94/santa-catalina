@@ -6,7 +6,7 @@ interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual
 interface Proveedor { id: string; nombre: string }
 interface Movimiento {
     id: string; tipo: string; cantidad: number; fecha: string; observaciones: string | null
-    costoTotal: number | null; estadoPago: string | null;
+    costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null;
     insumo: { id: string; nombre: string; unidadMedida: string }
     proveedor: { id: string; nombre: string } | null
 }
@@ -18,12 +18,13 @@ export default function StockPage() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [filterTipo, setFilterTipo] = useState('')
+    const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
     const [editingId, setEditingId] = useState<string | null>(null)
     const [form, setForm] = useState({
         insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
-        useBultos: false, bultos: '', unidadesPorBulto: '',
+        useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '',
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -62,7 +63,7 @@ export default function StockPage() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -82,6 +83,7 @@ export default function StockPage() {
             useBultos: false,
             bultos: '',
             unidadesPorBulto: '',
+            fechaVencimiento: mov.fechaVencimiento ? new Date(mov.fechaVencimiento).toLocaleDateString('en-CA') : '',
         })
         setShowModal(true)
     }
@@ -119,13 +121,32 @@ export default function StockPage() {
     }
 
     const movimientosPorFecha = filterFecha ? movimientos.filter((m) => {
-        // Asumiendo que m.fecha viene de la DB ISO-string "YYYY-MM-DDTHH:mm:ss.sssZ"
-        // Para compararla localmente extraemos sólo la porción de fecha en el fuso horario local
         const localDate = new Date(m.fecha)
-        const dStr = localDate.toLocaleDateString('en-CA')
-        return dStr === filterFecha
+        return localDate.toLocaleDateString('en-CA') === filterFecha
     }) : movimientos
-    const filtered = filterTipo ? movimientosPorFecha.filter((m) => m.tipo === filterTipo) : movimientosPorFecha
+
+    const filteredByInsumo = filterInsumo ? movimientosPorFecha.filter(m => m.insumo.id === filterInsumo) : movimientosPorFecha
+    const filtered = filterTipo ? filteredByInsumo.filter((m) => m.tipo === filterTipo) : filteredByInsumo
+
+    // Calcular stock por vencimiento para el insumo filtrado o todos
+    const stockPorVto = (() => {
+        const groups: Record<string, { fecha: string, cantidad: number, nombre: string }> = {}
+        const targetMovs = filterInsumo ? movimientos.filter(m => m.insumo.id === filterInsumo) : movimientos
+
+        targetMovs.forEach(m => {
+            if (m.fechaVencimiento) {
+                const key = m.fechaVencimiento
+                if (!groups[key]) {
+                    groups[key] = { fecha: key, cantidad: 0, nombre: m.insumo.nombre }
+                }
+                groups[key].cantidad += (m.tipo === 'entrada' ? m.cantidad : -m.cantidad)
+            }
+        })
+
+        return Object.values(groups)
+            .filter(g => g.cantidad > 0)
+            .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+    })()
 
     const statsEntradas = movimientosPorFecha.filter((m) => m.tipo === 'entrada').length
     const statsSalidas = movimientosPorFecha.filter((m) => m.tipo === 'salida').length
@@ -142,9 +163,19 @@ export default function StockPage() {
                         className="form-input"
                         value={filterFecha}
                         onChange={(e) => setFilterFecha(e.target.value)}
+                        onClick={(e) => e.currentTarget.showPicker?.()}
                         title="Filtrar por fecha"
                         style={{ height: '38px' }}
                     />
+                    <select
+                        className="form-select"
+                        value={filterInsumo}
+                        onChange={(e) => setFilterInsumo(e.target.value)}
+                        style={{ height: '38px', minWidth: '180px' }}
+                    >
+                        <option value="">Todos los Insumos</option>
+                        {insumos.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
+                    </select>
                     {filterFecha && (
                         <button className="btn btn-ghost" onClick={() => setFilterFecha('')} title="Ver todas las fechas" style={{ padding: '0 8px', fontSize: '1.2rem' }}>
                             ✕
@@ -152,7 +183,7 @@ export default function StockPage() {
                     )}
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '' })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
                 </div>
@@ -176,6 +207,32 @@ export default function StockPage() {
                 </button>
             </div>
 
+            {stockPorVto.length > 0 && (
+                <div style={{ marginBottom: 'var(--space-6)', padding: 'var(--space-4)', backgroundColor: '#F8F9F9', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7E9' }}>
+                    <h3 style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        ⏳ Stock por Vencimiento {filterInsumo && `(${insumos.find(i => i.id === filterInsumo)?.nombre})`}
+                    </h3>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        {stockPorVto.map((g, idx) => (
+                            <div key={idx} className="badge" style={{
+                                padding: '0.6rem 1rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                backgroundColor: new Date(g.fecha) < new Date() ? '#E74C3C15' : '#F1C40F10',
+                                color: new Date(g.fecha) < new Date() ? '#E74C3C' : '#D35400',
+                                border: `1px solid ${new Date(g.fecha) < new Date() ? '#E74C3C' : '#F1C40F'}`,
+                                gap: '2px'
+                            }}>
+                                <span style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>{new Date(g.fecha).toLocaleDateString('es-AR')}</span>
+                                <span style={{ fontWeight: 700, fontSize: '1rem' }}>{g.cantidad} {filterInsumo ? insumos.find(i => i.id === filterInsumo)?.unidadMedida : ''}</span>
+                                {!filterInsumo && <span style={{ fontSize: '10px' }}>{g.nombre}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="table-container">
                 <table className="table">
                     <thead>
@@ -184,6 +241,7 @@ export default function StockPage() {
                             <th>Insumo</th>
                             <th>Cantidad</th>
                             <th>Costo / Pago</th>
+                            <th>Vencimiento</th>
                             <th>Fecha</th>
                             <th>Proveedor</th>
                             <th>Observaciones</th>
@@ -227,6 +285,19 @@ export default function StockPage() {
                                     ) : (
                                         <span style={{ color: '#aaa' }}>—</span>
                                     )}
+                                </td>
+                                <td>
+                                    {mov.fechaVencimiento ? (
+                                        <span className="badge" style={{
+                                            backgroundColor: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C20' : '#F1C40F20',
+                                            color: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#D35400',
+                                            border: `1px solid ${new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#F1C40F'}`,
+                                            fontWeight: 600
+                                        }}>
+                                            {new Date(mov.fechaVencimiento).toLocaleDateString('es-AR')}
+                                            {new Date(mov.fechaVencimiento) < new Date() && ' (VENCIDO)'}
+                                        </span>
+                                    ) : <span style={{ color: '#aaa' }}>—</span>}
                                 </td>
                                 <td>{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
                                 <td>{mov.proveedor?.nombre || '—'}</td>
@@ -329,6 +400,10 @@ export default function StockPage() {
                                             )}
                                         </div>
                                     )}
+                                    <div className="form-group">
+                                        <label className="form-label">Fecha de Vencimiento</label>
+                                        <input type="date" className="form-input" value={form.fechaVencimiento} onChange={(e) => setForm({ ...form, fechaVencimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
+                                    </div>
                                 </div>
                                 <div style={{ marginBottom: 'var(--space-4)' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-xs)' }}>

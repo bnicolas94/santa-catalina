@@ -225,7 +225,7 @@ export default function CostosPage() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Fecha</label>
-                                        <input type="date" className="form-input" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} required />
+                                        <input type="date" className="form-input" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Monto ($)</label>

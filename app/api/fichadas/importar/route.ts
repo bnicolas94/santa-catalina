@@ -21,13 +21,22 @@ export async function POST(request: Request) {
             select: { id: true, codigoBiometrico: true }
         })
 
-        const mapEmpleados = new Map(empleados.map(e => [e.codigoBiometrico, e.id]))
+        // Normalizamos los códigos al crear el mapa: "00011" -> "11"
+        const mapEmpleados = new Map(empleados.map(e => {
+            const raw = e.codigoBiometrico || ""
+            const normalized = raw.replace(/^0+/, '')
+            return [normalized, e.id]
+        }))
 
         for (const reg of registros) {
-            const empleadoId = mapEmpleados.get(reg.codigoBiometrico?.toString())
+            // Normalizamos también el código que viene en el registro
+            const regRaw = reg.codigoBiometrico?.toString() || ""
+            const regNormalized = regRaw.replace(/^0+/, '')
+
+            const empleadoId = mapEmpleados.get(regNormalized)
 
             if (!empleadoId) {
-                errores.push(`No se encontró empleado con código biométrico: ${reg.codigoBiometrico}`)
+                errores.push(`No se encontró empleado con código biométrico: ${regRaw} (Normalizado: ${regNormalized})`)
                 continue
             }
 

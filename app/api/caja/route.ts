@@ -61,17 +61,23 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
+        console.log('[CAJA API] Recibido POST:', body)
         const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen } = body
 
-        if (!tipo || !concepto || !monto) {
+        if (!tipo || !concepto || monto === undefined || monto === null || monto === '') {
             return NextResponse.json({ error: 'Tipo, concepto y monto son requeridos' }, { status: 400 })
+        }
+
+        const numericMonto = parseFloat(monto)
+        if (isNaN(numericMonto)) {
+            return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
         }
 
         const mov = await prisma.movimientoCaja.create({
             data: {
                 tipo,
                 concepto,
-                monto: parseFloat(monto),
+                monto: numericMonto,
                 medioPago: medioPago || 'efectivo',
                 cajaOrigen: cajaOrigen || null,
                 descripcion: descripcion || null,
@@ -80,10 +86,14 @@ export async function POST(request: Request) {
             },
         })
 
+        console.log('[CAJA API] Movimiento creado exitosamente:', mov.id)
         return NextResponse.json(mov, { status: 201 })
     } catch (error) {
-        console.error('Error creando movimiento de caja:', error)
-        return NextResponse.json({ error: 'Error al registrar movimiento' }, { status: 500 })
+        console.error('[CAJA API] Error crítico creando movimiento:', error)
+        return NextResponse.json({
+            error: 'Error interno al registrar movimiento',
+            details: error instanceof Error ? error.message : String(error)
+        }, { status: 500 })
     }
 }
 

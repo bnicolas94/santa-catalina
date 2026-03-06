@@ -451,29 +451,34 @@ export default function ProduccionPage() {
                                                 </button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', textAlign: 'center' }}>
-                                            <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => {
-                                                const u = ubicaciones.find(x => x.tipo === 'FABRICA')
-                                                setMovForm({ productoId: sp.productoId, presentacionId: sp.presentacionId, tipo: 'ajuste', cantidad: String(sp.fabrica), observaciones: '' })
-                                                setMovExtraForm({ ubicacionId: u?.id || '', destinoUbicacionId: '' })
-                                                setShowMovModal(true)
-                                            }} title="Ajustar stock de fábrica">
-                                                <div style={{ fontSize: 'var(--text-xl)', fontFamily: 'var(--font-heading)', color: isLowStock ? '#E74C3C' : '#2ECC71', fontWeight: 700 }}>
-                                                    {sp.fabrica} <span style={{ fontSize: '12px', verticalAlign: 'middle', opacity: 0.5 }}>✏️</span>
-                                                </div>
-                                                <div style={{ fontSize: '10px', color: isLowStock ? '#E74C3C' : 'var(--color-gray-500)', textTransform: 'uppercase', fontFamily: 'var(--font-ui)', fontWeight: isLowStock ? 700 : 400 }}>🏭 Fábrica</div>
-                                            </div>
-                                            <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => {
-                                                const u = ubicaciones.find(x => x.tipo === 'LOCAL')
-                                                setMovForm({ productoId: sp.productoId, presentacionId: sp.presentacionId, tipo: 'ajuste', cantidad: String(sp.local), observaciones: '' })
-                                                setMovExtraForm({ ubicacionId: u?.id || '', destinoUbicacionId: '' })
-                                                setShowMovModal(true)
-                                            }} title="Ajustar stock de local">
-                                                <div style={{ fontSize: 'var(--text-xl)', fontFamily: 'var(--font-heading)', color: sp.local > 0 ? '#3498DB' : '#95A5A6', fontWeight: 700 }}>
-                                                    {sp.local} <span style={{ fontSize: '12px', verticalAlign: 'middle', opacity: 0.5 }}>✏️</span>
-                                                </div>
-                                                <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontFamily: 'var(--font-ui)' }}>🏪 Local</div>
-                                            </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                            {Object.entries(sp.ubicaciones || {}).map(([ubiName, qty]) => {
+                                                const ubi = ubicaciones.find(x => x.nombre === ubiName)
+                                                const isFab = ubi?.tipo === 'FABRICA'
+                                                const color = isFab ? (isLowStock ? '#E74C3C' : '#2ECC71') : '#3498DB'
+
+                                                return (
+                                                    <div key={ubiName}
+                                                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', background: 'var(--white)', border: '1px solid var(--color-gray-100)', borderRadius: '4px', cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                            setMovForm({ productoId: sp.productoId, presentacionId: sp.presentacionId, tipo: 'ajuste', cantidad: String(qty), observaciones: '' })
+                                                            setMovExtraForm({ ubicacionId: ubi?.id || '', destinoUbicacionId: '' })
+                                                            setShowMovModal(true)
+                                                        }}
+                                                        title={`Ajustar stock en ${ubiName}`}
+                                                    >
+                                                        <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                                                            {isFab ? '🏭' : '🏪'} {ubiName}
+                                                        </span>
+                                                        <span style={{ fontWeight: 700, color: color, fontSize: '14px' }}>
+                                                            {qty} <span style={{ fontSize: '10px', opacity: 0.5 }}>✏️</span>
+                                                        </span>
+                                                    </div>
+                                                )
+                                            })}
+                                            {Object.keys(sp.ubicaciones || {}).length === 0 && (
+                                                <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', textAlign: 'center', fontStyle: 'italic' }}>Sin stock registrado</div>
+                                            )}
                                         </div>
                                         {enProcesoPorProducto[sp.productoId] > 0 && (
                                             <div style={{ marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px dashed var(--color-gray-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -650,8 +655,11 @@ export default function ProduccionPage() {
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
-                                        <label className="form-label">Operarios en ronda</label>
-                                        <input type="number" className="form-input" value={form.empleadosRonda} onChange={(e) => setForm({ ...form, empleadosRonda: e.target.value })} placeholder="1" />
+                                        <label className="form-label">Sede / Ubicación</label>
+                                        <select className="form-select" value={form.ubicacionId} onChange={(e) => setForm({ ...form, ubicacionId: e.target.value })} required>
+                                            <option value="">Seleccionar sede...</option>
+                                            {ubicaciones.map((u) => <option key={u.id} value={u.id}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>)}
+                                        </select>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Coordinador</label>
@@ -704,7 +712,7 @@ export default function ProduccionPage() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Fecha producción</label>
-                                        <input type="date" className="form-input" value={cerrarForm.fechaProduccion} onChange={(e) => setCerrarForm({ ...cerrarForm, fechaProduccion: e.target.value })} />
+                                        <input type="date" className="form-input" value={cerrarForm.fechaProduccion} onChange={(e) => setCerrarForm({ ...cerrarForm, fechaProduccion: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Estado del lote</label>
@@ -725,12 +733,21 @@ export default function ProduccionPage() {
                                     </div>
                                 </div>
 
-                                <div className="form-group">
-                                    <label className="form-label">Coordinador</label>
-                                    <select className="form-select" value={cerrarForm.coordinadorId} onChange={(e) => setCerrarForm({ ...cerrarForm, coordinadorId: e.target.value })}>
-                                        <option value="">Sin asignar</option>
-                                        {coordinadores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                    </select>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Sede / Ubicación</label>
+                                        <select className="form-select" value={cerrarForm.ubicacionId} onChange={(e) => setCerrarForm({ ...cerrarForm, ubicacionId: e.target.value })} required>
+                                            <option value="">Seleccionar sede...</option>
+                                            {ubicaciones.map((u) => <option key={u.id} value={u.id}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Coordinador</label>
+                                        <select className="form-select" value={cerrarForm.coordinadorId} onChange={(e) => setCerrarForm({ ...cerrarForm, coordinadorId: e.target.value })}>
+                                            <option value="">Sin asignar</option>
+                                            {coordinadores.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
@@ -1050,7 +1067,7 @@ export default function ProduccionPage() {
                                                 <td style={{ textAlign: 'right' }}>
                                                     <button className="btn btn-icon btn-ghost" style={{ color: '#E74C3C' }} onClick={async () => {
                                                         if (!confirm('¿Eliminar esta sede? Se perderán las asociaciones de stock.')) return
-                                                        await fetch(`/api/ubicaciones/${u.id}`, { method: 'DELETE' })
+                                                        await fetch(`/api/ubicaciones?id=${u.id}`, { method: 'DELETE' })
                                                         fetchData()
                                                     }}>🗑️</button>
                                                 </td>

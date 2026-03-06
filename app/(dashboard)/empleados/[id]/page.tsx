@@ -196,7 +196,7 @@ export default function EmpleadoDetailPage() {
                     )}
 
                     {activeTab === 'fichadas' && (
-                        <FichadasTab empleadoId={empleado.id} />
+                        <FichadasTab empleadoId={empleado.id} empleado={empleado} />
                     )}
 
                     {activeTab === 'prestamos' && (

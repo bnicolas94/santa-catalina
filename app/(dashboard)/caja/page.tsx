@@ -98,13 +98,19 @@ export default function CajaPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
             })
-            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({ error: 'Error desconocido en el servidor' }))
+                throw new Error(data.error || data.details || 'Error al registrar')
+            }
             setSuccess('Movimiento registrado')
             setShowModal(false)
             setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
-        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+        } catch (err: unknown) {
+            console.error('[FRONTEND CAJA] Error en handleSubmit:', err)
+            setError(err instanceof Error ? err.message : 'Error al conectar con el servidor')
+        }
     }
 
     async function handleEdit(e: React.FormEvent) {
@@ -183,6 +189,7 @@ export default function CajaPage() {
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                     <input type="date" className="form-input" value={fechaFiltro}
                         onChange={(e) => setFechaFiltro(e.target.value)}
+                        onClick={(e) => e.currentTarget.showPicker?.()}
                         style={{ width: 170 }}
                     />
                     <button className="btn btn-ghost btn-icon" onClick={() => setShowMontos(!showMontos)}

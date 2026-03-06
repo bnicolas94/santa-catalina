@@ -34,10 +34,10 @@ export async function PUT(
         const dataToUpdate: any = {
             nombre,
             apellido,
-            dni,
-            email,
+            dni: dni || null,
+            email: (email && email.trim() !== '') ? email : null,
             rol,
-            telefono: telefono || null,
+            telefono: (telefono && telefono.trim() !== '') ? telefono : null,
             fechaIngreso: fechaIngreso ? new Date(fechaIngreso) : null,
             sueldoBaseMensual: sueldoBaseMensual ? parseFloat(sueldoBaseMensual) : 0,
             cicloPago: cicloPago || 'SEMANAL',

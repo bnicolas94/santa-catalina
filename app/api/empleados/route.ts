@@ -60,20 +60,22 @@ export async function POST(request: Request) {
             codigoBiometrico
         } = body
 
-        if (!nombre || !email || !rol) {
+        if (!nombre || !rol) {
             return NextResponse.json(
-                { error: 'Nombre, email y rol son requeridos' },
+                { error: 'Nombre y rol son requeridos' },
                 { status: 400 }
             )
         }
 
-        // Verificar email único
-        const existingEmail = await prisma.empleado.findUnique({ where: { email } })
-        if (existingEmail) {
-            return NextResponse.json(
-                { error: 'Ya existe un empleado con este email' },
-                { status: 400 }
-            )
+        // Verificar email único si se proporciona
+        if (email && email.trim() !== '') {
+            const existingEmail = await prisma.empleado.findUnique({ where: { email } })
+            if (existingEmail) {
+                return NextResponse.json(
+                    { error: 'Ya existe un empleado con este email' },
+                    { status: 400 }
+                )
+            }
         }
 
         if (dni) {
@@ -106,11 +108,11 @@ export async function POST(request: Request) {
             data: {
                 nombre,
                 apellido,
-                dni,
-                email,
+                dni: (dni && dni.trim() !== '') ? dni : null,
+                email: (email && email.trim() !== '') ? email : null,
                 password: hashedPassword,
                 rol,
-                telefono: telefono || null,
+                telefono: (telefono && telefono.trim() !== '') ? telefono : null,
                 fechaIngreso: fechaIngreso ? new Date(fechaIngreso) : null,
                 sueldoBaseMensual: sueldoBaseMensual ? parseFloat(sueldoBaseMensual) : 0,
                 cicloPago: cicloPago || 'SEMANAL',
