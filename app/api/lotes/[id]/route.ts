@@ -28,7 +28,12 @@ export async function PUT(
                     ...(body.unidadesRechazadas !== undefined && { unidadesRechazadas: parseInt(body.unidadesRechazadas) }),
                     ...(body.motivoRechazo !== undefined && { motivoRechazo: body.motivoRechazo || null }),
                     ...(body.empleadosRonda !== undefined && { empleadosRonda: parseInt(body.empleadosRonda) }),
-                    ...(body.fechaProduccion !== undefined && { fechaProduccion: new Date(body.fechaProduccion) }),
+                    ...(body.fechaProduccion !== undefined && {
+                        fechaProduccion: (() => {
+                            const [y, m, d] = body.fechaProduccion.split('-').map(Number)
+                            return new Date(Date.UTC(y, m - 1, d))
+                        })()
+                    }),
                     ...(body.coordinadorId !== undefined && { coordinadorId: body.coordinadorId || null }),
                 },
                 include: {

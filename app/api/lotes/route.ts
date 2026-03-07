@@ -52,8 +52,10 @@ export async function POST(request: Request) {
         }
 
         // Generar ID de lote: SC-YYYYMMDD-COD-NN
-        const fecha = new Date(fechaProduccion)
-        const yyyymmdd = fecha.toISOString().slice(0, 10).replace(/-/g, '')
+        // Normalizamos la fecha recibida ("YYYY-MM-DD") para que sea medianoche UTC
+        const [year, month, day] = fechaProduccion.split('-').map(Number)
+        const fecha = new Date(Date.UTC(year, month - 1, day))
+        const yyyymmdd = fechaProduccion.replace(/-/g, '')
 
         const producto = await prisma.producto.findUnique({ where: { id: productoId } })
         if (!producto) {

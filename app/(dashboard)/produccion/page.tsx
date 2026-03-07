@@ -63,9 +63,17 @@ function getEstadoInfo(estado: string) {
 }
 
 function getLocalDateString(date = new Date()) {
-    const offset = date.getTimezoneOffset()
-    const localDate = new Date(date.getTime() - (offset * 60 * 1000))
-    return localDate.toISOString().split('T')[0]
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+function formatDateOnly(isoString: string) {
+    if (!isoString) return '—'
+    // Extraemos la parte de la fecha antes de la 'T' para evitar shifts de zona horaria
+    const [year, month, day] = isoString.split('T')[0].split('-')
+    return `${day}/${month}/${year}`
 }
 
 export default function ProduccionPage() {
@@ -333,9 +341,8 @@ export default function ProduccionPage() {
     }
 
     const lotesPorFecha = filterFecha ? lotes.filter((l) => {
-        // Asegurarnos de comparar solo la parte YYYY-MM-DD
-        const lDate = l.fechaProduccion.split('T')[0]
-        return lDate === filterFecha
+        const lDateStr = l.fechaProduccion.split('T')[0]
+        return lDateStr === filterFecha
     }) : lotes
     const filteredLotes = filterEstado ? lotesPorFecha.filter((l) => l.estado === filterEstado) : lotesPorFecha
 
@@ -570,7 +577,7 @@ export default function ProduccionPage() {
                                         <span className="badge badge-neutral" style={{ marginRight: 6 }}>{lote.producto.codigoInterno}</span>
                                         {lote.producto.nombre}
                                     </td>
-                                    <td>{new Date(lote.fechaProduccion).toLocaleDateString('es-AR')}</td>
+                                    <td>{formatDateOnly(lote.fechaProduccion)}</td>
                                     <td style={{ fontWeight: 600 }}>{lote.unidadesProducidas.toLocaleString()} paq</td>
                                     <td style={{ color: 'var(--color-gray-500)' }}>{planchas.toLocaleString()} pl</td>
                                     <td>
