@@ -87,6 +87,7 @@ export default function ProduccionPage() {
     const [loteSeleccionado, setLoteSeleccionado] = useState<Lote | null>(null)
     const [filterEstado, setFilterEstado] = useState('')
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [form, setForm] = useState({
         productoId: '',
         fechaProduccion: getLocalDateString(),
@@ -547,64 +548,145 @@ export default function ProduccionPage() {
                 })}
             </div>
 
-            <div className="table-container">
-                <table className="table">
-                    <thead>
-                        <tr>
-                            <th>Lote ID</th>
-                            <th>Producto</th>
-                            <th>Fecha</th>
-                            <th>Paquetes</th>
-                            <th>Planchas</th>
-                            <th>Rechazos</th>
-                            <th>Ubicación</th>
-                            <th>Coordinador</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredLotes.length === 0 ? (
-                            <tr><td colSpan={10} style={{ textAlign: 'center', padding: '2rem' }}>No hay lotes registrados</td></tr>
-                        ) : filteredLotes.map((lote) => {
-                            const est = getEstadoInfo(lote.estado)
-                            const mermaPercent = lote.unidadesProducidas > 0 ? ((lote.unidadesRechazadas / lote.unidadesProducidas) * 100).toFixed(1) : '0'
-                            const planchas = lote.unidadesProducidas * (lote.producto.planchasPorPaquete || 6)
-                            return (
-                                <tr key={lote.id}>
-                                    <td style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{lote.id}</td>
-                                    <td>
-                                        <span className="badge badge-neutral" style={{ marginRight: 6 }}>{lote.producto.codigoInterno}</span>
-                                        {lote.producto.nombre}
-                                    </td>
-                                    <td>{formatDateOnly(lote.fechaProduccion)}</td>
-                                    <td style={{ fontWeight: 600 }}>{lote.unidadesProducidas.toLocaleString()} paq</td>
-                                    <td style={{ color: 'var(--color-gray-500)' }}>{planchas.toLocaleString()} pl</td>
-                                    <td>
-                                        {lote.unidadesRechazadas > 0 ? (
-                                            <span style={{ color: parseFloat(mermaPercent) > 5 ? 'var(--color-danger)' : 'var(--color-warning)' }}>
-                                                {lote.unidadesRechazadas} paq ({mermaPercent}%)
-                                            </span>
-                                        ) : '—'}
-                                    </td>
-                                    <td><span style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{lote.ubicacion?.nombre || '—'}</span></td>
-                                    <td>{lote.coordinador?.nombre || '—'}</td>
-                                    <td>
-                                        <span className="badge" style={{ backgroundColor: `${est.color}20`, color: est.color, border: `1px solid ${est.color}40` }}>
-                                            {est.emoji} {est.label}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                                            <button className="btn btn-icon btn-ghost" style={{ color: 'var(--color-primary)' }} title="Editar lote" onClick={() => openCerrarLote(lote)}>✏️</button>
-                                            <button className="btn btn-icon btn-ghost" style={{ color: '#E74C3C' }} title="Eliminar lote" onClick={() => handleDeleteLote(lote)}>🗑️</button>
+            <div className="grouped-lotes-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                {(() => {
+                    const grouped = filteredLotes.reduce((acc, lote) => {
+                        const pid = lote.producto.id
+                        if (!acc[pid]) {
+                            acc[pid] = {
+                                producto: lote.producto,
+                                lotes: [],
+                                totalPaquetes: 0,
+                                totalPlanchas: 0,
+                                totalRechazados: 0
+                            }
+                        }
+                        acc[pid].lotes.push(lote)
+                        acc[pid].totalPaquetes += lote.unidadesProducidas
+                        acc[pid].totalPlanchas += (lote.unidadesProducidas * (lote.producto.planchasPorPaquete || 6))
+                        acc[pid].totalRechazados += lote.unidadesRechazadas
+                        return acc
+                    }, {} as Record<string, { producto: Producto, lotes: Lote[], totalPaquetes: number, totalPlanchas: number, totalRechazados: number }>)
+
+                    const sortedGroups = Object.values(grouped).sort((a, b) => a.producto.nombre.localeCompare(b.producto.nombre))
+
+                    if (sortedGroups.length === 0) {
+                        return (
+                            <div className="card" style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                <div style={{ fontSize: '3rem', marginBottom: 'var(--space-2)' }}>📋</div>
+                                <p>No hay lotes registrados para los filtros seleccionados.</p>
+                            </div>
+                        )
+                    }
+
+                    return sortedGroups.map((group) => {
+                        const isExpanded = !!expandedGroups[group.producto.id]
+                        return (
+                            <div key={group.producto.id} className="card" style={{ border: '1px solid var(--color-gray-200)', overflow: 'hidden' }}>
+                                <div
+                                    className="card-header"
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: 'var(--space-3) var(--space-4)',
+                                        cursor: 'pointer',
+                                        backgroundColor: isExpanded ? 'var(--color-gray-50)' : 'white',
+                                        transition: 'background-color 0.2s'
+                                    }}
+                                    onClick={() => setExpandedGroups(prev => ({ ...prev, [group.producto.id]: !prev[group.producto.id] }))}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                        <span style={{ fontSize: '1.2rem' }}>{isExpanded ? '📂' : '📁'}</span>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700 }}>
+                                                <span className="badge badge-neutral" style={{ marginRight: '8px' }}>{group.producto.codigoInterno}</span>
+                                                {group.producto.nombre}
+                                            </h3>
+                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{group.lotes.length} lote{group.lotes.length !== 1 ? 's' : ''} registrado{group.lotes.length !== 1 ? 's' : ''}</span>
                                         </div>
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 'var(--space-6)', alignItems: 'center' }}>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-primary)' }}>{group.totalPaquetes.toLocaleString()} paq</div>
+                                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Total Paquetes</div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-gray-600)' }}>{group.totalPlanchas.toLocaleString()} pl</div>
+                                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Total Planchas</div>
+                                        </div>
+                                        {group.totalRechazados > 0 && (
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--color-danger)' }}>{group.totalRechazados}</div>
+                                                <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Rechazados</div>
+                                            </div>
+                                        )}
+                                        <div style={{ fontSize: '1.2rem', marginLeft: 'var(--space-2)', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                                            ⌄
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {isExpanded && (
+                                    <div className="card-body" style={{ padding: 0, borderTop: '1px solid var(--color-gray-100)' }}>
+                                        <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+                                            <table className="table table-sm">
+                                                <thead>
+                                                    <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
+                                                        <th>Lote ID</th>
+                                                        <th>Fecha</th>
+                                                        <th>Paquetes</th>
+                                                        <th>Planchas</th>
+                                                        <th>Rechazos</th>
+                                                        <th>Ubicación</th>
+                                                        <th>Coordinador</th>
+                                                        <th>Estado</th>
+                                                        <th style={{ textAlign: 'right' }}>Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {group.lotes.map((lote) => {
+                                                        const est = getEstadoInfo(lote.estado)
+                                                        const mermaPercent = lote.unidadesProducidas > 0 ? ((lote.unidadesRechazadas / lote.unidadesProducidas) * 100).toFixed(1) : '0'
+                                                        const planchas = lote.unidadesProducidas * (lote.producto.planchasPorPaquete || 6)
+                                                        return (
+                                                            <tr key={lote.id}>
+                                                                <td style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>{lote.id}</td>
+                                                                <td style={{ fontSize: 'var(--text-xs)' }}>{formatDateOnly(lote.fechaProduccion)}</td>
+                                                                <td style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{lote.unidadesProducidas.toLocaleString()} paq</td>
+                                                                <td style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>{planchas.toLocaleString()} pl</td>
+                                                                <td style={{ fontSize: 'var(--text-xs)' }}>
+                                                                    {lote.unidadesRechazadas > 0 ? (
+                                                                        <span style={{ color: parseFloat(mermaPercent) > 5 ? 'var(--color-danger)' : 'var(--color-warning)' }}>
+                                                                            {lote.unidadesRechazadas} ({mermaPercent}%)
+                                                                        </span>
+                                                                    ) : '—'}
+                                                                </td>
+                                                                <td><span style={{ fontSize: '10px', fontWeight: 600 }}>{lote.ubicacion?.nombre || '—'}</span></td>
+                                                                <td style={{ fontSize: 'var(--text-xs)' }}>{lote.coordinador?.nombre || '—'}</td>
+                                                                <td>
+                                                                    <span className="badge" style={{ backgroundColor: `${est.color}15`, color: est.color, border: `1px solid ${est.color}30`, fontSize: '10px', padding: '2px 6px' }}>
+                                                                        {est.emoji} {est.label}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ textAlign: 'right' }}>
+                                                                    <div style={{ display: 'flex', gap: '2px', justifyContent: 'flex-end' }}>
+                                                                        <button className="btn btn-icon btn-xs btn-ghost" style={{ color: 'var(--color-primary)' }} onClick={(e) => { e.stopPropagation(); openCerrarLote(lote) }}>✏️</button>
+                                                                        <button className="btn btn-icon btn-xs btn-ghost" style={{ color: '#E74C3C' }} onClick={(e) => { e.stopPropagation(); handleDeleteLote(lote) }}>🗑️</button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })
+                })()}
             </div>
 
             {/* Modal Nuevo Lote */}
