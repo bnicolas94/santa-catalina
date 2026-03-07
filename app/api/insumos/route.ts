@@ -6,7 +6,11 @@ export async function GET() {
     try {
         const insumos = await prisma.insumo.findMany({
             orderBy: { nombre: 'asc' },
-            include: { proveedor: true, familia: true },
+            include: {
+                proveedor: true,
+                familia: true,
+                stocks: { include: { ubicacion: true } }
+            },
         })
         return NextResponse.json(insumos)
     } catch (error) {

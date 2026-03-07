@@ -164,6 +164,7 @@ model Insumo {
   familia         FamiliaInsumo? @relation(fields: [familiaId], references: [id])
   fichasTecnicas  FichaTecnica[]
   movimientos     MovimientoStock[]
+  stocks          StockInsumo[]
 
   @@map("insumos")
 }
@@ -222,7 +223,9 @@ model Ubicacion {
   empleados           Empleado[]
   lotes              Lote[]
   stocks             StockProducto[]
+  stocksInsumo      StockInsumo[]
   movimientosProducto MovimientoProducto[]
+  movimientosStock   MovimientoStock[]
 
   @@map("ubicaciones")
 }
@@ -278,6 +281,8 @@ model MovimientoStock {
   // Relaciones
   insumoId      String   @map("id_insumo")
   insumo        Insumo   @relation(fields: [insumoId], references: [id])
+  ubicacionId   String?  @map("id_ubicacion")
+  ubicacion     Ubicacion? @relation(fields: [ubicacionId], references: [id])
   loteOrigenId  String?  @map("id_lote_origen")
   loteOrigen    Lote?    @relation(fields: [loteOrigenId], references: [id])
   proveedorId   String?  @map("id_proveedor")
@@ -286,6 +291,20 @@ model MovimientoStock {
   gasto         GastoOperativo? @relation(fields: [gastoId], references: [id])
 
   @@map("movimientos_stock")
+}
+
+model StockInsumo {
+  id          String   @id @default(uuid())
+  cantidad    Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  ubicacionId String   @map("id_ubicacion")
+  ubicacion   Ubicacion @relation(fields: [ubicacionId], references: [id])
+  insumoId    String   @map("id_insumo")
+  insumo      Insumo    @relation(fields: [insumoId], references: [id])
+
+  @@unique([insumoId, ubicacionId])
+  @@map("stock_insumos")
 }
 
 model Cliente {

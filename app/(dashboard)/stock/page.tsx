@@ -9,6 +9,7 @@ interface Movimiento {
     costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null;
     insumo: { id: string; nombre: string; unidadMedida: string }
     proveedor: { id: string; nombre: string } | null
+    ubicacion: { id: string; nombre: string } | null
 }
 
 export default function StockPage() {
@@ -28,6 +29,7 @@ export default function StockPage() {
         insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '',
+        ubicacionId: '',
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -75,7 +77,7 @@ export default function StockPage() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -96,6 +98,7 @@ export default function StockPage() {
             bultos: '',
             unidadesPorBulto: '',
             fechaVencimiento: mov.fechaVencimiento ? new Date(mov.fechaVencimiento).toLocaleDateString('en-CA') : '',
+            ubicacionId: mov.ubicacion?.id || '',
         })
         setShowModal(true)
     }
@@ -195,7 +198,8 @@ export default function StockPage() {
                     )}
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+                        const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || ''
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: defaultUbi })
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
                 </div>
@@ -274,7 +278,36 @@ export default function StockPage() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
-                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧪 Movimientos de Insumos (Global)</h2>
+                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧪 Stock de Insumos {selectedUbi && <span className="badge badge-primary">en {selectedUbi}</span>}</h2>
+            </div>
+            {insumos.length === 0 ? (
+                <div className="empty-state">No hay insumos cargados</div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
+                    {insumos.map((ins: any) => {
+                        const stockFound = selectedUbi ? ins.stocks?.find((s: any) => s.ubicacion.nombre === selectedUbi) : null;
+                        const qty = selectedUbi ? (stockFound?.cantidad || 0) : ins.stockActual;
+                        const isLow = qty < ins.stockMinimo;
+
+                        return (
+                            <div key={ins.id} className="card" style={{ border: isLow ? '1px solid var(--color-danger)' : '1px solid var(--color-gray-200)' }}>
+                                <div className="card-body" style={{ padding: 'var(--space-3)' }}>
+                                    <h4 style={{ margin: 0, fontSize: 'var(--text-sm)' }}>{ins.nombre}</h4>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
+                                        <span style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: isLow ? 'var(--color-danger)' : 'var(--color-primary)' }}>
+                                            {qty} <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400 }}>{ins.unidadMedida}</span>
+                                        </span>
+                                        {isLow && <span title="Stock bajo" style={{ color: 'var(--color-danger)' }}>⚠️</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>📜 Historial de Movimientos</h2>
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}
@@ -444,14 +477,28 @@ export default function StockPage() {
                                     </div>
                                 </div>
                                 <div className="form-group">
+                                    <label className="form-label">Sede / Ubicación del movimiento</label>
+                                    <select className="form-select" value={form.ubicacionId} onChange={(e) => setForm({ ...form, ubicacionId: e.target.value })} required>
+                                        <option value="">Seleccionar sede...</option>
+                                        {ubicaciones.map((u) => (
+                                            <option key={u.id} value={u.id}>
+                                                {u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="form-group">
                                     <label className="form-label">Insumo</label>
                                     <select className="form-select" value={form.insumoId} onChange={(e) => setForm({ ...form, insumoId: e.target.value })} required>
                                         <option value="">Seleccionar insumo...</option>
-                                        {insumos.map((ins) => (
-                                            <option key={ins.id} value={ins.id}>
-                                                {ins.nombre} (stock: {ins.stockActual} {ins.unidadMedida})
-                                            </option>
-                                        ))}
+                                        {insumos.map((ins: any) => {
+                                            const stockUbi = form.ubicacionId ? ins.stocks?.find((s: any) => s.ubicacionId === form.ubicacionId)?.cantidad || 0 : ins.stockActual;
+                                            return (
+                                                <option key={ins.id} value={ins.id}>
+                                                    {ins.nombre} (stock: {stockUbi} {ins.unidadMedida})
+                                                </option>
+                                            )
+                                        })}
                                     </select>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>

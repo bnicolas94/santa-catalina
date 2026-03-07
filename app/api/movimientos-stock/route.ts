@@ -15,6 +15,7 @@ export async function GET(request: Request) {
                 insumo: { select: { id: true, nombre: true, unidadMedida: true } },
                 proveedor: { select: { id: true, nombre: true } },
                 loteOrigen: { select: { id: true } },
+                ubicacion: { select: { id: true, nombre: true } },
             },
         })
         return NextResponse.json(movimientos)
@@ -28,10 +29,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento } = body
+        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, ubicacionId } = body
 
-        if (!insumoId || !tipo || !cantidad) {
-            return NextResponse.json({ error: 'Insumo, tipo y cantidad son requeridos' }, { status: 400 })
+        if (!insumoId || !tipo || !cantidad || !ubicacionId) {
+            return NextResponse.json({ error: 'Insumo, tipo, cantidad y ubicación son requeridos' }, { status: 400 })
         }
 
         if (!['entrada', 'salida'].includes(tipo)) {
@@ -74,7 +75,8 @@ export async function POST(request: Request) {
                     costoTotal: costoTotalFloat,
                     estadoPago: estado,
                     fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
-                    gastoId
+                    gastoId,
+                    ubicacionId
                 },
                 include: {
                     insumo: { select: { id: true, nombre: true, unidadMedida: true } },
@@ -95,6 +97,13 @@ export async function POST(request: Request) {
             await tx.insumo.update({
                 where: { id: insumoId },
                 data: dataInsumo,
+            })
+
+            // 4. Actualizar stock por ubicación (StockInsumo)
+            await tx.stockInsumo.upsert({
+                where: { insumoId_ubicacionId: { insumoId, ubicacionId } },
+                create: { insumoId, ubicacionId, cantidad: delta },
+                update: { cantidad: { increment: delta } }
             })
 
             return movimiento
