@@ -11,6 +11,7 @@ export async function GET() {
         const permisos = (session?.user as any)?.permisos || {}
 
         if (userRol !== 'ADMIN' && !permisos.permisoProduccion) {
+            console.log('Permiso denegado para:', session?.user?.email, 'Permisos:', permisos)
             return NextResponse.json({ error: 'No tienes permiso para ver producción' }, { status: 403 })
         }
         const lotes = await prisma.lote.findMany({
