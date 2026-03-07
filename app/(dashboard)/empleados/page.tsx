@@ -231,6 +231,7 @@ export default function EmpleadosPage() {
                                 <th>Rol / Puesto</th>
                                 <th>Contacto</th>
                                 <th>Ciclo / Base</th>
+                                <th>Sede / Ubicación</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -272,6 +273,15 @@ export default function EmpleadosPage() {
                                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
                                             ${(emp as any).sueldoBaseMensual?.toLocaleString() || '0'}
                                         </div>
+                                    </td>
+                                    <td>
+                                        {emp.ubicacion ? (
+                                            <span className="badge badge-neutral" style={{ display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
+                                                {emp.ubicacion.tipo === 'FABRICA' ? '🏭' : '🏪'} {emp.ubicacion.nombre}
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>— Sin asignar —</span>
+                                        )}
                                     </td>
                                     <td>
                                         <span className={`badge ${emp.activo ? 'badge-success' : 'badge-neutral'}`}>

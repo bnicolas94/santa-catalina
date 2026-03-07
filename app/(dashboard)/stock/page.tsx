@@ -15,6 +15,9 @@ export default function StockPage() {
     const [movimientos, setMovimientos] = useState<Movimiento[]>([])
     const [insumos, setInsumos] = useState<Insumo[]>([])
     const [proveedores, setProveedores] = useState<Proveedor[]>([])
+    const [ubicaciones, setUbicaciones] = useState<any[]>([])
+    const [selectedUbi, setSelectedUbi] = useState<string>('')
+    const [stockProductos, setStockProductos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [filterTipo, setFilterTipo] = useState('')
@@ -33,15 +36,24 @@ export default function StockPage() {
 
     async function fetchData() {
         try {
-            const [movRes, insRes, provRes] = await Promise.all([
-                fetch('/api/movimientos-stock'), fetch('/api/insumos'), fetch('/api/proveedores'),
+            const [movRes, insRes, provRes, ubiRes, stockProdRes] = await Promise.all([
+                fetch('/api/movimientos-stock'),
+                fetch('/api/insumos'),
+                fetch('/api/proveedores'),
+                fetch('/api/ubicaciones'),
+                fetch('/api/stock-producto')
             ])
             const movData = await movRes.json()
             const insData = await insRes.json()
             const provData = await provRes.json()
+            const ubiData = await ubiRes.json()
+            const stockProdData = await stockProdRes.json()
+
             setMovimientos(Array.isArray(movData) ? movData : [])
             setInsumos(Array.isArray(insData) ? insData : [])
             setProveedores(Array.isArray(provData) ? provData : [])
+            setUbicaciones(Array.isArray(ubiData) ? ubiData : [])
+            setStockProductos(Array.isArray(stockProdData) ? stockProdData : [])
         } catch { setError('Error al cargar datos') } finally { setLoading(false) }
     }
 
@@ -187,6 +199,82 @@ export default function StockPage() {
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
                 </div>
+            </div>
+
+            {/* Selector de Ubicación / Sede */}
+            <div className="card" style={{ marginBottom: 'var(--space-6)', border: '1px solid var(--color-primary-light)', backgroundColor: 'var(--color-primary-bg-light)' }}>
+                <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
+                    <div style={{ fontSize: '1.5rem' }}>📍</div>
+                    <div style={{ flex: 1 }}>
+                        <h3 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700 }}>Filtrar por Punto de Venta / Sede</h3>
+                        <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>Gestioná el stock específico de cada lugar.</p>
+                    </div>
+                    <select
+                        className="form-select"
+                        style={{ width: '250px', fontWeight: 600, border: '2px solid var(--color-primary)' }}
+                        value={selectedUbi}
+                        onChange={(e) => setSelectedUbi(e.target.value)}
+                    >
+                        <option value="">🌎 Todas las sedes (Global)</option>
+                        {ubicaciones.map(u => (
+                            <option key={u.id} value={u.nombre}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* Stock de Productos Terminados */}
+            <div style={{ marginBottom: 'var(--space-8)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                    <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        📦 Stock de Productos Terminados {selectedUbi && <span className="badge badge-primary">en {selectedUbi}</span>}
+                    </h2>
+                </div>
+                {stockProductos.length === 0 ? (
+                    <div className="empty-state" style={{ padding: 'var(--space-4)' }}>No hay stock de productos.</div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+                        {stockProductos.map(sp => {
+                            const ubiName = selectedUbi || '';
+                            const qty = selectedUbi ? (sp.ubicaciones[selectedUbi] || 0) : Object.values(sp.ubicaciones).reduce((a: any, b: any) => a + b, 0);
+                            const isLowStock = sp.stockMinimo > 0 && qty < sp.stockMinimo;
+
+                            if (selectedUbi && sp.ubicaciones[selectedUbi] === undefined) return null;
+
+                            return (
+                                <div key={`${sp.productoId}_${sp.presentacionId}`} className="card" style={{
+                                    border: isLowStock ? '2px solid var(--color-danger)' : '1px solid var(--color-gray-200)',
+                                    backgroundColor: isLowStock ? 'var(--color-danger-bg)' : 'var(--white)'
+                                }}>
+                                    <div className="card-body" style={{ padding: 'var(--space-3)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <span className="badge badge-neutral" style={{ fontWeight: 700 }}>{sp.codigoInterno}</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 600 }}>x{sp.cantidadPresentacion} unidades</span>
+                                        </div>
+                                        <h4 style={{ margin: 'var(--space-2) 0', fontSize: 'var(--text-sm)', fontWeight: 700 }}>{sp.nombre}</h4>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-1)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: isLowStock ? 'var(--color-danger)' : 'var(--color-primary)' }}>
+                                                    {qty} <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400 }}>paq</span>
+                                                </span>
+                                            </div>
+                                            {isLowStock && <span title="Stock bajo" style={{ fontSize: '1.2rem' }}>⚠️</span>}
+                                        </div>
+                                        {sp.stockMinimo > 0 && (
+                                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>
+                                                Mínimo: {sp.stockMinimo} paq
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        }).filter(Boolean)}
+                    </div>
+                )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧪 Movimientos de Insumos (Global)</h2>
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}

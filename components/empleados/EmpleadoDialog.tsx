@@ -14,6 +14,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
     const [loading, setLoading] = useState(false)
     const [tab, setTab] = useState('personal')
     const [roles, setRoles] = useState<any[]>([])
+    const [ubicaciones, setUbicaciones] = useState<any[]>([])
 
     // Estado local del form
     const [formData, setFormData] = useState({
@@ -33,7 +34,8 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         diasTrabajoSemana: empleado?.diasTrabajoSemana || 'Lunes a Viernes',
         horarioEntrada: empleado?.horarioEntrada || '',
         horarioSalida: empleado?.horarioSalida || '',
-        codigoBiometrico: empleado?.codigoBiometrico || ''
+        codigoBiometrico: empleado?.codigoBiometrico || '',
+        ubicacionId: empleado?.ubicacionId || ''
     })
 
     useEffect(() => {
@@ -42,14 +44,21 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                 const res = await fetch('/api/empleados/roles')
                 const data = await res.json()
                 setRoles(data)
-
-                // Si estamos creando y ya hay roles, y el rol actual no está en la lista (o es el default)
-                // nos aseguramos de que el valor inicial sea válido si es necesario.
             } catch (error) {
                 console.error('Error fetching roles:', error)
             }
         }
+        const fetchUbicaciones = async () => {
+            try {
+                const res = await fetch('/api/ubicaciones')
+                const data = await res.json()
+                setUbicaciones(data)
+            } catch (error) {
+                console.error('Error fetching ubicaciones:', error)
+            }
+        }
         fetchRoles()
+        fetchUbicaciones()
     }, [])
 
     // Estado local para el input de remuneración para que no "salte" con los decimales mientras tipea
@@ -263,6 +272,17 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                 <div className="form-group">
                                     <label className="form-label">Horario Salida</label>
                                     <input type="time" name="horarioSalida" value={formData.horarioSalida} onChange={handleChange} className="form-input" />
+                                </div>
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label className="form-label">Sede / Punto de Venta</label>
+                                    <select name="ubicacionId" value={formData.ubicacionId} onChange={handleChange} className="form-select">
+                                        <option value="">— Sin asignar —</option>
+                                        {ubicaciones.map(u => (
+                                            <option key={u.id} value={u.id}>
+                                                {u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
                         )}

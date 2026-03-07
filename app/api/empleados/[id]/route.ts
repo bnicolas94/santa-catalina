@@ -27,6 +27,7 @@ export async function PUT(
             horarioEntrada,
             horarioSalida,
             codigoBiometrico,
+            ubicacionId,
             activo
         } = body;
 
@@ -48,6 +49,7 @@ export async function PUT(
             horarioEntrada: horarioEntrada || null,
             horarioSalida: horarioSalida || null,
             codigoBiometrico: codigoBiometrico || null,
+            ubicacionId: ubicacionId || null,
         }
 
         if (activo !== undefined) {
@@ -81,6 +83,8 @@ export async function PUT(
                 horarioEntrada: true,
                 horarioSalida: true,
                 codigoBiometrico: true,
+                ubicacionId: true,
+                ubicacion: { select: { id: true, nombre: true, tipo: true } },
             },
         })
 

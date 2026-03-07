@@ -27,6 +27,8 @@ export async function GET() {
                 horarioEntrada: true,
                 horarioSalida: true,
                 codigoBiometrico: true,
+                ubicacionId: true,
+                ubicacion: { select: { id: true, nombre: true, tipo: true } },
             },
         })
         return NextResponse.json(empleados)
@@ -57,7 +59,8 @@ export async function POST(request: Request) {
             diasTrabajoSemana,
             horarioEntrada,
             horarioSalida,
-            codigoBiometrico
+            codigoBiometrico,
+            ubicacionId
         } = body
 
         if (!nombre || !rol) {
@@ -123,6 +126,7 @@ export async function POST(request: Request) {
                 horarioEntrada: horarioEntrada || null,
                 horarioSalida: horarioSalida || null,
                 codigoBiometrico: codigoBiometrico || null,
+                ubicacionId: ubicacionId || null,
             },
         })
 
