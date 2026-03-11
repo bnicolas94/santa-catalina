@@ -37,7 +37,8 @@ export async function GET(request: Request) {
                             }
                         },
                         cliente: { select: { id: true, nombreComercial: true, direccion: true, zona: true } }
-                    }
+                    },
+                    orderBy: { orden: 'asc' }
                 }
             }
         })
@@ -67,9 +68,10 @@ export async function POST(request: Request) {
                     zona: zona || null,
                     turno: turno || null,
                     entregas: {
-                        create: pedidos.map((p: { pedidoId: string, clienteId: string }) => ({
+                        create: pedidos.map((p: { pedidoId: string, clienteId: string }, index: number) => ({
                             pedidoId: p.pedidoId,
-                            clienteId: p.clienteId
+                            clienteId: p.clienteId,
+                            orden: index
                         }))
                     }
                 },

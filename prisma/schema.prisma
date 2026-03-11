@@ -398,6 +398,7 @@ model Ruta {
 
 model Entrega {
   id                  String   @id @default(uuid())
+  orden               Int      @default(0)
   horaEntrega         DateTime? @map("hora_entrega")
   dentroVentana       Boolean  @default(false) @map("dentro_ventana")
   tempEntrega         Float?   @map("temp_entrega")
