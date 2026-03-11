@@ -7,7 +7,7 @@ export async function GET() {
         const pedidos = await prisma.pedido.findMany({
             orderBy: { fechaPedido: 'desc' },
             include: {
-                cliente: { select: { id: true, nombreComercial: true, zona: true } },
+                cliente: { select: { id: true, nombreComercial: true, zona: true, latitud: true, longitud: true, direccion: true } },
                 detalles: {
                     include: {
                         presentacion: {

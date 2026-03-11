@@ -81,83 +81,116 @@ export default function RepartosPage() {
                     <p style={{ fontSize: '48px', margin: 0 }}>🏍️</p>
                     <p>No tenés rutas asignadas para hoy.</p>
                 </div>
-            ) : (
-                <>
-                    <div style={{ backgroundColor: 'var(--color-primary-50)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', border: '1px solid var(--color-primary-200)' }}>
-                        <h2 style={{ fontSize: 'var(--text-lg)', margin: '0 0 var(--space-1) 0', color: 'var(--color-primary)' }}>Ruta en progreso</h2>
-                        <span style={{ fontSize: 'var(--text-sm)' }}>
-                            {entregasSorted.filter(e => e.horaEntrega).length} de {entregasSorted.length} entregas completadas
-                        </span>
-                    </div>
+            ) : (() => {
+                const completadas = entregasSorted.filter(e => !!e.horaEntrega).length
+                return (
+                    <>
+                        <div style={{ backgroundColor: 'var(--color-primary-50)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', border: '1px solid var(--color-primary-200)' }}>
+                            <h2 style={{ fontSize: 'var(--text-lg)', margin: '0 0 var(--space-1) 0', color: 'var(--color-primary)' }}>Ruta en progreso</h2>
+                            <span style={{ fontSize: 'var(--text-sm)' }}>
+                                {completadas} de {entregasSorted.length} entregas completadas
+                            </span>
+                        </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                        {entregasSorted.map((entrega, i) => {
-                            const estaEntregado = !!entrega.horaEntrega
-                            return (
-                                <div key={entrega.id} className="card" style={{ padding: 'var(--space-4)', opacity: estaEntregado ? 0.7 : 1 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
-                                        <div>
-                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600, marginBottom: '2px' }}>
-                                                VISITA #{i + 1}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                                <div>
+                                    <h2 style={{ fontSize: '1.5rem', margin: '0 0 var(--space-2)' }}>
+                                        Ruta {new Date(rutaDeHoy.fecha).toLocaleDateString('es-AR')}
+                                    </h2>
+                                    <div style={{ color: 'var(--color-gray-500)' }}>
+                                        📍 Zona: {rutaDeHoy.zona || 'Sin zona especificada'}
+                                        {' · '} 📦 {rutaDeHoy.entregas.length} pedidos
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                                        {completadas} / {rutaDeHoy.entregas.length}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>entregados</div>
+                                </div>
+                            </div>
+
+                            {/* Botón iniciar recorrido (Google Maps multi-stop) */}
+                            {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (
+                                <a
+                                    href={`https://www.google.com/maps/dir/?api=1&origin=Mi+Ubicacion&destination=${encodeURIComponent(entregasSorted[entregasSorted.length - 1].cliente.direccion || '')}&waypoints=${entregasSorted.slice(0, -1).filter(e => !e.horaEntrega && e.cliente.direccion).map(e => encodeURIComponent(e.cliente.direccion || '')).join('|')}&travelmode=driving`}
+                                    target="_blank" rel="noreferrer"
+                                    className="btn"
+                                    style={{ width: '100%', marginBottom: 'var(--space-4)', backgroundColor: '#4285F4', color: 'white', fontWeight: 600, fontSize: '1.1rem', height: '48px' }}
+                                >
+                                    🗺️ Iniciar Recorrido Completo
+                                </a>
+                            )}
+
+                            {entregasSorted.map((entrega, i) => {
+                                const estaEntregado = !!entrega.horaEntrega
+                                return (
+                                    <div key={entrega.id} className="card" style={{ padding: 'var(--space-4)', opacity: estaEntregado ? 0.7 : 1 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
+                                            <div>
+                                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600, marginBottom: '2px' }}>
+                                                    VISITA #{i + 1}
+                                                </div>
+                                                <h3 style={{
+                                                    fontSize: 'var(--text-lg)', margin: 0,
+                                                    textDecoration: estaEntregado && entrega.pedido.estado === 'rechazado' ? 'line-through' : 'none',
+                                                    color: estaEntregado ? 'var(--color-gray-600)' : 'inherit'
+                                                }}>
+                                                    {entrega.cliente.nombreComercial}
+                                                </h3>
                                             </div>
-                                            <h3 style={{
-                                                fontSize: 'var(--text-lg)', margin: 0,
-                                                textDecoration: estaEntregado && entrega.pedido.estado === 'rechazado' ? 'line-through' : 'none',
-                                                color: estaEntregado ? 'var(--color-gray-600)' : 'inherit'
-                                            }}>
-                                                {entrega.cliente.nombreComercial}
-                                            </h3>
+                                            {estaEntregado ? (
+                                                <span className="badge badge-success" style={{ fontWeight: 600 }}>{entrega.pedido.estado === 'rechazado' ? 'Rechazado' : 'Entregado'}</span>
+                                            ) : (
+                                                <span className="badge badge-warning">En camino</span>
+                                            )}
                                         </div>
-                                        {estaEntregado ? (
-                                            <span className="badge badge-success" style={{ fontWeight: 600 }}>{entrega.pedido.estado === 'rechazado' ? 'Rechazado' : 'Entregado'}</span>
+                                        <p style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--text-md)', color: 'var(--color-gray-600)' }}>
+                                            📍 {entrega.cliente.direccion || 'Sin dirección registrada'}
+                                        </p>
+
+                                        <div style={{ backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)' }}>
+                                            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
+                                                📦 Pedido: {entrega.pedido.totalUnidades} sándwiches
+                                            </div>
+                                            {entrega.pedido.detalles.map((d, idx) => {
+                                                const pres = d.presentacion
+                                                return (
+                                                    <div key={idx} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
+                                                        - {d.cantidad} un. de x{pres?.cantidad ?? '?'} {pres?.producto?.codigoInterno ?? ''}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+
+                                        {!estaEntregado ? (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                                                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.cliente.direccion + ' ' + entrega.cliente.zona)}`}
+                                                    target="_blank" rel="noreferrer"
+                                                    className="btn btn-outline" style={{ textAlign: 'center', color: 'var(--color-primary)' }}>
+                                                    🗺️ Navegar
+                                                </a>
+                                                <button className="btn btn-primary" onClick={() => {
+                                                    setSelectedEntrega(entrega)
+                                                    setFormEntrega({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
+                                                }}>
+                                                    Entregar
+                                                </button>
+                                            </div>
                                         ) : (
-                                            <span className="badge badge-warning">En camino</span>
+                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                                ✓ Entregado a las {new Date(entrega.horaEntrega!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                                                {entrega.tempEntrega && ` · Temp: ${entrega.tempEntrega}°C`}
+                                            </div>
                                         )}
                                     </div>
-                                    <p style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--text-md)', color: 'var(--color-gray-600)' }}>
-                                        📍 {entrega.cliente.direccion || 'Sin dirección registrada'}
-                                    </p>
-
-                                    <div style={{ backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)' }}>
-                                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
-                                            📦 Pedido: {entrega.pedido.totalUnidades} sándwiches
-                                        </div>
-                                        {entrega.pedido.detalles.map((d, idx) => {
-                                            const pres = d.presentacion
-                                            return (
-                                                <div key={idx} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
-                                                    - {d.cantidad} un. de x{pres?.cantidad ?? '?'} {pres?.producto?.codigoInterno ?? ''}
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-
-                                    {!estaEntregado ? (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.cliente.direccion + ' ' + entrega.cliente.zona)}`}
-                                                target="_blank" rel="noreferrer"
-                                                className="btn btn-outline" style={{ textAlign: 'center', color: 'var(--color-primary)' }}>
-                                                🗺️ Navegar
-                                            </a>
-                                            <button className="btn btn-primary" onClick={() => {
-                                                setSelectedEntrega(entrega)
-                                                setFormEntrega({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
-                                            }}>
-                                                Entregar
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
-                                            ✓ Entregado a las {new Date(entrega.horaEntrega!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                                            {entrega.tempEntrega && ` · Temp: ${entrega.tempEntrega}°C`}
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </>
-            )}
+                                )
+                            })}
+                        </div>
+                    </>
+                )
+            })()}
 
             {/* Modal de Control de Entrega (Mobile First) */}
             {selectedEntrega && (

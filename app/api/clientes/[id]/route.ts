@@ -10,13 +10,39 @@ export async function PUT(
         const { id } = await params
         const body = await request.json()
 
+        // Recompute direccion if address components provided
+        const hasAddressChange = body.calle !== undefined || body.numero !== undefined || body.localidad !== undefined
+        const direccionComputed = hasAddressChange
+            ? [body.calle, body.numero, body.localidad].filter(Boolean).join(', ') || null
+            : undefined
+
+        // Auto-geocode if address changed
+        let latitud: number | undefined
+        let longitud: number | undefined
+        if (direccionComputed && process.env.GOOGLE_MAPS_API_KEY) {
+            try {
+                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(direccionComputed)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
+                const geoRes = await fetch(geoUrl)
+                const geoData = await geoRes.json()
+                if (geoData.status === 'OK' && geoData.results?.length) {
+                    latitud = geoData.results[0].geometry.location.lat
+                    longitud = geoData.results[0].geometry.location.lng
+                }
+            } catch (e) { console.error('Geocode failed on update:', e) }
+        }
+
         const cliente = await prisma.cliente.update({
             where: { id },
             data: {
                 ...(body.nombreComercial !== undefined && { nombreComercial: body.nombreComercial }),
                 ...(body.contactoNombre !== undefined && { contactoNombre: body.contactoNombre || null }),
                 ...(body.contactoTelefono !== undefined && { contactoTelefono: body.contactoTelefono || null }),
-                ...(body.direccion !== undefined && { direccion: body.direccion || null }),
+                ...(direccionComputed !== undefined && { direccion: direccionComputed }),
+                ...(body.calle !== undefined && { calle: body.calle || null }),
+                ...(body.numero !== undefined && { numero: body.numero || null }),
+                ...(body.localidad !== undefined && { localidad: body.localidad || null }),
+                ...(latitud !== undefined && { latitud }),
+                ...(longitud !== undefined && { longitud }),
                 ...(body.zona !== undefined && { zona: body.zona || null }),
                 ...(body.segmento !== undefined && { segmento: body.segmento || null }),
                 ...(body.frecuenciaSemanal !== undefined && { frecuenciaSemanal: parseInt(body.frecuenciaSemanal) }),

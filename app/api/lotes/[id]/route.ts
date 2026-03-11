@@ -117,13 +117,79 @@ export async function PUT(
                 }
             }
 
+            // ─── Descuento automático de insumos (ficha técnica) ───
+
+            // 1. Revertir descuentos previos de insumos vinculados a este lote
+            const movsInsumo = await tx.movimientoStock.findMany({
+                where: { loteOrigenId: id, tipo: 'salida' }
+            })
+            if (movsInsumo.length > 0) {
+                // Revertir stock en paralelo + eliminar movimientos
+                await Promise.all([
+                    // Eliminar movimientos viejos
+                    tx.movimientoStock.deleteMany({ where: { loteOrigenId: id, tipo: 'salida' } }),
+                    // Revertir cada insumo en paralelo
+                    ...movsInsumo.map(mov => tx.insumo.update({
+                        where: { id: mov.insumoId },
+                        data: { stockActual: { increment: mov.cantidad } }
+                    })),
+                    // Revertir stock por ubicación en paralelo
+                    ...movsInsumo.filter(m => m.ubicacionId).map(mov => tx.stockInsumo.upsert({
+                        where: { insumoId_ubicacionId: { insumoId: mov.insumoId, ubicacionId: mov.ubicacionId! } },
+                        create: { insumoId: mov.insumoId, ubicacionId: mov.ubicacionId!, cantidad: mov.cantidad },
+                        update: { cantidad: { increment: mov.cantidad } }
+                    }))
+                ])
+            }
+
+            // 2. Aplicar nuevo descuento si el estado final NO es en_produccion
+            if (nuevoEstado !== 'en_produccion') {
+                const fichas = await tx.fichaTecnica.findMany({
+                    where: { productoId: updated.productoId }
+                })
+                const ubicId = body.ubicacionId || updated.ubicacionId
+                const consumos = fichas
+                    .map(f => ({ insumoId: f.insumoId, consumo: f.cantidadPorUnidad * updated.unidadesProducidas }))
+                    .filter(c => c.consumo > 0)
+
+                if (consumos.length > 0) {
+                    await Promise.all([
+                        // Crear todos los movimientos de stock en batch
+                        tx.movimientoStock.createMany({
+                            data: consumos.map(c => ({
+                                insumoId: c.insumoId,
+                                tipo: 'salida',
+                                cantidad: c.consumo,
+                                observaciones: `Consumo automático — Lote ${id}`,
+                                loteOrigenId: id,
+                                ubicacionId: ubicId,
+                            }))
+                        }),
+                        // Decrementar stock de cada insumo en paralelo
+                        ...consumos.map(c => tx.insumo.update({
+                            where: { id: c.insumoId },
+                            data: { stockActual: { decrement: c.consumo } }
+                        })),
+                        // Actualizar stock por ubicación en paralelo
+                        ...consumos.map(c => tx.stockInsumo.upsert({
+                            where: { insumoId_ubicacionId: { insumoId: c.insumoId, ubicacionId: ubicId } },
+                            create: { insumoId: c.insumoId, ubicacionId: ubicId, cantidad: -c.consumo },
+                            update: { cantidad: { decrement: c.consumo } }
+                        }))
+                    ])
+                }
+            }
+
             return updated
-        })
+        }, { timeout: 30000 })
 
         return NextResponse.json(lote)
-    } catch (error) {
-        console.error('Error updating lote:', error)
-        return NextResponse.json({ error: 'Error al actualizar lote' }, { status: 500 })
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const stack = error instanceof Error ? error.stack : ''
+        console.error('Error updating lote:', msg)
+        console.error('Stack:', stack)
+        return NextResponse.json({ error: `Error al actualizar lote: ${msg}` }, { status: 500 })
     }
 }
 

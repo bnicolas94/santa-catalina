@@ -313,6 +313,9 @@ model Cliente {
   contactoNombre    String?  @map("contacto_nombre")
   contactoTelefono  String?  @map("contacto_telefono")
   direccion         String?
+  calle             String?
+  numero            String?
+  localidad         String?
   latitud           Float?
   longitud          Float?
   zona              String?  // A, B, C, D

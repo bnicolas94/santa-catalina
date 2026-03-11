@@ -121,6 +121,8 @@ export default function ProduccionPage() {
     const [minStockForm, setMinStockForm] = useState({ presentacionId: '', stockMinimo: '' })
     const [showUbiModal, setShowUbiModal] = useState(false)
     const [ubiForm, setUbiForm] = useState({ nombre: '', tipo: 'FABRICA' })
+    const [showMermaModal, setShowMermaModal] = useState(false)
+    const [mermaForm, setMermaForm] = useState({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
 
     useEffect(() => {
         fetchData()
@@ -379,6 +381,40 @@ export default function ProduccionPage() {
         }
     }
 
+    // Merma por planchas
+    const mermaProducto = productos.find(p => p.id === mermaForm.productoId)
+    const planchasPorPaq = mermaProducto?.planchasPorPaquete || 6
+    const planchasNum = parseFloat(mermaForm.planchas) || 0
+    const paquetesMerma = planchasNum / planchasPorPaq
+
+    async function handleMermaSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        if (paquetesMerma <= 0) { setError('Debe ingresar al menos 1 plancha'); return }
+        try {
+            const res = await fetch('/api/movimientos-producto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    productoId: mermaForm.productoId,
+                    presentacionId: mermaForm.presentacionId,
+                    tipo: 'merma',
+                    cantidad: Math.ceil(paquetesMerma),
+                    observaciones: `Merma ${planchasNum} planchas — ${mermaForm.motivo || 'Sin motivo'}`,
+                    ubicacionId: mermaForm.ubicacionId,
+                }),
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess(`Merma registrada: ${planchasNum} planchas (${Math.ceil(paquetesMerma)} paq) descontadas`)
+            setShowMermaModal(false)
+            setMermaForm({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
+            fetchData()
+            setTimeout(() => setSuccess(''), 4000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error')
+        }
+    }
+
     if (loading) return <div className="loading-container"><div className="loader"></div><p>Cargando producción...</p></div>
 
     return (
@@ -420,6 +456,11 @@ export default function ProduccionPage() {
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <button className="btn btn-sm btn-ghost" onClick={() => setShowUbiModal(true)} title="Configurar Fábricas y Locales">⚙️ Sedes</button>
                             <button className="btn btn-sm btn-secondary" onClick={() => setShowMovModal(true)}>Mover Stock</button>
+                            <button className="btn btn-sm" style={{ backgroundColor: '#E74C3C', color: '#fff', fontWeight: 600 }} onClick={() => {
+                                const fab = ubicaciones.find(u => u.tipo === 'FABRICA')
+                                setMermaForm(f => ({ ...f, ubicacionId: fab?.id || '' }))
+                                setShowMermaModal(true)
+                            }}>⚠️ Merma</button>
                         </div>
                     </div>
                     {stockProductos.length === 0 ? (
@@ -1177,6 +1218,98 @@ export default function ProduccionPage() {
                                 </table>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Registrar Merma por Planchas */}
+            {showMermaModal && (
+                <div className="modal-overlay" onClick={() => setShowMermaModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                        <div className="modal-header">
+                            <h2>⚠️ Registrar Merma</h2>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowMermaModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleMermaSubmit}>
+                            <div className="modal-body">
+                                <div className="form-group">
+                                    <label className="form-label">Producto y Presentación</label>
+                                    <select
+                                        className="form-select"
+                                        value={`${mermaForm.productoId}_${mermaForm.presentacionId}`}
+                                        onChange={e => {
+                                            const [pId, prId] = e.target.value.split('_')
+                                            setMermaForm({ ...mermaForm, productoId: pId || '', presentacionId: prId || '' })
+                                        }}
+                                        required
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        {productos.flatMap(p =>
+                                            (p.presentaciones || []).map(pr => (
+                                                <option key={`${p.id}_${pr.id}`} value={`${p.id}_${pr.id}`}>
+                                                    [x{pr.cantidad}] {p.nombre} ({p.planchasPorPaquete} pl/paq)
+                                                </option>
+                                            ))
+                                        )}
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Ubicación</label>
+                                    <select className="form-select" value={mermaForm.ubicacionId} onChange={e => setMermaForm({ ...mermaForm, ubicacionId: e.target.value })} required>
+                                        <option value="">Seleccionar...</option>
+                                        {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Cantidad de planchas</label>
+                                        <input
+                                            type="number"
+                                            className="form-input"
+                                            value={mermaForm.planchas}
+                                            onChange={e => setMermaForm({ ...mermaForm, planchas: e.target.value })}
+                                            placeholder="Ej: 2"
+                                            required
+                                            min="1"
+                                            style={{ fontSize: '18px' }}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Motivo</label>
+                                        <select className="form-select" value={mermaForm.motivo} onChange={e => setMermaForm({ ...mermaForm, motivo: e.target.value })} required>
+                                            <option value="">Seleccionar...</option>
+                                            <option value="Mal corte">Mal corte</option>
+                                            <option value="Vencimiento">Vencimiento</option>
+                                            <option value="Problema de calidad">Problema de calidad</option>
+                                            <option value="Rotura">Rotura / daño</option>
+                                            <option value="Otro">Otro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                {planchasNum > 0 && mermaProducto && (
+                                    <div style={{
+                                        padding: 'var(--space-3)', backgroundColor: '#FFF5F5', borderRadius: 'var(--radius-md)',
+                                        border: '1px solid #FECACA', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                    }}>
+                                        <div>
+                                            <div style={{ fontSize: 'var(--text-sm)', color: '#991B1B', fontWeight: 600 }}>
+                                                {planchasNum} planchas = {paquetesMerma % 1 === 0 ? paquetesMerma : paquetesMerma.toFixed(2)} paquetes
+                                            </div>
+                                            <div style={{ fontSize: 'var(--text-xs)', color: '#B91C1C' }}>
+                                                Se descontarán <strong>{Math.ceil(paquetesMerma)} paq</strong> del stock de {mermaProducto.nombre}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: '1.5rem' }}>🗑️</div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowMermaModal(false)}>Cancelar</button>
+                                <button type="submit" className="btn" style={{ backgroundColor: '#E74C3C', color: '#fff', fontWeight: 600 }} disabled={planchasNum <= 0}>
+                                    Registrar Merma
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

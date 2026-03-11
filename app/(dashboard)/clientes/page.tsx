@@ -8,6 +8,9 @@ interface Cliente {
     contactoNombre: string | null
     contactoTelefono: string | null
     direccion: string | null
+    calle: string | null
+    numero: string | null
+    localidad: string | null
     zona: string | null
     segmento: string | null
     frecuenciaSemanal: number
@@ -31,7 +34,7 @@ export default function ClientesPage() {
     const [filterZona, setFilterZona] = useState('')
     const [form, setForm] = useState({
         nombreComercial: '', contactoNombre: '', contactoTelefono: '',
-        direccion: '', zona: '', segmento: '',
+        calle: '', numero: '', localidad: '', zona: '', segmento: '',
         frecuenciaSemanal: '', pedidoPromedioU: '',
     })
     const [error, setError] = useState('')
@@ -49,15 +52,15 @@ export default function ClientesPage() {
 
     function resetForm() {
         setEditingId(null)
-        setForm({ nombreComercial: '', contactoNombre: '', contactoTelefono: '', direccion: '', zona: '', segmento: '', frecuenciaSemanal: '', pedidoPromedioU: '' })
+        setForm({ nombreComercial: '', contactoNombre: '', contactoTelefono: '', calle: '', numero: '', localidad: '', zona: '', segmento: '', frecuenciaSemanal: '', pedidoPromedioU: '' })
     }
 
     function openEdit(c: Cliente) {
         setEditingId(c.id)
         setForm({
             nombreComercial: c.nombreComercial, contactoNombre: c.contactoNombre || '',
-            contactoTelefono: c.contactoTelefono || '', direccion: c.direccion || '',
-            zona: c.zona || '', segmento: c.segmento || '',
+            contactoTelefono: c.contactoTelefono || '', calle: c.calle || '', numero: c.numero || '',
+            localidad: c.localidad || '', zona: c.zona || '', segmento: c.segmento || '',
             frecuenciaSemanal: String(c.frecuenciaSemanal), pedidoPromedioU: String(c.pedidoPromedioU),
         })
         setShowModal(true)
@@ -123,26 +126,26 @@ export default function ClientesPage() {
                     <thead>
                         <tr>
                             <th>Nombre Comercial</th>
+                            <th>Dirección</th>
                             <th>Contacto</th>
                             <th>Teléfono</th>
                             <th>Zona</th>
-                            <th>Segmento</th>
-                            <th>Freq/sem</th>
                             <th>Pedidos</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filtered.length === 0 ? (
-                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem' }}>No hay clientes registrados</td></tr>
+                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem' }}>No hay clientes registrados</td></tr>
                         ) : filtered.map((c) => (
                             <tr key={c.id}>
                                 <td style={{ fontWeight: 600 }}>{c.nombreComercial}</td>
+                                <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', maxWidth: 200 }}>
+                                    {c.direccion || <span style={{ color: 'var(--color-gray-400)' }}>Sin dirección</span>}
+                                </td>
                                 <td>{c.contactoNombre || '—'}</td>
                                 <td>{c.contactoTelefono || '—'}</td>
                                 <td>{c.zona ? <span className="badge badge-info">Zona {c.zona}</span> : '—'}</td>
-                                <td>{c.segmento ? <span className="badge badge-neutral">Seg. {c.segmento}</span> : '—'}</td>
-                                <td>{c.frecuenciaSemanal || '—'}</td>
                                 <td><span className="badge badge-success">{c._count.pedidos}</span></td>
                                 <td>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -180,9 +183,19 @@ export default function ClientesPage() {
                                         <input className="form-input" value={form.contactoTelefono} onChange={(e) => setForm({ ...form, contactoTelefono: e.target.value })} placeholder="+54 9 11..." />
                                     </div>
                                 </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Calle</label>
+                                        <input className="form-input" value={form.calle} onChange={(e) => setForm({ ...form, calle: e.target.value })} placeholder="Ej: Av. San Martín" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Número</label>
+                                        <input className="form-input" value={form.numero} onChange={(e) => setForm({ ...form, numero: e.target.value })} placeholder="Ej: 1450" />
+                                    </div>
+                                </div>
                                 <div className="form-group">
-                                    <label className="form-label">Dirección</label>
-                                    <input className="form-input" value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} placeholder="Dirección de entrega" />
+                                    <label className="form-label">Localidad / Ciudad</label>
+                                    <input className="form-input" value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} placeholder="Ej: San Miguel de Tucumán" />
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
