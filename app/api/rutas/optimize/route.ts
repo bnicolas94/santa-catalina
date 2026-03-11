@@ -30,17 +30,18 @@ export async function POST(request: Request) {
             })
         }
 
-        // Use first waypoint as origin/destination if no origin provided (round trip from first stop)
-        const start = origin || waypoints[0]
-        const waypointsForApi = origin ? waypoints : waypoints.slice(1)
+        // Use predefined factory address as origin and destination (round trip)
+        const companyAddress = "Camino General Belgrano 7287, Gutierrez, Buenos Aires"
+        const startParam = encodeURIComponent(companyAddress)
+        const waypointsForApi = waypoints // include all waypoints
 
         const waypointsParam = waypointsForApi
             .map(w => `${w.lat},${w.lng}`)
             .join('|')
 
         const url = `https://maps.googleapis.com/maps/api/directions/json?` +
-            `origin=${start.lat},${start.lng}` +
-            `&destination=${start.lat},${start.lng}` + // round trip
+            `origin=${startParam}` +
+            `&destination=${startParam}` + // round trip to factory
             `&waypoints=optimize:true|${waypointsParam}` +
             `&key=${GOOGLE_MAPS_API_KEY}` +
             `&region=ar`
@@ -56,9 +57,8 @@ export async function POST(request: Request) {
         const optimizedWaypointOrder: number[] = route.waypoint_order
 
         // Map back to original waypoint indices
-        const optimizedOrder = origin
-            ? optimizedWaypointOrder.map((i: number) => i)
-            : [0, ...optimizedWaypointOrder.map((i: number) => i + 1)]
+        // Since all waypoints were passed to optimize (none was dropped as origin), the map is direct
+        const optimizedOrder = optimizedWaypointOrder.map((i: number) => i)
 
         // Calculate totals
         let totalDistance = 0

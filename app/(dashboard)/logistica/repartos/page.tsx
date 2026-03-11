@@ -112,16 +112,21 @@ export default function RepartosPage() {
                             </div>
 
                             {/* Botón iniciar recorrido (Google Maps multi-stop) */}
-                            {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (
-                                <a
-                                    href={`https://www.google.com/maps/dir/?api=1&origin=Mi+Ubicacion&destination=${encodeURIComponent(entregasSorted[entregasSorted.length - 1].cliente.direccion || '')}&waypoints=${entregasSorted.slice(0, -1).filter(e => !e.horaEntrega && e.cliente.direccion).map(e => encodeURIComponent(e.cliente.direccion || '')).join('|')}&travelmode=driving`}
-                                    target="_blank" rel="noreferrer"
-                                    className="btn"
+                            {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (() => {
+                                const companyAddress = encodeURIComponent("Camino General Belgrano 7287, Gutierrez, Buenos Aires")
+                                const pendingWaypoints = entregasSorted.filter(e => !e.horaEntrega && e.cliente.direccion).map(e => encodeURIComponent(e.cliente.direccion || '')).join('|')
+                                
+                                return (
+                                    <a
+                                        href={`https://www.google.com/maps/dir/?api=1&origin=${companyAddress}&destination=${companyAddress}&waypoints=${pendingWaypoints}&travelmode=driving`}
+                                        target="_blank" rel="noreferrer"
+                                        className="btn"
                                     style={{ width: '100%', marginBottom: 'var(--space-4)', backgroundColor: '#4285F4', color: 'white', fontWeight: 600, fontSize: '1.1rem', height: '48px' }}
-                                >
-                                    🗺️ Iniciar Recorrido Completo
-                                </a>
-                            )}
+                                    >
+                                        🗺️ Iniciar Recorrido Completo
+                                    </a>
+                                )
+                            })()}
 
                             {entregasSorted.map((entrega, i) => {
                                 const estaEntregado = !!entrega.horaEntrega
