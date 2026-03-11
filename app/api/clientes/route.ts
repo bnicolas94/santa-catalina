@@ -25,15 +25,23 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'El nombre comercial es requerido' }, { status: 400 })
         }
 
-        // Compute direccion from components
-        const direccion = [calle, numero, localidad].filter(Boolean).join(', ') || null
+        // Auto-prefix "Calle " if calle is just a number to improve geocoding
+        let calleFormatted = calle
+        if (calleFormatted && /^\d+$/.test(calleFormatted.trim())) {
+            calleFormatted = `Calle ${calleFormatted.trim()}`
+        }
 
-        // Auto-geocode if we have an address
+        // Compute direccion from components
+        const direccion = [calleFormatted, numero, localidad].filter(Boolean).join(', ') || null
+
+        // Auto-geocode if we have at least calle and numero
         let latitud: number | null = null
         let longitud: number | null = null
-        if (direccion && process.env.GOOGLE_MAPS_API_KEY) {
+        if (calleFormatted && numero && process.env.GOOGLE_MAPS_API_KEY) {
             try {
-                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(direccion)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
+                // To help Google Maps, if localidad is missing, we append a default province context
+                const queryAddress = [calleFormatted, numero, localidad || 'Buenos Aires'].filter(Boolean).join(', ')
+                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(queryAddress)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
                 const geoRes = await fetch(geoUrl)
                 const geoData = await geoRes.json()
                 if (geoData.status === 'OK' && geoData.results?.length) {
@@ -49,7 +57,7 @@ export async function POST(request: Request) {
                 contactoNombre: contactoNombre || null,
                 contactoTelefono: contactoTelefono || null,
                 direccion,
-                calle: calle || null,
+                calle: calleFormatted || null,
                 numero: numero || null,
                 localidad: localidad || null,
                 latitud,

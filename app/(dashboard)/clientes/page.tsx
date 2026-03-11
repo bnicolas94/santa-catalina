@@ -141,7 +141,18 @@ export default function ClientesPage() {
                             <tr key={c.id}>
                                 <td style={{ fontWeight: 600 }}>{c.nombreComercial}</td>
                                 <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', maxWidth: 200 }}>
-                                    {c.direccion || <span style={{ color: 'var(--color-gray-400)' }}>Sin dirección</span>}
+                                    {c.direccion ? (
+                                        <>
+                                            <div>{c.direccion}</div>
+                                            {(!c.localidad) && (
+                                                <div style={{ color: 'var(--color-warning)', fontSize: '0.7rem', marginTop: '2px' }}>
+                                                    ⚠️ Faltan datos (ej: localidad)
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span style={{ color: 'var(--color-gray-400)' }}>Sin dirección</span>
+                                    )}
                                 </td>
                                 <td>{c.contactoNombre || '—'}</td>
                                 <td>{c.contactoTelefono || '—'}</td>
@@ -194,8 +205,9 @@ export default function ClientesPage() {
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Localidad / Ciudad</label>
-                                    <input className="form-input" value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} placeholder="Ej: San Miguel de Tucumán" />
+                                    <label className="form-label">Localidad / Ciudad <span style={{ color: 'var(--color-danger)' }}>*</span></label>
+                                    <input className="form-input" value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} required placeholder="Ej: Juan María Gutiérrez, Berazategui" />
+                                    <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '4px' }}>Obligatorio para que Google Maps encuente el lugar exacto en la ruta.</p>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">

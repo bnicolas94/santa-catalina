@@ -10,10 +10,18 @@ export async function PUT(
         const { id } = await params
         const body = await request.json()
 
+        // Auto-prefix "Calle " if calle is just a number
+        let calleFormatted = body.calle
+        if (calleFormatted !== undefined && calleFormatted !== null) {
+            if (/^\d+$/.test(calleFormatted.toString().trim())) {
+                calleFormatted = `Calle ${calleFormatted.toString().trim()}`
+            }
+        }
+
         // Recompute direccion if address components provided
-        const hasAddressChange = body.calle !== undefined || body.numero !== undefined || body.localidad !== undefined
+        const hasAddressChange = calleFormatted !== undefined || body.numero !== undefined || body.localidad !== undefined
         const direccionComputed = hasAddressChange
-            ? [body.calle, body.numero, body.localidad].filter(Boolean).join(', ') || null
+            ? [calleFormatted, body.numero, body.localidad].filter(Boolean).join(', ') || null
             : undefined
 
         // Auto-geocode if address changed
@@ -21,7 +29,10 @@ export async function PUT(
         let longitud: number | undefined
         if (direccionComputed && process.env.GOOGLE_MAPS_API_KEY) {
             try {
-                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(direccionComputed)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
+                // Determine the locality to help geocoding (use body.localidad, or existing, or default)
+                // Use the string components explicitly to bypass formatting errors
+                const queryAddress = [calleFormatted, body.numero, body.localidad || 'Buenos Aires'].filter(Boolean).join(', ')
+                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(queryAddress)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
                 const geoRes = await fetch(geoUrl)
                 const geoData = await geoRes.json()
                 if (geoData.status === 'OK' && geoData.results?.length) {
@@ -38,24 +49,24 @@ export async function PUT(
                 ...(body.contactoNombre !== undefined && { contactoNombre: body.contactoNombre || null }),
                 ...(body.contactoTelefono !== undefined && { contactoTelefono: body.contactoTelefono || null }),
                 ...(direccionComputed !== undefined && { direccion: direccionComputed }),
-                ...(body.calle !== undefined && { calle: body.calle || null }),
+                ...(calleFormatted !== undefined && { calle: calleFormatted || null }),
                 ...(body.numero !== undefined && { numero: body.numero || null }),
                 ...(body.localidad !== undefined && { localidad: body.localidad || null }),
                 ...(latitud !== undefined && { latitud }),
                 ...(longitud !== undefined && { longitud }),
                 ...(body.zona !== undefined && { zona: body.zona || null }),
                 ...(body.segmento !== undefined && { segmento: body.segmento || null }),
-                ...(body.frecuenciaSemanal !== undefined && { frecuenciaSemanal: parseInt(body.frecuenciaSemanal) }),
-                ...(body.pedidoPromedioU !== undefined && { pedidoPromedioU: parseInt(body.pedidoPromedioU) }),
+                ...(body.frecuenciaSemanal !== undefined && { frecuenciaSemanal: parseInt(body.frecuenciaSemanal) || 0 }),
+                ...(body.pedidoPromedioU !== undefined && { pedidoPromedioU: parseInt(body.pedidoPromedioU) || 0 }),
                 ...(body.activo !== undefined && { activo: body.activo }),
             },
             include: { _count: { select: { pedidos: true } } },
         })
 
         return NextResponse.json(cliente)
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating cliente:', error)
-        return NextResponse.json({ error: 'Error al actualizar cliente' }, { status: 500 })
+        return NextResponse.json({ error: error?.message || 'Error al actualizar cliente' }, { status: 500 })
     }
 }
 
