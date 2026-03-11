@@ -25,9 +25,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'El nombre comercial es requerido' }, { status: 400 })
         }
 
-        // Auto-prefix "Calle " if calle is just a number to improve geocoding
+        // Auto-prefix "Calle " if calle is just a number (e.g. "154", "154a", "154 A", "154 bis")
         let calleFormatted = calle
-        if (calleFormatted && /^\d+$/.test(calleFormatted.trim())) {
+        if (calleFormatted && /^\d+(\s?[a-zA-Z]+)?$/.test(calleFormatted.trim())) {
             calleFormatted = `Calle ${calleFormatted.trim()}`
         }
 

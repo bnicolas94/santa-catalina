@@ -10,10 +10,10 @@ export async function PUT(
         const { id } = await params
         const body = await request.json()
 
-        // Auto-prefix "Calle " if calle is just a number
+        // Auto-prefix "Calle " if calle is just a number (e.g. "154", "154a", "154 A", "154 bis")
         let calleFormatted = body.calle
         if (calleFormatted !== undefined && calleFormatted !== null) {
-            if (/^\d+$/.test(calleFormatted.toString().trim())) {
+            if (/^\d+(\s?[a-zA-Z]+)?$/.test(calleFormatted.toString().trim())) {
                 calleFormatted = `Calle ${calleFormatted.toString().trim()}`
             }
         }
