@@ -30,11 +30,11 @@ export async function GET() {
     }
 }
 
-// PUT /api/caja/saldos — Actualizar saldo de una caja
+// PUT /api/caja/saldos — Actualizar saldo de una caja y registrar el ajuste en movimientos
 export async function PUT(request: Request) {
     try {
         const body = await request.json()
-        const { tipo, saldo } = body
+        const { tipo, saldo, motivo, descripcion } = body
 
         if (!tipo || saldo === undefined) {
             return NextResponse.json({ error: 'Tipo y saldo son requeridos' }, { status: 400 })
@@ -44,13 +44,38 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
         }
 
-        const updated = await prisma.saldoCaja.upsert({
-            where: { tipo },
-            create: { tipo, saldo: parseFloat(saldo) },
-            update: { saldo: parseFloat(saldo) },
+        const nuevoSaldo = parseFloat(saldo)
+
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Obtener saldo actual
+            const actual = await tx.saldoCaja.findUnique({ where: { tipo } })
+            const saldoAnterior = actual?.saldo || 0
+            const diferencia = nuevoSaldo - saldoAnterior
+
+            // 2. Si hay diferencia, registrar el movimiento
+            if (diferencia !== 0) {
+                await tx.movimientoCaja.create({
+                    data: {
+                        tipo: diferencia > 0 ? 'ingreso' : 'egreso',
+                        concepto: motivo || 'ajuste', // ajuste o arqueo
+                        monto: Math.abs(diferencia),
+                        medioPago: 'efectivo',
+                        cajaOrigen: tipo,
+                        descripcion: descripcion || `Cambio manual de saldo (${motivo || 'ajuste'})`,
+                        fecha: new Date()
+                    }
+                })
+            }
+
+            // 3. Actualizar el saldo
+            return await tx.saldoCaja.upsert({
+                where: { tipo },
+                create: { tipo, saldo: nuevoSaldo },
+                update: { saldo: nuevoSaldo },
+            })
         })
 
-        return NextResponse.json(updated)
+        return NextResponse.json(result)
     } catch (error) {
         console.error('Error actualizando saldo:', error)
         return NextResponse.json({ error: 'Error al actualizar saldo' }, { status: 500 })

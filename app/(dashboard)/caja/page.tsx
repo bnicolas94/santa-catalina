@@ -37,6 +37,8 @@ export default function CajaPage() {
     const [saldoLocal, setSaldoLocal] = useState(0)
     const [editingSaldo, setEditingSaldo] = useState<string | null>(null)
     const [editSaldoValue, setEditSaldoValue] = useState('')
+    const [editMotivo, setEditMotivo] = useState('ajuste')
+    const [editDescripcion, setEditDescripcion] = useState('')
     const [showMontos, setShowMontos] = useState(true)
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
@@ -108,10 +110,17 @@ export default function CajaPage() {
             const res = await fetch('/api/caja/saldos', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tipo, saldo: editSaldoValue }),
+                body: JSON.stringify({ 
+                    tipo, 
+                    saldo: editSaldoValue,
+                    motivo: editMotivo,
+                    descripcion: editDescripcion
+                }),
             })
             if (!res.ok) throw new Error()
             setEditingSaldo(null)
+            setEditMotivo('ajuste')
+            setEditDescripcion('')
             setSuccess('Saldo actualizado')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
@@ -261,9 +270,21 @@ export default function CajaPage() {
                                 )}
                             </div>
                             {editingSaldo === 'caja_madre' ? (
-                                <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                    onChange={(e) => setEditSaldoValue(e.target.value)}
-                                    style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                        onChange={(e) => setEditSaldoValue(e.target.value)}
+                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
+                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
+                                            <option value="ajuste">⚙️ AJUSTE</option>
+                                            <option value="arqueo">📋 ARQUEO</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
+                                        style={{ fontSize: '0.75rem', padding: '4px' }}
+                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+                                </div>
                             ) : (
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#8E44AD', textAlign: 'center' }}>{formatCurrency(saldoMadre, showMontos)}</div>
                             )}
@@ -289,9 +310,21 @@ export default function CajaPage() {
                                 )}
                             </div>
                             {editingSaldo === 'caja_chica' ? (
-                                <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                    onChange={(e) => setEditSaldoValue(e.target.value)}
-                                    style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                        onChange={(e) => setEditSaldoValue(e.target.value)}
+                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
+                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
+                                            <option value="ajuste">⚙️ AJUSTE</option>
+                                            <option value="arqueo">📋 ARQUEO</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
+                                        style={{ fontSize: '0.75rem', padding: '4px' }}
+                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+                                </div>
                             ) : (
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E67E22', textAlign: 'center' }}>{formatCurrency(saldoChica, showMontos)}</div>
                             )}
@@ -317,9 +350,21 @@ export default function CajaPage() {
                                 )}
                             </div>
                             {editingSaldo === 'local' ? (
-                                <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                    onChange={(e) => setEditSaldoValue(e.target.value)}
-                                    style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                        onChange={(e) => setEditSaldoValue(e.target.value)}
+                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
+                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
+                                            <option value="ajuste">⚙️ AJUSTE</option>
+                                            <option value="arqueo">📋 ARQUEO</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
+                                        style={{ fontSize: '0.75rem', padding: '4px' }}
+                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+                                </div>
                             ) : (
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#27AE60', textAlign: 'center' }}>{formatCurrency(saldoLocal, showMontos)}</div>
                             )}
