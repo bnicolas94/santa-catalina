@@ -11,6 +11,8 @@ export type ClientMatchResult = {
     proposedData: {
         nombreComercial: string;
         contactoTelefono?: string;
+        direccion?: string;
+        localidad?: string;
     };
 };
 
@@ -43,6 +45,8 @@ function normalizePhone(phone: string | null): string {
 export function matchClient(
     nombreExcel: string,
     telefonoExcel: string | null,
+    direccionExcel: string | null,
+    localidadExcel: string | null,
     clientesDB: ClienteData[]
 ): ClientMatchResult {
     const normNameExcel = normalizeString(nombreExcel);
@@ -52,7 +56,11 @@ export function matchClient(
         return {
             isNew: true,
             confidence: "low",
-            proposedData: { nombreComercial: "CLIENTE DESCONOCIDO" },
+            proposedData: { 
+                nombreComercial: "CLIENTE DESCONOCIDO",
+                direccion: direccionExcel || undefined,
+                localidad: localidadExcel || undefined,
+            },
         };
     }
 
@@ -71,6 +79,8 @@ export function matchClient(
                 proposedData: {
                     nombreComercial: nombreExcel,
                     contactoTelefono: telefonoExcel || undefined,
+                    direccion: direccionExcel || undefined,
+                    localidad: localidadExcel || undefined,
                 },
             };
         }
@@ -91,6 +101,8 @@ export function matchClient(
             proposedData: {
                 nombreComercial: nombreExcel,
                 contactoTelefono: telefonoExcel || undefined,
+                direccion: direccionExcel || undefined,
+                localidad: localidadExcel || undefined,
             },
         };
     }
@@ -102,6 +114,8 @@ export function matchClient(
         proposedData: {
             nombreComercial: nombreExcel.trim(),
             contactoTelefono: telefonoExcel ? telefonoExcel.trim() : undefined,
+            direccion: direccionExcel ? direccionExcel.trim() : undefined,
+            localidad: localidadExcel ? localidadExcel.trim() : undefined,
         },
     };
 }

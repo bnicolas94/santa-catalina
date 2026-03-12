@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Presentacion {
     id: string; cantidad: number; precioVenta: number
-    producto: { id: string; nombre: string; codigoInterno: string }
+    producto: { id: string; nombre: string; codigoInterno: string; alias?: string | null }
 }
 interface Cliente { id: string; nombreComercial: string }
 interface DetallePedido {
     id: string; cantidad: number; precioUnitario: number
+    observaciones?: string | null
     presentacion: Presentacion
 }
 interface Pedido {
@@ -169,7 +171,10 @@ export default function PedidosPage() {
         <div>
             <div className="page-header">
                 <h1>📋 Pedidos</h1>
-                <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Nuevo Pedido</button>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <Link href="/importar" className="btn btn-ghost">📂 Importar Excel</Link>
+                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Nuevo Pedido</button>
+                </div>
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}
@@ -231,6 +236,7 @@ export default function PedidosPage() {
                                             <div key={d.id} style={{ fontSize: 'var(--text-xs)' }}>
                                                 <span className="badge badge-neutral" style={{ marginRight: 4, fontSize: '10px' }}>{d.presentacion.producto.codigoInterno}</span>
                                                 x{d.presentacion.cantidad} ×{d.cantidad}
+                                                {d.observaciones && <span style={{ marginLeft: '4px', fontStyle: 'italic', color: 'var(--color-primary)' }}>({d.observaciones.toUpperCase()})</span>}
                                             </div>
                                         ))}
                                     </td>

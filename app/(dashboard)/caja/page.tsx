@@ -39,9 +39,11 @@ export default function CajaPage() {
     const [showMontos, setShowMontos] = useState(true)
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
+    const [showTransferModal, setShowTransferModal] = useState(false)
+    const [transfForm, setTransfForm] = useState({ origen: 'local', destino: 'caja_chica', monto: '', fecha: new Date().toISOString().split('T')[0] })
     const [showRendicionModal, setShowRendicionModal] = useState<Rendicion | null>(null)
     const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0])
-    const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' })
+    const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
     const [rendForm, setRendForm] = useState({ montoEntregado: '', observaciones: '' })
 
     const [error, setError] = useState('')
@@ -112,7 +114,7 @@ export default function CajaPage() {
             }
             setSuccess('Movimiento registrado')
             setShowModal(false)
-            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' })
+            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
             fetchData()
 
             setTimeout(() => setSuccess(''), 3000)
@@ -136,7 +138,7 @@ export default function CajaPage() {
             setSuccess('Movimiento actualizado')
             setShowModal(false)
             setEditingMov(null)
-            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' })
+            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
 
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
@@ -164,6 +166,7 @@ export default function CajaPage() {
             descripcion: m.descripcion || '',
             cajaOrigen: m.cajaOrigen || 'caja_madre',
             choferId: m.rendicion ? m.rendicion.chofer.id : '',
+            fecha: new Date(m.fecha).toISOString().split('T')[0],
         })
 
         setShowModal(true)
@@ -209,7 +212,8 @@ export default function CajaPage() {
                         style={{ fontSize: '1.2rem' }}>
                         {showMontos ? '👁️' : '🙈'}
                     </button>
-                    <button className="btn btn-primary" onClick={() => { setEditingMov(null); setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '' }); setShowModal(true) }}>+ Registrar Movimiento</button>
+                    <button className="btn btn-secondary" onClick={() => setShowTransferModal(true)}>⇄ Transferir</button>
+                    <button className="btn btn-primary" onClick={() => { setEditingMov(null); setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] }); setShowModal(true) }}>+ Registrar Movimiento</button>
 
                 </div>
             </div>
@@ -436,6 +440,16 @@ export default function CajaPage() {
                         <form onSubmit={editingMov ? handleEdit : handleSubmit}>
                             <div className="modal-body">
                                 <div className="form-group">
+                                    <label className="form-label">Fecha de Registro</label>
+                                    <input 
+                                        type="date" 
+                                        className="form-input" 
+                                        value={form.fecha}
+                                        onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                                        required 
+                                    />
+                                </div>
+                                <div className="form-group">
                                     <label className="form-label">Tipo</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                                         <button type="button" className="btn btn-sm"
@@ -634,6 +648,70 @@ export default function CajaPage() {
                         <div className="modal-footer">
                             <button className="btn btn-ghost" onClick={() => setShowConceptosModal(false)}>Cerrar</button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* ═══ Modal Transferencia ═══ */}
+            {showTransferModal && (
+                <div className="modal-overlay" onClick={() => setShowTransferModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 450 }}>
+                        <div className="modal-header">
+                            <h2>⇄ Transferir entre Cajas</h2>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowTransferModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={async (e) => {
+                            e.preventDefault()
+                            setError('')
+                            try {
+                                const res = await fetch('/api/caja/transferir', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(transfForm),
+                                })
+                                if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+                                setSuccess('Transferencia realizada correctamente')
+                                setShowTransferModal(false)
+                                setTransfForm({ origen: 'local', destino: 'caja_chica', monto: '', fecha: new Date().toISOString().split('T')[0] })
+                                fetchData()
+                                setTimeout(() => setSuccess(''), 3000)
+                            } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+                        }}>
+                            <div className="modal-body">
+                                <div className="form-group">
+                                    <label className="form-label">Fecha</label>
+                                    <input type="date" className="form-input" value={transfForm.fecha}
+                                        onChange={(e) => setTransfForm({ ...transfForm, fecha: e.target.value })} required />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Desde</label>
+                                        <select className="form-select" value={transfForm.origen} onChange={(e) => setTransfForm({ ...transfForm, origen: e.target.value })}>
+                                            <option value="caja_madre">🏦 Madre</option>
+                                            <option value="caja_chica">💼 Chica</option>
+                                            <option value="local">🏪 Local</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Hacia</label>
+                                        <select className="form-select" value={transfForm.destino} onChange={(e) => setTransfForm({ ...transfForm, destino: e.target.value })}>
+                                            <option value="caja_madre">🏦 Madre</option>
+                                            <option value="caja_chica">💼 Chica</option>
+                                            <option value="local">🏪 Local</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Monto ($)</label>
+                                    <input type="number" step="0.01" min="0.01" className="form-input" placeholder="0.00" value={transfForm.monto}
+                                        onChange={(e) => setTransfForm({ ...transfForm, monto: e.target.value })} required 
+                                        style={{ fontSize: '1.2rem', textAlign: 'center', fontWeight: 700 }} />
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowTransferModal(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary">Realizar Transferencia</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

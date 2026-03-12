@@ -26,6 +26,7 @@ interface Producto {
     planchasPorPaquete: number
     paquetesPorRonda: number
     activo: boolean
+    alias: string | null
     presentaciones: Presentacion[]
     fichasTecnicas: FichaTecnica[]
 }
@@ -40,7 +41,7 @@ export default function ProductosPage() {
     const [presForm, setPresForm] = useState({ cantidad: '', precioVenta: '' })
     const [form, setForm] = useState({
         nombre: '', codigoInterno: '', vidaUtilHoras: '48', tempConservacionMax: '4',
-        planchasPorPaquete: '6', paquetesPorRonda: '14',
+        planchasPorPaquete: '6', paquetesPorRonda: '14', alias: '',
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -57,7 +58,7 @@ export default function ProductosPage() {
 
     function resetForm() {
         setEditingId(null)
-        setForm({ nombre: '', codigoInterno: '', vidaUtilHoras: '48', tempConservacionMax: '4', planchasPorPaquete: '6', paquetesPorRonda: '14' })
+        setForm({ nombre: '', codigoInterno: '', vidaUtilHoras: '48', tempConservacionMax: '4', planchasPorPaquete: '6', paquetesPorRonda: '14', alias: '' })
     }
 
     function openEdit(prod: Producto) {
@@ -67,6 +68,7 @@ export default function ProductosPage() {
             vidaUtilHoras: String(prod.vidaUtilHoras), tempConservacionMax: '4',
             planchasPorPaquete: String(prod.planchasPorPaquete || 6),
             paquetesPorRonda: String(prod.paquetesPorRonda || 14),
+            alias: prod.alias || '',
         })
         setShowModal(true)
     }
@@ -172,7 +174,10 @@ export default function ProductosPage() {
                             return (
                                 <tr key={prod.id}>
                                     <td><span className="badge badge-neutral">{prod.codigoInterno}</span></td>
-                                    <td style={{ fontWeight: 600 }}>{prod.nombre}</td>
+                                    <td style={{ fontWeight: 600 }}>
+                                        {prod.nombre}
+                                        {prod.alias && <div style={{ fontSize: '11px', color: 'var(--color-gray-500)', fontWeight: 400 }}>Alias: {prod.alias}</div>}
+                                    </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
                                             {prod.presentaciones.length > 0 ? prod.presentaciones.map((p) => (
@@ -228,6 +233,10 @@ export default function ProductosPage() {
                                         <label className="form-label">Código interno</label>
                                         <input className="form-input" value={form.codigoInterno} onChange={(e) => setForm({ ...form, codigoInterno: e.target.value.toUpperCase() })} required placeholder="JQ" />
                                     </div>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Alias de importación (separados por coma)</label>
+                                    <input className="form-input" value={form.alias} onChange={(e) => setForm({ ...form, alias: e.target.value.toLowerCase() })} placeholder="ej: jq, jyq, jamon" />
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">

@@ -96,10 +96,18 @@ export async function POST(request: Request) {
                     concepto: 'rendicion_chofer',
                     monto: montoReal,
                     medioPago: 'efectivo',
+                    cajaOrigen: 'caja_chica', // Por defecto las rendiciones van a caja chica
                     descripcion: `Rendición chofer - ${diferencia !== 0 ? `Diferencia: $${diferencia.toFixed(2)}` : 'Sin diferencia'}`,
                     rendicionId: rendicion.id,
                 },
             })
+
+            // 3. Actualizar saldo en Caja Chica
+            await tx.saldoCaja.update({
+                where: { tipo: 'caja_chica' },
+                data: { saldo: { increment: montoReal } }
+            })
+
 
             return rendicion
         })

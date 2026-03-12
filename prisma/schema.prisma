@@ -98,6 +98,7 @@ model Producto {
   paquetesPorRonda    Int      @default(14) @map("paquetes_por_ronda")
   vidaUtilHoras       Int      @default(48) @map("vida_util_horas")
   tempConservacionMax Float    @default(4) @map("temp_conservacion_max")
+  alias               String?  // Ej: "jq, jyq, jamon"
   activo              Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

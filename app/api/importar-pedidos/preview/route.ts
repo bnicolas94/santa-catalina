@@ -12,6 +12,7 @@ export interface ExcelRow {
     nombreCliente: string;
     pedidoTexto: string; // Ej: "24jyq 8hue"
     direccion?: string;
+    localidad?: string;
     telefono?: string;
     turno?: "MANANA" | "SIESTA" | "TARDE";
 }
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
                 select: {
                     id: true,
                     cantidad: true,
-                    producto: { select: { codigoInterno: true } },
+                    producto: { select: { codigoInterno: true, alias: true } as any },
                 },
             }),
         ]);
@@ -61,10 +62,10 @@ export async function POST(req: NextRequest) {
             const errors: string[] = [];
 
             // 1. Match de Cliente
-            const clientMatch = matchClient(row.nombreCliente, row.telefono || null, clientesDB);
+            const clientMatch = matchClient(row.nombreCliente, row.telefono || null, row.direccion || null, row.localidad || null, clientesDB);
 
             // 2. Parseo de Pedido
-            const orderMatch = parseOrderText(row.pedidoTexto, presentacionesDB);
+            const orderMatch = parseOrderText(row.pedidoTexto, presentacionesDB as any);
 
             // 3. Determinar Status General de la Fila
             let status: "verde" | "amarillo" | "rojo" = "verde";

@@ -31,23 +31,48 @@ export default function ImportarPedidosPage() {
         try {
             const data = await file.arrayBuffer();
             const workbook = xlsx.read(data);
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]]; // Usamos la primera por ahora o la llamada "2026"
-            const rawJson = xlsx.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: "" });
+            
+            // Intentar buscar la hoja "2026" o usar la que tenga más filas
+            let sheetName = workbook.SheetNames.find(n => n.includes("2026")) || workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            
+            // Leemos como array de arrays para no depender de nombres de encabezados (header: 1)
+            // O mejor, usamos { header: "A" } para tener r["A"], r["B"], etc.
+            const rawJson = xlsx.utils.sheet_to_json<any>(sheet, { header: "A", defval: "" });
+
+            // Función para convertir fecha de Excel (número) a string ISO
+            const formatExcelDate = (val: any) => {
+                if (!val) return new Date().toISOString().split("T")[0];
+                if (typeof val === "number") {
+                    // Excel base date is 1899-12-30
+                    const date = new Date((val - 25569) * 86400 * 1000);
+                    return date.toISOString().split("T")[0];
+                }
+                return String(val);
+            };
 
             // Transformar datos crudos a ExcelRow
-            const rows: ExcelRow[] = rawJson.map((r, index) => ({
-                rowId: index,
-                // En Excel la fecha usualmente viene como número serial si no está formateada
-                // Para simplificar, asumimos que A es fecha y está como string. Si viene serial hay que convertirlo (TODO)
-                fecha: (r["A"] as string) || new Date().toISOString().split("T")[0],
-                nombreCliente: (r["B"] as string)?.toString() || "",
-                pedidoTexto: (r["C"] as string)?.toString() || "",
-                direccion: (r["E"] as string)?.toString() || "",
-                telefono: (r["F"] as string)?.toString() || "",
-                turno: ((r["G"] as string)?.toString().toUpperCase() as "MANANA" | "SIESTA" | "TARDE") || undefined,
-            })).filter(r => r.nombreCliente && r.pedidoTexto); // Filtrar filas vacías de Excel
+            // Saltamos la primera fila si detectamos que es el encabezado (Fecha, Nombre...)
+            const rows: ExcelRow[] = rawJson
+                .map((r: any, index: number) => ({
+                    rowId: index,
+                    fecha: formatExcelDate(r["A"]),
+                    nombreCliente: r["B"]?.toString() || "",
+                    pedidoTexto: r["C"]?.toString() || "",
+                    direccion: r["E"]?.toString() || "",
+                    localidad: r["F"]?.toString() || "",
+                    telefono: r["G"]?.toString() || "",
+                    turno: (r["H"]?.toString().toUpperCase().includes("MA") ? "MANANA" : 
+                            r["H"]?.toString().toUpperCase().includes("SI") ? "SIESTA" : 
+                            r["H"]?.toString().toUpperCase().includes("TA") ? "TARDE" : undefined) as "MANANA" | "SIESTA" | "TARDE" | undefined,
+                }))
+                .filter(r => r.nombreCliente && r.pedidoTexto && r.nombreCliente !== "Nombre y Apellido");
 
-            setImportStatus({ type: "info", msg: "Enviando a validación..." });
+            if (rows.length === 0) {
+                throw new Error("No se encontraron filas válidas en la hoja " + sheetName);
+            }
+
+            setImportStatus({ type: "info", msg: `Enviando ${rows.length} filas a validación...` });
 
             // Llamar al API preview
             const res = await fetch("/api/importar-pedidos/preview", {

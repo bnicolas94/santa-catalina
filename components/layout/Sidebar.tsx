@@ -70,6 +70,12 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN', 'ADMIN_OPS'],
     },
     {
+        label: 'Importar',
+        href: '/importar',
+        icon: '📥',
+        roles: ['ADMIN', 'ADMIN_OPS'],
+    },
+    {
         label: 'Logística',
         href: '/logistica',
         icon: '🚚',

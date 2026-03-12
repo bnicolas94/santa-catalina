@@ -17,15 +17,21 @@ interface FichaTecnica {
     insumo: Insumo
 }
 
+interface Presentacion {
+    id: string
+    cantidad: number
+    precioVenta: number
+}
+
 interface Producto {
     id: string
     nombre: string
     codigoInterno: string
-    precioVenta: number
     costoUnitario: number
     vidaUtilHoras: number
     tempConservacionMax: number
     activo: boolean
+    presentaciones: Presentacion[]
     fichasTecnicas: FichaTecnica[]
 }
 
@@ -129,8 +135,13 @@ export default function ProductoDetallePage() {
         (acc, f) => acc + f.cantidadPorUnidad * f.insumo.precioUnitario,
         0
     )
-    const margen = producto.precioVenta > 0
-        ? ((producto.precioVenta - cdi) / producto.precioVenta * 100).toFixed(1)
+
+    // Usamos la primera presentación para el cálculo del margen (referencia)
+    const mainPres = producto.presentaciones?.[0];
+    const precioReferencia = mainPres ? mainPres.precioVenta : 0;
+
+    const margen = precioReferencia > 0
+        ? ((precioReferencia - cdi) / precioReferencia * 100).toFixed(1)
         : '—'
 
     // Insumos que ya están en la ficha
@@ -163,10 +174,15 @@ export default function ProductoDetallePage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
                 <div className="card">
                     <div className="card-body" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>Precio Venta</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>Precio Venta (Ref)</div>
                         <div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
-                            ${producto.precioVenta.toLocaleString('es-AR')}
+                            {precioReferencia > 0 ? `$${precioReferencia.toLocaleString('es-AR')}` : '—'}
                         </div>
+                        {producto.presentaciones.length > 1 && (
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>
+                                Basado en x{mainPres?.cantidad} unidades
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="card">

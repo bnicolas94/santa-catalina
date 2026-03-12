@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { nombre, codigoInterno, vidaUtilHoras, tempConservacionMax, planchasPorPaquete, paquetesPorRonda, presentaciones } = body
+        const { nombre, codigoInterno, vidaUtilHoras, tempConservacionMax, planchasPorPaquete, paquetesPorRonda, presentaciones, alias } = body
 
         if (!nombre || !codigoInterno) {
             return NextResponse.json({ error: 'Nombre y código interno son requeridos' }, { status: 400 })
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
                 vidaUtilHoras: parseInt(vidaUtilHoras) || 48,
                 tempConservacionMax: parseFloat(tempConservacionMax) || 4,
                 planchasPorPaquete: parseInt(planchasPorPaquete) || 6,
-                paquetesPorRonda: parseInt(paquetesPorRonda) || 14,
+                planchasPorPaquete: parseInt(paquesPorRonda) || 14,
+                alias: alias || null,
                 ...(presentaciones?.length && {
                     presentaciones: {
                         create: presentaciones.map((p: { cantidad: string; precioVenta: string }) => ({

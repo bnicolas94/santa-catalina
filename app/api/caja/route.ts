@@ -16,17 +16,9 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const fechaParam = searchParams.get('fecha')
 
-        // Parsear como hora local para evitar desfasaje de timezone
-        let startOfDay: Date, endOfDay: Date
-        if (fechaParam) {
-            const [y, m, d] = fechaParam.split('-').map(Number)
-            startOfDay = new Date(y, m - 1, d, 0, 0, 0, 0)
-            endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999)
-        } else {
-            const now = new Date()
-            startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-            endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
-        }
+        const dateToFilter = fechaParam ? new Date(fechaParam + 'T00:00:00') : new Date()
+        const startOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 0, 0, 0, 0)
+        const endOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 23, 59, 59, 999)
 
         const movimientos = await prisma.movimientoCaja.findMany({
             where: { fecha: { gte: startOfDay, lte: endOfDay } },
@@ -79,7 +71,7 @@ export async function POST(request: Request) {
 
         const body = await request.json()
         console.log('[CAJA API] Recibido POST:', body)
-        const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen, choferId } = body
+        const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen, choferId, fecha } = body
 
         if (!tipo || !concepto || monto === undefined || monto === null || monto === '') {
             return NextResponse.json({ error: 'Tipo, concepto y monto son requeridos' }, { status: 400 })
@@ -117,22 +109,42 @@ export async function POST(request: Request) {
             rendicionId = rendicion.id
         }
 
-        const mov = await prisma.movimientoCaja.create({
-            data: {
-                tipo,
-                concepto,
-                monto: numericMonto,
-                medioPago: medioPago || 'efectivo',
-                cajaOrigen: cajaOrigen || null,
-                descripcion: descripcion || null,
-                pedidoId: pedidoId || null,
-                gastoId: gastoId || null,
-                rendicionId: rendicionId,
-            },
+        const result = await prisma.$transaction(async (tx) => {
+            const mov = await tx.movimientoCaja.create({
+                data: {
+                    tipo,
+                    concepto,
+                    monto: numericMonto,
+                    medioPago: medioPago || 'efectivo',
+                    cajaOrigen: cajaOrigen || null,
+                    descripcion: descripcion || null,
+                    pedidoId: pedidoId || null,
+                    gastoId: gastoId || null,
+                    rendicionId: rendicionId,
+                    fecha: fecha ? new Date(fecha) : new Date(),
+                },
+            })
+
+            // Actualizar SaldoCaja si hay caja origen
+            if (cajaOrigen) {
+                if (tipo === 'ingreso') {
+                    await tx.saldoCaja.update({
+                        where: { tipo: cajaOrigen },
+                        data: { saldo: { increment: numericMonto } }
+                    })
+                } else {
+                    await tx.saldoCaja.update({
+                        where: { tipo: cajaOrigen },
+                        data: { saldo: { decrement: numericMonto } }
+                    })
+                }
+            }
+
+            return mov
         })
 
-        console.log('[CAJA API] Movimiento creado exitosamente:', mov.id)
-        return NextResponse.json(mov, { status: 201 })
+        console.log('[CAJA API] Movimiento creado exitosamente:', result.id)
+        return NextResponse.json(result, { status: 201 })
     } catch (error) {
         console.error('[CAJA API] Error crítico creando movimiento:', error)
         return NextResponse.json({
@@ -154,22 +166,62 @@ export async function PUT(request: Request) {
         }
 
         const body = await request.json()
-        const { id, tipo, concepto, monto, medioPago, cajaOrigen, descripcion } = body
+        const { id, tipo, concepto, monto, medioPago, cajaOrigen, descripcion, fecha } = body
 
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-        const mov = await prisma.movimientoCaja.update({
-            where: { id },
-            data: {
-                ...(tipo && { tipo }),
-                ...(concepto && { concepto }),
-                ...(monto !== undefined && { monto: parseFloat(monto) }),
-                ...(medioPago && { medioPago }),
-                ...(cajaOrigen !== undefined && { cajaOrigen: cajaOrigen || null }),
-                ...(descripcion !== undefined && { descripcion: descripcion || null }),
-            },
+        const result = await prisma.$transaction(async (tx) => {
+            const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
+            if (!oldMov) throw new Error('Movimiento no encontrado')
+
+            // 1. Revertir impacto viejo en saldo
+            if (oldMov.cajaOrigen) {
+                if (oldMov.tipo === 'ingreso') {
+                    await tx.saldoCaja.update({
+                        where: { tipo: oldMov.cajaOrigen },
+                        data: { saldo: { decrement: oldMov.monto } }
+                    })
+                } else {
+                    await tx.saldoCaja.update({
+                        where: { tipo: oldMov.cajaOrigen },
+                        data: { saldo: { increment: oldMov.monto } }
+                    })
+                }
+            }
+
+            // 2. Actualizar el movimiento
+            const mov = await tx.movimientoCaja.update({
+                where: { id },
+                data: {
+                    ...(tipo && { tipo }),
+                    ...(concepto && { concepto }),
+                    ...(monto !== undefined && { monto: parseFloat(monto) }),
+                    ...(medioPago && { medioPago }),
+                    ...(cajaOrigen !== undefined && { cajaOrigen: cajaOrigen || null }),
+                    ...(descripcion !== undefined && { descripcion: descripcion || null }),
+                    ...(fecha && { fecha: new Date(fecha) }),
+                },
+            })
+
+            // 3. Aplicar nuevo impacto en saldo
+            if (mov.cajaOrigen) {
+                if (mov.tipo === 'ingreso') {
+                    await tx.saldoCaja.update({
+                        where: { tipo: mov.cajaOrigen },
+                        data: { saldo: { increment: mov.monto } }
+                    })
+                } else {
+                    await tx.saldoCaja.update({
+                        where: { tipo: mov.cajaOrigen },
+                        data: { saldo: { decrement: mov.monto } }
+                    })
+                }
+            }
+
+            return mov
         })
-        return NextResponse.json(mov)
+
+        return NextResponse.json(result)
     } catch (error) {
         console.error('Error editando movimiento:', error)
         return NextResponse.json({ error: 'Error al editar movimiento' }, { status: 500 })
@@ -191,7 +243,28 @@ export async function DELETE(request: Request) {
         const id = searchParams.get('id')
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-        await prisma.movimientoCaja.delete({ where: { id } })
+        await prisma.$transaction(async (tx) => {
+            const mov = await tx.movimientoCaja.findUnique({ where: { id } })
+            if (!mov) return
+
+            // Revertir impacto en saldo
+            if (mov.cajaOrigen) {
+                if (mov.tipo === 'ingreso') {
+                    await tx.saldoCaja.update({
+                        where: { tipo: mov.cajaOrigen },
+                        data: { saldo: { decrement: mov.monto } }
+                    })
+                } else {
+                    await tx.saldoCaja.update({
+                        where: { tipo: mov.cajaOrigen },
+                        data: { saldo: { increment: mov.monto } }
+                    })
+                }
+            }
+
+            await tx.movimientoCaja.delete({ where: { id } })
+        })
+
         return NextResponse.json({ ok: true })
     } catch (error) {
         console.error('Error eliminando movimiento:', error)

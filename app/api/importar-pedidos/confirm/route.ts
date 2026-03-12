@@ -27,6 +27,12 @@ export async function POST(req: NextRequest) {
         // Validamos que se envíen solament las confirmadas (por ej: que no sean Rojas)
         const validRows = rows.filter(r => r.status !== "rojo");
 
+        // Traer precios de todas las presentaciones para calcular totales
+        const todasPresentaciones = await prisma.presentacion.findMany({
+            select: { id: true, precioVenta: true }
+        });
+        const precioMap = new Map(todasPresentaciones.map(p => [p.id, p.precioVenta]));
+
         // En Prisma SQLite, la forma más limpia es hacer operaciones batch o secuencias
         // En PostgreSQL podríamos usar un gran transaction, pero con transacciones grandes SQLite bloquea
         for (const row of validRows) {
@@ -34,37 +40,83 @@ export async function POST(req: NextRequest) {
                 await prisma.$transaction(async (tx) => {
                     let finalClientId = row.clientMatch.clienteId;
 
-                    // 1. Crear cliente si es nuevo
+                    // Helper para parsear calle y número
+                    const parseDireccion = (dir: string | null) => {
+                        if (!dir) return { calle: null, numero: null };
+                        // Busca patron de "Calle 123" o "23 N° 3517" o "Calle Nro 123"
+                        const match = dir.match(/^(.*?)\s+(?:N°|#|nro|num|altura)?\.?\s*(\d+.*)$/i);
+                        if (match) {
+                            return { calle: match[1].trim(), numero: match[2].trim() };
+                        }
+                        return { calle: dir.trim(), numero: null };
+                    };
+
+                    const { calle, numero } = parseDireccion(row.clientMatch.proposedData.direccion || null);
+
+                    // 1. Crear o Actualizar cliente
                     if (row.clientMatch.isNew || !finalClientId) {
                         const newClient = await tx.cliente.create({
                             data: {
                                 nombreComercial: row.clientMatch.proposedData.nombreComercial,
                                 contactoTelefono: row.clientMatch.proposedData.contactoTelefono || null,
-                                zona: "C", // Zona por defecto que puede editarse después
+                                direccion: row.clientMatch.proposedData.direccion || null,
+                                calle,
+                                numero,
+                                localidad: row.clientMatch.proposedData.localidad || null,
+                                zona: "C", 
                             },
                         });
                         finalClientId = newClient.id;
+                    } else if (finalClientId) {
+                        const existing = await tx.cliente.findUnique({ where: { id: finalClientId } });
+                        if (existing) {
+                            const updateData: any = {};
+                            if (!existing.direccion && row.clientMatch.proposedData.direccion) {
+                                updateData.direccion = row.clientMatch.proposedData.direccion;
+                                updateData.calle = calle;
+                                updateData.numero = numero;
+                            }
+                            if (!existing.localidad && row.clientMatch.proposedData.localidad) {
+                                updateData.localidad = row.clientMatch.proposedData.localidad;
+                            }
+                            if (!existing.contactoTelefono && row.clientMatch.proposedData.contactoTelefono) {
+                                updateData.contactoTelefono = row.clientMatch.proposedData.contactoTelefono;
+                            }
+                            
+                            if (Object.keys(updateData).length > 0) {
+                                await tx.cliente.update({
+                                    where: { id: finalClientId },
+                                    data: updateData
+                                });
+                            }
+                        }
                     }
 
-                    // 2. Crear Pedido y sus Detalles
-                    const totalUnidades = row.orderMatch.detalles.reduce((acc, d) => acc + d.cantidad, 0);
+                    // 2. Calcular Totales y Crear Pedido
+                    const detallesConPrecio = row.orderMatch.detalles.map(d => ({
+                        ...d,
+                        precioUnitario: precioMap.get(d.presentacionId) || 0
+                    }));
+
+                    const totalUnidades = detallesConPrecio.reduce((acc, d) => acc + d.cantidad, 0);
+                    const totalImporte = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * d.precioUnitario), 0);
 
                     const { original } = row;
 
                     await tx.pedido.create({
                         data: {
                             clienteId: finalClientId,
-                            fechaPedido: new Date(original.fecha), // Suponemos que ya viene en formato válido YYYY-MM-DD
-                            fechaEntrega: new Date(original.fecha), // A futuro esto podría diferir
+                            fechaPedido: new Date(original.fecha),
+                            fechaEntrega: new Date(original.fecha),
                             estado: "confirmado",
                             esRetiro: original.direccion?.toLowerCase().includes("retira") || false,
                             totalUnidades,
-                            totalImporte: 0, // Se recalculará después o se actualizará en background
+                            totalImporte,
                             detalles: {
-                                create: row.orderMatch.detalles.map(d => ({
+                                create: detallesConPrecio.map(d => ({
                                     presentacionId: d.presentacionId,
                                     cantidad: d.cantidad,
-                                    precioUnitario: 0, // En la migración histórica no es vital, se usa para pedidos nuevos
+                                    precioUnitario: d.precioUnitario,
                                     observaciones: d.observaciones,
                                 }))
                             }

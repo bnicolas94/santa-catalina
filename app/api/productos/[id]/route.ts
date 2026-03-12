@@ -19,6 +19,7 @@ export async function PUT(
                 ...(body.tempConservacionMax !== undefined && { tempConservacionMax: parseFloat(body.tempConservacionMax) }),
                 ...(body.planchasPorPaquete !== undefined && { planchasPorPaquete: parseInt(body.planchasPorPaquete) }),
                 ...(body.paquetesPorRonda !== undefined && { paquetesPorRonda: parseInt(body.paquetesPorRonda) }),
+                ...(body.alias !== undefined && { alias: body.alias }),
                 ...(body.activo !== undefined && { activo: body.activo }),
             },
             include: {

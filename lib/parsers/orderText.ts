@@ -3,6 +3,7 @@ export type PresentacionData = {
     cantidad: number;
     producto: {
         codigoInterno: string;
+        alias?: string | null;
     };
 };
 
@@ -34,12 +35,20 @@ export function parseOrderText(
     const unmatchedParts = [];
     let isFullyMatched = true;
 
-    // Normalizamos el texto: a minusculas y separamos por espacios o barras
-    // Ej: "24jyq / 8hue 8tom p/n" -> ["24jyq", "/", "8hue", "8tom", "p/n"]
-    const tokens = text.toLowerCase().split(/[\s/]+/);
+    // Normalizamos el texto: a minusculas y removemos paréntesis
+    let cleanText = text.toLowerCase().replace(/[()]/g, ' ');
 
-    // Regex para detectar "[cantidad][codigo]" ej: "24jyq" -> match[1]="24", match[2]="jyq"
-    const itemRegex = /^(\d+)([a-zA-Z]+)$/;
+    // Unimos números seguidos de letras que tengan un espacio en medio para que el regex los agarre
+    // Ej: "48 clasicos" -> "48clasicos"
+    cleanText = cleanText.replace(/(\d+)\s+([a-zñáéíóú]+)/g, '$1$2');
+    
+    // Separamos por espacios o barras y filtramos palabras de relleno
+    const fillerWords = ['elegidos', 'de', 'surtidos', 'variados', 'puntos'];
+    const tokens = cleanText.split(/[\s/]+/).filter(t => t && !fillerWords.includes(t));
+
+    // Regex para detectar "[cantidad][codigo]" ej: "24jyq" o "48clasicos"
+    // Incluimos ñ y acentos
+    const itemRegex = /^(\d+)([a-zñáéíóú]+)$/;
 
     const currentObservaciones: string[] = [];
 
@@ -53,22 +62,50 @@ export function parseOrderText(
             const codigoInterno = match[2];
 
             // Buscamos si existe la presentación exacta
-            const presentacionStr = presentaciones.find(
-                (p) =>
-                    p.cantidad === cantidad &&
-                    p.producto.codigoInterno.toLowerCase() === codigoInterno
+            const exactMatch = presentaciones.find(
+                (p) => {
+                    const matchesCodigo = p.producto.codigoInterno.toLowerCase() === codigoInterno;
+                    const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase()) : [];
+                    const matchesAlias = aliases.includes(codigoInterno);
+                    
+                    return p.cantidad === cantidad && (matchesCodigo || matchesAlias);
+                }
             );
 
-            if (presentacionStr) {
+            if (exactMatch) {
+                const isAlias = exactMatch.producto.codigoInterno.toLowerCase() !== codigoInterno.toLowerCase();
+                const detailObs = isAlias ? codigoInterno.toUpperCase() : "";
+
                 detalles.push({
-                    presentacionId: presentacionStr.id,
-                    cantidad: 1, // 1 pack de esa presentacion
-                    observaciones: "", // Las llenamos al final si hay
+                    presentacionId: exactMatch.id,
+                    cantidad: 1, 
+                    observaciones: detailObs, 
                 });
             } else {
-                // Encontramos el patrón pero no existe esa combinación exacta en DB
-                isFullyMatched = false;
-                unmatchedParts.push(token);
+                // Si no hay match exacto, buscamos si la cantidad es múltiplo de alguna presentación
+                // Filtramos presentaciones que coincidan con el código/alias
+                const related = presentaciones.filter(p => {
+                    const matchesCodigo = p.producto.codigoInterno.toLowerCase() === codigoInterno;
+                    const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase()) : [];
+                    return matchesCodigo || aliases.includes(codigoInterno);
+                }).sort((a, b) => b.cantidad - a.cantidad); // Ordenamos de mayor a menor para usar el paquete más grande
+
+                const divisor = related.find(p => cantidad % p.cantidad === 0);
+
+                if (divisor) {
+                    const isAlias = divisor.producto.codigoInterno.toLowerCase() !== codigoInterno.toLowerCase();
+                    const detailObs = isAlias ? codigoInterno.toUpperCase() : "";
+
+                    detalles.push({
+                        presentacionId: divisor.id,
+                        cantidad: cantidad / divisor.cantidad,
+                        observaciones: detailObs,
+                    });
+                } else {
+                    // Encontramos el patrón pero no hay forma de cubrir esa cantidad con presentaciones existentes
+                    isFullyMatched = false;
+                    unmatchedParts.push(token);
+                }
             }
         } else {
             // Si no hace match con "[CANTIDAD][CODIGO]", lo consideramos una observacion o unmatched
@@ -84,17 +121,19 @@ export function parseOrderText(
         }
     }
 
-    // Si hubo observaciones globales, se las aplicamos al primer detalle (u a todos)
+    // Si hubo observaciones globales, se las sumamos a todos los detalles
     const obsString = currentObservaciones.join(" ");
     if (obsString && detalles.length > 0) {
-        detalles.forEach((d) => (d.observaciones = obsString));
+        detalles.forEach((d) => {
+            d.observaciones = d.observaciones ? `${d.observaciones} ${obsString}` : obsString;
+        });
     } else if (obsString) {
         unmatchedParts.push(obsString);
     }
 
     // Si no logramos procesar algo, devolvemos isFullyMatched = false
     return {
-        detalles: isFullyMatched ? detalles : [],
+        detalles: detalles,
         isFullyMatched,
         unmatchedText: isFullyMatched ? undefined : text, // Devolvemos todo el texto original para carga manual
     };
