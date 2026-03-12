@@ -62,6 +62,25 @@ export async function POST(request: Request) {
                     }
                 })
                 gastoId = gasto.id
+
+                // NUEVO: Crear Movimiento de Caja y Actualizar Saldo
+                await tx.movimientoCaja.create({
+                    data: {
+                        tipo: 'egreso',
+                        concepto: 'compra_insumos',
+                        monto: costoTotalFloat,
+                        medioPago: 'efectivo',
+                        cajaOrigen: 'caja_madre',
+                        descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
+                        gastoId: gastoId,
+                        fecha: new Date()
+                    }
+                })
+
+                await tx.saldoCaja.update({
+                    where: { tipo: 'caja_madre' },
+                    data: { saldo: { decrement: costoTotalFloat } }
+                })
             }
 
             // 2. Crear MovimientoStock

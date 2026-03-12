@@ -43,7 +43,27 @@ export async function PUT(
                 }
             })
 
-            // 3. Vincular Gasto y cambiar estado a pagado
+            // 3. Crear Movimiento de Caja vinculado al gasto
+            const movCaja = await tx.movimientoCaja.create({
+                data: {
+                    tipo: 'egreso',
+                    concepto: 'pago_proveedor',
+                    monto: movimiento.costoTotal || 0,
+                    medioPago: 'efectivo', // Por defecto para facturas
+                    cajaOrigen: 'caja_madre', // Las compras suelen salir de caja madre
+                    descripcion: gasto.descripcion,
+                    gastoId: gasto.id,
+                    fecha: new Date()
+                }
+            })
+
+            // 4. Actualizar Saldo de Caja (Madre)
+            await tx.saldoCaja.update({
+                where: { tipo: 'caja_madre' },
+                data: { saldo: { decrement: movimiento.costoTotal || 0 } }
+            })
+
+            // 5. Vincular Gasto y cambiar estado a pagado
             const movActualizado = await tx.movimientoStock.update({
                 where: { id },
                 data: {

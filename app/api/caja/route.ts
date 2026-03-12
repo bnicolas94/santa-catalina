@@ -16,12 +16,28 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const fechaParam = searchParams.get('fecha')
 
+        // Si hay fecha especificada, usamos medianoche local para el rango
+        // Si no hay fecha, usamos el momento actual
         const dateToFilter = fechaParam ? new Date(fechaParam + 'T00:00:00') : new Date()
         const startOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 0, 0, 0, 0)
         const endOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 23, 59, 59, 999)
 
+        // Definir cajas permitidas según ubicación
+        let allowedBoxes: string[] | undefined = undefined
+        if (userRol !== 'ADMIN') {
+            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+            if (ubicacionTipo === 'LOCAL') {
+                allowedBoxes = ['local']
+            } else if (ubicacionTipo === 'FABRICA') {
+                allowedBoxes = ['caja_madre', 'caja_chica']
+            }
+        }
+
         const movimientos = await prisma.movimientoCaja.findMany({
-            where: { fecha: { gte: startOfDay, lte: endOfDay } },
+            where: { 
+                fecha: { gte: startOfDay, lte: endOfDay },
+                ...(allowedBoxes && { cajaOrigen: { in: allowedBoxes } })
+            },
             orderBy: { fecha: 'desc' },
             include: {
                 pedido: { select: { id: true, totalImporte: true, cliente: { select: { nombreComercial: true } } } },
@@ -77,6 +93,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Tipo, concepto y monto son requeridos' }, { status: 400 })
         }
 
+        // VALIDACIÓN DE UBICACIÓN
+        if (userRol !== 'ADMIN' && cajaOrigen) {
+            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+            if (ubicacionTipo === 'LOCAL' && cajaOrigen !== 'local') {
+                return NextResponse.json({ error: 'No tienes permiso para operar en esta caja' }, { status: 403 })
+            }
+            if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(cajaOrigen)) {
+                return NextResponse.json({ error: 'No tienes permiso para operar en esta caja' }, { status: 403 })
+            }
+        }
+
         const numericMonto = parseFloat(monto)
         if (isNaN(numericMonto)) {
             return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
@@ -121,7 +148,10 @@ export async function POST(request: Request) {
                     pedidoId: pedidoId || null,
                     gastoId: gastoId || null,
                     rendicionId: rendicionId,
-                    fecha: fecha ? new Date(fecha) : new Date(),
+                    // Si viene una fecha de string (YYYY-MM-DD), le agregamos mediodía para evitar saltos de zona horaria
+                    fecha: (fecha && typeof fecha === 'string' && fecha.length === 10) 
+                        ? new Date(fecha + 'T12:00:00') 
+                        : (fecha ? new Date(fecha) : new Date()),
                 },
             })
 
@@ -174,6 +204,28 @@ export async function PUT(request: Request) {
             const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!oldMov) throw new Error('Movimiento no encontrado')
 
+            // VALIDACIÓN DE UBICACIÓN (Movimiento Existente)
+            if (userRol !== 'ADMIN' && oldMov.cajaOrigen) {
+                const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+                if (ubicacionTipo === 'LOCAL' && oldMov.cajaOrigen !== 'local') {
+                    throw new Error('No tienes permiso para editar este movimiento')
+                }
+                if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(oldMov.cajaOrigen)) {
+                    throw new Error('No tienes permiso para editar este movimiento')
+                }
+            }
+
+            // VALIDACIÓN DE UBICACIÓN (Nuevos Valores)
+            if (userRol !== 'ADMIN' && cajaOrigen) {
+                const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+                if (ubicacionTipo === 'LOCAL' && cajaOrigen !== 'local') {
+                    throw new Error('No tienes permiso para mover fondos a esta caja')
+                }
+                if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(cajaOrigen)) {
+                    throw new Error('No tienes permiso para mover fondos a esta caja')
+                }
+            }
+
             // 1. Revertir impacto viejo en saldo
             if (oldMov.cajaOrigen) {
                 if (oldMov.tipo === 'ingreso') {
@@ -199,7 +251,12 @@ export async function PUT(request: Request) {
                     ...(medioPago && { medioPago }),
                     ...(cajaOrigen !== undefined && { cajaOrigen: cajaOrigen || null }),
                     ...(descripcion !== undefined && { descripcion: descripcion || null }),
-                    ...(fecha && { fecha: new Date(fecha) }),
+                    // Si viene una fecha de string (YYYY-MM-DD), le agregamos mediodía para evitar saltos de zona horaria
+                    ...(fecha && { 
+                        fecha: (typeof fecha === 'string' && fecha.length === 10) 
+                            ? new Date(fecha + 'T12:00:00') 
+                            : new Date(fecha) 
+                    }),
                 },
             })
 
@@ -246,6 +303,17 @@ export async function DELETE(request: Request) {
         await prisma.$transaction(async (tx) => {
             const mov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!mov) return
+
+            // VALIDACIÓN DE UBICACIÓN
+            if (userRol !== 'ADMIN' && mov.cajaOrigen) {
+                const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+                if (ubicacionTipo === 'LOCAL' && mov.cajaOrigen !== 'local') {
+                    throw new Error('No tienes permiso para eliminar este movimiento')
+                }
+                if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(mov.cajaOrigen)) {
+                    throw new Error('No tienes permiso para eliminar este movimiento')
+                }
+            }
 
             // Revertir impacto en saldo
             if (mov.cajaOrigen) {

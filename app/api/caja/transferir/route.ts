@@ -19,7 +19,26 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'La caja de origen y destino deben ser diferentes' }, { status: 400 })
         }
 
-        const customDate = fecha ? new Date(fecha) : new Date()
+        // VALIDACIÓN DE UBICACIÓN
+        const userRol = (session?.user as any)?.rol
+        if (userRol !== 'ADMIN') {
+            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+            if (ubicacionTipo === 'LOCAL') {
+                if (origen !== 'local' && destino !== 'local') {
+                    return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
+                }
+            } else if (ubicacionTipo === 'FABRICA') {
+                const fabricBoxes = ['caja_madre', 'caja_chica']
+                if (!fabricBoxes.includes(origen) && !fabricBoxes.includes(destino)) {
+                    return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
+                }
+            }
+        }
+
+        // Si viene una fecha de string (YYYY-MM-DD), le agregamos mediodía para evitar saltos de zona horaria
+        const customDate = (fecha && typeof fecha === 'string' && fecha.length === 10) 
+            ? new Date(fecha + 'T12:00:00') 
+            : (fecha ? new Date(fecha) : new Date())
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Crear el egreso de la caja origen

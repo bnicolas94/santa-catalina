@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 
 interface MovCaja {
     id: string; tipo: string; concepto: string; monto: number; medioPago: string
@@ -53,6 +54,24 @@ export default function CajaPage() {
     const [nuevoConcepto, setNuevoConcepto] = useState('')
     const [editingMov, setEditingMov] = useState<MovCaja | null>(null)
     const [choferes, setChoferes] = useState<any[]>([])
+    const { data: session } = useSession()
+    const userRol = (session?.user as any)?.rol
+    const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+
+    const allowedBoxes = userRol === 'ADMIN' 
+        ? ['caja_madre', 'caja_chica', 'local'] 
+        : (ubicacionTipo === 'LOCAL' ? ['local'] : ['caja_madre', 'caja_chica'])
+
+    useEffect(() => {
+        // Reset default form boxes if restricted
+        if (ubicacionTipo === 'LOCAL') {
+            setForm(f => ({ ...f, cajaOrigen: 'local' }))
+            setTransfForm(f => ({ ...f, origen: 'local', destino: 'caja_chica' }))
+        } else if (ubicacionTipo === 'FABRICA') {
+            setForm(f => ({ ...f, cajaOrigen: 'caja_madre' }))
+            setTransfForm(f => ({ ...f, origen: 'caja_madre', destino: 'caja_chica' }))
+        }
+    }, [ubicacionTipo])
 
 
     useEffect(() => { fetchData() }, [fechaFiltro])
@@ -222,79 +241,91 @@ export default function CajaPage() {
             {error && <div className="toast toast-error">{error}</div>}
 
             {/* ═══ Saldos de Caja ═══ */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allowedBoxes.length}, 1fr)`, gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 {/* Caja Madre */}
-                <div className="card" style={{ borderTop: '3px solid #8E44AD' }}>
-                    <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏦 Caja Madre</span>
+                {allowedBoxes.includes('caja_madre') && (
+                    <div className="card" style={{ borderTop: '3px solid #8E44AD' }}>
+                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏦 Caja Madre</span>
+                                {(userRol === 'ADMIN') && (
+                                    editingSaldo === 'caja_madre' ? (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_madre')}>✓</button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                            onClick={() => { setEditingSaldo('caja_madre'); setEditSaldoValue(String(saldoMadre)) }}>✏️ Editar</button>
+                                    )
+                                )}
+                            </div>
                             {editingSaldo === 'caja_madre' ? (
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                    <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_madre')}>✓</button>
-                                </div>
+                                <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                    onChange={(e) => setEditSaldoValue(e.target.value)}
+                                    style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
                             ) : (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                    onClick={() => { setEditingSaldo('caja_madre'); setEditSaldoValue(String(saldoMadre)) }}>✏️ Editar</button>
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#8E44AD', textAlign: 'center' }}>{formatCurrency(saldoMadre, showMontos)}</div>
                             )}
                         </div>
-                        {editingSaldo === 'caja_madre' ? (
-                            <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                onChange={(e) => setEditSaldoValue(e.target.value)}
-                                style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                        ) : (
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#8E44AD', textAlign: 'center' }}>{formatCurrency(saldoMadre, showMontos)}</div>
-                        )}
                     </div>
-                </div>
+                )}
                 {/* Caja Chica */}
-                <div className="card" style={{ borderTop: '3px solid #E67E22' }}>
-                    <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E67E22', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💼 Caja Chica</span>
+                {allowedBoxes.includes('caja_chica') && (
+                    <div className="card" style={{ borderTop: '3px solid #E67E22' }}>
+                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E67E22', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💼 Caja Chica</span>
+                                {(userRol === 'ADMIN') && (
+                                    editingSaldo === 'caja_chica' ? (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_chica')}>✓</button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                            onClick={() => { setEditingSaldo('caja_chica'); setEditSaldoValue(String(saldoChica)) }}>✏️ Editar</button>
+                                    )
+                                )}
+                            </div>
                             {editingSaldo === 'caja_chica' ? (
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                    <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_chica')}>✓</button>
-                                </div>
+                                <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                    onChange={(e) => setEditSaldoValue(e.target.value)}
+                                    style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
                             ) : (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                    onClick={() => { setEditingSaldo('caja_chica'); setEditSaldoValue(String(saldoChica)) }}>✏️ Editar</button>
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E67E22', textAlign: 'center' }}>{formatCurrency(saldoChica, showMontos)}</div>
                             )}
                         </div>
-                        {editingSaldo === 'caja_chica' ? (
-                            <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                onChange={(e) => setEditSaldoValue(e.target.value)}
-                                style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                        ) : (
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E67E22', textAlign: 'center' }}>{formatCurrency(saldoChica, showMontos)}</div>
-                        )}
                     </div>
-                </div>
+                )}
                 {/* Local */}
-                <div className="card" style={{ borderTop: '3px solid #27AE60' }}>
-                    <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏪 Local</span>
+                {allowedBoxes.includes('local') && (
+                    <div className="card" style={{ borderTop: '3px solid #27AE60' }}>
+                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏪 Local</span>
+                                {(userRol === 'ADMIN' || ubicacionTipo === 'LOCAL') && (
+                                    editingSaldo === 'local' ? (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('local')}>✓</button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                            onClick={() => { setEditingSaldo('local'); setEditSaldoValue(String(saldoLocal)) }}>✏️ Editar</button>
+                                    )
+                                )}
+                            </div>
                             {editingSaldo === 'local' ? (
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                    <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('local')}>✓</button>
-                                </div>
+                                <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                    onChange={(e) => setEditSaldoValue(e.target.value)}
+                                    style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
                             ) : (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                    onClick={() => { setEditingSaldo('local'); setEditSaldoValue(String(saldoLocal)) }}>✏️ Editar</button>
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#27AE60', textAlign: 'center' }}>{formatCurrency(saldoLocal, showMontos)}</div>
                             )}
                         </div>
-                        {editingSaldo === 'local' ? (
-                            <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                onChange={(e) => setEditSaldoValue(e.target.value)}
-                                style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                        ) : (
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#27AE60', textAlign: 'center' }}>{formatCurrency(saldoLocal, showMontos)}</div>
-                        )}
                     </div>
-                </div>
+                )}
             </div>
 
             {/* ═══ Rendiciones Pendientes ═══ */}
@@ -467,7 +498,11 @@ export default function CajaPage() {
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                        {[{ key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' }, { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' }, { key: 'local', label: '🏪 Local', color: '#27AE60' }].map((c) => (
+                                        {[
+                                            { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' }, 
+                                            { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' }, 
+                                            { key: 'local', label: '🏪 Local', color: '#27AE60' }
+                                        ].filter(c => allowedBoxes.includes(c.key)).map((c) => (
                                             <button key={c.key} type="button" className="btn btn-sm"
                                                 onClick={() => setForm({ ...form, cajaOrigen: c.key })}
                                                 style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
@@ -686,9 +721,9 @@ export default function CajaPage() {
                                     <div className="form-group">
                                         <label className="form-label">Desde</label>
                                         <select className="form-select" value={transfForm.origen} onChange={(e) => setTransfForm({ ...transfForm, origen: e.target.value })}>
-                                            <option value="caja_madre">🏦 Madre</option>
-                                            <option value="caja_chica">💼 Chica</option>
-                                            <option value="local">🏪 Local</option>
+                                            {allowedBoxes.includes('caja_madre') && <option value="caja_madre">🏦 Madre</option>}
+                                            {allowedBoxes.includes('caja_chica') && <option value="caja_chica">💼 Chica</option>}
+                                            {allowedBoxes.includes('local') && <option value="local">🏪 Local</option>}
                                         </select>
                                     </div>
                                     <div className="form-group">
