@@ -42,7 +42,7 @@ export async function POST(request: Request) {
                 vidaUtilHoras: parseInt(vidaUtilHoras) || 48,
                 tempConservacionMax: parseFloat(tempConservacionMax) || 4,
                 planchasPorPaquete: parseInt(planchasPorPaquete) || 6,
-                planchasPorPaquete: parseInt(paquesPorRonda) || 14,
+                paquetesPorRonda: parseInt(paquetesPorRonda) || 14,
                 alias: alias || null,
                 ...(presentaciones?.length && {
                     presentaciones: {
