@@ -127,7 +127,7 @@ export async function POST(request: Request) {
                 for (const f of fichasT) {
                     await tx.insumo.update({
                         where: { id: f.insumoId },
-                        data: { stockActual: { decrement: f.f.cantidadPorUnidad * qtyPaquetes } }
+                        data: { stockActual: { decrement: f.cantidadPorUnidad * qtyPaquetes } }
                     })
                 }
             }
