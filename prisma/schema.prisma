@@ -40,8 +40,10 @@ model Empleado {
   prestamos           PrestamoEmpleado[]
   rendiciones         RendicionChofer[]   @relation("RendicionesChofer")
   rutasChofer         Ruta[]              @relation("ChoferRuta")
+  asignaciones        AsignacionOperario[]
 
   @@map("empleados")
+
 }
 
 model Proveedor {
@@ -184,8 +186,10 @@ model Ubicacion {
   movimientosStock    MovimientoStock[]
   stocksInsumo        StockInsumo[]
   stocks              StockProducto[]
+  asignaciones        AsignacionOperario[]
 
   @@map("ubicaciones")
+
 }
 
 model StockProducto {
@@ -520,3 +524,32 @@ model RolEmpleado {
 
   @@map("roles_empleado")
 }
+
+model ConceptoProduccion {
+  id           String               @id @default(uuid())
+  nombre       String               @unique
+  descripcion  String?
+  activo       Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  asignaciones AsignacionOperario[]
+
+  @@map("conceptos_produccion")
+}
+
+model AsignacionOperario {
+  id            String             @id @default(uuid())
+  fecha         DateTime
+  empleadoId    String             @map("id_empleado")
+  conceptoId    String             @map("id_concepto")
+  ubicacionId   String             @map("id_ubicacion")
+  observaciones String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  concepto      ConceptoProduccion @relation(fields: [conceptoId], references: [id])
+  empleado      Empleado           @relation(fields: [empleadoId], references: [id])
+  ubicacion     Ubicacion          @relation(fields: [ubicacionId], references: [id])
+
+  @@map("asignaciones_operario")
+}
+

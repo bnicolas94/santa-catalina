@@ -1,3 +1,4 @@
+// VERSION_IDENTIFIER: 2026-03-13_V3_CLEAN
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -11,7 +12,6 @@ export async function GET() {
         const permisos = (session?.user as any)?.permisos || {}
 
         if (userRol !== 'ADMIN' && !permisos.permisoProduccion) {
-            console.log('Permiso denegado para:', session?.user?.email, 'Permisos:', permisos)
             return NextResponse.json({ error: 'No tienes permiso para ver producción' }, { status: 403 })
         }
         const lotes = await prisma.lote.findMany({
@@ -52,47 +52,42 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Producto, fecha, unidades y ubicación son requeridos' }, { status: 400 })
         }
 
-        // Generar ID de lote: SC-YYYYMMDD-COD-NN
-        // Normalizamos la fecha recibida ("YYYY-MM-DD") para que sea medianoche UTC
+        // Operaciones de fecha únicas
         const [year, month, day] = fechaProduccion.split('-').map(Number)
         const fecha = new Date(Date.UTC(year, month - 1, day))
         const yyyymmdd = fechaProduccion.replace(/-/g, '')
+
+        const startOfProdDay = new Date(fecha)
+        startOfProdDay.setHours(0, 0, 0, 0)
+        const endOfProdDay = new Date(fecha)
+        endOfProdDay.setHours(23, 59, 59, 999)
 
         const producto = await prisma.producto.findUnique({ where: { id: productoId } })
         if (!producto) {
             return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
         }
 
-        // Contar lotes del día para ese producto
-        const startOfDay = new Date(fecha)
-        startOfDay.setHours(0, 0, 0, 0)
-        const endOfDay = new Date(fecha)
-        endOfDay.setHours(23, 59, 59, 999)
-
         const countHoy = await prisma.lote.count({
             where: {
                 productoId,
-                fechaProduccion: { gte: startOfDay, lte: endOfDay },
+                fechaProduccion: { gte: startOfProdDay, lte: endOfProdDay },
             },
         })
 
         const loteId = `SC-${yyyymmdd}-${producto.codigoInterno}-${String(countHoy + 1).padStart(2, '0')}`
-
-        // Receta para descontar stock (usar transacción)
-        const fichasT = await prisma.fichaTecnica.findMany({
-            where: { productoId }
-        })
-        // La ficha técnica normalmente detalla la cantidad por PLANCHA o por SÁNDWICH?
-        // En la UI de producto dice "Cantidad por sándwich" que es lo mismo que por paquete (x1).
-        // En realidad la UI de Producto[id] dice: `addInsumoToFicha`
-        // Y en el form dice "Cantidad por sándwich/unidad", es decir por 1 paquete de x1.
-        // Pero en la base de datos `unidadesProducidas` son "paquetes".
-        // Entonces Insumo Descontado = (CantidadPorUnidad en ficha) * unidadesProducidas * planchasPorPaquete ?? 
-        // Asumamos que `cantidadPorUnidad` es literalmente por PAQUETE para simplificar, o miremos UI. 
-        // La UI decía `const cdi = producto.fichasTecnicas.reduce((acc, f) => acc + f.cantidadPorUnidad * f.insumo.precioUnitario, 0)`.
-        // Como ese es el CDI, significa que `cantidadPorUnidad` es la cantidad DE INSUMO por 1 PAQUETE de producto. 
-
         const qtyPaquetes = parseInt(unidadesProducidas)
+
+        // Obtener posicionamiento para el día
+        const posicionamientosStr = await prisma.asignacionOperario.findMany({
+            where: {
+                fecha: { gte: startOfProdDay, lte: endOfProdDay },
+                ubicacionId,
+            },
+            include: {
+                empleado: { select: { nombre: true, apellido: true } },
+                concepto: { select: { nombre: true } }
+            }
+        }).then((asigs: any[]) => asigs.map(a => `${a.empleado.nombre} (${a.concepto.nombre})`).join(', '))
 
         const lote = await prisma.$transaction(async (tx) => {
             const nuevoLote = await tx.lote.create({
@@ -113,50 +108,41 @@ export async function POST(request: Request) {
                 },
             })
 
-            // Descontar insumos
-            if (fichasT.length > 0) {
-                const movimientosData = fichasT.map(f => ({
-                    insumoId: f.insumoId,
-                    tipo: 'salida',
-                    cantidad: f.cantidadPorUnidad * qtyPaquetes,
-                    observaciones: `Consumo automático por Lote ${loteId}`,
-                    loteOrigenId: loteId
-                }))
+            const fichasT = await tx.fichaTecnica.findMany({
+                where: { productoId }
+            })
 
+            if (fichasT.length > 0) {
+                const obsPersonal = posicionamientosStr ? `. Personal: ${posicionamientosStr}` : ''
                 await tx.movimientoStock.createMany({
-                    data: movimientosData
+                    data: fichasT.map(f => ({
+                        insumoId: f.insumoId,
+                        tipo: 'salida',
+                        cantidad: f.cantidadPorUnidad * qtyPaquetes,
+                        observaciones: `Consumo automático por Lote ${loteId}${obsPersonal}`,
+                        loteOrigenId: loteId
+                    }))
                 })
 
-                // Actualizar saldos de los insumos
                 for (const f of fichasT) {
                     await tx.insumo.update({
                         where: { id: f.insumoId },
-                        data: {
-                            stockActual: {
-                                decrement: f.cantidadPorUnidad * qtyPaquetes
-                            }
-                        }
+                        data: { stockActual: { decrement: f.f.cantidadPorUnidad * qtyPaquetes } }
                     })
                 }
             }
 
-            // Sumar producto terminado al stock de fábrica SOLO si ya está terminado
-            const estadoInicial = estado || 'en_camara'
-            if (estadoInicial !== 'en_produccion') {
-                // By default, use the largest presentacion available for this product
+            if ((estado || 'en_camara') !== 'en_produccion') {
                 const presentacion = await tx.presentacion.findFirst({
                     where: { productoId },
                     orderBy: { cantidad: 'desc' }
                 })
-
                 if (presentacion) {
                     await tx.stockProducto.upsert({
                         where: { productoId_presentacionId_ubicacionId: { productoId, presentacionId: presentacion.id, ubicacionId } },
                         create: { productoId, presentacionId: presentacion.id, ubicacionId, cantidad: qtyPaquetes },
                         update: { cantidad: { increment: qtyPaquetes } },
                     })
-
-                    // Registrar movimiento de producto terminado
                     await tx.movimientoProducto.create({
                         data: {
                             productoId,

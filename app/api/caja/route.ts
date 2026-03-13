@@ -94,13 +94,25 @@ export async function POST(request: Request) {
         }
 
         // VALIDACIÓN DE UBICACIÓN
-        if (userRol !== 'ADMIN' && cajaOrigen) {
-            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-            if (ubicacionTipo === 'LOCAL' && cajaOrigen !== 'local') {
-                return NextResponse.json({ error: 'No tienes permiso para operar en esta caja' }, { status: 403 })
-            }
-            if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(cajaOrigen)) {
-                return NextResponse.json({ error: 'No tienes permiso para operar en esta caja' }, { status: 403 })
+        if (userRol?.toUpperCase() !== 'ADMIN' && cajaOrigen) {
+            const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
+            const cajaLower = cajaOrigen.toLowerCase()
+            
+            console.log('[CAJA API] Validando Permisos POST:', { userRol, ubicacionTipo, cajaOrigen: cajaLower })
+            
+            if (ubicacionTipo === 'LOCAL') {
+                if (cajaLower !== 'local') {
+                    return NextResponse.json({ error: `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación LOCAL` }, { status: 403 })
+                }
+            } else if (ubicacionTipo === 'FABRICA') {
+                const allowed = ['caja_madre', 'caja_chica']
+                if (!allowed.includes(cajaLower)) {
+                    return NextResponse.json({ error: `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación FABRICA` }, { status: 403 })
+                }
+            } else {
+                // Si no tiene ubicación definida y no es ADMIN, por seguridad restringimos
+                console.warn('[CAJA API] Usuario sin ubicación definida intentó operar:', { userRol })
+                return NextResponse.json({ error: 'Tu usuario no tiene una ubicación asignada para operar en caja' }, { status: 403 })
             }
         }
 

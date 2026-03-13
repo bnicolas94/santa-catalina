@@ -36,6 +36,31 @@ export async function PUT(request: Request) {
         const body = await request.json()
         const { tipo, saldo, motivo, descripcion } = body
 
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol?.toUpperCase() !== 'ADMIN') {
+            if (!permisos.permisoCaja) {
+                return NextResponse.json({ error: 'No tienes permiso para operar en caja' }, { status: 403 })
+            }
+            const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
+            const cajaLower = tipo?.toLowerCase()
+
+            if (ubicacionTipo === 'LOCAL') {
+                if (cajaLower !== 'local') {
+                    return NextResponse.json({ error: `No tienes permiso para ajustar la caja '${tipo}' desde ubicación LOCAL` }, { status: 403 })
+                }
+            } else if (ubicacionTipo === 'FABRICA') {
+                const allowed = ['caja_madre', 'caja_chica']
+                if (!allowed.includes(cajaLower)) {
+                    return NextResponse.json({ error: `No tienes permiso para ajustar la caja '${tipo}' desde ubicación FABRICA` }, { status: 403 })
+                }
+            } else {
+                return NextResponse.json({ error: 'Tu usuario no tiene una ubicación asignada para operar en caja' }, { status: 403 })
+            }
+        }
+
         if (!tipo || saldo === undefined) {
             return NextResponse.json({ error: 'Tipo y saldo son requeridos' }, { status: 400 })
         }

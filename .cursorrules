@@ -1,0 +1,42 @@
+# Reglas de Proyecto: Santa Catalina
+
+Estas reglas definen el comportamiento de Antigravity para asegurar eficiencia, compatibilidad y consistencia en este proyecto.
+
+## 🪟 Compatibilidad con Windows (CRÍTICO)
+
+Santa Catalina se desarrolla en un entorno Windows. Es **imperativo** seguir estas reglas para evitar errores de ejecución:
+
+- **Shell**: Usa siempre PowerShell o CMD. No asumas disponibilidad de `bash`.
+- **Comandos**:
+  - No uses `&&` para encadenar comandos; prefiere comandos separados.
+  - Usa `type` o `Get-Content` en lugar de `cat`.
+  - Usa `ls` o `dir` (PowerShell mapea `ls` a `Get-ChildItem`).
+  - Usa `rm` o `Remove-Item` para borrar archivos.
+  - Usa `mkdir` para directorios.
+- **Rutas**: Usa siempre rutas absolutas con `\` o `/` según el lenguaje, pero respeta el estilo de Windows si es necesario.
+- **Node/NPM**: Usa `npx` para herramientas locales (Prisma, Next, etc.).
+
+## 🏗️ Stack Tecnológico y Estructura
+
+- **Framework**: Next.js 15+ (App Router).
+- **Base de Datos**: Prisma con SQLite (local).
+- **Lenguaje**: TypeScript (estricto).
+- **Estilo de Código**: 
+  - Prefiere componentes funcionales de React.
+  - Usa "Server Components" por defecto, a menos que se requiera interactividad (marcar con `"use client"`).
+- **Estructura**:
+  - `app/api/`: Endpoints de API.
+  - `app/(dashboard)/`: Rutas protegidas detrás del login.
+  - `components/`: UI reutilizable.
+  - `prisma/schema.prisma`: Definición del modelo de datos.
+
+## 🗣️ Comunicación y Estilo
+
+- **Idioma**: Las respuestas al usuario y los comentarios en el código nuevo deben ser en **Español**.
+- **Proactividad**: Sugiere mejoras si detectas deuda técnica o inconsistencias con el PRD.
+- **Git**: Los mensajes de commit deben seguir el formato `feat:`, `fix:`, `docs:`, `refactor:`, etc.
+
+## 📦 Gestión de Base de Datos
+
+- Después de modificar `schema.prisma`, recuerda correr `npx prisma generate`.
+- Si los cambios impactan la estructura, sugiere `npx prisma db push` para desarrollo rápido.
