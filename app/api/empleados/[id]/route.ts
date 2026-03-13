@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 
 // PUT /api/empleados/:id — Actualizar empleado
 export async function PUT(
@@ -41,23 +40,23 @@ export async function PUT(
         } = body;
 
         // Robustecimiento de Fecha de Ingreso
-        let validatedFechaIngreso = null;
+        let validatedFechaIngreso = undefined; // Usar undefined para no sobreescribir si no viene nada
         if (fechaIngreso) {
             const dateObj = new Date(fechaIngreso);
             if (!isNaN(dateObj.getTime())) {
                 validatedFechaIngreso = dateObj;
-            } else {
-                console.warn(`[EMPLEADOS API] Fecha de ingreso inválida recibida: ${fechaIngreso}`);
+            } else if (fechaIngreso === '') {
+                validatedFechaIngreso = null;
             }
         }
 
         const dataToUpdate: any = {
             nombre: nombre || undefined,
-            apellido: apellido || undefined,
-            dni: dni || null,
-            email: (email && email.trim() !== '') ? email : null,
+            apellido: (apellido !== undefined) ? apellido : undefined,
+            dni: (dni !== undefined) ? (dni || null) : undefined,
+            email: (email !== undefined) ? (email || null) : undefined,
             rol: rol || undefined,
-            telefono: (telefono && telefono.trim() !== '') ? telefono : null,
+            telefono: (telefono !== undefined) ? (telefono || null) : undefined,
             fechaIngreso: validatedFechaIngreso,
             sueldoBaseMensual: !isNaN(parseFloat(sueldoBaseMensual)) ? parseFloat(sueldoBaseMensual) : undefined,
             cicloPago: cicloPago || undefined,
@@ -65,10 +64,10 @@ export async function PUT(
             porcentajeFeriado: !isNaN(parseFloat(porcentajeFeriado)) ? parseFloat(porcentajeFeriado) : undefined,
             horasTrabajoDiarias: !isNaN(parseFloat(horasTrabajoDiarias)) ? parseFloat(horasTrabajoDiarias) : undefined,
             diasTrabajoSemana: diasTrabajoSemana || undefined,
-            horarioEntrada: horarioEntrada || null,
-            horarioSalida: horarioSalida || null,
-            codigoBiometrico: codigoBiometrico || null,
-            ubicacionId: ubicacionId || null,
+            horarioEntrada: (horarioEntrada !== undefined) ? (horarioEntrada || null) : undefined,
+            horarioSalida: (horarioSalida !== undefined) ? (horarioSalida || null) : undefined,
+            codigoBiometrico: (codigoBiometrico !== undefined) ? (codigoBiometrico || null) : undefined,
+            ubicacionId: (ubicacionId !== undefined) ? (ubicacionId || null) : undefined,
         }
 
         if (activo !== undefined) {
@@ -76,8 +75,11 @@ export async function PUT(
         }
 
         if (password && password.trim() !== '') {
+            const bcrypt = require('bcryptjs');
             dataToUpdate.password = await bcrypt.hash(password, 10);
         }
+
+        console.log(`[EMPLEADOS API] Data a enviar a Prisma para ${id}:`, dataToUpdate);
 
         const empleado = await prisma.empleado.update({
             where: { id },
@@ -108,9 +110,17 @@ export async function PUT(
 
         return NextResponse.json(empleado)
     } catch (error: any) {
-        console.error(`[EMPLEADOS API] Error actualizando empleado ${employeeId}:`, error)
+        console.error(`[EMPLEADOS API] ERROR CRITICO actualizando empleado ${employeeId}:`, error);
+        // Intentar dar detalles específicos de PrismaP2002 (Unique constraint)
+        if (error?.code === 'P2002') {
+            const field = error.meta?.target?.[0] || 'campo';
+            return NextResponse.json({ 
+                error: `Ya existe un empleado con ese ${field}`,
+                details: error.message
+            }, { status: 400 });
+        }
         return NextResponse.json({ 
-            error: 'Error al actualizar empleado',
+            error: 'Error interno al actualizar empleado',
             details: error?.message || String(error)
         }, { status: 500 })
     }
