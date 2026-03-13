@@ -1,14 +1,23 @@
 import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 
 // PUT /api/empleados/:id — Actualizar empleado
 export async function PUT(
-    request: Request,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    let employeeId = 'desconocido';
     try {
         const { id } = await params
+        employeeId = id;
         const body = await request.json()
+        
+        console.log(`[EMPLEADOS API] Intentando actualizar empleado ${id}:`, {
+            ...body,
+            password: body.password ? '****' : undefined
+        });
+
         const {
             nombre,
             apellido,
@@ -31,21 +40,31 @@ export async function PUT(
             activo
         } = body;
 
-        // Limpiar contraseña si viene vacía para no blanquearla
+        // Robustecimiento de Fecha de Ingreso
+        let validatedFechaIngreso = null;
+        if (fechaIngreso) {
+            const dateObj = new Date(fechaIngreso);
+            if (!isNaN(dateObj.getTime())) {
+                validatedFechaIngreso = dateObj;
+            } else {
+                console.warn(`[EMPLEADOS API] Fecha de ingreso inválida recibida: ${fechaIngreso}`);
+            }
+        }
+
         const dataToUpdate: any = {
-            nombre,
-            apellido,
+            nombre: nombre || undefined,
+            apellido: apellido || undefined,
             dni: dni || null,
             email: (email && email.trim() !== '') ? email : null,
-            rol,
+            rol: rol || undefined,
             telefono: (telefono && telefono.trim() !== '') ? telefono : null,
-            fechaIngreso: fechaIngreso ? new Date(fechaIngreso) : null,
-            sueldoBaseMensual: sueldoBaseMensual ? parseFloat(sueldoBaseMensual) : 0,
-            cicloPago: cicloPago || 'SEMANAL',
-            porcentajeHoraExtra: porcentajeHoraExtra ? parseFloat(porcentajeHoraExtra) : 50,
-            porcentajeFeriado: porcentajeFeriado ? parseFloat(porcentajeFeriado) : 100,
-            horasTrabajoDiarias: horasTrabajoDiarias ? parseFloat(horasTrabajoDiarias) : 8,
-            diasTrabajoSemana: diasTrabajoSemana || 'Lunes a Viernes',
+            fechaIngreso: validatedFechaIngreso,
+            sueldoBaseMensual: !isNaN(parseFloat(sueldoBaseMensual)) ? parseFloat(sueldoBaseMensual) : undefined,
+            cicloPago: cicloPago || undefined,
+            porcentajeHoraExtra: !isNaN(parseFloat(porcentajeHoraExtra)) ? parseFloat(porcentajeHoraExtra) : undefined,
+            porcentajeFeriado: !isNaN(parseFloat(porcentajeFeriado)) ? parseFloat(porcentajeFeriado) : undefined,
+            horasTrabajoDiarias: !isNaN(parseFloat(horasTrabajoDiarias)) ? parseFloat(horasTrabajoDiarias) : undefined,
+            diasTrabajoSemana: diasTrabajoSemana || undefined,
             horarioEntrada: horarioEntrada || null,
             horarioSalida: horarioSalida || null,
             codigoBiometrico: codigoBiometrico || null,
@@ -57,7 +76,6 @@ export async function PUT(
         }
 
         if (password && password.trim() !== '') {
-            const bcrypt = require('bcryptjs');
             dataToUpdate.password = await bcrypt.hash(password, 10);
         }
 
@@ -89,15 +107,18 @@ export async function PUT(
         })
 
         return NextResponse.json(empleado)
-    } catch (error) {
-        console.error('Error updating empleado:', error)
-        return NextResponse.json({ error: 'Error al actualizar empleado' }, { status: 500 })
+    } catch (error: any) {
+        console.error(`[EMPLEADOS API] Error actualizando empleado ${employeeId}:`, error)
+        return NextResponse.json({ 
+            error: 'Error al actualizar empleado',
+            details: error?.message || String(error)
+        }, { status: 500 })
     }
 }
 
 // DELETE /api/empleados/:id — Eliminar empleado
 export async function DELETE(
-    _request: Request,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
