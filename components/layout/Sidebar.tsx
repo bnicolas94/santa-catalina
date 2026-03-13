@@ -170,8 +170,16 @@ export default function Sidebar() {
             {/* Navigation */}
             <nav className={styles.nav}>
                 {filteredItems.map((item) => {
-                    const isActive = pathname === item.href ||
-                        (item.href !== '/' && pathname?.startsWith(item.href))
+                    // El item es activo si es el "match" más largo (específico) que coincide con la ruta actual
+                    const isLongestMatch = item.href !== '/' && 
+                        (pathname === item.href || pathname?.startsWith(item.href + '/')) &&
+                        !filteredItems.some(other => 
+                            other.href !== item.href && 
+                            other.href.length > item.href.length && 
+                            (pathname === other.href || pathname?.startsWith(other.href + '/'))
+                        );
+
+                    const isActive = item.href === '/' ? pathname === '/' : isLongestMatch;
 
                     return (
                         <Link
