@@ -18,6 +18,8 @@ export default function EmpleadosPage() {
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
     const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
+    const [ubicaciones, setUbicaciones] = useState<any[]>([])
+    const [updatingId, setUpdatingId] = useState<string | null>(null)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -32,8 +34,19 @@ export default function EmpleadosPage() {
         }
     }
 
+    const fetchUbicaciones = async () => {
+        try {
+            const res = await fetch('/api/ubicaciones')
+            const data = await res.json()
+            setUbicaciones(data)
+        } catch (error) {
+            console.error('Error fetching ubicaciones:', error)
+        }
+    }
+
     useEffect(() => {
         fetchEmpleados()
+        fetchUbicaciones()
     }, [])
 
     const handleSave = async (formData: any) => {
@@ -53,6 +66,25 @@ export default function EmpleadosPage() {
 
         await fetchEmpleados()
         setDialogOpen(false)
+    }
+
+    const handleQuickUpdateLocation = async (empleadoId: string, ubicacionId: string) => {
+        setUpdatingId(empleadoId)
+        try {
+            const res = await fetch(`/api/empleados/${empleadoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ubicacionId: ubicacionId === "" ? null : ubicacionId })
+            })
+
+            if (!res.ok) throw new Error('Error al actualizar ubicación')
+            
+            await fetchEmpleados()
+        } catch (error: any) {
+            alert(error.message)
+        } finally {
+            setUpdatingId(null)
+        }
     }
 
     const handleDelete = async (id: string) => {
@@ -275,13 +307,46 @@ export default function EmpleadosPage() {
                                         </div>
                                     </td>
                                     <td>
-                                        {emp.ubicacion ? (
-                                            <span className="badge badge-neutral" style={{ display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
-                                                {emp.ubicacion.tipo === 'FABRICA' ? '🏭' : '🏪'} {emp.ubicacion.nombre}
-                                            </span>
-                                        ) : (
-                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>— Sin asignar —</span>
-                                        )}
+                                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                            <select
+                                                value={emp.ubicacionId || ''}
+                                                onChange={(e) => handleQuickUpdateLocation(emp.id, e.target.value)}
+                                                disabled={updatingId === emp.id}
+                                                style={{
+                                                    appearance: 'none',
+                                                    padding: '4px 28px 4px 8px',
+                                                    fontSize: 'var(--text-xs)',
+                                                    fontWeight: 500,
+                                                    borderRadius: 'var(--radius-md)',
+                                                    border: '1px solid var(--color-gray-200)',
+                                                    backgroundColor: emp.ubicacionId ? 'var(--color-gray-50)' : 'transparent',
+                                                    color: emp.ubicacionId ? 'var(--color-gray-800)' : 'var(--color-gray-400)',
+                                                    cursor: updatingId === emp.id ? 'wait' : 'pointer',
+                                                    width: 'auto',
+                                                    minWidth: '120px'
+                                                }}
+                                            >
+                                                <option value="">— Sin asignar —</option>
+                                                {ubicaciones.map(u => (
+                                                    <option key={u.id} value={u.id}>
+                                                        {u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div style={{
+                                                position: 'absolute',
+                                                right: '8px',
+                                                pointerEvents: 'none',
+                                                color: 'var(--color-gray-400)',
+                                                display: 'flex'
+                                            }}>
+                                                {updatingId === emp.id ? (
+                                                    <div className="spinner-xs"></div>
+                                                ) : (
+                                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                                                )}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         <span className={`badge ${emp.activo ? 'badge-success' : 'badge-neutral'}`}>
