@@ -35,10 +35,16 @@ export async function POST(req: Request) {
             }
         }
 
-        // Si viene una fecha de string (YYYY-MM-DD), le agregamos mediodía para evitar saltos de zona horaria
-        const customDate = (fecha && typeof fecha === 'string' && fecha.length === 10) 
-            ? new Date(fecha + 'T12:00:00') 
-            : (fecha ? new Date(fecha) : new Date())
+        // Lógica de fecha normalizada para evitar desfases
+        const customDate = (() => {
+            if (!fecha) return new Date();
+            if (typeof fecha === 'string' && fecha.length === 10) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (fecha === todayStr) return new Date(); // Capturar hora actual si es hoy
+                return new Date(fecha + 'T12:00:00Z'); // Forzar mediodía UTC
+            }
+            return new Date(fecha);
+        })();
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Crear el egreso de la caja origen

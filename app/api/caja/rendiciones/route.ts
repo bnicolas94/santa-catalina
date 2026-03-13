@@ -99,6 +99,7 @@ export async function POST(request: Request) {
                     cajaOrigen: 'caja_chica', // Por defecto las rendiciones van a caja chica
                     descripcion: `Rendición chofer - ${diferencia !== 0 ? `Diferencia: $${diferencia.toFixed(2)}` : 'Sin diferencia'}`,
                     rendicionId: rendicion.id,
+                    fecha: new Date(), // Aseguramos la hora exacta de registro
                 },
             })
 

@@ -160,10 +160,20 @@ export async function POST(request: Request) {
                     pedidoId: pedidoId || null,
                     gastoId: gastoId || null,
                     rendicionId: rendicionId,
-                    // Si viene una fecha de string (YYYY-MM-DD), le agregamos mediodía para evitar saltos de zona horaria
-                    fecha: (fecha && typeof fecha === 'string' && fecha.length === 10) 
-                        ? new Date(fecha + 'T12:00:00') 
-                        : (fecha ? new Date(fecha) : new Date()),
+                    // Lógica de fecha mejorada:
+                    // 1. Si no hay fecha, usamos exactamente 'ahora'
+                    // 2. Si hay fecha string (YYYY-MM-DD):
+                    //    a. Si es HOY (según el servidor), usamos 'ahora' para capturar la hora real de registro.
+                    //    b. Si es otro día, usamos mediodía UTC con 'Z' para evitar desfases por zona horaria del servidor.
+                    fecha: (() => {
+                        if (!fecha) return new Date();
+                        if (typeof fecha === 'string' && fecha.length === 10) {
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            if (fecha === todayStr) return new Date(); // Es hoy, capturar HORA actual
+                            return new Date(fecha + 'T12:00:00Z'); // Es histórico, forzar mediodía UTC
+                        }
+                        return new Date(fecha);
+                    })(),
                 },
             })
 
@@ -263,11 +273,16 @@ export async function PUT(request: Request) {
                     ...(medioPago && { medioPago }),
                     ...(cajaOrigen !== undefined && { cajaOrigen: cajaOrigen || null }),
                     ...(descripcion !== undefined && { descripcion: descripcion || null }),
-                    // Si viene una fecha de string (YYYY-MM-DD), le agregamos mediodía para evitar saltos de zona horaria
+                    // Aplicar la misma normalización de fecha al editar
                     ...(fecha && { 
-                        fecha: (typeof fecha === 'string' && fecha.length === 10) 
-                            ? new Date(fecha + 'T12:00:00') 
-                            : new Date(fecha) 
+                        fecha: (() => {
+                            if (typeof fecha === 'string' && fecha.length === 10) {
+                                const todayStr = new Date().toISOString().split('T')[0];
+                                if (fecha === todayStr) return new Date(); // Si cambian a 'hoy', capturar ahora
+                                return new Date(fecha + 'T12:00:00Z'); // Histórico
+                            }
+                            return new Date(fecha);
+                        })()
                     }),
                 },
             })
