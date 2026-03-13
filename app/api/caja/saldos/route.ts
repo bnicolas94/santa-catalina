@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/lib/auth'
 
 // GET /api/caja/saldos — Obtener saldos actuales de Caja Madre y Caja Chica
 export async function GET() {
@@ -31,7 +33,7 @@ export async function GET() {
 }
 
 // PUT /api/caja/saldos — Actualizar saldo de una caja y registrar el ajuste en movimientos
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
     try {
         const body = await request.json()
         const { tipo, saldo, motivo, descripcion } = body
