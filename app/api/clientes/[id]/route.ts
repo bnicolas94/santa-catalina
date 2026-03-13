@@ -1,9 +1,9 @@
 import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // PUT /api/clientes/:id
 export async function PUT(
-    request: Request,
+    request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
@@ -72,7 +72,7 @@ export async function PUT(
 
 // DELETE /api/clientes/:id
 export async function DELETE(
-    _request: Request,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {

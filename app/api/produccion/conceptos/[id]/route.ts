@@ -1,13 +1,13 @@
 import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // PUT /api/produccion/conceptos/[id] — Actualizar un concepto
 export async function PUT(
-    request: Request,
-    { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = params
+        const { id } = await params
         const body = await request.json()
         const { nombre, descripcion, activo } = body
 
@@ -35,11 +35,11 @@ export async function PUT(
 
 // DELETE /api/produccion/conceptos/[id] — Soft delete de un concepto
 export async function DELETE(
-    request: Request,
-    { params }: { params: { id: string } }
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = params
+        const { id } = await params
         
         // Preferimos soft delete para no romper el historial de asignaciones
         const concepto = await prisma.conceptoProduccion.update({
