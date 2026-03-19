@@ -10,10 +10,10 @@ interface ExpressLiquidationModalProps {
 }
 
 export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: ExpressLiquidationModalProps) {
-    const [sueldoBase, setSueldoBase] = useState(0)
-    const [horasExtras, setHorasExtras] = useState(0)
-    const [montoHsExtras, setMontoHsExtras] = useState(0)
-    const [descuentoPrestamos, setDescuentoPrestamos] = useState(0)
+    const [sueldoBase, setSueldoBase] = useState<number | ''>('')
+    const [horasExtras, setHorasExtras] = useState<number | ''>('')
+    const [montoHsExtras, setMontoHsExtras] = useState<number | ''>('')
+    const [descuentoPrestamos, setDescuentoPrestamos] = useState<number | ''>('')
     
     // Fechas
     const [fechaDesde, setFechaDesde] = useState(() => {
@@ -55,7 +55,11 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         }
     }, [empleado])
 
-    const totalNeto = sueldoBase + montoHsExtras - descuentoPrestamos
+    const valSueldo = Number(sueldoBase) || 0
+    const valExtras = Number(montoHsExtras) || 0
+    const valPrestamos = Number(descuentoPrestamos) || 0
+
+    const totalNeto = valSueldo + valExtras - valPrestamos
 
     const handleGuardarYImprimir = async () => {
         if (totalNeto <= 0 && !confirm('El total es 0 o negativo. ¿Deseas continuar?')) return
@@ -73,10 +77,10 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     cajaId: cajaSeleccionada,
                     concepto: 'pago_sueldo',
                     manualData: {
-                        sueldoBase,
-                        horasExtras,
-                        montoHsExtras,
-                        descuentoPrestamos,
+                        sueldoBase: valSueldo,
+                        horasExtras: Number(horasExtras) || 0,
+                        montoHsExtras: valExtras,
+                        descuentoPrestamos: valPrestamos,
                         diasTrabajados: 6 // Placeholder
                     }
                 })
@@ -109,9 +113,9 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         const fDesde = fechaDesde.split('-').reverse().join('/')
         const fHasta = `${fechaHasta.split('-')[2]}/${fechaHasta.split('-')[1]}/${fechaHasta.split('-')[0]}`
 
-        const sueldoBaseLetras = formatCurrencyToWords(sueldoBase)
-        const montoHsExtrasLetras = formatCurrencyToWords(montoHsExtras)
-        const totalBruto = sueldoBase + montoHsExtras
+        const sueldoBaseLetras = formatCurrencyToWords(valSueldo)
+        const montoHsExtrasLetras = formatCurrencyToWords(valExtras)
+        const totalBruto = valSueldo + valExtras
         const totalLetras = formatCurrencyToWords(totalBruto)
 
         const html = `
@@ -155,9 +159,9 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     </div>
 
                     <div class="texto">
-                        Recibo la cantidad de <span class="amount">$${sueldoBase.toLocaleString()}</span> 
+                        Recibo la cantidad de <span class="amount">$${valSueldo.toLocaleString()}</span> 
                         (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
-                        <span class="amount">$${montoHsExtras.toLocaleString()}</span> 
+                        <span class="amount">$${valExtras.toLocaleString()}</span> 
                         (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
                         del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
                         Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
@@ -223,23 +227,23 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                         <label className="form-label">Importe Pagado (Sueldo/Semana)</label>
                         <div style={{ position: 'relative' }}>
                             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>$</span>
-                            <input type="number" className="form-input" style={{ paddingLeft: '25px' }} value={sueldoBase} onChange={e => setSueldoBase(Number(e.target.value))} />
+                            <input type="number" className="form-input" style={{ paddingLeft: '25px' }} value={sueldoBase} onChange={e => setSueldoBase(e.target.value === '' ? '' : Number(e.target.value))} />
                         </div>
                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', marginTop: '4px' }}>
-                            pesos {formatCurrencyToWords(sueldoBase)}
+                            pesos {formatCurrencyToWords(valSueldo)}
                         </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                         <div className="form-group">
                             <label className="form-label">Horas Extras (cant.)</label>
-                            <input type="number" className="form-input" value={horasExtras} onChange={e => setHorasExtras(Number(e.target.value))} />
+                            <input type="number" className="form-input" value={horasExtras} onChange={e => setHorasExtras(e.target.value === '' ? '' : Number(e.target.value))} />
                         </div>
                         <div className="form-group">
                             <label className="form-label">Monto Horas Extras</label>
                             <div style={{ position: 'relative' }}>
                                 <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>$</span>
-                                <input type="number" className="form-input" style={{ paddingLeft: '25px' }} value={montoHsExtras} onChange={e => setMontoHsExtras(Number(e.target.value))} />
+                                <input type="number" className="form-input" style={{ paddingLeft: '25px' }} value={montoHsExtras} onChange={e => setMontoHsExtras(e.target.value === '' ? '' : Number(e.target.value))} />
                             </div>
                         </div>
                     </div>
@@ -248,7 +252,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                         <label className="form-label">Descuento Préstamos/Adelantos</label>
                         <div style={{ position: 'relative' }}>
                             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-danger)' }}>-$</span>
-                            <input type="number" className="form-input" style={{ paddingLeft: '25px', color: 'var(--color-danger)' }} value={descuentoPrestamos} onChange={e => setDescuentoPrestamos(Number(e.target.value))} />
+                            <input type="number" className="form-input" style={{ paddingLeft: '25px', color: 'var(--color-danger)' }} value={descuentoPrestamos} onChange={e => setDescuentoPrestamos(e.target.value === '' ? '' : Number(e.target.value))} />
                         </div>
                     </div>
 
