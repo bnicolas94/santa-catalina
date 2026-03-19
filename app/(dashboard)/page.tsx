@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import styles from './page.module.css'
+import Link from 'next/link'
 
 interface DashboardData {
     pedidosHoy: number
@@ -198,7 +199,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                <div className={`card ${styles.statCardSmall}`}>
+                <Link href="/stock?pago=pendiente" className={`${styles.statCardSmall} card`} style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
                     <div className="card-body">
                         <div className={styles.statInfo}>
                             <span className={styles.statLabel}>💳 Compras por Pagar</span>
@@ -207,7 +208,7 @@ export default function DashboardPage() {
                             </span>
                         </div>
                     </div>
-                </div>
+                </Link>
 
                 <div className={`card ${styles.statCardSmall}`}>
                     <div className="card-body">

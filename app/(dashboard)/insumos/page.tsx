@@ -127,17 +127,24 @@ export default function InsumosPage() {
     }
 
     async function handleDelete(id: string, nombre: string) {
-        if (!confirm(`¿Estás seguro de eliminar "${nombre}"? Esta acción no se puede deshacer.`)) return
+        console.log('Attempting to delete insumo:', id, nombre)
+        if (!window.confirm(`¿Estás seguro de eliminar "${nombre}"? Esta acción no se puede deshacer.`)) {
+            console.log('Deletion cancelled by user')
+            return
+        }
         try {
+            console.log('Sending DELETE request to /api/insumos/' + id)
             const res = await fetch(`/api/insumos/${id}`, { method: 'DELETE' })
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error || 'Error al eliminar')
             }
+            console.log('Delete successful')
             setSuccess('Insumo eliminado')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
+            console.error('Delete error:', err)
             setError(err instanceof Error ? err.message : 'Error al eliminar')
         }
     }
@@ -150,10 +157,19 @@ export default function InsumosPage() {
             const url = editingId ? `/api/insumos/${editingId}` : '/api/insumos'
             const method = editingId ? 'PUT' : 'POST'
 
+            // Handle commas for decimal values and normalize to dot
+            const cleansedForm = {
+                ...form,
+                stockActual: form.stockActual.replace(',', '.'),
+                stockMinimo: form.stockMinimo.replace(',', '.'),
+                precioUnitario: form.precioUnitario.replace(',', '.'),
+                factorConversion: form.factorConversion.replace(',', '.'),
+            }
+
             const res = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
+                body: JSON.stringify(cleansedForm),
             })
 
             if (!res.ok) {

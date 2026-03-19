@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: any[] }
 interface Proveedor { id: string; nombre: string }
@@ -12,7 +13,8 @@ interface Movimiento {
     ubicacion: { id: string; nombre: string } | null
 }
 
-export default function StockPage() {
+function StockContent() {
+    const searchParams = useSearchParams()
     const [movimientos, setMovimientos] = useState<Movimiento[]>([])
     const [insumos, setInsumos] = useState<Insumo[]>([])
     const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -24,6 +26,7 @@ export default function StockPage() {
     const [filterTipo, setFilterTipo] = useState('')
     const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
+    const [filterPago, setFilterPago] = useState('')
     const [editingId, setEditingId] = useState<string | null>(null)
     const [form, setForm] = useState({
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
@@ -35,6 +38,14 @@ export default function StockPage() {
     const [success, setSuccess] = useState('')
 
     useEffect(() => { fetchData() }, [])
+
+    useEffect(() => {
+        const pago = searchParams.get('pago')
+        if (pago === 'pendiente') {
+            setFilterPago('pendiente')
+            setFilterFecha('') // Mostrar todos los pendientes sin importar fecha
+        }
+    }, [searchParams])
 
     async function fetchData() {
         try {
@@ -63,9 +74,20 @@ export default function StockPage() {
         e.preventDefault()
         setError('')
         try {
-            const payloadParams = {
+            const cleansingForm = {
                 ...form,
-                cantidad: form.useBultos ? String(parseFloat(form.bultos) * parseFloat(form.unidadesPorBulto)) : form.cantidad,
+                cantidad: String(form.cantidad).replace(',', '.'),
+                cantidadSecundaria: String(form.cantidadSecundaria).replace(',', '.'),
+                costoTotal: String(form.costoTotal).replace(',', '.'),
+                bultos: String(form.bultos).replace(',', '.'),
+                unidadesPorBulto: String(form.unidadesPorBulto).replace(',', '.'),
+            }
+
+            const payloadParams = {
+                ...cleansingForm,
+                cantidad: cleansingForm.useBultos 
+                    ? String(parseFloat(cleansingForm.bultos || '0') * parseFloat(cleansingForm.unidadesPorBulto || '1')) 
+                    : cleansingForm.cantidad,
             }
 
             const res = await fetch(editingId ? `/api/movimientos-stock/${editingId}` : '/api/movimientos-stock', {
@@ -142,7 +164,8 @@ export default function StockPage() {
     }) : movimientos
 
     const filteredByInsumo = filterInsumo ? movimientosPorFecha.filter(m => m.insumo.id === filterInsumo) : movimientosPorFecha
-    const filtered = filterTipo ? filteredByInsumo.filter((m) => m.tipo === filterTipo) : filteredByInsumo
+    const filteredByPago = filterPago ? filteredByInsumo.filter(m => m.estadoPago === filterPago) : filteredByInsumo
+    const filtered = filterTipo ? filteredByPago.filter((m) => m.tipo === filterTipo) : filteredByPago
 
     // Calcular stock por vencimiento para el insumo filtrado o todos
     const stockPorVto = (() => {
@@ -199,7 +222,7 @@ export default function StockPage() {
                     )}
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
-                        const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || ''
+                        const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
                         setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: defaultUbi })
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
@@ -334,6 +357,12 @@ export default function StockPage() {
                     style={{ backgroundColor: filterTipo === 'salida' ? '#E74C3C' : '#E74C3C18', color: filterTipo === 'salida' ? '#fff' : '#E74C3C', border: '2px solid #E74C3C', fontWeight: 600 }}>
                     ⬇️ Salidas ({statsSalidas})
                 </button>
+                {filterPago === 'pendiente' && (
+                    <button className="btn btn-sm" onClick={() => setFilterPago('')}
+                        style={{ backgroundColor: '#E67E22', color: '#fff', border: '2px solid #E67E22', fontWeight: 600 }}>
+                        ⏳ Solo Pendientes (Haga clic para quitar)
+                    </button>
+                )}
             </div>
 
             {stockPorVto.length > 0 && (
@@ -640,5 +669,13 @@ export default function StockPage() {
                 </div>
             )}
         </div>
+    )
+}
+
+export default function StockPage() {
+    return (
+        <Suspense fallback={<div className="empty-state"><div className="spinner" /><p>Cargando filtros...</p></div>}>
+            <StockContent />
+        </Suspense>
     )
 }

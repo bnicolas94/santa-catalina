@@ -15,22 +15,26 @@ export async function PUT(
             data: {
                 ...(body.nombre !== undefined && { nombre: body.nombre }),
                 ...(body.unidadMedida !== undefined && { unidadMedida: body.unidadMedida }),
-                ...(body.stockActual !== undefined && { stockActual: parseFloat(body.stockActual) }),
-                ...(body.stockMinimo !== undefined && { stockMinimo: parseFloat(body.stockMinimo) }),
-                ...(body.precioUnitario !== undefined && { precioUnitario: parseFloat(body.precioUnitario) }),
-                ...(body.diasReposicion !== undefined && { diasReposicion: parseInt(body.diasReposicion) }),
-                ...(body.proveedorId !== undefined && { proveedorId: body.proveedorId || null }),
-                ...(body.familiaId !== undefined && { familiaId: body.familiaId || null }),
+                ...(body.stockActual !== undefined && { stockActual: parseFloat(body.stockActual) || 0 }),
+                ...(body.stockMinimo !== undefined && { stockMinimo: parseFloat(body.stockMinimo) || 0 }),
+                ...(body.precioUnitario !== undefined && { precioUnitario: parseFloat(body.precioUnitario) || 0 }),
+                ...(body.diasReposicion !== undefined && { diasReposicion: parseInt(body.diasReposicion) || 1 }),
+                ...(body.proveedorId !== undefined && { 
+                    proveedor: body.proveedorId ? { connect: { id: body.proveedorId } } : { disconnect: true } 
+                }),
+                ...(body.familiaId !== undefined && { 
+                    familia: body.familiaId ? { connect: { id: body.familiaId } } : { disconnect: true } 
+                }),
                 ...(body.activo !== undefined && { activo: body.activo }),
                 ...(body.unidadSecundaria !== undefined && { unidadSecundaria: body.unidadSecundaria || null }),
                 ...(body.factorConversion !== undefined && { factorConversion: parseFloat(body.factorConversion) || null }),
-                ...(body.stockActualSecundario !== undefined && { stockActualSecundario: parseFloat(body.stockActualSecundario) }),
+                ...(body.stockActualSecundario !== undefined && { stockActualSecundario: parseFloat(body.stockActualSecundario) || 0 }),
             },
             include: { proveedor: true, familia: true },
         })
 
         return NextResponse.json(insumo)
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating insumo:', error)
         return NextResponse.json({ error: 'Error al actualizar insumo' }, { status: 500 })
     }
@@ -47,6 +51,7 @@ export async function DELETE(
         // Delete related dependencies manually to mimic Cascade and avoid 500 error
         await prisma.fichaTecnica.deleteMany({ where: { insumoId: id } })
         await prisma.movimientoStock.deleteMany({ where: { insumoId: id } })
+        await prisma.stockInsumo.deleteMany({ where: { insumoId: id } })
 
         await prisma.insumo.delete({ where: { id } })
         return NextResponse.json({ success: true })

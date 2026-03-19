@@ -20,24 +20,39 @@ export async function DELETE(
 
         await prisma.$transaction(async (tx) => {
             // 2. Revertir el stock en el Insumo
-            // Si fue entrada (+), ahora restamos (-). Si fue salida (-), ahora sumamos (+).
             const delta = movimiento.tipo === 'entrada' ? -movimiento.cantidad : movimiento.cantidad
+            const deltaSec = movimiento.cantidadSecundaria ? (movimiento.tipo === 'entrada' ? -movimiento.cantidadSecundaria : movimiento.cantidadSecundaria) : 0
 
             await tx.insumo.update({
                 where: { id: movimiento.insumoId },
                 data: {
-                    stockActual: { increment: delta }
+                    stockActual: { increment: delta },
+                    stockActualSecundario: { increment: deltaSec }
                 }
             })
 
-            // 3. Si tiene un gasto asociado, eliminarlo
+            // 3. Revertir el stock en la Ubicación específica
+            await tx.stockInsumo.updateMany({
+                where: { insumoId: movimiento.insumoId, ubicacionId: movimiento.ubicacionId as string },
+                data: {
+                    cantidad: { increment: delta },
+                    cantidadSecundaria: { increment: deltaSec }
+                }
+            })
+
+            // 4. Si tiene un gasto asociado, eliminarlo (y su movimiento de caja)
             if (movimiento.gastoId) {
+                // Primero borrar el movimiento de caja para evitar FK errors si los hay
+                await tx.movimientoCaja.deleteMany({
+                    where: { gastoId: movimiento.gastoId }
+                })
+                
                 await tx.gastoOperativo.delete({
                     where: { id: movimiento.gastoId }
                 })
             }
 
-            // 4. Eliminar el movimiento
+            // 5. Eliminar el movimiento
             await tx.movimientoStock.delete({
                 where: { id }
             })
