@@ -1,5 +1,5 @@
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead("c:\Users\sandw\Documents\santa-catalina\docs\santa_catalina_integracion.docx")
+$zip = [System.IO.Compression.ZipFile]::OpenRead("c:\Users\sandw\Documents\santa-catalina\docs\Recibo de pago 2025 MOD.docx")
 $entry = $zip.GetEntry("word/document.xml")
 if ($entry -ne $null) {
     $stream = $entry.Open()

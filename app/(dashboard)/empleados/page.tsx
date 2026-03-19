@@ -5,6 +5,7 @@ import { Empleado } from '@prisma/client'
 import { EmpleadoDialog } from '@/components/empleados/EmpleadoDialog'
 import RolesConfigModal from '@/components/empleados/RolesConfigModal'
 import { MassLiquidationModal } from '@/components/empleados/MassLiquidationModal'
+import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -17,6 +18,7 @@ export default function EmpleadosPage() {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
+    const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
     const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
     const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -362,6 +364,14 @@ export default function EmpleadosPage() {
                                             >
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                             </button>
+                                            <button
+                                                className="btn btn-ghost btn-icon"
+                                                onClick={() => { setSelectedEmpleado(emp); setExpressLiquidationOpen(true); }}
+                                                title="Liquidación Express"
+                                                style={{ color: 'var(--color-success)' }}
+                                            >
+                                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            </button>
                                             {emp.activo && (
                                                 <button
                                                     className="btn btn-ghost btn-icon"
@@ -401,6 +411,14 @@ export default function EmpleadosPage() {
                 <MassLiquidationModal
                     empleados={empleados}
                     onClose={() => setMassLiquidationOpen(false)}
+                    onSuccess={() => fetchEmpleados()}
+                />
+            )}
+
+            {expressLiquidationOpen && (
+                <ExpressLiquidationModal
+                    empleado={selectedEmpleado}
+                    onClose={() => setExpressLiquidationOpen(false)}
                     onSuccess={() => fetchEmpleados()}
                 />
             )}

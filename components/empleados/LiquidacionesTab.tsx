@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { Empleado } from '@prisma/client'
+import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
+import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
+
 
 export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: string, empleadoDatos: any }) {
     const [liquidaciones, setLiquidaciones] = useState<any[]>([])
@@ -23,11 +26,13 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
 
     const [alertas, setAlertas] = useState<string[]>([])
     const [escaneando, setEscaneando] = useState(false)
+    const [expressModalOpen, setExpressModalOpen] = useState(false)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
     const fetchLiquidaciones = async () => {
         setLoading(true)
         try {
-            const res = await fetch(`/api/liquidaciones?empleadoId=${empleadoId}`)
+            const res = await fetch(`/api/liquidaciones?empleadoId=${empleadoId}&t=${Date.now()}`)
             const data = await res.json()
             setLiquidaciones(data)
         } catch (error) {
@@ -168,116 +173,134 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
         }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('¿Estás seguro de eliminar esta liquidación? Se devolverá el dinero a la caja y las cuotas de préstamos volverán a estar pendientes.')) return
+    const executeDelete = async () => {
+        if (!confirmDeleteId) return
+        const id = confirmDeleteId
+        setConfirmDeleteId(null) // Cerrar antes de procesar
 
         try {
             const res = await fetch(`/api/liquidaciones?id=${id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                cache: 'no-store'
             })
 
             if (res.ok) {
-                alert('Liquidación eliminada correctamente')
+                // Liquidación eliminada correctamente
                 fetchLiquidaciones()
                 fetchCajas()
             } else {
                 const err = await res.json()
-                alert(err.error || 'Error al eliminar')
+                console.error(err.error || 'Error al eliminar')
             }
         } catch (error) {
-            console.error(error)
-            alert('Error al eliminar liquidación')
+            console.error('Error de red al eliminar', error)
         }
     }
 
     const printRecibo = (liq: any) => {
-        // En una app real esto abriría un PDF con @react-pdf/renderer o similar
-        // Por la limitación de la prueba, abrimos un popup con HTML para imprimir
+        const dImp = new Date(liq.fechaGeneracion || new Date())
+        const dia = dImp.getDate()
+        const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        const mesNombre = meses[dImp.getMonth()]
+        const anio = dImp.getFullYear()
+
+        // Extraer fechas del periodo si es posible
+        let periodoTexto = liq.periodo || ''
+        let matchExpress = periodoTexto.match(/Express\s+([\d\/]+)\s+-\s+([\d\/]+)/)
+        let fDesde = '', fHasta = ''
+        if (matchExpress) {
+            fDesde = matchExpress[1]
+            fHasta = matchExpress[2]
+        } else {
+            let matchNormal = periodoTexto.match(/del\s+([\d\/]+)\s+al\s+([\d\/]+)/i)
+            if (matchNormal) {
+                fDesde = matchNormal[1]
+                fHasta = matchNormal[2]
+            } else {
+                fDesde = liq.periodo
+                fHasta = liq.periodo
+            }
+        }
+
+        const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
+        const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
+        
+        // El usuario solicitó que el texto del recibo indique el importe íntegro de sueldo + extras antes de descuentos
+        const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0)
+        const totalLetras = formatCurrencyToWords(totalBruto)
+
         const html = `
             <html>
             <head>
                 <title>Recibo de Sueldo - ${empleadoDatos.nombre}</title>
                 <style>
-                    body { font-family: sans-serif; padding: 40px; }
-                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-                    .row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-                    .titulo { font-weight: bold; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-                    th { background-color: #f5f5f5; }
-                    .total { font-weight: bold; font-size: 1.2em; border-top: 2px solid #000; padding-top: 10px; margin-top: 20px; }
+                    @page { size: A4; margin: 20mm; }
+                    body { font-family: 'Times New Roman', serif; line-height: 1.6; color: #000; padding: 20px; font-size: 14pt; }
+                    .recibo-container { border: 1px solid #eee; padding: 40px; max-width: 800px; margin: 0 auto; position: relative; z-index: 1; background: transparent !important; }
+                    .watermark {
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        width: 80%;
+                        max-width: 500px;
+                        height: auto;
+                        opacity: 0.35; /* Opacidad aumentada a pedido del usuario */
+                        z-index: 0;
+                        pointer-events: none;
+                    }
+                    .header { margin-bottom: 40px; position: relative; z-index: 10; }
+                    .texto { text-align: justify; margin-bottom: 60px; position: relative; z-index: 10; padding-top: 20px; }
+                    .firma-section { display: flex; flex-direction: column; align-items: flex-end; gap: 20px; margin-top: 80px; position: relative; z-index: 10; }
+                    .firma-line { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
+                    .data-label { font-weight: bold; }
+                    .amount { font-weight: bold; }
+                    @media print { 
+                        .no-print { display: none; } 
+                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    }
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <h1>SANTA CATALINA</h1>
-                    <h3>RECIBO DE HABERES - ${liq.periodo}</h3>
-                </div>
-                
-                <div class="row">
-                    <span class="titulo">Empleado:</span> <span>${empleadoDatos.nombre} ${empleadoDatos.apellido || ''}</span>
-                </div>
-                <div class="row">
-                    <span class="titulo">DNI:</span> <span>${empleadoDatos.dni || '-'}</span>
-                </div>
-                <div class="row">
-                    <span class="titulo">Fecha de Pago:</span> <span>${new Date(liq.fechaGeneracion).toLocaleDateString()}</span>
-                </div>
+                <div class="recibo-container">
+                    <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
+                    
+                    <div class="header">
+                        <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
+                    </div>
 
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Concepto</th>
-                            <th>Unidades</th>
-                            <th style="text-align: right">Haberes</th>
-                            <th style="text-align: right">Deducciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Sueldo Proporcional (${empleadoDatos.cicloPago})</td>
-                            <td>1</td>
-                            <td style="text-align: right">$${liq.sueldoProporcional.toFixed(2)}</td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td>Horas Normales</td>
-                            <td>${liq.horasNormales} hs</td>
-                            <td style="text-align: right">$${liq.montoHorasNormales.toFixed(2)}</td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td>Horas Extras (${empleadoDatos.porcentajeHoraExtra}%)</td>
-                            <td>${liq.horasExtras} hs</td>
-                            <td style="text-align: right">$${liq.montoHorasExtras.toFixed(2)}</td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td>Feriados Trabajados</td>
-                            <td>${liq.horasFeriado} hs</td>
-                            <td style="text-align: right">$${liq.montoHorasFeriado.toFixed(2)}</td>
-                            <td></td>
-                        </tr>
-                        <tr>
-                            <td>Descuento Adelantos/Préstamos</td>
-                            <td></td>
-                            <td></td>
-                            <td style="text-align: right">-$${liq.descuentosPrestamos.toFixed(2)}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <div class="row total">
-                    <span>NETO A COBRAR:</span>
-                    <span>$${liq.totalNeto.toFixed(2)}</span>
+                    <div class="texto">
+                        Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
+                        (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
+                        <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
+                        (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
+                        del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
+                        Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
+                        (pesos ${totalLetras}).
+                    </div>
+
+                    <div class="firma-section">
+                        <div class="firma-line">Firma</div>
+                        <div style="width: 250px;">Aclaración: ${empleadoDatos.nombre} ${empleadoDatos.apellido || ''}</div>
+                        <div style="width: 250px;">D.N.I: ${empleadoDatos.dni || ''}</div>
+                    </div>
                 </div>
-                
-                <div style="margin-top: 100px; display: flex; justify-content: space-around;">
-                    <div style="text-align: center; border-top: 1px solid #000; width: 200px; padding-top: 5px;">Firma Empleador</div>
-                    <div style="text-align: center; border-top: 1px solid #000; width: 200px; padding-top: 5px;">Firma Empleado</div>
-                </div>
-                
-                <script>window.print();</script>
+                <script>
+                    let printed = false;
+                    const doPrint = () => {
+                        if (printed) return;
+                        printed = true;
+                        window.print();
+                    };
+                    const img = document.querySelector('.watermark');
+                    if (img && !img.complete) {
+                        img.onload = doPrint;
+                        img.onerror = doPrint;
+                        setTimeout(doPrint, 1500);
+                    } else {
+                        doPrint();
+                    }
+                </script>
             </body>
             </html>
         `
@@ -373,6 +396,13 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                             >
                                 {generando ? 'Procesando...' : (escaneando ? 'Validando...' : 'Liquidar y Generar')}
                             </button>
+                            <button
+                                onClick={() => setExpressModalOpen(true)}
+                                className="btn btn-outline"
+                                style={{ borderColor: 'var(--color-success)', color: 'var(--color-success)' }}
+                            >
+                                💸 Express (Manual)
+                            </button>
                         </div>
                     </div>
 
@@ -438,7 +468,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(liq.id)}
+                                                onClick={() => setConfirmDeleteId(liq.id)}
                                                 className="btn btn-ghost btn-icon btn-sm text-danger"
                                                 title="Eliminar Liquidación"
                                                 style={{ color: 'var(--color-danger)' }}
@@ -469,6 +499,34 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                     </div>
                 )}
             </div>
+
+            {/* Modal de confirmación de borrado */}
+            {confirmDeleteId && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '400px' }}>
+                        <div className="modal-header">
+                            <h3 style={{ margin: 0, color: 'var(--color-danger)' }}>Eliminar Liquidación</h3>
+                            <button onClick={() => setConfirmDeleteId(null)} className="btn btn-ghost btn-icon">✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <p style={{ marginTop: 0 }}>¿Estás seguro de que quieres eliminar esta liquidación?</p>
+                            <p style={{ color: 'var(--color-gray-500)', fontSize: '12px' }}>Se devolverá el dinero a la caja y se restaurarán los préstamos involucrados.</p>
+                        </div>
+                        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+                            <button onClick={() => setConfirmDeleteId(null)} className="btn btn-outline" style={{ borderColor: 'var(--color-gray-400)', color: 'var(--color-gray-700)' }}>Cancelar</button>
+                            <button onClick={executeDelete} className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}>Sí, Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {expressModalOpen && (
+                <ExpressLiquidationModal
+                    empleado={empleadoDatos}
+                    onClose={() => setExpressModalOpen(false)}
+                    onSuccess={() => fetchLiquidaciones()}
+                />
+            )}
         </div>
     )
 }
