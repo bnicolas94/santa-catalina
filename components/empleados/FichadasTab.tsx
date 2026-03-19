@@ -16,6 +16,11 @@ interface Fichada {
     fechaHora: string
     tipo: 'entrada' | 'salida' | 'ausencia'
     origen: string
+    tipoLicenciaId?: string
+    tipoLicencia?: {
+        nombre: string
+        conGoceSueldo: boolean
+    }
 }
 
 export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empleado: any }) {
@@ -29,6 +34,8 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
     const [manualFecha, setManualFecha] = useState(new Date().toISOString().split('T')[0])
     const [manualHora, setManualHora] = useState('08:00')
     const [manualTipo, setManualTipo] = useState<'entrada' | 'salida' | 'ausencia'>('entrada')
+    const [manualTipoLicenciaId, setManualTipoLicenciaId] = useState<string>('')
+    const [tiposLicencias, setTiposLicencias] = useState<any[]>([])
     const [manualLoading, setManualLoading] = useState(false)
     const [editingFichadaId, setEditingFichadaId] = useState<string | null>(null)
 
@@ -45,8 +52,19 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
         }
     }
 
+    const fetchTiposLicencias = async () => {
+        try {
+            const res = await fetch('/api/licencias')
+            const data = await res.json()
+            setTiposLicencias(data.filter((l: any) => l.activo))
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
     useEffect(() => {
         fetchFichadas()
+        fetchTiposLicencias()
     }, [empleadoId])
 
     const toggleDay = (day: string) => {
@@ -71,7 +89,8 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         fechaHora: tempDate.toISOString(),
-                        tipo: manualTipo
+                        tipo: manualTipo,
+                        tipoLicenciaId: manualTipo === 'ausencia' && manualTipoLicenciaId ? manualTipoLicenciaId : null
                     })
                 })
             } else {
@@ -82,7 +101,8 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                         empleadoId,
                         fechaHora: tempDate.toISOString(),
                         tipo: manualTipo,
-                        origen: 'manual'
+                        origen: 'manual',
+                        tipoLicenciaId: manualTipo === 'ausencia' && manualTipoLicenciaId ? manualTipoLicenciaId : null
                     })
                 })
             }
@@ -126,6 +146,7 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
         setManualFecha(localDate.toISOString().split('T')[0])
         setManualHora(localDate.toISOString().substring(11, 16))
         setManualTipo(f.tipo)
+        setManualTipoLicenciaId(f.tipoLicenciaId || '')
         setEditingFichadaId(f.id)
         setManualOpen(true)
     }
@@ -134,6 +155,7 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
         setManualFecha(new Date().toISOString().split('T')[0])
         setManualHora('08:00')
         setManualTipo('entrada')
+        setManualTipoLicenciaId('')
         setEditingFichadaId(null)
         setManualOpen(true)
     }
@@ -246,7 +268,7 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                                                         <td style={{ fontWeight: 600 }}>{new Date(f.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                                         <td>
                                                             <span className={`badge ${f.tipo === 'entrada' ? 'badge-success' : f.tipo === 'ausencia' ? 'badge-danger' : 'badge-warning'}`}>
-                                                                {f.tipo === 'entrada' ? 'Entrada' : f.tipo === 'ausencia' ? 'Ausencia' : 'Salida'}
+                                                                {f.tipo === 'entrada' ? 'Entrada' : f.tipo === 'ausencia' ? (f.tipoLicencia ? `Ausencia: ${f.tipoLicencia.nombre}` : 'Ausencia') : 'Salida'}
                                                             </span>
                                                         </td>
                                                         <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'capitalize' }}>{f.origen}</td>
@@ -292,12 +314,26 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Tipo de Movimiento</label>
-                                    <select value={manualTipo} onChange={e => setManualTipo(e.target.value as 'entrada' | 'salida' | 'ausencia')} className="form-select">
+                                    <select value={manualTipo} onChange={e => {
+                                        setManualTipo(e.target.value as 'entrada' | 'salida' | 'ausencia')
+                                        if (e.target.value !== 'ausencia') setManualTipoLicenciaId('')
+                                    }} className="form-select">
                                         <option value="entrada">Entrada</option>
                                         <option value="salida">Salida</option>
                                         <option value="ausencia">Ausencia Confirmada</option>
                                     </select>
                                 </div>
+                                {manualTipo === 'ausencia' && (
+                                    <div className="form-group">
+                                        <label className="form-label">Motivo (Opcional)</label>
+                                        <select value={manualTipoLicenciaId} onChange={e => setManualTipoLicenciaId(e.target.value)} className="form-select">
+                                            <option value="">-- Sin especificar --</option>
+                                            {tiposLicencias.map(l => (
+                                                <option key={l.id} value={l.id}>{l.nombre} {l.conGoceSueldo ? '(Remunerada)' : ''}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
                             <div className="modal-footer">
                                 <button type="button" onClick={() => setManualOpen(false)} className="btn btn-ghost">Cancelar</button>

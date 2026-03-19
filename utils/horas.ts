@@ -5,6 +5,9 @@
 export interface Marca {
     fechaHora: string | Date;
     tipo: 'entrada' | 'salida' | 'ausencia';
+    tipoLicencia?: {
+        conGoceSueldo: boolean;
+    };
 }
 
 export interface ResumenDia {
@@ -21,9 +24,15 @@ export interface ResumenDia {
 export function calcularResumenDia(marcas: Marca[], horasJornada: number = 8): ResumenDia {
     let milisegundosTrabajados = 0;
     let esAusencia = marcas.some(m => m.tipo === 'ausencia');
+    let esAusenciaRemunerada = marcas.some(m => m.tipo === 'ausencia' && m.tipoLicencia?.conGoceSueldo);
 
     if (esAusencia) {
-        return { horasTrabajadas: 0, horasExtras: 0, esAusencia: true, marcas };
+        return { 
+            horasTrabajadas: esAusenciaRemunerada ? horasJornada : 0, 
+            horasExtras: 0, 
+            esAusencia: true, 
+            marcas 
+        };
     }
 
     // Ordenar por seguridad

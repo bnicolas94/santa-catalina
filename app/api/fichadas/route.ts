@@ -31,7 +31,8 @@ export async function GET(request: Request) {
             include: {
                 empleado: {
                     select: { nombre: true, apellido: true }
-                }
+                },
+                tipoLicencia: true
             }
         })
 
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { empleadoId, fechaHora, tipo, origen } = body
+        const { empleadoId, fechaHora, tipo, origen, tipoLicenciaId } = body
 
         if (!empleadoId || !fechaHora || !tipo) {
             return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
@@ -57,7 +58,8 @@ export async function POST(request: Request) {
                 empleadoId,
                 fechaHora: new Date(fechaHora),
                 tipo,
-                origen: origen || 'manual'
+                origen: origen || 'manual',
+                tipoLicenciaId
             }
         })
 

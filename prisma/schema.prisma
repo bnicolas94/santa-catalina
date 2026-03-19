@@ -450,15 +450,31 @@ model ConceptoCaja {
 }
 
 model FichadaEmpleado {
-  id         String   @id @default(uuid())
-  fechaHora  DateTime @map("fecha_hora")
-  tipo       String
-  origen     String   @default("reloj")
-  createdAt  DateTime @default(now())
-  empleadoId String   @map("id_empleado")
-  empleado   Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  id             String        @id @default(uuid())
+  fechaHora      DateTime      @map("fecha_hora")
+  tipo           String
+  origen         String        @default("reloj")
+  createdAt      DateTime      @default(now())
+  empleadoId     String        @map("id_empleado")
+  tipoLicenciaId String?       @map("id_tipo_licencia")
+  empleado       Empleado      @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  tipoLicencia   TipoLicencia? @relation(fields: [tipoLicenciaId], references: [id])
 
   @@map("fichadas_empleados")
+}
+
+model TipoLicencia {
+  id            String   @id @default(uuid())
+  nombre        String   @unique
+  descripcion   String?
+  conGoceSueldo Boolean  @default(false) @map("con_goce_sueldo")
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  fichadas      FichadaEmpleado[]
+
+  @@map("tipos_licencia")
 }
 
 model PrestamoEmpleado {

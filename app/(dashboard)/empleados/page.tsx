@@ -6,6 +6,7 @@ import { EmpleadoDialog } from '@/components/empleados/EmpleadoDialog'
 import RolesConfigModal from '@/components/empleados/RolesConfigModal'
 import { MassLiquidationModal } from '@/components/empleados/MassLiquidationModal'
 import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
+import { ConfigLicenciasModal } from '@/components/empleados/ConfigLicenciasModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -14,6 +15,7 @@ export default function EmpleadosPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedEmpleado, setSelectedEmpleado] = useState<Empleado | null>(null)
     const [showRolesModal, setShowRolesModal] = useState(false)
+    const [showLicenciasModal, setShowLicenciasModal] = useState(false)
     const [importLoading, setImportLoading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
@@ -243,6 +245,12 @@ export default function EmpleadosPage() {
                         ⚙️ Roles
                     </button>
                     <button
+                        onClick={() => setShowLicenciasModal(true)}
+                        className="btn btn-outline"
+                    >
+                        ⚙️ Licencias
+                    </button>
+                    <button
                         onClick={() => handleOpenDialog()}
                         className="btn btn-primary"
                     >
@@ -438,6 +446,9 @@ export default function EmpleadosPage() {
                         // Refresh logic if needed
                     }}
                 />
+            )}
+            {showLicenciasModal && (
+                <ConfigLicenciasModal onClose={() => setShowLicenciasModal(false)} />
             )}
         </div>
     )

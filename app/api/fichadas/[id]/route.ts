@@ -9,7 +9,7 @@ export async function PUT(
     try {
         const { id } = await params
         const body = await request.json()
-        const { fechaHora, tipo } = body
+        const { fechaHora, tipo, tipoLicenciaId } = body
 
         if (!fechaHora || !tipo) {
             return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
@@ -19,7 +19,8 @@ export async function PUT(
             where: { id },
             data: {
                 fechaHora: new Date(fechaHora),
-                tipo
+                tipo,
+                tipoLicenciaId
             }
         })
 
