@@ -126,11 +126,14 @@ model Insumo {
   updatedAt      DateTime          @updatedAt
   proveedorId    String?           @map("id_proveedor")
   familiaId      String?           @map("id_familia")
-  fichasTecnicas FichaTecnica[]
-  familia        FamiliaInsumo?    @relation(fields: [familiaId], references: [id])
-  proveedor      Proveedor?        @relation(fields: [proveedorId], references: [id])
-  movimientos    MovimientoStock[]
-  stocks         StockInsumo[]
+  unidadSecundaria       String?           @map("unidad_secundaria")
+  factorConversion       Float?            @map("factor_conversion")
+  stockActualSecundario  Float             @default(0) @map("stock_actual_secundario")
+  fichasTecnicas         FichaTecnica[]
+  familia                FamiliaInsumo?    @relation(fields: [familiaId], references: [id])
+  proveedor              Proveedor?        @relation(fields: [proveedorId], references: [id])
+  movimientos            MovimientoStock[]
+  stocks                 StockInsumo[]
 
   @@map("insumos")
 }
@@ -241,8 +244,9 @@ model MovimientoStock {
   proveedorId      String?         @map("id_proveedor")
   gastoId          String?         @unique @map("id_gasto")
   fechaVencimiento DateTime?       @map("fecha_vencimiento")
-  ubicacionId      String?         @map("id_ubicacion")
-  gasto            GastoOperativo? @relation(fields: [gastoId], references: [id])
+  ubicacionId        String?         @map("id_ubicacion")
+  cantidadSecundaria Float?          @map("cantidad_secundaria")
+  gasto              GastoOperativo? @relation(fields: [gastoId], references: [id])
   insumo           Insumo          @relation(fields: [insumoId], references: [id])
   loteOrigen       Lote?           @relation(fields: [loteOrigenId], references: [id])
   proveedor        Proveedor?      @relation(fields: [proveedorId], references: [id])
@@ -253,12 +257,13 @@ model MovimientoStock {
 
 model StockInsumo {
   id          String    @id @default(uuid())
-  cantidad    Float     @default(0)
-  updatedAt   DateTime  @updatedAt
-  ubicacionId String    @map("id_ubicacion")
-  insumoId    String    @map("id_insumo")
-  insumo      Insumo    @relation(fields: [insumoId], references: [id])
-  ubicacion   Ubicacion @relation(fields: [ubicacionId], references: [id])
+  cantidad           Float     @default(0)
+  cantidadSecundaria Float     @default(0) @map("cantidad_secundaria")
+  updatedAt          DateTime  @updatedAt
+  ubicacionId        String    @map("id_ubicacion")
+  insumoId           String    @map("id_insumo")
+  insumo             Insumo    @relation(fields: [insumoId], references: [id])
+  ubicacion          Ubicacion @relation(fields: [ubicacionId], references: [id])
 
   @@unique([insumoId, ubicacionId])
   @@map("stock_insumos")

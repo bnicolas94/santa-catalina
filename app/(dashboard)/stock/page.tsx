@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 
-interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number }
+interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: any[] }
 interface Proveedor { id: string; nombre: string }
 interface Movimiento {
-    id: string; tipo: string; cantidad: number; fecha: string; observaciones: string | null
+    id: string; tipo: string; cantidad: number; cantidadSecundaria: number | null; fecha: string; observaciones: string | null
     costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null;
-    insumo: { id: string; nombre: string; unidadMedida: string }
+    insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
     proveedor: { id: string; nombre: string } | null
     ubicacion: { id: string; nombre: string } | null
 }
@@ -26,7 +26,7 @@ export default function StockPage() {
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
     const [editingId, setEditingId] = useState<string | null>(null)
     const [form, setForm] = useState({
-        insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '',
+        insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '',
         ubicacionId: '',
@@ -77,7 +77,7 @@ export default function StockPage() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: '' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -89,6 +89,7 @@ export default function StockPage() {
             insumoId: mov.insumo.id,
             tipo: mov.tipo,
             cantidad: String(mov.cantidad),
+            cantidadSecundaria: mov.cantidadSecundaria ? String(mov.cantidadSecundaria) : '',
             observaciones: mov.observaciones || '',
             proveedorId: mov.proveedor?.id || '',
             costoTotal: mov.costoTotal ? String(mov.costoTotal) : '',
@@ -199,7 +200,7 @@ export default function StockPage() {
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || ''
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: defaultUbi })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: defaultUbi })
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
                 </div>
@@ -294,9 +295,16 @@ export default function StockPage() {
                                 <div className="card-body" style={{ padding: 'var(--space-3)' }}>
                                     <h4 style={{ margin: 0, fontSize: 'var(--text-sm)' }}>{ins.nombre}</h4>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
-                                        <span style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: isLow ? 'var(--color-danger)' : 'var(--color-primary)' }}>
-                                            {qty} <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400 }}>{ins.unidadMedida}</span>
-                                        </span>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: isLow ? 'var(--color-danger)' : 'var(--color-primary)' }}>
+                                                {qty.toLocaleString('es-AR', { maximumFractionDigits: 2 })} <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400 }}>{ins.unidadMedida}</span>
+                                            </span>
+                                            {ins.unidadSecundaria && (
+                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600 }}>
+                                                    {(selectedUbi ? (stockFound?.cantidadSecundaria || 0) : (ins.stockActualSecundario || 0)).toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadSecundaria}
+                                                </span>
+                                            )}
+                                        </div>
                                         {isLow && <span title="Stock bajo" style={{ color: 'var(--color-danger)' }}>⚠️</span>}
                                     </div>
                                 </div>
@@ -385,9 +393,16 @@ export default function StockPage() {
                                 </td>
                                 <td style={{ fontWeight: 600 }}>{mov.insumo.nombre}</td>
                                 <td>
-                                    <span style={{ color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C', fontWeight: 700 }}>
-                                        {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidad} {mov.insumo.unidadMedida}
-                                    </span>
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C', fontWeight: 700 }}>
+                                            {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidad.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadMedida}
+                                        </span>
+                                        {mov.cantidadSecundaria && (
+                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600 }}>
+                                                {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidadSecundaria.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadSecundaria}
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
                                 <td>
                                     {mov.tipo === 'entrada' && mov.costoTotal ? (
@@ -519,9 +534,48 @@ export default function StockPage() {
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="form-group">
-                                            <label className="form-label">Cantidad Total</label>
-                                            <input type="number" step="0.01" className="form-input" value={form.cantidad} onChange={(e) => setForm({ ...form, cantidad: e.target.value })} required placeholder="0" />
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                                            <div className="form-group">
+                                                <label className="form-label">Cantidad ({insumos.find(i => i.id === form.insumoId)?.unidadMedida || 'u'})</label>
+                                                <input 
+                                                    type="number" 
+                                                    step="0.001" 
+                                                    className="form-input" 
+                                                    value={form.cantidad} 
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        const ins = insumos.find(i => i.id === form.insumoId);
+                                                        let secVal = form.cantidadSecundaria;
+                                                        if (ins?.factorConversion && val) {
+                                                            secVal = String(parseFloat(val) / ins.factorConversion);
+                                                        }
+                                                        setForm({ ...form, cantidad: val, cantidadSecundaria: secVal });
+                                                    }} 
+                                                    required 
+                                                    placeholder="0" 
+                                                />
+                                            </div>
+                                            {insumos.find(i => i.id === form.insumoId)?.unidadSecundaria && (
+                                                <div className="form-group">
+                                                    <label className="form-label">En {insumos.find(i => i.id === form.insumoId)?.unidadSecundaria}</label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.001" 
+                                                        className="form-input" 
+                                                        value={form.cantidadSecundaria} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const ins = insumos.find(i => i.id === form.insumoId);
+                                                            let primVal = form.cantidad;
+                                                            if (ins?.factorConversion && val) {
+                                                                primVal = String(parseFloat(val) * ins.factorConversion);
+                                                            }
+                                                            setForm({ ...form, cantidadSecundaria: val, cantidad: primVal });
+                                                        }} 
+                                                        placeholder="0" 
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     {form.tipo === 'entrada' && (

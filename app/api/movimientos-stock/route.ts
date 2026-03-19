@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, ubicacionId } = body
+        const { insumoId, tipo, cantidad, cantidadSecundaria, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, ubicacionId } = body
 
         if (!insumoId || !tipo || !cantidad || !ubicacionId) {
             return NextResponse.json({ error: 'Insumo, tipo, cantidad y ubicación son requeridos' }, { status: 400 })
@@ -84,11 +84,13 @@ export async function POST(request: Request) {
             }
 
             // 2. Crear MovimientoStock
+            const movCantSec = cantidadSecundaria ? parseFloat(cantidadSecundaria) : null
             const movimiento = await tx.movimientoStock.create({
                 data: {
                     insumoId,
                     tipo,
                     cantidad: cant,
+                    cantidadSecundaria: movCantSec,
                     observaciones: observaciones || null,
                     proveedorId: proveedorId || null,
                     costoTotal: costoTotalFloat,
@@ -102,27 +104,40 @@ export async function POST(request: Request) {
                     proveedor: { select: { id: true, nombre: true } },
                 },
             })
-
+    
             // 3. Actualizar stock del insumo y precio unitario si corresponde
             const delta = tipo === 'entrada' ? cant : -cant
-            const dataInsumo: { stockActual: { increment: number }; precioUnitario?: number } = { stockActual: { increment: delta } }
-
+            const deltaSec = movCantSec ? (tipo === 'entrada' ? movCantSec : -movCantSec) : 0
+            
+            const dataInsumo: any = { 
+                stockActual: { increment: delta },
+                stockActualSecundario: { increment: deltaSec }
+            }
+    
             if (tipo === 'entrada' && costoTotalFloat && actualizarCosto) {
                 if (costoTotalFloat > 0 && cant > 0) {
                     dataInsumo.precioUnitario = costoTotalFloat / cant
                 }
             }
-
+    
             await tx.insumo.update({
                 where: { id: insumoId },
                 data: dataInsumo,
             })
-
+    
             // 4. Actualizar stock por ubicación (StockInsumo)
             await tx.stockInsumo.upsert({
                 where: { insumoId_ubicacionId: { insumoId, ubicacionId } },
-                create: { insumoId, ubicacionId, cantidad: delta },
-                update: { cantidad: { increment: delta } }
+                create: { 
+                    insumoId, 
+                    ubicacionId, 
+                    cantidad: delta,
+                    cantidadSecundaria: deltaSec
+                },
+                update: { 
+                    cantidad: { increment: delta },
+                    cantidadSecundaria: { increment: deltaSec }
+                }
             })
 
             return movimiento

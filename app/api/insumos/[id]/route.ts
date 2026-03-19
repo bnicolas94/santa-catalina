@@ -22,6 +22,9 @@ export async function PUT(
                 ...(body.proveedorId !== undefined && { proveedorId: body.proveedorId || null }),
                 ...(body.familiaId !== undefined && { familiaId: body.familiaId || null }),
                 ...(body.activo !== undefined && { activo: body.activo }),
+                ...(body.unidadSecundaria !== undefined && { unidadSecundaria: body.unidadSecundaria || null }),
+                ...(body.factorConversion !== undefined && { factorConversion: parseFloat(body.factorConversion) || null }),
+                ...(body.stockActualSecundario !== undefined && { stockActualSecundario: parseFloat(body.stockActualSecundario) }),
             },
             include: { proveedor: true, familia: true },
         })

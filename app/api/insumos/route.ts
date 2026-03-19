@@ -42,6 +42,8 @@ export async function POST(request: Request) {
                 diasReposicion: parseInt(diasReposicion) || 1,
                 proveedorId: proveedorId || null,
                 familiaId: familiaId || null,
+                unidadSecundaria: body.unidadSecundaria || null,
+                factorConversion: parseFloat(body.factorConversion) || null,
             },
             include: { proveedor: true, familia: true },
         })

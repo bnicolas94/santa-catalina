@@ -25,6 +25,9 @@ interface Insumo {
     activo: boolean
     proveedor: Proveedor | null
     familia: Familia | null
+    unidadSecundaria: string | null
+    factorConversion: number | null
+    stockActualSecundario: number
 }
 
 const UNIDADES = [
@@ -66,6 +69,8 @@ export default function InsumosPage() {
         diasReposicion: '1',
         proveedorId: '',
         familiaId: '',
+        unidadSecundaria: '',
+        factorConversion: '',
     })
     const [familiaForm, setFamiliaForm] = useState({ nombre: '', color: COLORES_FAMILIA[0] })
     const [error, setError] = useState('')
@@ -97,7 +102,11 @@ export default function InsumosPage() {
 
     function resetForm() {
         setEditingId(null)
-        setForm({ nombre: '', unidadMedida: 'kg', stockActual: '', stockMinimo: '', precioUnitario: '', diasReposicion: '1', proveedorId: '', familiaId: '' })
+        setForm({ 
+            nombre: '', unidadMedida: 'kg', stockActual: '', stockMinimo: '', 
+            precioUnitario: '', diasReposicion: '1', proveedorId: '', familiaId: '',
+            unidadSecundaria: '', factorConversion: ''
+        })
     }
 
     function openEdit(ins: Insumo) {
@@ -111,6 +120,8 @@ export default function InsumosPage() {
             diasReposicion: String(ins.diasReposicion),
             proveedorId: ins.proveedor?.id || '',
             familiaId: ins.familia?.id || '',
+            unidadSecundaria: ins.unidadSecundaria || '',
+            factorConversion: ins.factorConversion ? String(ins.factorConversion) : '',
         })
         setShowModal(true)
     }
@@ -366,7 +377,12 @@ export default function InsumosPage() {
                                             )}
                                         </td>
                                         <td>
-                                            {ins.stockActual.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadMedida}
+                                            <div>{ins.stockActual.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadMedida}</div>
+                                            {ins.unidadSecundaria && (
+                                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                                    {ins.stockActualSecundario.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadSecundaria}
+                                                </div>
+                                            )}
                                         </td>
                                         <td>
                                             {ins.stockMinimo.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadMedida}
@@ -486,6 +502,33 @@ export default function InsumosPage() {
                                         />
                                     </div>
                                 </div>
+                                <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+                                    <h4 style={{ marginBottom: 'var(--space-3)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)' }}>Unidad Secundaria (Opcional)</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label">Nombre unidad</label>
+                                            <input
+                                                className="form-input"
+                                                value={form.unidadSecundaria}
+                                                onChange={(e) => setForm({ ...form, unidadSecundaria: e.target.value })}
+                                                placeholder="Ej: Barra, Cajón"
+                                            />
+                                        </div>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label">Equivalencia (1 {form.unidadSecundaria || 'u'} = ? {form.unidadMedida})</label>
+                                            <input
+                                                type="number"
+                                                step="0.001"
+                                                className="form-input"
+                                                value={form.factorConversion}
+                                                onChange={(e) => setForm({ ...form, factorConversion: e.target.value })}
+                                                placeholder="Ej: 5 (si 1 barra = 5kg)"
+                                            />
+                                            <p style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>Dejar vacío si el peso es variable</p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="form-group">
                                     <label className="form-label">Proveedor</label>
                                     <select
