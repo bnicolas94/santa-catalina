@@ -748,13 +748,23 @@ export default function CajaPage() {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify(transfForm),
                                 })
-                                if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+                                if (!res.ok) { 
+                                    const data = await res.json()
+                                    throw new Error(data.details || data.error || 'Error al procesar la transferencia') 
+                                }
                                 setSuccess('Transferencia realizada correctamente')
                                 setShowTransferModal(false)
                                 setTransfForm({ origen: 'local', destino: 'caja_chica', monto: '', fecha: new Date().toISOString().split('T')[0] })
                                 fetchData()
                                 setTimeout(() => setSuccess(''), 3000)
-                            } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+                            } catch (err: unknown) { 
+                                console.error('[TRANSFER] Error:', err)
+                                if (err instanceof Error) {
+                                    setError(err.message)
+                                } else {
+                                    setError('Error desconocido al procesar la transferencia')
+                                }
+                            }
                         }}>
                             <div className="modal-body">
                                 <div className="form-group">

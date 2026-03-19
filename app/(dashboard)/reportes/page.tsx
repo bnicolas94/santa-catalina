@@ -7,6 +7,7 @@ import {
     Title, Tooltip, Legend, ArcElement
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
+import ProduccionReport from './ProduccionReport'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
@@ -23,7 +24,9 @@ interface RentabilidadData {
 }
 
 export default function ReportesPage() {
-    const [data, setData] = useState<RentabilidadData | null>(null)
+    const [activeTab, setActiveTab] = useState<'economico' | 'produccion'>('economico')
+    const [rentabilidadData, setRentabilidadData] = useState<RentabilidadData | null>(null)
+    const [produccionData, setProduccionData] = useState<any | null>(null)
     const [loading, setLoading] = useState(true)
 
     const d = new Date()
@@ -32,14 +35,20 @@ export default function ReportesPage() {
 
     useEffect(() => {
         fetchData()
-    }, [mes, anio])
+    }, [mes, anio, activeTab])
 
     async function fetchData() {
         setLoading(true)
         try {
-            const res = await fetch(`/api/reportes/rentabilidad?mes=${mes}&anio=${anio}`)
-            const json = await res.json()
-            setData(json)
+            if (activeTab === 'economico') {
+                const res = await fetch(`/api/reportes/rentabilidad?mes=${mes}&anio=${anio}`)
+                const json = await res.json()
+                setRentabilidadData(json)
+            } else {
+                const res = await fetch(`/api/reportes/produccion?mes=${mes}&anio=${anio}`)
+                const json = await res.json()
+                setProduccionData(json)
+            }
         } catch {
             console.error('Error fetching reporte')
         } finally {
@@ -47,115 +56,148 @@ export default function ReportesPage() {
         }
     }
 
-    if (loading || !data) return <div className="empty-state"><div className="spinner" /><p>Generando reporte...</p></div>
-
-    // Data for Bar Chart: Margen Bruto, Gastos, Neto
-    const barData = {
+    // --- Economico Report Logic ---
+    const barData = rentabilidadData ? {
         labels: [`Mes ${mes}/${anio}`],
         datasets: [
             {
                 label: '1. Facturación (Ventas)',
-                data: [data.ingresosTotales],
+                data: [rentabilidadData.ingresosTotales],
                 backgroundColor: '#3498DB',
             },
             {
                 label: '2. Costo Mercadería (CMV)',
-                data: [data.costoMercaderiaVendida],
+                data: [rentabilidadData.costoMercaderiaVendida],
                 backgroundColor: '#F39C12',
             },
             {
                 label: '3. Gastos Operativos Totales',
-                data: [data.totalGastos],
+                data: [rentabilidadData.totalGastos],
                 backgroundColor: '#E74C3C',
             },
             {
                 label: '➔ RESULTADO NETO (EBITDA)',
-                data: [data.rentabilidadNeta],
-                backgroundColor: data.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C',
+                data: [rentabilidadData.rentabilidadNeta],
+                backgroundColor: rentabilidadData.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C',
             }
         ],
-    }
+    } : null
 
-    // Cost Breakdown array
-    const catKeys = Object.keys(data.gastosPorCategoria)
-    const pieData = {
+    const catKeys = rentabilidadData ? Object.keys(rentabilidadData.gastosPorCategoria) : []
+    const pieData = rentabilidadData ? {
         labels: catKeys.length > 0 ? catKeys : ['Sin Gastos'],
         datasets: [{
-            data: catKeys.length > 0 ? Object.values(data.gastosPorCategoria) : [1],
+            data: catKeys.length > 0 ? Object.values(rentabilidadData.gastosPorCategoria) : [1],
             backgroundColor: catKeys.length > 0
                 ? catKeys.map((_, i) => ['#E74C3C', '#9B59B6', '#34495E', '#F1C40F', '#1ABC9C', '#E67E22'][i % 6])
                 : ['#ddd'],
             borderWidth: 0,
         }]
-    }
+    } : null
 
     return (
         <div>
-            <div className="page-header">
-                <h1>📈 Reporte Económico y Rentabilidad</h1>
-                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <select className="form-select" value={mes} onChange={e => setMes(e.target.value)} style={{ width: 150 }}>
-                        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
-                        <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
-                        <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
-                        <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
-                    </select>
-                    <select className="form-select" value={anio} onChange={e => setAnio(e.target.value)} style={{ width: 100 }}>
-                        <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Ingresos Brutos</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}>
-                        ${data.ingresosTotales.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className="page-header" style={{ marginBottom: 'var(--space-4)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                        <h1 style={{ margin: 0 }}>📊 Reportes de Gestión</h1>
+                        <div className="tabs" style={{ display: 'flex', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-lg)', marginLeft: 'var(--space-4)' }}>
+                            <button 
+                                className={`btn btn-sm ${activeTab === 'economico' ? 'btn-primary' : 'btn-ghost'}`}
+                                onClick={() => setActiveTab('economico')}
+                                style={{ borderRadius: 'var(--radius-md)' }}
+                            >
+                                💰 Económico
+                            </button>
+                            <button 
+                                className={`btn btn-sm ${activeTab === 'produccion' ? 'btn-primary' : 'btn-ghost'}`}
+                                onClick={() => setActiveTab('produccion')}
+                                style={{ borderRadius: 'var(--radius-md)' }}
+                            >
+                                🏭 Producción
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Margen Contribución</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
-                        ${data.margenBruto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Rentabilidad Neta</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: data.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C' }}>
-                        ${data.rentabilidadNeta.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Margen EBITDA %</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: data.margenEbitda >= 15 ? 'var(--color-success)' : data.margenEbitda > 0 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
-                        {data.margenEbitda.toFixed(2)}%
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <select className="form-select" value={mes} onChange={e => setMes(e.target.value)} style={{ width: 140 }}>
+                            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+                            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+                            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+                            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+                        </select>
+                        <select className="form-select" value={anio} onChange={e => setAnio(e.target.value)} style={{ width: 90 }}>
+                            <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
+                        </select>
                     </div>
                 </div>
             </div>
 
-            {/* Charts Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-6)' }}>
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Cascada de Resultados</h3>
-                    <div style={{ height: '300px' }}>
-                        <Bar
-                            data={barData}
-                            options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }}
-                        />
+            {activeTab === 'economico' && rentabilidadData && (
+                <div className="fade-in">
+                    {/* KPIs Económicos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Ingresos Brutos</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}>
+                                ${rentabilidadData.ingresosTotales.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Margen Contribución</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
+                                ${rentabilidadData.margenBruto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Rentabilidad Neta</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: rentabilidadData.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C' }}>
+                                ${rentabilidadData.rentabilidadNeta.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Margen EBITDA %</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: rentabilidadData.margenEbitda >= 15 ? 'var(--color-success)' : rentabilidadData.margenEbitda > 0 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
+                                {rentabilidadData.margenEbitda.toFixed(2)}%
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <div className="card" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', textAlign: 'center' }}>Distribución de Gastos</h3>
-                    <div style={{ height: '240px', position: 'relative' }}>
-                        <Doughnut
-                            data={pieData}
-                            options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }}
-                        />
+                    {/* Charts Row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-6)' }}>
+                        <div className="card" style={{ padding: 'var(--space-6)' }}>
+                            <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Cascada de Resultados</h3>
+                            <div style={{ height: '300px' }}>
+                                {barData && (
+                                    <Bar
+                                        data={barData}
+                                        options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="card" style={{ padding: 'var(--space-6)' }}>
+                            <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', textAlign: 'center' }}>Distribución de Gastos</h3>
+                            <div style={{ height: '240px', position: 'relative' }}>
+                                {pieData && (
+                                    <Doughnut
+                                        data={pieData}
+                                        options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }}
+                                    />
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {activeTab === 'produccion' && (
+                <ProduccionReport data={produccionData} loading={loading} />
+            )}
+
+            {loading && (activeTab === 'economico' && !rentabilidadData) && (
+                <div className="empty-state"><div className="spinner" /><p>Generando reporte...</p></div>
+            )}
         </div>
     )
 }

@@ -89,8 +89,11 @@ export async function POST(req: Request) {
         })
 
         return NextResponse.json(result)
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error en transferencia:', error)
-        return NextResponse.json({ error: 'Error al procesar la transferencia' }, { status: 500 })
+        return NextResponse.json({ 
+            error: 'Error al procesar la transferencia',
+            details: error?.message || String(error)
+        }, { status: 500 })
     }
 }
