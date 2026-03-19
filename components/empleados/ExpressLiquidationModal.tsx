@@ -14,6 +14,8 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const [horasExtras, setHorasExtras] = useState<number | ''>('')
     const [montoHsExtras, setMontoHsExtras] = useState<number | ''>('')
     const [descuentoPrestamos, setDescuentoPrestamos] = useState<number | ''>('')
+    const [licenciaId, setLicenciaId] = useState<string>('')
+    const [tiposLicencias, setTiposLicencias] = useState<any[]>([])
     
     // Fechas
     const [fechaDesde, setFechaDesde] = useState(() => {
@@ -40,7 +42,15 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                 { id: 'local', nombre: 'Caja Local', saldo: data.local?.saldo || 0 }
             ])
         }
+
+        const fetchLicencias = async () => {
+            const res = await fetch('/api/licencias')
+            const data = await res.json()
+            setTiposLicencias(data.filter((l: any) => l.activo))
+        }
+
         fetchCajas()
+        fetchLicencias()
         
         // Cargar valores por defecto del empleado si existen
         if (empleado) {
@@ -118,6 +128,9 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         const totalBruto = valSueldo + valExtras
         const totalLetras = formatCurrencyToWords(totalBruto)
 
+        const licenciaActiva = tiposLicencias.find(l => l.id === licenciaId)
+        const textoLicencia = licenciaActiva ? ` Asimismo, se contemplan días correspondientes a licencia por ${licenciaActiva.nombre}.` : ''
+
         const html = `
             <html>
             <head>
@@ -163,7 +176,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                         (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
                         <span class="amount">$${valExtras.toLocaleString()}</span> 
                         (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
-                        del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
+                        del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>.${textoLicencia} 
                         Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
                         (pesos ${totalLetras}).
                     </div>
@@ -254,6 +267,17 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-danger)' }}>-$</span>
                             <input type="number" className="form-input" style={{ paddingLeft: '25px', color: 'var(--color-danger)' }} value={descuentoPrestamos} onChange={e => setDescuentoPrestamos(e.target.value === '' ? '' : Number(e.target.value))} />
                         </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label className="form-label">Incluir Licencia (Opcional)</label>
+                        <select className="form-select" value={licenciaId} onChange={e => setLicenciaId(e.target.value)}>
+                            <option value="">-- Ninguna --</option>
+                            {tiposLicencias.map(l => (
+                                <option key={l.id} value={l.id}>{l.nombre} {l.conGoceSueldo ? '(Remunerada)' : ''}</option>
+                            ))}
+                        </select>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px', display: 'block' }}>Si se selecciona, figurará en el texto del recibo.</span>
                     </div>
 
                     <div className="form-group">
