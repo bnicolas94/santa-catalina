@@ -31,7 +31,7 @@ function StockContent() {
     const [form, setForm] = useState({
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
-        useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '',
+        useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
         ubicacionId: '',
     })
     const [error, setError] = useState('')
@@ -99,7 +99,7 @@ function StockContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: '' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -121,6 +121,7 @@ function StockContent() {
             bultos: '',
             unidadesPorBulto: '',
             fechaVencimiento: mov.fechaVencimiento ? new Date(mov.fechaVencimiento).toLocaleDateString('en-CA') : '',
+            fechaMovimiento: mov.fecha ? new Date(mov.fecha).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
             ubicacionId: mov.ubicacion?.id || '',
         })
         setShowModal(true)
@@ -223,7 +224,7 @@ function StockContent() {
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', ubicacionId: defaultUbi })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi })
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
                 </div>
@@ -618,6 +619,10 @@ function StockContent() {
                                             )}
                                         </div>
                                     )}
+                                    <div className="form-group">
+                                        <label className="form-label">Fecha del Movimiento</label>
+                                        <input type="date" className="form-input" value={form.fechaMovimiento} onChange={(e) => setForm({ ...form, fechaMovimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
+                                    </div>
                                     <div className="form-group">
                                         <label className="form-label">Fecha de Vencimiento</label>
                                         <input type="date" className="form-input" value={form.fechaVencimiento} onChange={(e) => setForm({ ...form, fechaVencimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />

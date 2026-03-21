@@ -73,7 +73,7 @@ export async function PATCH(
     try {
         const { id } = await params
         const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento } = body
+        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, fechaMovimiento } = body
 
         // 1. Buscar el movimiento original
         const movOriginal = await prisma.movimientoStock.findUnique({
@@ -87,6 +87,8 @@ export async function PATCH(
         const nuevaCant = parseFloat(cantidad)
         const nuevoCostoTotal = costoTotal ? parseFloat(costoTotal) : null
         const nuevoEstado = tipo === 'entrada' ? (estadoPago || 'pagado') : null
+        
+        const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : movOriginal.fecha
 
         const result = await prisma.$transaction(async (tx) => {
             // 2. Compensar Stock
@@ -132,16 +134,22 @@ export async function PATCH(
                         await tx.gastoOperativo.update({
                             where: { id: gastoId },
                             data: {
+                                fecha: parsedFecha,
                                 monto: nuevoCostoTotal,
                                 descripcion: `Compra de Insumos (Editada) - ${observaciones || 'Directa'}`,
                                 categoriaId: cat.id
                             }
                         })
+                        // Actualizar fecha en caja asociada
+                        await tx.movimientoCaja.updateMany({
+                            where: { gastoId: gastoId },
+                            data: { fecha: parsedFecha }
+                        })
                     } else {
                         // Crear nuevo gasto
                         const nuevoGasto = await tx.gastoOperativo.create({
                             data: {
-                                fecha: new Date(),
+                                fecha: parsedFecha,
                                 monto: nuevoCostoTotal,
                                 descripcion: `Compra de Insumos - ${observaciones || 'Directa'}`,
                                 categoriaId: cat.id
@@ -166,6 +174,7 @@ export async function PATCH(
                 data: {
                     insumoId,
                     tipo,
+                    fecha: parsedFecha,
                     cantidad: nuevaCant,
                     observaciones: observaciones || null,
                     proveedorId: proveedorId || null,

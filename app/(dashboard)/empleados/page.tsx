@@ -7,6 +7,7 @@ import RolesConfigModal from '@/components/empleados/RolesConfigModal'
 import { MassLiquidationModal } from '@/components/empleados/MassLiquidationModal'
 import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
 import { ConfigLicenciasModal } from '@/components/empleados/ConfigLicenciasModal'
+import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -16,6 +17,7 @@ export default function EmpleadosPage() {
     const [selectedEmpleado, setSelectedEmpleado] = useState<Empleado | null>(null)
     const [showRolesModal, setShowRolesModal] = useState(false)
     const [showLicenciasModal, setShowLicenciasModal] = useState(false)
+    const [showReportePagos, setShowReportePagos] = useState(false)
     const [importLoading, setImportLoading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
@@ -230,6 +232,12 @@ export default function EmpleadosPage() {
                         className="btn btn-outline"
                     >
                         🏢 Liquidación Masiva
+                    </button>
+                    <button
+                        onClick={() => setShowReportePagos(true)}
+                        className="btn btn-outline"
+                    >
+                        🖨️ Reporte de Pagos
                     </button>
                     <button
                         onClick={handleImportarClic}
@@ -449,6 +457,9 @@ export default function EmpleadosPage() {
             )}
             {showLicenciasModal && (
                 <ConfigLicenciasModal onClose={() => setShowLicenciasModal(false)} />
+            )}
+            {showReportePagos && (
+                <ReportePagosModal onClose={() => setShowReportePagos(false)} />
             )}
         </div>
     )

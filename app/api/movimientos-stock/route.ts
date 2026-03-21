@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         const { 
             insumoId, tipo, cantidad, cantidadSecundaria, observaciones, 
             proveedorId, costoTotal, estadoPago, actualizarCosto, 
-            fechaVencimiento, ubicacionId 
+            fechaVencimiento, ubicacionId, fechaMovimiento
         } = body
 
         if (!insumoId || !tipo || !cantidad || !ubicacionId) {
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
             const costoTotalFloat = costoTotal ? parseFloat(String(costoTotal).replace(',', '.')) : null
             const cantidadFloat = parseFloat(String(cantidad).replace(',', '.'))
             const movCantSec = cantidadSecundaria ? parseFloat(String(cantidadSecundaria).replace(',', '.')) : null
+            const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : new Date()
             
             let gastoId = null
             let movimientoCajaId = null
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
 
                     const gasto = await tx.gastoOperativo.create({
                         data: {
-                            fecha: new Date(),
+                            fecha: parsedFecha,
                             monto: costoTotalFloat,
                             descripcion: `Compra de Insumos - ${observaciones || 'Directa'}`,
                             categoriaId: cat.id
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
                             cajaOrigen: 'caja_madre',
                             descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
                             gastoId: gastoId,
-                            fecha: new Date()
+                            fecha: parsedFecha
                         }
                     })
                     movimientoCajaId = movCaja.id
@@ -111,6 +112,7 @@ export async function POST(request: Request) {
                 data: {
                     insumoId,
                     tipo,
+                    fecha: parsedFecha,
                     cantidad: cantidadFloat,
                     cantidadSecundaria: movCantSec,
                     observaciones: observaciones || null,
