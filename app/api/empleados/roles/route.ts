@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-        const { nombre, descripcion, color, permisoDashboard, permisoStock, permisoCaja, permisoPersonal, permisoProduccion, permisoCostos } = body
+        const { nombre, descripcion, color, permisoDashboard, permisoStock, permisoCaja, permisoPersonal, permisoProduccion, permisoCostos, jornal, valorHoraExtra } = body
 
         if (!nombre) {
             return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
@@ -49,7 +49,9 @@ export async function POST(req: Request) {
                 permisoCaja: !!permisoCaja,
                 permisoPersonal: !!permisoPersonal,
                 permisoProduccion: !!permisoProduccion,
-                permisoCostos: !!permisoCostos
+                permisoCostos: !!permisoCostos,
+                jornal: jornal ? parseFloat(jornal) : 0,
+                valorHoraExtra: valorHoraExtra ? parseFloat(valorHoraExtra) : 0
             }
         })
 

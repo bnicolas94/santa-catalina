@@ -13,6 +13,8 @@ interface Role {
     permisoPersonal: boolean
     permisoProduccion: boolean
     permisoCostos: boolean
+    jornal: number
+    valorHoraExtra: number
 }
 
 interface RolesConfigModalProps {
@@ -143,6 +145,36 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                         {p.label}
                                     </label>
                                 ))}
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#eef7ee', borderRadius: '8px', border: '1px solid #c3e6c3' }}>
+                            <h4 style={{ margin: '0 0 1rem 0' }}>💰 Configuración Salarial</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Jornal / Sueldo Base ($)</label>
+                                    <input
+                                        className="form-input"
+                                        type="number"
+                                        step="0.01"
+                                        value={(editRole as any).jornal || 0}
+                                        onChange={e => setEditRole({ ...editRole, jornal: parseFloat(e.target.value) || 0 })}
+                                        placeholder="Ej: 50000"
+                                    />
+                                    <small style={{ color: '#666' }}>Monto base por período para este rol</small>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Valor Hora Extra ($)</label>
+                                    <input
+                                        className="form-input"
+                                        type="number"
+                                        step="0.01"
+                                        value={(editRole as any).valorHoraExtra || 0}
+                                        onChange={e => setEditRole({ ...editRole, valorHoraExtra: parseFloat(e.target.value) || 0 })}
+                                        placeholder="Ej: 1500"
+                                    />
+                                    <small style={{ color: '#666' }}>Monto fijo por hora extra para este rol</small>
+                                </div>
                             </div>
                         </div>
 

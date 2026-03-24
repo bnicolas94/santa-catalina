@@ -29,7 +29,9 @@ export async function GET() {
                 horarioSalida: true,
                 codigoBiometrico: true,
                 ubicacionId: true,
+                rolId: true,
                 ubicacion: { select: { id: true, nombre: true, tipo: true } },
+                rolRel: { select: { id: true, nombre: true, jornal: true, valorHoraExtra: true } },
             },
         })
         return NextResponse.json(empleados)

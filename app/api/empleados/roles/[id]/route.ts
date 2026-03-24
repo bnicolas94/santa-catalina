@@ -5,7 +5,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     try {
         const { id } = await context.params
         const body = await req.json()
-        const { nombre, descripcion, color, permisoDashboard, permisoStock, permisoCaja, permisoPersonal, permisoProduccion, permisoCostos } = body
+        const { nombre, descripcion, color, permisoDashboard, permisoStock, permisoCaja, permisoPersonal, permisoProduccion, permisoCostos, jornal, valorHoraExtra } = body
 
         const actualizado = await prisma.rolEmpleado.update({
             where: { id },
@@ -18,7 +18,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
                 permisoCaja: !!permisoCaja,
                 permisoPersonal: !!permisoPersonal,
                 permisoProduccion: !!permisoProduccion,
-                permisoCostos: !!permisoCostos
+                permisoCostos: !!permisoCostos,
+                jornal: jornal !== undefined ? parseFloat(jornal) : undefined,
+                valorHoraExtra: valorHoraExtra !== undefined ? parseFloat(valorHoraExtra) : undefined
             }
         })
 

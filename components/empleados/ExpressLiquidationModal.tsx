@@ -54,16 +54,26 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         
         // Cargar valores por defecto del empleado si existen
         if (empleado) {
-            // Calcular el proporcional según el ciclo de pago (semanal /4, quincenal /2)
-            let base = empleado.sueldoBaseMensual
-            if (empleado.cicloPago === 'SEMANAL') {
-                base = empleado.sueldoBaseMensual / 4.3
-            } else if (empleado.cicloPago === 'QUINCENAL') {
-                base = empleado.sueldoBaseMensual / 2
+            // Prioridad: 1) Jornal del Rol, 2) Sueldo base individual del empleado
+            const rolJornal = empleado.rolRel?.jornal || 0
+            let base = rolJornal > 0 ? rolJornal : empleado.sueldoBaseMensual
+            
+            // Si usamos sueldoBaseMensual individual, calcular proporcional según ciclo de pago
+            if (rolJornal <= 0) {
+                if (empleado.cicloPago === 'SEMANAL') {
+                    base = empleado.sueldoBaseMensual / 4.3
+                } else if (empleado.cicloPago === 'QUINCENAL') {
+                    base = empleado.sueldoBaseMensual / 2
+                }
             }
             setSueldoBase(Math.round(base))
         }
     }, [empleado])
+
+    // Determinar el valor hora extra efectivo: prioridad empleado > rol
+    const valorHoraExtraEfectivo = (empleado?.valorHoraExtra && empleado.valorHoraExtra > 0)
+        ? empleado.valorHoraExtra
+        : (empleado?.rolRel?.valorHoraExtra || 0)
 
     const valSueldo = Number(sueldoBase) || 0
     const valExtras = Number(montoHsExtras) || 0
@@ -253,14 +263,17 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                             <input type="number" className="form-input" value={horasExtras} onChange={e => {
                                 const val = e.target.value === '' ? '' : Number(e.target.value)
                                 setHorasExtras(val)
-                                // Auto-calcular monto si el empleado tiene valor hora extra configurado
-                                if (empleado?.valorHoraExtra && empleado.valorHoraExtra > 0 && val !== '') {
-                                    setMontoHsExtras(Math.round(Number(val) * empleado.valorHoraExtra))
+                                // Auto-calcular monto usando el valor hora extra efectivo
+                                if (valorHoraExtraEfectivo > 0 && val !== '') {
+                                    setMontoHsExtras(Math.round(Number(val) * valorHoraExtraEfectivo))
                                 }
                             }} />
-                            {empleado?.valorHoraExtra > 0 && (
+                            {valorHoraExtraEfectivo > 0 && (
                                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '2px', display: 'block' }}>
-                                    Valor/hora: ${empleado.valorHoraExtra.toLocaleString('es-AR')}
+                                    Valor/hora: ${valorHoraExtraEfectivo.toLocaleString('es-AR')}
+                                    {empleado?.rolRel?.valorHoraExtra > 0 && !(empleado?.valorHoraExtra > 0) && (
+                                        <> (según rol {empleado.rolRel.nombre})</>
+                                    )}
                                 </span>
                             )}
                         </div>

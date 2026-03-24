@@ -543,6 +543,8 @@ model RolEmpleado {
   permisoProduccion Boolean    @default(false)
   permisoStock      Boolean    @default(false)
   permisoDashboard  Boolean    @default(false)
+  jornal            Float      @default(0)
+  valorHoraExtra    Float      @default(0) @map("valor_hora_extra")
   empleados         Empleado[]
 
   @@map("roles_empleado")
