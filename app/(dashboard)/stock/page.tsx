@@ -32,7 +32,7 @@ function StockContent() {
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
-        ubicacionId: '',
+        ubicacionId: '', cajaOrigen: 'caja_madre',
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -99,7 +99,7 @@ function StockContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_madre' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -123,14 +123,24 @@ function StockContent() {
             fechaVencimiento: mov.fechaVencimiento ? new Date(mov.fechaVencimiento).toLocaleDateString('en-CA') : '',
             fechaMovimiento: mov.fecha ? new Date(mov.fecha).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
             ubicacionId: mov.ubicacion?.id || '',
+            cajaOrigen: 'caja_madre',
         })
         setShowModal(true)
     }
 
     async function handlePago(id: string) {
-        if (!confirm('¿Marcar compra como pagada y generar un Gasto Operativo en el reporte de Rentabilidad?')) return
+        const opciones = '1 = 🏦 Caja Madre\n2 = 💼 Caja Chica\n3 = 🏪 Local'
+        const resp = prompt(`¿De qué caja sale el pago?\n\n${opciones}\n\nIngresá 1, 2 o 3:`, '1')
+        if (!resp) return
+        const cajaMap: Record<string, string> = { '1': 'caja_madre', '2': 'caja_chica', '3': 'local' }
+        const cajaOrigen = cajaMap[resp.trim()] || 'caja_madre'
+        if (!confirm(`¿Marcar compra como pagada desde ${cajaOrigen === 'caja_madre' ? '🏦 Caja Madre' : cajaOrigen === 'caja_chica' ? '💼 Caja Chica' : '🏪 Local'}?`)) return
         try {
-            const res = await fetch(`/api/movimientos-stock/${id}/pago`, { method: 'PUT' })
+            const res = await fetch(`/api/movimientos-stock/${id}/pago`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cajaOrigen })
+            })
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error || 'Error al pagar la compra')
@@ -224,7 +234,7 @@ function StockContent() {
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi, cajaOrigen: 'caja_madre' })
                         setShowModal(true)
                     }}>+ Registrar Movimiento</button>
                 </div>
@@ -656,6 +666,24 @@ function StockContent() {
                                                 Actualizar costo unitario del insumo
                                             </label>
                                         </div>
+                                        {form.estadoPago === 'pagado' && (
+                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                <label className="form-label" style={{ fontSize: 'var(--text-xs)' }}>¿De qué caja sale el pago?</label>
+                                                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                    {[
+                                                        { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' },
+                                                        { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' },
+                                                        { key: 'local', label: '🏪 Local', color: '#27AE60' }
+                                                    ].map((c) => (
+                                                        <button key={c.key} type="button" className="btn btn-sm"
+                                                            onClick={() => setForm({ ...form, cajaOrigen: c.key })}
+                                                            style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
+                                                            {c.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 <div className="form-group">

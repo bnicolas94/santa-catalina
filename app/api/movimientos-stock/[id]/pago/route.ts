@@ -8,6 +8,13 @@ export async function PUT(
 ) {
     try {
         const { id } = await params
+        
+        // Accept optional cajaOrigen from body
+        let selectedCaja = 'caja_madre'
+        try {
+            const body = await request.json()
+            if (body.cajaOrigen) selectedCaja = body.cajaOrigen
+        } catch { /* no body = default caja_madre */ }
 
         const movimiento = await prisma.movimientoStock.findUnique({
             where: { id },
@@ -49,19 +56,22 @@ export async function PUT(
                     tipo: 'egreso',
                     concepto: 'pago_proveedor',
                     monto: movimiento.costoTotal || 0,
-                    medioPago: 'efectivo', // Por defecto para facturas
-                    cajaOrigen: 'caja_madre', // Las compras suelen salir de caja madre
+                    medioPago: 'efectivo',
+                    cajaOrigen: selectedCaja,
                     descripcion: gasto.descripcion,
                     gastoId: gasto.id,
                     fecha: new Date()
                 }
             })
 
-            // 4. Actualizar Saldo de Caja (Madre)
-            await tx.saldoCaja.update({
-                where: { tipo: 'caja_madre' },
-                data: { saldo: { decrement: movimiento.costoTotal || 0 } }
-            })
+            // 4. Actualizar Saldo de Caja
+            const saldo = await tx.saldoCaja.findUnique({ where: { tipo: selectedCaja } })
+            if (saldo) {
+                await tx.saldoCaja.update({
+                    where: { tipo: selectedCaja },
+                    data: { saldo: { decrement: movimiento.costoTotal || 0 } }
+                })
+            }
 
             // 5. Vincular Gasto y cambiar estado a pagado
             const movActualizado = await tx.movimientoStock.update({

@@ -34,7 +34,7 @@ export async function POST(request: Request) {
         const { 
             insumoId, tipo, cantidad, cantidadSecundaria, observaciones, 
             proveedorId, costoTotal, estadoPago, actualizarCosto, 
-            fechaVencimiento, ubicacionId, fechaMovimiento
+            fechaVencimiento, ubicacionId, fechaMovimiento, cajaOrigen
         } = body
 
         if (!insumoId || !tipo || !cantidad || !ubicacionId) {
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
             const cantidadFloat = parseFloat(String(cantidad).replace(',', '.'))
             const movCantSec = cantidadSecundaria ? parseFloat(String(cantidadSecundaria).replace(',', '.')) : null
             const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : new Date()
+            const selectedCaja = cajaOrigen || 'caja_madre'
             
             let gastoId = null
             let movimientoCajaId = null
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
                             concepto: 'pago_proveedor',
                             monto: costoTotalFloat,
                             medioPago: 'efectivo',
-                            cajaOrigen: 'caja_madre',
+                            cajaOrigen: selectedCaja,
                             descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
                             gastoId: gastoId,
                             fecha: parsedFecha
@@ -90,10 +91,10 @@ export async function POST(request: Request) {
                     console.log('MovimientoCaja created:', movimientoCajaId)
 
                     // Actualizar SaldoCaja (defensivo)
-                    const saldo = await tx.saldoCaja.findUnique({ where: { tipo: 'caja_madre' } })
+                    const saldo = await tx.saldoCaja.findUnique({ where: { tipo: selectedCaja } })
                     if (saldo) {
                         await tx.saldoCaja.update({
-                            where: { tipo: 'caja_madre' },
+                            where: { tipo: selectedCaja },
                             data: { saldo: { decrement: costoTotalFloat } }
                         })
                         console.log('SaldoCaja updated')

@@ -20,6 +20,24 @@
     gap: var(--space-4);
 }
 
+.mobileMenuBtn {
+    background: none;
+    border: none;
+    color: var(--color-gray-700);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: var(--space-2);
+    margin-left: -var(--space-2);
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast);
+}
+
+.mobileMenuBtn:hover {
+    background-color: var(--color-gray-100);
+}
+
 .greeting {
     font-family: var(--font-heading);
     font-size: var(--text-xl);
@@ -75,5 +93,8 @@
     .header {
         left: 0;
         padding: 0 var(--space-4);
+    }
+    .mobileMenuBtn {
+        display: flex;
     }
 }

@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import styles from './Sidebar.module.css'
 
@@ -97,6 +97,12 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN', 'LOGISTICA'],
     },
     {
+        label: 'Flota',
+        href: '/flota',
+        icon: '🚐',
+        roles: ['ADMIN', 'LOGISTICA'],
+    },
+    {
         label: 'Costos',
         href: '/costos',
         icon: '📉',
@@ -129,6 +135,18 @@ export default function Sidebar() {
     const pathname = usePathname()
     const { data: session } = useSession()
     const [collapsed, setCollapsed] = useState(false)
+    const [mobileOpen, setMobileOpen] = useState(false)
+
+    useEffect(() => {
+        const handleToggle = () => setMobileOpen(prev => !prev)
+        window.addEventListener('toggleMobileMenu', handleToggle)
+        return () => window.removeEventListener('toggleMobileMenu', handleToggle)
+    }, [])
+
+    // Cerrar el menú en mobile al cambiar de ruta
+    useEffect(() => {
+        setMobileOpen(false)
+    }, [pathname])
 
     const userRol = (session?.user as any)?.rol
     const permisos = (session?.user as any)?.permisos || {}
@@ -147,7 +165,14 @@ export default function Sidebar() {
     })
 
     return (
-        <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
+        <>
+            {mobileOpen && (
+                <div 
+                    className={styles.overlay} 
+                    onClick={() => setMobileOpen(false)}
+                />
+            )}
+            <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''} ${mobileOpen ? styles.mobileOpen : ''}`}>
             {/* Logo */}
             <div className={styles.logoContainer}>
                 <Link href="/" className={styles.logoLink}>
@@ -213,5 +238,6 @@ export default function Sidebar() {
                 {collapsed ? '→' : '←'}
             </button>
         </aside>
+        </>
     )
 }

@@ -578,3 +578,67 @@ model AsignacionOperario {
   @@map("asignaciones_operario")
 }
 
+model Vehiculo {
+  id              String                @id @default(uuid())
+  patente         String                @unique
+  marca           String
+  modelo          String
+  anio            Int
+  kmActual        Int                   @default(0) @map("km_actual")
+  estado          String                @default("disponible") // disponible, mantenimiento, inactivo
+  activo          Boolean               @default(true)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  
+  kilometrajes    KilometrajeVehiculo[]
+  vencimientos    VencimientoVehiculo[]
+  mantenimientos  MantenimientoVehiculo[]
+
+  @@map("vehiculos")
+}
+
+model KilometrajeVehiculo {
+  id            String   @id @default(uuid())
+  vehiculoId    String   @map("id_vehiculo")
+  fecha         DateTime @default(now())
+  kmRegistrado  Int      @map("km_registrado")
+  observaciones String?
+  createdAt     DateTime @default(now())
+  
+  vehiculo      Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+
+  @@map("kilometrajes_vehiculo")
+}
+
+model VencimientoVehiculo {
+  id               String   @id @default(uuid())
+  vehiculoId       String   @map("id_vehiculo")
+  tipo             String   // "VTV", "Seguro", etc.
+  fechaVencimiento DateTime @map("fecha_vencimiento")
+  observaciones    String?
+  notificado       Boolean  @default(false)
+  diasAviso        Int      @default(30) @map("dias_aviso")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  vehiculo         Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+
+  @@map("vencimientos_vehiculo")
+}
+
+model MantenimientoVehiculo {
+  id              String   @id @default(uuid())
+  vehiculoId      String   @map("id_vehiculo")
+  fecha           DateTime @default(now())
+  tipo            String   // "preventivo" o "correctivo"
+  taller          String?
+  costo           Float    @default(0)
+  descripcion     String
+  kilometraje     Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  vehiculo        Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+
+  @@map("mantenimientos_vehiculo")
+}
