@@ -250,7 +250,19 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                         <div className="form-group">
                             <label className="form-label">Horas Extras (cant.)</label>
-                            <input type="number" className="form-input" value={horasExtras} onChange={e => setHorasExtras(e.target.value === '' ? '' : Number(e.target.value))} />
+                            <input type="number" className="form-input" value={horasExtras} onChange={e => {
+                                const val = e.target.value === '' ? '' : Number(e.target.value)
+                                setHorasExtras(val)
+                                // Auto-calcular monto si el empleado tiene valor hora extra configurado
+                                if (empleado?.valorHoraExtra && empleado.valorHoraExtra > 0 && val !== '') {
+                                    setMontoHsExtras(Math.round(Number(val) * empleado.valorHoraExtra))
+                                }
+                            }} />
+                            {empleado?.valorHoraExtra > 0 && (
+                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '2px', display: 'block' }}>
+                                    Valor/hora: ${empleado.valorHoraExtra.toLocaleString('es-AR')}
+                                </span>
+                            )}
                         </div>
                         <div className="form-group">
                             <label className="form-label">Monto Horas Extras</label>

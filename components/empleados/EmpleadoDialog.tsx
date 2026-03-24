@@ -35,7 +35,8 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         horarioEntrada: empleado?.horarioEntrada || '',
         horarioSalida: empleado?.horarioSalida || '',
         codigoBiometrico: empleado?.codigoBiometrico || '',
-        ubicacionId: empleado?.ubicacionId || ''
+        ubicacionId: empleado?.ubicacionId || '',
+        valorHoraExtra: empleado?.valorHoraExtra?.toString() || '0'
     })
 
     useEffect(() => {
@@ -349,6 +350,14 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                         <span style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-100)', border: '1px solid var(--color-gray-300)', borderLeft: 'none', borderRadius: '0 var(--radius-md) var(--radius-md) 0', color: 'var(--color-gray-500)' }}>%</span>
                                     </div>
                                     <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px' }}>Gralmente 100% adicional sobre hs base.</p>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Valor Hora Extra ($)</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>$</span>
+                                        <input type="number" step="0.01" name="valorHoraExtra" value={formData.valorHoraExtra} onChange={handleChange} className="form-input" style={{ paddingLeft: '25px' }} />
+                                    </div>
+                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px' }}>Monto fijo por cada hora extra. Se usa en Liquidación Express.</p>
                                 </div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1', backgroundColor: 'var(--color-success-bg)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-success)' }}>
                                     <label className="form-label" style={{ color: 'var(--color-gray-800)', fontWeight: 600 }}>Sueldo Base Mensual Proyectado (en DB):</label>

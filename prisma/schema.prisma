@@ -25,6 +25,7 @@ model Empleado {
   valorHoraNormal     Float?              @map("valor_hora_normal")
   cicloPago           String              @default("SEMANAL") @map("ciclo_pago")
   porcentajeHoraExtra Float               @default(50) @map("porcentaje_hora_extra")
+  valorHoraExtra      Float               @default(0) @map("valor_hora_extra")
   porcentajeFeriado   Float               @default(100) @map("porcentaje_feriado")
   horasTrabajoDiarias Float               @default(8) @map("horas_trabajo_diarias")
   diasTrabajoSemana   String              @default("Lunes a Viernes") @map("dias_trabajo_semana")
