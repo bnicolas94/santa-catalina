@@ -11,6 +11,8 @@ interface ReporteFila {
     empleado: string
     periodo: string
     fechaGeneracion: string
+    horasExtras: number
+    montoHorasExtras: number
     totalBruto: number
     descuentos: number
     totalNeto: number
@@ -83,6 +85,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                             <th>N°</th>
                             <th>Empleado</th>
                             <th>Período Disp.</th>
+                            <th class="number">Hs. Ext.</th>
+                            <th class="number">Monto Ext. ($)</th>
                             <th class="number">Bruto ($)</th>
                             <th class="number">Descuentos ($)</th>
                             <th class="number">Neto a Pagar ($)</th>
@@ -94,11 +98,13 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 <td>${i + 1}</td>
                                 <td>${row.empleado}</td>
                                 <td>${row.periodo}</td>
+                                <td class="number">${row.horasExtras}</td>
+                                <td class="number">${row.montoHorasExtras.toLocaleString('es-AR')}</td>
                                 <td class="number">${row.totalBruto.toLocaleString('es-AR')}</td>
                                 <td class="number">${row.descuentos.toLocaleString('es-AR')}</td>
                                 <td class="number"><strong>${row.totalNeto.toLocaleString('es-AR')}</strong></td>
                             </tr>
-                        `).join('') : '<tr><td colspan="6" style="text-align: center;">No hay recibos emitidos en este rango de fechas.</td></tr>'}
+                        `).join('') : '<tr><td colspan="8" style="text-align: center;">No hay recibos emitidos en este rango de fechas.</td></tr>'}
                     </tbody>
                 </table>
 
@@ -152,6 +158,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 <thead>
                                     <tr>
                                         <th>Empleado</th>
+                                        <th style={{ textAlign: 'right' }}>Hs Extras</th>
                                         <th style={{ textAlign: 'right' }}>Ingresos ($)</th>
                                         <th style={{ textAlign: 'right' }}>Descuentos ($)</th>
                                         <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Neto Final ($)</th>
@@ -165,6 +172,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                     <div style={{ fontWeight: 500 }}>{d.empleado}</div>
                                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{d.periodo}</div>
                                                 </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    {d.horasExtras > 0 ? `${d.horasExtras}hs ($${d.montoHorasExtras.toLocaleString('es-AR')})` : '-'}
+                                                </td>
                                                 <td style={{ textAlign: 'right' }}>${d.totalBruto.toLocaleString('es-AR')}</td>
                                                 <td style={{ textAlign: 'right', color: d.descuentos > 0 ? 'var(--color-danger)' : 'inherit' }}>
                                                     {d.descuentos > 0 ? `-$${d.descuentos.toLocaleString('es-AR')}` : '-'}
@@ -176,7 +186,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={4} style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
+                                            <td colSpan={5} style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
                                                 No hay recibos emitidos en el rango de fechas actual.
                                                 <br/>
                                                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Se buscan los recibos generados estrictamente entre {fechaDesde} y {fechaHasta}.</span>
@@ -187,7 +197,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 {datos.length > 0 && (
                                     <tfoot>
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)', borderTop: '2px solid var(--color-gray-200)' }}>
-                                            <td colSpan={3} style={{ textAlign: 'right', fontWeight: 'bold', padding: 'var(--space-4)' }}>
+                                            <td colSpan={4} style={{ textAlign: 'right', fontWeight: 'bold', padding: 'var(--space-4)' }}>
                                                 Efectivo a Separar:
                                             </td>
                                             <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.4rem', color: 'var(--color-primary)', padding: 'var(--space-4)' }}>
