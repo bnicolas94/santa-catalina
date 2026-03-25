@@ -92,7 +92,16 @@ export async function POST(req: Request) {
       // Procesar parámetros de montos
       const montoBruto = paymentInfo.transaction_amount || 0;
       const montoNeto = paymentInfo.transaction_details?.net_received_amount ?? montoBruto;
-      const comision = paymentInfo.fee_details?.reduce((acc, fee) => acc + fee.amount, 0) || 0;
+      const comision = paymentInfo.fee_details?.reduce((acc: number, fee: any) => acc + fee.amount, 0) || 0;
+
+      // Intentar obtener el nombre del pagador
+      const p = paymentInfo.payer;
+      const payerName = (p?.first_name || p?.last_name) 
+        ? `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim()
+        : (p?.email ? p.email.split('@')[0] : 'Cliente MP');
+      
+      const shortDesc = paymentInfo.description || "Cobro Mercado Pago";
+      const displayDesc = `[${payerName}] ${shortDesc}`;
 
       // Usamos una transacción para mantener consistencia 
       await prisma.$transaction(async (tx) => {
@@ -115,7 +124,7 @@ export async function POST(req: Request) {
             estado: paymentInfo.status,
             fechaCreacionMp: new Date(paymentInfo.date_created),
             fechaAprobacionMp: paymentInfo.date_approved ? new Date(paymentInfo.date_approved) : null,
-            descripcion: paymentInfo.description || "Ingreso por Mercado Pago",
+            descripcion: displayDesc,
             referenciaExterna: paymentInfo.external_reference
           }
         });
@@ -126,11 +135,11 @@ export async function POST(req: Request) {
             data: {
               fecha: paymentInfo.date_approved ? new Date(paymentInfo.date_approved) : new Date(),
               tipo: "ingreso",
-              concepto: paymentInfo.description || "Cobro Mercado Pago",
+              concepto: displayDesc,
               monto: montoNeto, // Impactamos el neto en la caja
               medioPago: "mercado_pago",
               cajaOrigen: "mercado_pago",
-              descripcion: `PAGO #${paymentInfo.id} | MP`,
+              descripcion: `PAGO #${paymentInfo.id} | ${payerName}`,
             }
           });
 

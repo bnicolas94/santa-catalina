@@ -18,6 +18,16 @@ export interface MPPaymentResponse {
   date_created: string;
   date_approved?: string;
   external_reference?: string;
+  payer?: {
+    id: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    identification?: {
+      type: string;
+      number: string;
+    };
+  };
 }
 
 export async function getPayment(paymentId: string | number): Promise<MPPaymentResponse | null> {
