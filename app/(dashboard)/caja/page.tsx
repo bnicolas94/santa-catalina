@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 
 interface MovCaja {
@@ -44,6 +44,8 @@ export default function CajaPage() {
     const [editSaldoValue, setEditSaldoValue] = useState('')
     const [editMotivo, setEditMotivo] = useState('ajuste')
     const [editDescripcion, setEditDescripcion] = useState('')
+    const [toastNotif, setToastNotif] = useState<{ message: string, amount: number, id: string } | null>(null)
+    const movimientosRef = useRef<MovCaja[]>([])
 
     const checkLiveMP = async () => {
         setLoadingMP(true)
@@ -95,9 +97,16 @@ export default function CajaPage() {
     }, [ubicacionTipo])
 
 
-    useEffect(() => { fetchData() }, [fechaFiltro])
+    useEffect(() => { 
+        fetchData() 
+        // Polling para actualizar caja en tiempo real y emitir toast
+        const interval = setInterval(() => {
+            fetchData(true)
+        }, 15000)
+        return () => clearInterval(interval)
+    }, [fechaFiltro])
 
-    async function fetchData() {
+    async function fetchData(isPolling = false) {
         try {
             const [cajaRes, rendRes, saldosRes] = await Promise.all([
                 fetch(`/api/caja?fecha=${fechaFiltro}`),
@@ -107,6 +116,19 @@ export default function CajaPage() {
             const cajaData = await cajaRes.json()
             const rendData = await rendRes.json()
             const saldosData = await saldosRes.json()
+
+            if (isPolling && cajaData.movimientos) {
+                const oldIds = new Set(movimientosRef.current.map((m: MovCaja) => m.id))
+                const newIncomes = cajaData.movimientos.filter((m: MovCaja) => 
+                    m.cajaOrigen === 'mercado_pago' && m.tipo === 'ingreso' && !oldIds.has(m.id)
+                )
+                if (newIncomes.length > 0) {
+                    setToastNotif({ message: '¡Cobro M.Pago acreditado!', amount: newIncomes[0].monto, id: newIncomes[0].id })
+                    setTimeout(() => setToastNotif(null), 8000)
+                }
+            }
+            movimientosRef.current = cajaData.movimientos || []
+
             setMovimientos(cajaData.movimientos || [])
             setResumen(cajaData.resumen || { ingresosEfectivo: 0, ingresosTransferencia: 0, egresosTotal: 0, saldo: 0 })
             setRendiciones(Array.isArray(rendData) ? rendData.filter((r: Rendicion) => r.estado === 'pendiente' && r.montoEsperado > 0) : [])
@@ -247,6 +269,28 @@ export default function CajaPage() {
 
     return (
         <div>
+            {toastNotif && (
+                <div style={{
+                    position: 'fixed', top: '24px', right: '24px', zIndex: 99999,
+                    background: 'var(--color-primary)', color: 'white', padding: '16px 24px',
+                    borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+                    display: 'flex', alignItems: 'center', gap: '16px',
+                    animation: 'slideInRight 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }}>
+                    <div style={{ fontSize: '2rem' }}>💳</div>
+                    <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{toastNotif.message}</div>
+                        <div style={{ fontSize: '0.95rem', opacity: 0.9 }}>Monto: {formatCurrency(toastNotif.amount, true)}</div>
+                    </div>
+                    <button onClick={() => setToastNotif(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', marginLeft: '12px', opacity: 0.8 }}>✕</button>
+                    <style>{`
+                        @keyframes slideInRight {
+                            from { transform: translateX(120%); opacity: 0; }
+                            to { transform: translateX(0); opacity: 1; }
+                        }
+                    `}</style>
+                </div>
+            )}
             <div className="page-header">
                 <h1>💰 Caja</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
