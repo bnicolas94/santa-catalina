@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPayment } from "@/lib/mercadopago";
+import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
@@ -8,7 +9,43 @@ export async function POST(req: Request) {
 
     // Verificamos si la solicitud es una notificación de pago (v1 IPN o Webhook)
     if ((body.type === "payment" || body.action === "payment.created") && body.data && body.data.id) {
+      
       const paymentId = body.data.id;
+
+      // ---- SEGURIDAD: Validación de Firma Webhook ----
+      const signature = req.headers.get("x-signature");
+      const requestId = req.headers.get("x-request-id");
+      const secret = process.env.MP_WEBHOOK_SECRET;
+
+      if (secret && signature && requestId) {
+        const parts = signature.split(',');
+        let ts, v1;
+        parts.forEach(part => {
+            const splitIndex = part.indexOf('=');
+            if (splitIndex !== -1) {
+                const key = part.substring(0, splitIndex).trim();
+                const value = part.substring(splitIndex + 1).trim();
+                if (key === 'ts') ts = value;
+                if (key === 'v1') v1 = value;
+            }
+        });
+
+        // Search params para ID en webhooks suele estar en la URL, pero si viene en data.id se usa ese (u obtener del search Params)
+        // Usualmente el API doc dice: id: {query.id || data.id}
+        const manifest = `id:${paymentId};request-id:${requestId};ts:${ts}`;
+        const hmac = crypto.createHmac('sha256', secret);
+        const digest = hmac.update(manifest).digest('hex');
+
+        if (digest !== v1) {
+          console.warn(`[MercadoPago Webhook] ALERTA DE SEGURIDAD: Firma inválida para el pago ${paymentId}`);
+          return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+        }
+      } else if (secret) {
+          console.warn("[MercadoPago Webhook] Faltan cabeceras de firma (posible IPN antigua o request no autorizado).");
+          // Si es estrictamente necesario, podrías bloquearlo:
+          // return NextResponse.json({ error: "Missing signature" }, { status: 403 });
+      }
+      // ------------------------------------------------
       
       console.log(`[MercadoPago Webhook] Recibido pago ID: ${paymentId}`);
 
