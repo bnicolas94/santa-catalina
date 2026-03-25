@@ -38,14 +38,20 @@ export async function GET(req: Request) {
     const outgoing = results.filter((p: any) => {
         if (p.status !== "approved") return false;
         
-        // Criterio 1: transferencias hacia afuera (retiros bancarios, envíos P2P)
-        // En la API MP, las transferencias salientes figuran con monto positivo pero sin collector_id (o distinto)
-        const isTransferOut = p.operation_type === "money_transfer" && !p.collector_id;
+        // Criterio BROAD: Cualquier pago en mi cuenta donde el BENEFICIARIO (collector) NO sea mi ID.
+        // Nota: El ID de vendedor del usuario es 231378824
+        const userCollectorId = "231378824";
+        const isMeCollector = p.collector_id && String(p.collector_id) === userCollectorId;
         
-        // Criterio 2: si MP explícitamente reporta el monto bruto en negativo (algunos reembolsos o débitos)
-        const isNegative = (p.transaction_amount || 0) < 0 || (p.transaction_details?.net_received_amount || 0) < 0;
+        // Excluir recargas de saldo (account_fund: dinero que entra de un banco)
+        const isAccountFund = p.operation_type === "account_fund";
 
-        return isTransferOut || isNegative;
+        // Excluir montos cero (posibles validaciones de tarjeta)
+        const hasAmount = (p.transaction_amount || 0) > 0;
+
+        // Si NO soy el cobrador, NO es recarga propia y TIENE monto -> es plata que SALIÓ (Egreso)
+        // Esto captura: Transferencias enviadas, Compras, Peajes (Aubasa), Servicios (Movistar), Shell, etc.
+        return !isMeCollector && !isAccountFund && hasAmount;
     });
 
     let addedCount = 0;
@@ -79,7 +85,7 @@ export async function GET(req: Request) {
                         estado: p.status,
                         fechaCreacionMp: new Date(p.date_created),
                         fechaAprobacionMp: p.date_approved ? new Date(p.date_approved) : null,
-                        descripcion: p.description || "Egreso MP Automático / Transferencia",
+                        descripcion: p.description || `Egreso ${p.operation_type} #${p.id}`,
                         referenciaExterna: p.external_reference
                     }
                  });
@@ -89,11 +95,11 @@ export async function GET(req: Request) {
                     data: {
                         fecha: p.date_approved ? new Date(p.date_approved) : new Date(p.date_created),
                         tipo: "egreso", // Tipo: Egreso
-                        concepto: p.description || "Egreso MP Automático",
+                        concepto: p.description || `Egreso ${p.operation_type}`,
                         monto: neto, // Guardamos monto positivo (Caja front lo resta visualmente si es egreso)
                         medioPago: "mercado_pago",
                         cajaOrigen: "mercado_pago",
-                        descripcion: `AUTO-RETIRO #${p.id} | MP`,
+                        descripcion: `AUTO-RETIRO | ${p.description || p.operation_type} | #${p.id}`,
                     }
                  });
 
