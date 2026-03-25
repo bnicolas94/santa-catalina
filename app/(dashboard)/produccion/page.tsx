@@ -112,6 +112,14 @@ export default function ProduccionPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [stockProductos, setStockProductos] = useState<StockProd[]>([])
+    interface PlanningData {
+        necesidades: Record<string, Record<string, number>>
+        infoProductos: Record<string, Producto>
+        stockFabricacion: Record<string, number>
+        enProduccion: Record<string, number>
+    }
+    const [planning, setPlanning] = useState<PlanningData | null>(null)
+    const [activeTurno, setActiveTurno] = useState('Mañana')
     interface UbicacionOption { id: string, nombre: string, tipo: string }
     const [ubicaciones, setUbicaciones] = useState<UbicacionOption[]>([])
     const [showMovModal, setShowMovModal] = useState(false)
@@ -132,13 +140,14 @@ export default function ProduccionPage() {
 
     async function fetchData() {
         try {
-            const [lotesRes, prodRes, empRes, stockRes, movRes, ubiRes] = await Promise.all([
+            const [lotesRes, prodRes, empRes, stockRes, movRes, ubiRes, planRes] = await Promise.all([
                 fetch('/api/lotes'),
                 fetch('/api/productos'),
                 fetch('/api/empleados'),
                 fetch('/api/stock-producto'),
                 fetch('/api/movimientos-producto?limit=10'),
-                fetch('/api/ubicaciones')
+                fetch('/api/ubicaciones'),
+                fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`)
             ])
             const lotesData = await lotesRes.json()
             const prodData = await prodRes.json()
@@ -146,11 +155,13 @@ export default function ProduccionPage() {
             const stockData = await stockRes.json()
             const movData = await movRes.json()
             const ubiData = await ubiRes.json()
+            const planData = await planRes.json()
             setLotes(Array.isArray(lotesData) ? lotesData : [])
             setProductos(Array.isArray(prodData) ? prodData : [])
             setCoordinadores(Array.isArray(empData) ? empData.filter((e: { rol: string; activo: boolean }) => ['ADMIN', 'COORD_PROD'].includes(e.rol) && e.activo) : [])
             setStockProductos(Array.isArray(stockData) ? stockData : [])
             setMovimientos(Array.isArray(movData) ? movData : [])
+            setPlanning(planData && !planData.error ? planData : null)
             const validUbi = Array.isArray(ubiData) ? ubiData : []
             setUbicaciones(validUbi)
 
@@ -444,6 +455,106 @@ export default function ProduccionPage() {
 
             {success && <div className="toast toast-success">{success}</div>}
             {error && <div className="toast toast-error">{error}</div>}
+
+            {/* Planificación por Turnos */}
+            {planning && (
+                <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+                    <div className="card-body">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontFamily: 'var(--font-heading)' }}>📅 Planificación — {formatDateOnly(filterFecha || getLocalDateString())}</h2>
+                                <span className="badge badge-info" style={{ fontSize: '10px' }}>Basado en Hoja de Ruta</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                {['Mañana', 'Siesta', 'Tarde', 'Por Asignar'].map(t => (
+                                    <button 
+                                        key={t}
+                                        className={`btn btn-xs ${activeTurno === t ? 'btn-primary' : 'btn-ghost'}`}
+                                        onClick={() => setActiveTurno(t)}
+                                        style={{ fontSize: '11px', padding: '4px 12px' }}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="table-container" style={{ margin: 0, border: '1px solid var(--color-gray-100)' }}>
+                            <table className="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th style={{ textAlign: 'center' }}>Necesario</th>
+                                        <th style={{ textAlign: 'center' }}>Stock Fab. (Fijo)</th>
+                                        <th style={{ textAlign: 'center' }}>En Proceso</th>
+                                        <th style={{ textAlign: 'center' }}>Faltante</th>
+                                        <th style={{ textAlign: 'right' }}>Sugerencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Object.keys(planning.necesidades[activeTurno] || {}).length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                No hay requerimientos cargados para el turno {activeTurno}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        Object.entries(planning.necesidades[activeTurno]).map(([pid, req]) => {
+                                            const prod = planning.infoProductos[pid]
+                                            const stock = planning.stockFabricacion[pid] || 0
+                                            const enProc = planning.enProduccion[pid] || 0
+                                            const faltante = Math.max(0, req - stock - enProc)
+                                            const rondasSugeridas = Math.ceil(faltante / (prod?.paquetesPorRonda || 14))
+
+                                            return (
+                                                <tr key={pid}>
+                                                    <td>
+                                                        <div style={{ fontWeight: 600 }}>{prod?.nombre}</div>
+                                                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{req} paq</td>
+                                                    <td style={{ textAlign: 'center', color: stock < req ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                                                        {stock} paq
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', color: '#F39C12' }}>
+                                                        {enProc > 0 ? `${enProc} paq` : '—'}
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        {faltante > 0 ? (
+                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>{faltante} paq</span>
+                                                        ) : (
+                                                            <span style={{ color: 'var(--color-success)' }}>Cubierto ✅</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ textAlign: 'right' }}>
+                                                        {faltante > 0 ? (
+                                                            <button 
+                                                                className="btn btn-xs btn-primary"
+                                                                onClick={() => {
+                                                                    setForm({
+                                                                        ...form,
+                                                                        productoId: pid,
+                                                                        rondas: String(rondasSugeridas),
+                                                                        paquetesPersonales: String(rondasSugeridas * (prod?.paquetesPorRonda || 14)),
+                                                                        fechaProduccion: filterFecha || getLocalDateString()
+                                                                    })
+                                                                    setShowModal(true)
+                                                                }}
+                                                            >
+                                                                Producir {rondasSugeridas} rondas
+                                                            </button>
+                                                        ) : '—'}
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Stock Producto Terminado */}
             <div className="card" style={{ marginBottom: 'var(--space-6)', overflow: 'visible' }}>
