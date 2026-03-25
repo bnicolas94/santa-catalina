@@ -30,9 +30,15 @@ export async function POST(req: Request) {
             }
         });
 
-        // Search params para ID en webhooks suele estar en la URL, pero si viene en data.id se usa ese (u obtener del search Params)
-        // Usualmente el API doc dice: id: {query.id || data.id}
-        const manifest = `id:${paymentId};request-id:${requestId};ts:${ts}`;
+        // Search params para ID en webhooks suele estar en la URL
+        const url = new URL(req.url);
+        const queryId = url.searchParams.get('data.id') || url.searchParams.get('id');
+        
+        // El manifest DEBE armarse con el ID que viene en la query (es lo que MP firma)
+        // Si no hay en query y es test, usamos el del body
+        const manifestId = queryId || paymentId;
+
+        const manifest = `id:${manifestId};request-id:${requestId};ts:${ts}`;
         const hmac = crypto.createHmac('sha256', secret);
         const digest = hmac.update(manifest).digest('hex');
 
