@@ -37,10 +37,27 @@ export default function CajaPage() {
     const [saldoChica, setSaldoChica] = useState(0)
     const [saldoLocal, setSaldoLocal] = useState(0)
     const [saldoMercadoPago, setSaldoMercadoPago] = useState(0)
+    const [showMPModal, setShowMPModal] = useState(false)
+    const [liveMPData, setLiveMPData] = useState<any[]>([])
+    const [loadingMP, setLoadingMP] = useState(false)
     const [editingSaldo, setEditingSaldo] = useState<string | null>(null)
     const [editSaldoValue, setEditSaldoValue] = useState('')
     const [editMotivo, setEditMotivo] = useState('ajuste')
     const [editDescripcion, setEditDescripcion] = useState('')
+
+    const checkLiveMP = async () => {
+        setLoadingMP(true)
+        setShowMPModal(true)
+        try {
+            const res = await fetch('/api/mercadopago/movimientos?live_mp=true')
+            const data = await res.json()
+            setLiveMPData(data)
+        } catch (error) {
+            console.error("Error fetching live MP data", error)
+        }
+        setLoadingMP(false)
+    }
+
     const [showMontos, setShowMontos] = useState(true)
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
@@ -387,8 +404,11 @@ export default function CajaPage() {
                                             <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('mercado_pago')}>✓</button>
                                         </div>
                                     ) : (
-                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                            onClick={() => { setEditingSaldo('mercado_pago'); setEditSaldoValue(String(saldoMercadoPago)) }}>✏️ Editar</button>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: '#2980B9' }} onClick={checkLiveMP}>🔄 En Vivo</button>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                                onClick={() => { setEditingSaldo('mercado_pago'); setEditSaldoValue(String(saldoMercadoPago)) }}>✏️ Editar</button>
+                                        </div>
                                     )
                                 )}
                             </div>
@@ -853,6 +873,58 @@ export default function CajaPage() {
                                 <button type="submit" className="btn btn-primary">Realizar Transferencia</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal MP en Vivo */}
+            {showMPModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '800px', width: '90%' }}>
+                        <h2>Conexión en Vivo: Últimos 15 Pagos MP</h2>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginBottom: '1rem' }}>
+                            Estos datos vienen <strong>directamente de la API de Mercado Pago</strong>, sin pasar por la base de datos local. Sirve para corroborar que tu cuenta está recibiendo fondos de manera efectiva.
+                        </p>
+                        {loadingMP ? (
+                            <div style={{ padding: '2rem', textAlign: 'center' }}>Conectando a servidores de Mercado Pago...</div>
+                        ) : (
+                            <div className="table-container" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                                <table className="table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID MP</th>
+                                            <th>Fecha Aprobación</th>
+                                            <th>Estado</th>
+                                            <th>Monto Bruto</th>
+                                            <th>Bruto Neto</th>
+                                            <th>Método</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {liveMPData.length === 0 ? (
+                                            <tr><td colSpan={6} style={{ textAlign: 'center' }}>No se obtuvieron registros de la API.</td></tr>
+                                        ) : (liveMPData.map(p => (
+                                            <tr key={p.id}>
+                                                <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{p.id}</td>
+                                                <td style={{ fontSize: '0.8rem' }}>{p.date_approved ? new Date(p.date_approved).toLocaleString('es-AR') : p.date_created}</td>
+                                                <td>
+                                                    <span className={`badge ${p.status === 'approved' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.7rem' }}>
+                                                        {p.status}
+                                                    </span>
+                                                </td>
+                                                <td style={{ fontWeight: 'bold' }}>${p.transaction_amount}</td>
+                                                <td style={{ color: 'var(--color-primary)' }}>${p.transaction_details?.net_received_amount ?? p.transaction_amount}</td>
+                                                <td style={{ fontSize: '0.8rem', color: 'var(--color-gray-600)' }}>{p.payment_method_id || '-'}</td>
+                                            </tr>
+                                        )))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        <div className="form-actions" style={{ marginTop: '1.5rem' }}>
+                            <button type="button" className="btn btn-ghost" onClick={() => setShowMPModal(false)}>Cerrar</button>
+                            <button type="button" className="btn btn-primary" onClick={checkLiveMP} disabled={loadingMP}>Actualizar Lista MP</button>
+                        </div>
                     </div>
                 </div>
             )}
