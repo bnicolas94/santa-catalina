@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth'
 export async function GET() {
     try {
         // Crear registros si no existen (upsert)
-        const [cajaMadre, cajaChica, local] = await Promise.all([
+        const [cajaMadre, cajaChica, local, mercadoPago] = await Promise.all([
             prisma.saldoCaja.upsert({
                 where: { tipo: 'caja_madre' },
                 create: { tipo: 'caja_madre', saldo: 0 },
@@ -23,9 +23,14 @@ export async function GET() {
                 create: { tipo: 'local', saldo: 0 },
                 update: {},
             }),
+            prisma.saldoCaja.upsert({
+                where: { tipo: 'mercado_pago' },
+                create: { tipo: 'mercado_pago', saldo: 0 },
+                update: {},
+            }),
         ])
 
-        return NextResponse.json({ cajaMadre, cajaChica, local })
+        return NextResponse.json({ cajaMadre, cajaChica, local, mercadoPago })
     } catch (error) {
         console.error('Error obteniendo saldos:', error)
         return NextResponse.json({ error: 'Error al obtener saldos' }, { status: 500 })
@@ -67,7 +72,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Tipo y saldo son requeridos' }, { status: 400 })
         }
 
-        if (!['caja_madre', 'caja_chica', 'local'].includes(tipo)) {
+        if (!['caja_madre', 'caja_chica', 'local', 'mercado_pago'].includes(tipo)) {
             return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
         }
 

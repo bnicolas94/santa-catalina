@@ -8,6 +8,7 @@ interface MovCaja {
     cajaOrigen: string | null; descripcion: string | null; fecha: string
     pedido: { id: string; totalImporte: number; cliente: { nombreComercial: string } } | null
     rendicion: { id: string; chofer: { id: string, nombre: string } } | null
+    movimientoMp?: { mpId: string; comisionMp: number; montoNeto: number; estado: string; metodoPago: string | null } | null
 }
 
 interface Rendicion {
@@ -35,6 +36,7 @@ export default function CajaPage() {
     const [saldoMadre, setSaldoMadre] = useState(0)
     const [saldoChica, setSaldoChica] = useState(0)
     const [saldoLocal, setSaldoLocal] = useState(0)
+    const [saldoMercadoPago, setSaldoMercadoPago] = useState(0)
     const [editingSaldo, setEditingSaldo] = useState<string | null>(null)
     const [editSaldoValue, setEditSaldoValue] = useState('')
     const [editMotivo, setEditMotivo] = useState('ajuste')
@@ -61,7 +63,7 @@ export default function CajaPage() {
     const ubicacionTipo = (session?.user as any)?.ubicacionTipo
 
     const allowedBoxes = userRol === 'ADMIN' 
-        ? ['caja_madre', 'caja_chica', 'local'] 
+        ? ['caja_madre', 'caja_chica', 'local', 'mercado_pago'] 
         : (ubicacionTipo === 'LOCAL' ? ['local'] : ['caja_madre', 'caja_chica'])
 
     useEffect(() => {
@@ -94,6 +96,7 @@ export default function CajaPage() {
             setSaldoMadre(saldosData.cajaMadre?.saldo ?? 0)
             setSaldoChica(saldosData.cajaChica?.saldo ?? 0)
             setSaldoLocal(saldosData.local?.saldo ?? 0)
+            setSaldoMercadoPago(saldosData.mercadoPago?.saldo ?? 0)
             const conceptosRes = await fetch('/api/caja/conceptos')
             const conceptosData = await conceptosRes.json()
             if (Array.isArray(conceptosData)) setConceptos(conceptosData)
@@ -371,6 +374,46 @@ export default function CajaPage() {
                         </div>
                     </div>
                 )}
+                {/* Mercado Pago */}
+                {allowedBoxes.includes('mercado_pago') && (
+                    <div className="card" style={{ borderTop: '3px solid #2980B9' }}>
+                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2980B9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💳 M.Pago</span>
+                                {(userRol === 'ADMIN') && (
+                                    editingSaldo === 'mercado_pago' ? (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('mercado_pago')}>✓</button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                            onClick={() => { setEditingSaldo('mercado_pago'); setEditSaldoValue(String(saldoMercadoPago)) }}>✏️ Editar</button>
+                                    )
+                                )}
+                            </div>
+                            {editingSaldo === 'mercado_pago' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                        onChange={(e) => setEditSaldoValue(e.target.value)}
+                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
+                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
+                                            <option value="ajuste">⚙️ AJUSTE</option>
+                                            <option value="arqueo">📋 ARQUEO</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
+                                        style={{ fontSize: '0.75rem', padding: '4px' }}
+                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2980B9', textAlign: 'center' }}>{formatCurrency(saldoMercadoPago, showMontos)}</div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ═══ Rendiciones Pendientes ═══ */}
@@ -487,6 +530,11 @@ export default function CajaPage() {
                                 </td>
                                 <td style={{ fontSize: '0.85rem', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {m.descripcion || (m.pedido ? `Pedido de ${m.pedido.cliente.nombreComercial}` : m.rendicion ? `Rendición de ${m.rendicion.chofer.nombre}` : '—')}
+                                    {m.movimientoMp && (
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', marginTop: 2 }}>
+                                            ID: {m.movimientoMp.mpId} | Com: ${m.movimientoMp.comisionMp}
+                                        </div>
+                                    )}
                                 </td>
                                 <td style={{ fontSize: '0.8rem', color: 'var(--color-gray-400)' }}>
                                     {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
@@ -546,7 +594,8 @@ export default function CajaPage() {
                                         {[
                                             { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' }, 
                                             { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' }, 
-                                            { key: 'local', label: '🏪 Local', color: '#27AE60' }
+                                            { key: 'local', label: '🏪 Local', color: '#27AE60' },
+                                            { key: 'mercado_pago', label: '💳 M.Pago', color: '#2980B9' }
                                         ].filter(c => allowedBoxes.includes(c.key)).map((c) => (
                                             <button key={c.key} type="button" className="btn btn-sm"
                                                 onClick={() => setForm({ ...form, cajaOrigen: c.key })}
@@ -779,14 +828,16 @@ export default function CajaPage() {
                                             {allowedBoxes.includes('caja_madre') && <option value="caja_madre">🏦 Madre</option>}
                                             {allowedBoxes.includes('caja_chica') && <option value="caja_chica">💼 Chica</option>}
                                             {allowedBoxes.includes('local') && <option value="local">🏪 Local</option>}
+                                            {allowedBoxes.includes('mercado_pago') && <option value="mercado_pago">💳 Mercado Pago</option>}
                                         </select>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Hacia</label>
                                         <select className="form-select" value={transfForm.destino} onChange={(e) => setTransfForm({ ...transfForm, destino: e.target.value })}>
-                                            <option value="caja_madre">🏦 Madre</option>
-                                            <option value="caja_chica">💼 Chica</option>
-                                            <option value="local">🏪 Local</option>
+                                            {allowedBoxes.includes('caja_madre') && <option value="caja_madre">🏦 Madre</option>}
+                                            {allowedBoxes.includes('caja_chica') && <option value="caja_chica">💼 Chica</option>}
+                                            {allowedBoxes.includes('local') && <option value="local">🏪 Local</option>}
+                                            {allowedBoxes.includes('mercado_pago') && <option value="mercado_pago">💳 Mercado Pago</option>}
                                         </select>
                                     </div>
                                 </div>

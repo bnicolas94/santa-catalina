@@ -115,9 +115,21 @@ export default function PlanificacionRutasPage() {
                         if (!p.lat || !p.lng) reordered.push(p)
                     }
                     payloadPedidos = reordered
+                } else {
+                    const msg = optData.error || 'Error desconocido';
+                    console.error('API Google Falló:', msg)
+                    setIsOptimizing(false)
+                    if (!confirm(`Error optimizando ruta de Google Maps:\n${msg}\n\n¿Desea crear la ruta de todas formas (sin optimizar)?`)) {
+                        return; // Se cancela la creación
+                    }
                 }
-            } catch (e) { console.error('Error optimizando, guardando sin optimizar', e) }
-            setIsOptimizing(false)
+            } catch (e) { 
+                console.error('Error optimizando, guardando sin optimizar', e) 
+                setIsOptimizing(false)
+                if (!confirm(`La conexión con el optimizador falló. ¿Desea guardar la ruta sin optimizar?`)) {
+                    return;
+                }
+            }
         }
 
         try {

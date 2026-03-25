@@ -116,6 +116,7 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN'],
         permissionKey: 'permisoCaja',
     },
+
     {
         label: 'Reportes',
         href: '/reportes',

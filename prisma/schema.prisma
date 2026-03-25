@@ -411,6 +411,7 @@ model MovimientoCaja {
   rendicionId String?          @map("id_rendicion")
   pedido      Pedido?          @relation(fields: [pedidoId], references: [id])
   rendicion   RendicionChofer? @relation(fields: [rendicionId], references: [id])
+  movimientoMp MovimientoMercadoPago?
 
   @@map("movimientos_caja")
 }
@@ -643,4 +644,26 @@ model MantenimientoVehiculo {
   vehiculo        Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
 
   @@map("mantenimientos_vehiculo")
+}
+
+model MovimientoMercadoPago {
+  id                 String          @id @default(uuid())
+  mpId               String          @unique @map("mp_id")
+  tipo               String          // "ingreso" o "egreso"
+  montoBruto         Float           @map("monto_bruto")
+  montoNeto          Float           @map("monto_neto")
+  comisionMp         Float           @default(0) @map("comision_mp")
+  metodoPago         String?         @map("metodo_pago")
+  estado             String          // "approved", "pending", "rejected"
+  fechaCreacionMp    DateTime        @map("fecha_creacion_mp")
+  fechaAprobacionMp  DateTime?       @map("fecha_aprobacion_mp")
+  descripcion        String?
+  referenciaExterna  String?         @map("referencia_externa")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  
+  movimientoCajaId   String?         @unique @map("id_movimiento_caja")
+  movimientoCaja     MovimientoCaja? @relation(fields: [movimientoCajaId], references: [id])
+
+  @@map("movimientos_mercado_pago")
 }

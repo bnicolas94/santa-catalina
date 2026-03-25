@@ -43,12 +43,22 @@ export async function POST(req: NextRequest) {
                     // Helper para parsear calle y número
                     const parseDireccion = (dir: string | null) => {
                         if (!dir) return { calle: null, numero: null };
-                        // Busca patron de "Calle 123" o "23 N° 3517" o "Calle Nro 123"
-                        const match = dir.match(/^(.*?)\s+(?:N°|#|nro|num|altura)?\.?\s*(\d+.*)$/i);
+                        
+                        let tempCalle = dir.trim();
+                        let numero = null;
+
+                        const match = dir.match(/^(.*?)\s+(?:N°|#|nro|num|altura|n)\.?\s*(\d+.*)$/i);
                         if (match) {
-                            return { calle: match[1].trim(), numero: match[2].trim() };
+                            tempCalle = match[1].trim();
+                            numero = match[2].trim();
                         }
-                        return { calle: dir.trim(), numero: null };
+
+                        // Si la calle empieza con un número y no tiene la palabra "calle", se la agregamos
+                        if (/^\d/.test(tempCalle) && !/^calle\s/i.test(tempCalle)) {
+                            tempCalle = `Calle ${tempCalle}`;
+                        }
+
+                        return { calle: tempCalle, numero };
                     };
 
                     const { calle, numero } = parseDireccion(row.clientMatch.proposedData.direccion || null);

@@ -42,6 +42,7 @@ export async function GET(request: Request) {
             include: {
                 pedido: { select: { id: true, totalImporte: true, cliente: { select: { nombreComercial: true } } } },
                 rendicion: { select: { id: true, chofer: { select: { nombre: true } } } },
+                movimientoMp: true,
             },
         })
 
