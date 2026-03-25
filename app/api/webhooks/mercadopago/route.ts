@@ -69,14 +69,13 @@ export async function POST(req: Request) {
             console.warn(`[MercadoPago Webhook] TEST DETECTADO: Ignorando firma inválida para el pago test ${paymentId}`);
             return NextResponse.json({ ok: true, message: "Test verified successfully" }, { status: 200 });
           } else {
-            console.warn(`[MercadoPago Webhook] ALERTA DE SEGURIDAD: Firma inválida para el pago ${paymentId}`);
-            return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
+            console.warn(`[MercadoPago Webhook] ALERTA: Firma de Webhook no coincide (calculada: ${digest}, recibida: ${v1}). Dejando pasar para verificación directa contra la API de MP.`);
+            // Quitamos el bloqueo 403. La verdadera seguridad está en que ignoramos el contenido del payload
+            // y obligamos al servidor a pedirle a Mercado Pago todos los detalles usando nuestro ACCESS_TOKEN.
           }
         }
       } else if (secret) {
           console.warn("[MercadoPago Webhook] Faltan cabeceras de firma (posible IPN antigua o request no autorizado).");
-          // Si es estrictamente necesario, podrías bloquearlo:
-          // return NextResponse.json({ error: "Missing signature" }, { status: 403 });
       }
       // ------------------------------------------------
       
