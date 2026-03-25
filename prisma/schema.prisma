@@ -82,6 +82,7 @@ model Producto {
   movimientosProducto MovimientoProducto[]
   presentaciones      Presentacion[]
   stockUbicaciones    StockProducto[]
+  requerimientos      RequerimientoProduccion[]
 
   @@map("productos")
 }
@@ -666,4 +667,17 @@ model MovimientoMercadoPago {
   movimientoCaja     MovimientoCaja? @relation(fields: [movimientoCajaId], references: [id])
 
   @@map("movimientos_mercado_pago")
+}
+
+model RequerimientoProduccion {
+  id         String   @id @default(uuid())
+  fecha      DateTime
+  turno      String
+  productoId String   @map("id_producto")
+  cantidad   Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  producto   Producto @relation(fields: [productoId], references: [id])
+
+  @@map("requerimientos_produccion")
 }

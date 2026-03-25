@@ -115,6 +115,7 @@ export default function ProduccionPage() {
     interface PlanningData {
         necesidades: Record<string, Record<string, number>>
         infoProductos: Record<string, Producto>
+        manuales: Record<string, Record<string, number>>
         stockFabricacion: Record<string, number>
         enProduccion: Record<string, number>
     }
@@ -426,6 +427,25 @@ export default function ProduccionPage() {
         }
     }
 
+    async function handleManualChange(productoId: string, cantidad: string) {
+        try {
+            const res = await fetch('/api/produccion/planificacion/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fecha: filterFecha || getLocalDateString(),
+                    turno: activeTurno,
+                    productoId,
+                    cantidad
+                })
+            })
+            if (!res.ok) throw new Error('Error al guardar')
+            fetchData() // Actualizar vista
+        } catch (err: any) {
+            setError(err.message)
+        }
+    }
+
     if (loading) return <div className="loading-container"><div className="loader"></div><p>Cargando producción...</p></div>
 
     return (
@@ -484,46 +504,59 @@ export default function ProduccionPage() {
                                 <thead>
                                     <tr>
                                         <th>Producto</th>
-                                        <th style={{ textAlign: 'center' }}>Necesario</th>
-                                        <th style={{ textAlign: 'center' }}>Stock Fab. (Fijo)</th>
+                                        <th style={{ textAlign: 'center' }}>H. Ruta</th>
+                                        <th style={{ textAlign: 'center' }}>Carga Express</th>
+                                        <th style={{ textAlign: 'center' }}>Stock Fab.</th>
                                         <th style={{ textAlign: 'center' }}>En Proceso</th>
-                                        <th style={{ textAlign: 'center' }}>Faltante</th>
+                                        <th style={{ textAlign: 'center' }}>Total Faltante</th>
                                         <th style={{ textAlign: 'right' }}>Sugerencia</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {Object.keys(planning.necesidades[activeTurno] || {}).length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
-                                                No hay requerimientos cargados para el turno {activeTurno}
+                                            <td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                No hay requerimientos para el turno {activeTurno}
                                             </td>
                                         </tr>
                                     ) : (
-                                        Object.entries(planning.necesidades[activeTurno]).map(([pid, req]) => {
+                                        Object.entries(planning.necesidades[activeTurno]).map(([pid, totalReq]) => {
                                             const prod = planning.infoProductos[pid]
+                                            const manualQty = planning.manuales[activeTurno]?.[pid] || 0
+                                            const rutaQty = totalReq - manualQty
                                             const stock = planning.stockFabricacion[pid] || 0
                                             const enProc = planning.enProduccion[pid] || 0
-                                            const faltante = Math.max(0, req - stock - enProc)
+                                            const faltante = Math.max(0, totalReq - stock - enProc)
                                             const rondasSugeridas = Math.ceil(faltante / (prod?.paquetesPorRonda || 14))
 
                                             return (
                                                 <tr key={pid}>
                                                     <td>
-                                                        <div style={{ fontWeight: 600 }}>{prod?.nombre}</div>
+                                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
                                                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
                                                     </td>
-                                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{req} paq</td>
-                                                    <td style={{ textAlign: 'center', color: stock < req ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                                                    <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaQty > 0 ? `${rutaQty} paq` : '—'}</td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <input 
+                                                            type="number" 
+                                                            className="form-input" 
+                                                            style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
+                                                            value={manualQty || ''} 
+                                                            placeholder="0"
+                                                            onChange={(e) => handleManualChange(pid, e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', color: stock < totalReq ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                         {stock} paq
                                                     </td>
-                                                    <td style={{ textAlign: 'center', color: '#F39C12' }}>
+                                                    <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
                                                         {enProc > 0 ? `${enProc} paq` : '—'}
                                                     </td>
                                                     <td style={{ textAlign: 'center' }}>
                                                         {faltante > 0 ? (
-                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>{faltante} paq</span>
+                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltante} paq</span>
                                                         ) : (
-                                                            <span style={{ color: 'var(--color-success)' }}>Cubierto ✅</span>
+                                                            <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
                                                         )}
                                                     </td>
                                                     <td style={{ textAlign: 'right' }}>
@@ -549,6 +582,26 @@ export default function ProduccionPage() {
                                             )
                                         })
                                     )}
+                                    {/* Fila para agregar producto extra al turno */}
+                                    <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
+                                        <td colSpan={2}>
+                                            <select 
+                                                className="form-select" 
+                                                style={{ height: '32px', fontSize: '12px' }}
+                                                onChange={(e) => {
+                                                    if(e.target.value) handleManualChange(e.target.value, '1')
+                                                    e.target.value = ''
+                                                }}
+                                            >
+                                                <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
+                                                {productos
+                                                    .filter(p => !planning.necesidades[activeTurno]?.[p.id])
+                                                    .map(p => <option key={p.id} value={p.id}>[{p.codigoInterno}] {p.nombre}</option>)
+                                                }
+                                            </select>
+                                        </td>
+                                        <td colSpan={5}></td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>

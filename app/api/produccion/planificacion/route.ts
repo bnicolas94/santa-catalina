@@ -64,7 +64,13 @@ export async function GET(request: Request) {
             }
         })
 
-        // 3. Consolidar necesidades por producto y turno
+        // 3. Obtener requerimientos manuales del día
+        const manuales = await prisma.requerimientoProduccion.findMany({
+            where: { fecha: { gte: startOfDay, lte: endOfDay } },
+            include: { producto: true }
+        })
+
+        // 4. Consolidar necesidades por producto y turno
         const necesidades: Record<string, Record<string, number>> = {
             'Mañana': {},
             'Siesta': {},
@@ -103,14 +109,23 @@ export async function GET(request: Request) {
             })
         })
 
-        // 4. Obtener stock actual consolidado (solo FABRICA)
+        // Procesar requerimientos manuales
+        manuales.forEach(m => {
+            const turno = m.turno
+            if (!necesidades[turno]) necesidades[turno] = {}
+            const pid = m.productoId
+            necesidades[turno][pid] = (necesidades[turno][pid] || 0) + m.cantidad
+            if (!infoProductos[pid]) infoProductos[pid] = m.producto
+        })
+
+        // 5. Obtener stock actual consolidado (solo FABRICA)
         const stockActual = await prisma.stockProducto.groupBy({
             by: ['productoId'],
             where: { ubicacion: { tipo: 'FABRICA' } },
             _sum: { cantidad: true }
         })
 
-        // 5. Obtener lo que ya está en producción hoy
+        // 6. Obtener lo que ya está en producción hoy
         const enProduccion = await prisma.lote.findMany({
             where: {
                 fechaProduccion: { gte: startOfDay, lte: endOfDay },
@@ -127,6 +142,11 @@ export async function GET(request: Request) {
         return NextResponse.json({
             necesidades,
             infoProductos,
+            manuales: manuales.reduce((acc, current) => {
+                if (!acc[current.turno]) acc[current.turno] = {}
+                acc[current.turno][current.productoId] = current.cantidad
+                return acc
+            }, {} as Record<string, Record<string, number>>),
             stockFabricacion: stockActual.reduce((acc, s) => {
                 acc[s.productoId] = s._sum.cantidad || 0
                 return acc
