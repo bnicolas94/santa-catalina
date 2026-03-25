@@ -948,30 +948,37 @@ export default function CajaPage() {
                                     <tbody>
                                         {liveMPData.length === 0 ? (
                                             <tr><td colSpan={7} style={{ textAlign: 'center' }}>No se obtuvieron registros de la API.</td></tr>
-                                        ) : (liveMPData.map(p => (
-                                            <tr key={p.id}>
-                                                <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{p.id}</td>
-                                                <td>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                                                        {(p.payer?.first_name || p.payer?.last_name) 
-                                                            ? `${p.payer.first_name ?? ''} ${p.payer.last_name ?? ''}`.trim()
-                                                            : (p.payer?.email ? p.payer.email.split('@')[0] : 'Cliente MP')}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
-                                                        {p.description || '-'}
-                                                    </div>
-                                                </td>
-                                                <td style={{ fontSize: '0.8rem' }}>{p.date_approved ? new Date(p.date_approved).toLocaleString('es-AR') : p.date_created}</td>
-                                                <td>
-                                                    <span className={`badge ${p.status === 'approved' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.7rem' }}>
-                                                        {p.status}
-                                                    </span>
-                                                </td>
-                                                <td style={{ fontWeight: 'bold' }}>${p.transaction_amount}</td>
-                                                <td style={{ color: 'var(--color-primary)' }}>${p.transaction_details?.net_received_amount ?? p.transaction_amount}</td>
-                                                <td style={{ fontSize: '0.8rem', color: 'var(--color-gray-600)' }}>{p.payment_method_id || '-'}</td>
-                                            </tr>
-                                        )))}
+                                        ) : (liveMPData.map(p => {
+                                            const isEgreso = !p.collector_id || String(p.collector_id) !== '231378824';
+                                            const color = isEgreso ? '#dc2626' : '#16a34a';
+                                            const prefix = isEgreso ? '-' : '+';
+                                            const payerName = (p.payer?.first_name || p.payer?.last_name) 
+                                                ? `${p.payer.first_name ?? ''} ${p.payer.last_name ?? ''}`.trim()
+                                                : (p.payer?.email ? p.payer.email.split('@')[0] : 'Cliente MP');
+
+                                            return (
+                                                <tr key={p.id}>
+                                                    <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{p.id}</td>
+                                                    <td>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
+                                                            {payerName}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
+                                                            {p.description || '-'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ fontSize: '0.8rem' }}>{p.date_approved ? new Date(p.date_approved).toLocaleString('es-AR') : p.date_created}</td>
+                                                    <td>
+                                                        <span className={`badge ${p.status === 'approved' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.7rem' }}>
+                                                            {p.status}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ fontWeight: 'bold', color }}>{prefix} ${p.transaction_amount}</td>
+                                                    <td style={{ color }}>{prefix} ${p.transaction_details?.net_received_amount ?? p.transaction_amount}</td>
+                                                    <td style={{ fontSize: '0.8rem', color: 'var(--color-gray-600)' }}>{p.payment_method_id || '-'}</td>
+                                                </tr>
+                                            );
+                                        }))}
                                     </tbody>
                                 </table>
                             </div>
