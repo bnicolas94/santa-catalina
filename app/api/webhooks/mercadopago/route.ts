@@ -46,6 +46,7 @@ export async function POST(req: Request) {
           // El simulador de pruebas de MP a veces envía firmas dummy
           if (paymentId === "123456" || paymentId === 123456) {
             console.warn(`[MercadoPago Webhook] TEST DETECTADO: Ignorando firma inválida para el pago test ${paymentId}`);
+            return NextResponse.json({ ok: true, message: "Test verified successfully" }, { status: 200 });
           } else {
             console.warn(`[MercadoPago Webhook] ALERTA DE SEGURIDAD: Firma inválida para el pago ${paymentId}`);
             return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
