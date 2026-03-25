@@ -879,10 +879,10 @@ export default function CajaPage() {
 
             {/* Modal MP en Vivo */}
             {showMPModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content" style={{ maxWidth: '800px', width: '90%' }}>
-                        <h2>Conexión en Vivo: Últimos 15 Pagos MP</h2>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginBottom: '1rem' }}>
+                <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }} onClick={(e) => { if (e.target === e.currentTarget) setShowMPModal(false) }}>
+                    <div className="modal-content" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
+                        <h2 style={{ color: 'var(--color-text)' }}>Conexión en Vivo: Últimos 15 Pagos MP</h2>
+                        <p style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginBottom: '1.5rem' }}>
                             Estos datos vienen <strong>directamente de la API de Mercado Pago</strong>, sin pasar por la base de datos local. Sirve para corroborar que tu cuenta está recibiendo fondos de manera efectiva.
                         </p>
                         {loadingMP ? (
