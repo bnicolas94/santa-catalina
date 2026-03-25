@@ -7,6 +7,14 @@ export async function POST(req: Request) {
   try {
     let body: any = {};
     const textBody = await req.text();
+    
+    // DUMP ABSOLUTO PARA DEBUGGING EN VERCEL LOGS
+    console.log(`\n\n========== [WEBHOOK MP INGRESO] ==========`);
+    console.log(`[URL] ${req.url}`);
+    console.log(`[HEADERS] x-signature: ${req.headers.get("x-signature")} | x-request-id: ${req.headers.get("x-request-id")}`);
+    console.log(`[RAW TEXT BODY] ${textBody}`);
+    console.log(`==========================================\n`);
+
     if (textBody) {
         try {
             body = JSON.parse(textBody);
