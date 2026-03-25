@@ -99,6 +99,12 @@ export default function CajaPage() {
 
     useEffect(() => { 
         fetchData() 
+
+        // Solicitar permisos de notificación de escritorio
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+
         // Polling para actualizar caja en tiempo real y emitir toast
         const interval = setInterval(() => {
             fetchData(true)
@@ -123,7 +129,21 @@ export default function CajaPage() {
                     m.cajaOrigen === 'mercado_pago' && m.tipo === 'ingreso' && !oldIds.has(m.id)
                 )
                 if (newIncomes.length > 0) {
-                    setToastNotif({ message: '¡Cobro M.Pago acreditado!', amount: newIncomes[0].monto, id: newIncomes[0].id })
+                    const latest = newIncomes[0];
+                    setToastNotif({ message: '¡Cobro M.Pago acreditado!', amount: latest.monto, id: latest.id })
+                    
+                    // Sonido de notificación
+                    const audio = new Audio('/sounds/notification.mp3');
+                    audio.play().catch(err => console.log('Autoplay preventer by browser:', err));
+
+                    // Notificación de escritorio
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("Nuevo Pago Mercado Pago", {
+                            body: `Acreditado: $${latest.monto.toLocaleString('es-AR')}\n${latest.descripcion || ''}`,
+                            icon: '/favicon.ico'
+                        });
+                    }
+
                     setTimeout(() => setToastNotif(null), 8000)
                 }
             }
