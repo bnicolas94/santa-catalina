@@ -5,12 +5,25 @@ import crypto from 'crypto';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    let body: any = {};
+    const textBody = await req.text();
+    if (textBody) {
+        try {
+            body = JSON.parse(textBody);
+        } catch (e) {
+            console.warn("[MercadoPago Webhook] Body no es JSON válido o está vacío");
+        }
+    }
+
+    const url = new URL(req.url);
+    const queryTopic = url.searchParams.get('topic');
+    const queryId = url.searchParams.get('id') || url.searchParams.get('data.id');
+
+    const topic = body.type || body.action || queryTopic;
+    const paymentId = body?.data?.id || queryId;
 
     // Verificamos si la solicitud es una notificación de pago (v1 IPN o Webhook)
-    if ((body.type === "payment" || body.action === "payment.created") && body.data && body.data.id) {
-      
-      const paymentId = body.data.id;
+    if ((topic === "payment" || topic === "payment.created") && paymentId) {
 
       // ---- SEGURIDAD: Validación de Firma Webhook ----
       const signature = req.headers.get("x-signature");
