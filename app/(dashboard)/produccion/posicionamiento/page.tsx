@@ -33,6 +33,8 @@ interface Ubicacion {
 export default function PosicionamientoPage() {
     const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
     const [turno, setTurno] = useState('AM')
+    const [roles, setRoles] = useState<{ id: string, nombre: string }[]>([])
+    const [selectedRole, setSelectedRole] = useState('OPERARIO')
     const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
     const [ubicacionId, setUbicacionId] = useState('')
     const [conceptos, setConceptos] = useState<Concepto[]>([])
@@ -59,18 +61,21 @@ export default function PosicionamientoPage() {
 
     async function fetchInitialData() {
         try {
-            const [ubiRes, conceptRes, empRes] = await Promise.all([
+            const [ubiRes, conceptRes, empRes, rolesRes] = await Promise.all([
                 fetch('/api/ubicaciones'),
                 fetch('/api/produccion/conceptos'),
-                fetch('/api/empleados')
+                fetch('/api/empleados'),
+                fetch('/api/empleados/roles')
             ])
             const ubiData = await ubiRes.json()
             const conceptData = await conceptRes.json()
             const empData = await empRes.json()
+            const rolesData = await rolesRes.json()
 
             const validUbi = Array.isArray(ubiData) ? ubiData : []
             setUbicaciones(validUbi)
             setConceptos(Array.isArray(conceptData) ? conceptData : [])
+            setRoles(Array.isArray(rolesData) ? rolesData : [])
             
             // Default location
             if (validUbi.length > 0) {
@@ -79,7 +84,7 @@ export default function PosicionamientoPage() {
             }
 
             // Operarios (solo rol OPERARIO o similar si se desea)
-            const ops = Array.isArray(empData) ? empData.filter(e => e.rol === 'OPERARIO' && e.activo) : []
+            const ops = Array.isArray(empData) ? empData.filter(e => e.activo) : []
             setOperarios(ops)
 
         } catch (err) {
@@ -99,11 +104,11 @@ export default function PosicionamientoPage() {
         }
     }
 
-    // Filtrar operarios por ubicación seleccionada
-    // Nota: El empleado tiene un campo ubicacionId para su sucursal base.
-    // Pero si queremos que puedan estar en cualquier lado, filtramos o los mostramos todos.
-    // Según el requerimiento: "solo me tome los empleados vinculados a esa ubicación"
-    const operariosFiltrados = operarios.filter(op => (op as any).ubicacionId === ubicacionId)
+    // Filtrar operarios por ubicación seleccionada y rol
+    const operariosFiltrados = operarios.filter(op => 
+        (op as any).ubicacionId === ubicacionId && 
+        op.rol === selectedRole
+    )
 
     const handleAssign = (empleadoId: string, conceptoId: string) => {
         setAsignaciones(prev => {
@@ -212,6 +217,18 @@ export default function PosicionamientoPage() {
                                 PM
                             </button>
                         </div>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Ver Rol</label>
+                        <select 
+                            className="form-select" 
+                            value={selectedRole} 
+                            onChange={e => setSelectedRole(e.target.value)}
+                        >
+                            {roles.map(r => (
+                                <option key={r.id} value={r.nombre}>{r.nombre}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             </div>
