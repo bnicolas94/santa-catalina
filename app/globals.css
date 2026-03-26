@@ -109,9 +109,10 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
 
-  /* Sidebar */
+  /* Layout */
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 72px;
+  --main-offset: 260px;
   --header-height: 64px;
 
   /* Transitions */
@@ -664,7 +665,7 @@ a:hover {
 /* Responsive */
 @media (max-width: 768px) {
   :root {
-    --sidebar-width: 0px;
+    --main-offset: 0px;
   }
 
   .page-header {
