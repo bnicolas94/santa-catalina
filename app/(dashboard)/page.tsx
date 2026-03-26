@@ -52,8 +52,12 @@ export default function DashboardPage() {
 
     useEffect(() => {
         const saved = localStorage.getItem('dashboard_caja_widget')
-        if (saved) setSelectedCajaWidget(saved)
-    }, [])
+        if (saved) {
+            setSelectedCajaWidget(saved)
+        } else if ((session?.user as any)?.rol === 'ADMIN') {
+            setSelectedCajaWidget('global')
+        }
+    }, [session])
 
     // Redirección por roles/permisos
     useEffect(() => {
@@ -137,22 +141,35 @@ export default function DashboardPage() {
                         <div className={styles.statInfo} style={{ width: '100%' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '4px' }}>
                                 <span className={styles.statLabel} style={{ marginBottom: 0 }}>En Caja</span>
-                                <select 
-                                    value={selectedCajaWidget} 
-                                    onChange={(e) => {
-                                        setSelectedCajaWidget(e.target.value)
-                                        localStorage.setItem('dashboard_caja_widget', e.target.value)
-                                    }}
-                                    className="form-select" 
-                                    style={{ fontSize: '0.75rem', padding: '2px 16px 2px 4px', height: 'auto', width: 'auto', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px', color: 'var(--color-gray-700)', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
-                                >
-                                    {(session?.user as any)?.rol === 'ADMIN' && <option value="caja_madre">Madre</option>}
-                                    {((session?.user as any)?.rol === 'ADMIN' || (session?.user as any)?.ubicacionTipo === 'FABRICA') && <option value="caja_chica">Chica</option>}
-                                    {((session?.user as any)?.rol === 'ADMIN' || (session?.user as any)?.ubicacionTipo === 'LOCAL') && <option value="local">Local</option>}
-                                </select>
+                                    <select 
+                                        value={selectedCajaWidget} 
+                                        onChange={(e) => {
+                                            setSelectedCajaWidget(e.target.value)
+                                            localStorage.setItem('dashboard_caja_widget', e.target.value)
+                                        }}
+                                        className="form-select" 
+                                        style={{ fontSize: '0.75rem', padding: '2px 16px 2px 4px', height: 'auto', width: 'auto', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px', color: 'var(--color-gray-700)', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+                                    >
+                                        {(session?.user as any)?.rol === 'ADMIN' && <option value="global">🌎 Global</option>}
+                                        {(session?.user as any)?.rol === 'ADMIN' && <option value="caja_madre">Madre</option>}
+                                        {((session?.user as any)?.rol === 'ADMIN' || (session?.user as any)?.ubicacionTipo === 'FABRICA') && <option value="caja_chica">Chica</option>}
+                                        {((session?.user as any)?.rol === 'ADMIN' || (session?.user as any)?.ubicacionTipo === 'LOCAL') && <option value="local">Local</option>}
+                                        {(session?.user as any)?.rol === 'ADMIN' && <option value="mercado_pago">M. Pago</option>}
+                                    </select>
                             </div>
-                            <span className={styles.statValue} style={{ color: selectedCajaWidget === 'caja_madre' ? '#8E44AD' : selectedCajaWidget === 'caja_chica' ? '#E67E22' : '#27AE60' }}>
-                                {saldosCaja ? formatCurrency(saldosCaja[selectedCajaWidget === 'caja_madre' ? 'cajaMadre' : selectedCajaWidget === 'caja_chica' ? 'cajaChica' : 'local']?.saldo || 0) : '...'}
+                            <span className={styles.statValue} style={{ color: selectedCajaWidget === 'caja_madre' ? '#8E44AD' : selectedCajaWidget === 'caja_chica' ? '#E67E22' : selectedCajaWidget === 'global' ? '#10b981' : '#27AE60' }}>
+                                {saldosCaja ? (
+                                    selectedCajaWidget === 'global' ? (
+                                        formatCurrency(
+                                            (saldosCaja.cajaMadre?.saldo || 0) + 
+                                            (saldosCaja.cajaChica?.saldo || 0) + 
+                                            (saldosCaja.local?.saldo || 0) + 
+                                            (saldosCaja.mercadoPago?.saldo || 0)
+                                        )
+                                    ) : (
+                                        formatCurrency(saldosCaja[selectedCajaWidget === 'caja_madre' ? 'cajaMadre' : selectedCajaWidget === 'caja_chica' ? 'cajaChica' : selectedCajaWidget === 'mercado_pago' ? 'mercadoPago' : 'local']?.saldo || 0)
+                                    )
+                                ) : '...'}
                             </span>
                         </div>
                     </div>

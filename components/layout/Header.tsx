@@ -21,7 +21,10 @@ export default function Header() {
             <div className={styles.headerLeft}>
                 <button 
                     className={styles.mobileMenuBtn}
-                    onClick={() => window.dispatchEvent(new Event('toggleMobileMenu'))}
+                    onClick={() => {
+                        console.log('Dispatching toggleSidebar event');
+                        window.dispatchEvent(new CustomEvent('toggleSidebar'));
+                    }}
                     aria-label="Toggle Menu"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

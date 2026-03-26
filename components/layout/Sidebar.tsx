@@ -139,9 +139,12 @@ export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false)
 
     useEffect(() => {
-        const handleToggle = () => setMobileOpen(prev => !prev)
-        window.addEventListener('toggleMobileMenu', handleToggle)
-        return () => window.removeEventListener('toggleMobileMenu', handleToggle)
+        const handleToggle = () => {
+            console.log('Sidebar received toggleSidebar event');
+            setMobileOpen(prev => !prev);
+        }
+        window.addEventListener('toggleSidebar', handleToggle as any)
+        return () => window.removeEventListener('toggleSidebar', handleToggle as any)
     }, [])
 
     // Cerrar el menú en mobile al cambiar de ruta
