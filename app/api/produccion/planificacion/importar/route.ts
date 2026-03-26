@@ -1,0 +1,158 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { parseOrderText, PresentacionData } from '@/lib/parsers/orderText'
+
+// Normaliza el texto del turno al nombre canónico
+function normalizarTurno(raw: string): string | null {
+    const clean = raw.toLowerCase().trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
+    if (clean.includes('man') || clean === 'm') return 'Mañana'
+    if (clean.includes('sies') || clean === 's') return 'Siesta'
+    if (clean.includes('tard') || clean === 't') return 'Tarde'
+    return null
+}
+
+// POST /api/produccion/planificacion/importar
+// Body: { fecha: 'YYYY-MM-DD', filas: [{ turno: string, texto: string }] }
+export async function POST(req: NextRequest) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session || !(session.user as any)?.rol) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        }
+
+        const { fecha, filas, confirmar } = await req.json()
+
+        if (!fecha || !Array.isArray(filas)) {
+            return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
+        }
+
+        const startOfDay = new Date(fecha)
+        startOfDay.setUTCHours(0, 0, 0, 0)
+
+        // Traer presentaciones para el parser
+        const presentacionesDB = await prisma.presentacion.findMany({
+            where: { activo: true },
+            select: {
+                id: true,
+                cantidad: true,
+                producto: {
+                    select: {
+                        id: true,
+                        codigoInterno: true,
+                        alias: true,
+                    }
+                }
+            }
+        })
+
+        // Procesar cada fila
+        interface FilaResultado {
+            filaIndex: number
+            turnoRaw: string
+            turnoNorm: string | null
+            texto: string
+            status: 'ok' | 'sin_turno' | 'sin_match' | 'parcial'
+            items: Array<{ productoId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }>
+            errores: string[]
+        }
+        const resultados: FilaResultado[] = []
+
+        for (let i = 0; i < filas.length; i++) {
+            const { turno: turnoRaw, texto } = filas[i]
+            const turnoNorm = normalizarTurno(turnoRaw || '')
+            const errores: string[] = []
+
+            if (!turnoNorm) {
+                errores.push(`Turno no reconocido: "${turnoRaw}". Use Mañana, Siesta o Tarde.`)
+                resultados.push({ filaIndex: i, turnoRaw, turnoNorm, texto, status: 'sin_turno', items: [], errores })
+                continue
+            }
+
+            if (!texto?.trim()) {
+                errores.push('Texto de necesidades vacío.')
+                resultados.push({ filaIndex: i, turnoRaw, turnoNorm, texto, status: 'sin_match', items: [], errores })
+                continue
+            }
+
+            const parsed = parseOrderText(texto, presentacionesDB as PresentacionData[])
+
+            // Convertir detalles de pedido (presentacionId + cantidad paquetes) → agrupado por productoId
+            const porProducto: Record<string, { productoId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }> = {}
+
+            for (const det of parsed.detalles) {
+                const pres = presentacionesDB.find(p => p.id === det.presentacionId)
+                if (!pres) continue
+                const pid = (pres.producto as any).id
+                if (!porProducto[pid]) {
+                    porProducto[pid] = {
+                        productoId: pid,
+                        productoNombre: (pres.producto as any).codigoInterno,
+                        cantidadPaquetes: 0,
+                        tokenOriginal: texto
+                    }
+                }
+                // cantidad = número de paquetes (1 paquete = 1 detalle en pedidos, pero aquí la cantidad del detalle puede ser > 1 si era divisor)
+                porProducto[pid].cantidadPaquetes += det.cantidad
+            }
+
+            resultados.push({
+                filaIndex: i,
+                turnoRaw,
+                turnoNorm,
+                texto,
+                status: !parsed.isFullyMatched ? 'parcial' : 'ok',
+                items: Object.values(porProducto),
+                errores: parsed.unmatchedText ? [`Tokens no reconocidos: "${parsed.unmatchedText}"`] : []
+            })
+        }
+
+        // Si es solo preview, devolvemos resultados sin guardar
+        if (!confirmar) {
+            return NextResponse.json({ 
+                preview: true, 
+                resultados,
+                ok: resultados.filter(r => r.status === 'ok').length,
+                parcial: resultados.filter(r => r.status === 'parcial').length,
+                error: resultados.filter(r => r.status === 'sin_turno' || r.status === 'sin_match').length,
+            })
+        }
+
+        // Si es confirmación, guardamos en DB
+        let guardados = 0
+        for (const resultado of resultados) {
+            if (!resultado.turnoNorm || resultado.items.length === 0) continue
+
+            for (const item of resultado.items) {
+                const existing = await prisma.requerimientoProduccion.findFirst({
+                    where: { fecha: startOfDay, turno: resultado.turnoNorm, productoId: item.productoId }
+                })
+
+                if (existing) {
+                    await prisma.requerimientoProduccion.update({
+                        where: { id: existing.id },
+                        data: { cantidad: existing.cantidad + item.cantidadPaquetes }
+                    })
+                } else {
+                    await prisma.requerimientoProduccion.create({
+                        data: {
+                            fecha: startOfDay,
+                            turno: resultado.turnoNorm,
+                            productoId: item.productoId,
+                            cantidad: item.cantidadPaquetes
+                        }
+                    })
+                }
+                guardados++
+            }
+        }
+
+        return NextResponse.json({ success: true, guardados, resultados })
+
+    } catch (error: any) {
+        console.error('Error en importación de planificación:', error)
+        return NextResponse.json({ error: 'Error interno', details: error.message }, { status: 500 })
+    }
+}

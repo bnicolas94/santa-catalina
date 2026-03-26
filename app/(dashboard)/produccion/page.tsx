@@ -133,6 +133,17 @@ export default function ProduccionPage() {
     const [showMermaModal, setShowMermaModal] = useState(false)
     const [mermaForm, setMermaForm] = useState({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
 
+    // Estado para importación Excel
+    const [showImportModal, setShowImportModal] = useState(false)
+    const [importStep, setImportStep] = useState<'upload' | 'preview' | 'done'>('upload')
+    const [importColTurno, setImportColTurno] = useState('')
+    const [importColTexto, setImportColTexto] = useState('')
+    const [importHeaders, setImportHeaders] = useState<string[]>([])
+    const [importRawRows, setImportRawRows] = useState<any[]>([])
+    const [importPreview, setImportPreview] = useState<any[]>([])
+    const [importSummary, setImportSummary] = useState({ ok: 0, parcial: 0, error: 0 })
+    const [importLoading, setImportLoading] = useState(false)
+
     useEffect(() => {
         fetchData()
         const interval = setInterval(fetchData, 5000) // Poll every 5s for real-time updates
@@ -446,6 +457,71 @@ export default function ProduccionPage() {
         }
     }
 
+    async function handleExcelFile(file: File) {
+        try {
+            const XLSX = await import('xlsx')
+            const buffer = await file.arrayBuffer()
+            const wb = XLSX.read(buffer, { type: 'array' })
+            const ws = wb.Sheets[wb.SheetNames[0]]
+            const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' })
+            if (!rows.length) { setError('El archivo está vacío.'); return }
+            const headers = Object.keys(rows[0])
+            setImportHeaders(headers)
+            setImportRawRows(rows)
+            // Auto-detectar columnas
+            const turnoCol = headers.find(h => /turno/i.test(h)) || ''
+            const textoCol = headers.find(h => /neces|pedido|prod|item|detalle/i.test(h)) || ''
+            setImportColTurno(turnoCol)
+            setImportColTexto(textoCol)
+        } catch (err: any) {
+            setError('Error al leer el archivo: ' + err.message)
+        }
+    }
+
+    async function handleImportPreview() {
+        if (!importColTurno || !importColTexto) { setError('Seleccioná las columnas de Turno y Necesidades.'); return }
+        setImportLoading(true)
+        try {
+            const filas = importRawRows.map(r => ({ turno: String(r[importColTurno] || ''), texto: String(r[importColTexto] || '') }))
+            const res = await fetch('/api/produccion/planificacion/importar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha: filterFecha || getLocalDateString(), filas, confirmar: false })
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            setImportPreview(data.resultados)
+            setImportSummary({ ok: data.ok, parcial: data.parcial, error: data.error })
+            setImportStep('preview')
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setImportLoading(false)
+        }
+    }
+
+    async function handleImportConfirm() {
+        setImportLoading(true)
+        try {
+            const filas = importRawRows.map(r => ({ turno: String(r[importColTurno] || ''), texto: String(r[importColTexto] || '') }))
+            const res = await fetch('/api/produccion/planificacion/importar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha: filterFecha || getLocalDateString(), filas, confirmar: true })
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            setImportStep('done')
+            setSuccess(`¡Importación exitosa! ${data.guardados} requerimientos cargados.`)
+            fetchData()
+            setTimeout(() => { setShowImportModal(false); setImportStep('upload'); setSuccess('') }, 3000)
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setImportLoading(false)
+        }
+    }
+
     if (loading) return <div className="loading-container"><div className="loader"></div><p>Cargando producción...</p></div>
 
     return (
@@ -485,17 +561,26 @@ export default function ProduccionPage() {
                                 <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontFamily: 'var(--font-heading)' }}>📅 Planificación — {formatDateOnly(filterFecha || getLocalDateString())}</h2>
                                 <span className="badge badge-info" style={{ fontSize: '10px' }}>Basado en Hoja de Ruta</span>
                             </div>
-                            <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
-                                {['Mañana', 'Siesta', 'Tarde', 'Por Asignar'].map(t => (
-                                    <button 
-                                        key={t}
-                                        className={`btn btn-xs ${activeTurno === t ? 'btn-primary' : 'btn-ghost'}`}
-                                        onClick={() => setActiveTurno(t)}
-                                        style={{ fontSize: '11px', padding: '4px 12px' }}
-                                    >
-                                        {t}
-                                    </button>
-                                ))}
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <button
+                                    className="btn btn-xs btn-ghost"
+                                    style={{ fontSize: '11px', padding: '4px 10px', border: '1px dashed var(--color-gray-300)' }}
+                                    onClick={() => { setImportStep('upload'); setImportHeaders([]); setImportRawRows([]); setShowImportModal(true) }}
+                                >
+                                    📥 Importar Excel
+                                </button>
+                                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                    {['Mañana', 'Siesta', 'Tarde', 'Por Asignar'].map(t => (
+                                        <button 
+                                            key={t}
+                                            className={`btn btn-xs ${activeTurno === t ? 'btn-primary' : 'btn-ghost'}`}
+                                            onClick={() => setActiveTurno(t)}
+                                            style={{ fontSize: '11px', padding: '4px 12px' }}
+                                        >
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
@@ -1474,6 +1559,130 @@ export default function ProduccionPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Importar Excel de Planificación */}
+            {showImportModal && (
+                <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
+                    <div className="modal" style={{ maxWidth: '640px', width: '95vw' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>📥 Importar Necesidades desde Excel</h3>
+                            <button className="btn btn-ghost" style={{ fontSize: '1.2rem' }} onClick={() => setShowImportModal(false)}>✕</button>
+                        </div>
+
+                        {importStep === 'upload' && (
+                            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                                <div style={{ background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: '12px', color: 'var(--color-gray-600)' }}>
+                                    <strong>Formato esperado del Excel:</strong><br />
+                                    Mínimo 2 columnas: una para el <strong>Turno</strong> (Mañana / Siesta / Tarde) y otra para <strong>Necesidades</strong> (ej: <code>48jyq 24clasicos 12esp</code>).
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Archivo Excel (.xlsx / .xls)</label>
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.xls"
+                                        className="form-input"
+                                        onChange={e => { if (e.target.files?.[0]) handleExcelFile(e.target.files[0]) }}
+                                    />
+                                </div>
+                                {importHeaders.length > 0 && (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                            <div className="form-group">
+                                                <label className="form-label">Columna de Turno</label>
+                                                <select className="form-select" value={importColTurno} onChange={e => setImportColTurno(e.target.value)}>
+                                                    <option value="">— Seleccionar —</option>
+                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label">Columna de Necesidades</label>
+                                                <select className="form-select" value={importColTexto} onChange={e => setImportColTexto(e.target.value)}>
+                                                    <option value="">— Seleccionar —</option>
+                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>
+                                            {importRawRows.length} filas detectadas. Fecha destino: <strong>{formatDateOnly((filterFecha || getLocalDateString()) + 'T00:00:00')}</strong>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {importStep === 'preview' && (
+                            <div className="modal-body">
+                                <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+                                    <span className="badge" style={{ background: '#2ECC71', color: '#fff' }}>✅ {importSummary.ok} OK</span>
+                                    <span className="badge" style={{ background: '#F39C12', color: '#fff' }}>⚠ {importSummary.parcial} Parciales</span>
+                                    <span className="badge" style={{ background: '#E74C3C', color: '#fff' }}>✕ {importSummary.error} Errores</span>
+                                </div>
+                                <div className="table-container" style={{ margin: 0, maxHeight: '360px', overflowY: 'auto' }}>
+                                    <table className="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Turno</th>
+                                                <th>Texto original</th>
+                                                <th>Productos detectados</th>
+                                                <th style={{ textAlign: 'center' }}>Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {importPreview.map((r: any, i: number) => (
+                                                <tr key={i}>
+                                                    <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.turnoNorm || <span style={{ color: 'var(--color-danger)' }}>{r.turnoRaw}</span>}</td>
+                                                    <td style={{ fontSize: '11px', color: 'var(--color-gray-500)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.texto}</td>
+                                                    <td style={{ fontSize: '11px' }}>
+                                                        {r.items?.length > 0
+                                                            ? r.items.map((it: any) => <span key={it.productoId} className="badge badge-info" style={{ marginRight: '2px' }}>{it.productoNombre} ×{it.cantidadPaquetes}</span>)
+                                                            : <span style={{ color: 'var(--color-danger)', fontSize: '10px' }}>{r.errores?.[0] || 'Sin datos'}</span>
+                                                        }
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        {r.status === 'ok' && <span style={{ color: '#2ECC71' }}>✅</span>}
+                                                        {r.status === 'parcial' && <span style={{ color: '#F39C12' }}>⚠</span>}
+                                                        {(r.status === 'sin_turno' || r.status === 'sin_match') && <span style={{ color: '#E74C3C' }}>✕</span>}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {importSummary.ok === 0 && importSummary.parcial === 0 && (
+                                    <div style={{ color: 'var(--color-danger)', marginTop: 'var(--space-2)', fontSize: '12px' }}>
+                                        No hay filas válidas para importar. Verificá el formato del archivo.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {importStep === 'done' && (
+                            <div className="modal-body" style={{ textAlign: 'center', padding: 'var(--space-6)' }}>
+                                <div style={{ fontSize: '48px' }}>✅</div>
+                                <p style={{ fontWeight: 600, fontSize: 'var(--text-lg)' }}>¡Importación completada!</p>
+                                <p style={{ color: 'var(--color-gray-500)', fontSize: '13px' }}>Los requerimientos ya están cargados en el planificador.</p>
+                            </div>
+                        )}
+
+                        <div className="modal-footer">
+                            <button className="btn btn-ghost" onClick={() => setShowImportModal(false)}>Cerrar</button>
+                            {importStep === 'upload' && (
+                                <button className="btn btn-primary" onClick={handleImportPreview} disabled={importLoading || !importColTurno || !importColTexto}>
+                                    {importLoading ? 'Analizando...' : 'Ver Preview →'}
+                                </button>
+                            )}
+                            {importStep === 'preview' && (importSummary.ok > 0 || importSummary.parcial > 0) && (
+                                <>
+                                    <button className="btn btn-ghost" onClick={() => setImportStep('upload')}>← Volver</button>
+                                    <button className="btn btn-primary" onClick={handleImportConfirm} disabled={importLoading}>
+                                        {importLoading ? 'Importando...' : `Confirmar (${importSummary.ok + importSummary.parcial} filas)`}
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
