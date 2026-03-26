@@ -80,7 +80,14 @@ export async function POST(req: NextRequest) {
             const parsed = parseOrderText(texto, presentacionesDB as PresentacionData[])
 
             // Convertir detalles de pedido (presentacionId + cantidad paquetes) → agrupado por productoId + presentacionId
-            const agrupado: Record<string, { productoId: string, presentacionId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }> = {}
+            const agrupado: Record<string, { 
+                productoId: string, 
+                presentacionId: string, 
+                productoNombreBase: string, 
+                paquetesMatch: number, 
+                totalUnidades: number, 
+                tokenOriginal: string 
+            }> = {}
 
             for (const det of parsed.detalles) {
                 const pres = presentacionesDB.find(p => p.id === det.presentacionId)
@@ -92,14 +99,15 @@ export async function POST(req: NextRequest) {
                     agrupado[key] = {
                         productoId: pid,
                         presentacionId: det.presentacionId,
-                        productoNombre: `${(pres.producto as any).codigoInterno} [x${pres.cantidad}]`,
-                        cantidadPaquetes: 0,
+                        productoNombreBase: `${(pres.producto as any).codigoInterno} [x${pres.cantidad}]`,
+                        paquetesMatch: 0,
+                        totalUnidades: 0,
                         tokenOriginal: texto
                     }
                 }
                 // det.cantidad es el número de paquetes matcheados (ej: 2 si 96jyq matchea 2x48)
-                // Guardamos la cantidad en UNIDADES (sándwiches) para el registro en DB
-                agrupado[key].cantidadPaquetes += det.cantidad * pres.cantidad
+                agrupado[key].paquetesMatch += det.cantidad
+                agrupado[key].totalUnidades += det.cantidad * pres.cantidad
             }
 
             resultados.push({
@@ -108,8 +116,14 @@ export async function POST(req: NextRequest) {
                 turnoNorm,
                 texto,
                 status: !parsed.isFullyMatched ? 'parcial' : 'ok',
-                items: Object.values(agrupado),
-                errores: parsed.unmatchedText ? [`Tokens no reconocidos: "${parsed.unmatchedText}"`] : []
+                items: Object.values(agrupado).map(item => ({
+                    productoId: item.productoId,
+                    presentacionId: item.presentacionId,
+                    productoNombre: `${item.productoNombreBase} x${item.paquetesMatch}`,
+                    cantidadPaquetes: item.totalUnidades,
+                    tokenOriginal: item.tokenOriginal
+                })),
+                errores: (parsed.unmatchedText || !parsed.isFullyMatched) ? ["No se pudo armar el pedido completo con paquetes disponibles."] : []
             })
         }
 

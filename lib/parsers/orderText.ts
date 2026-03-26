@@ -85,6 +85,7 @@ export function parseOrderText(
                 const sorted = [...related].sort((a, b) => b.cantidad - a.cantidad);
                 let remaining = cantidad;
                 let foundAny = false;
+                const initialDetallesLength = detalles.length;
 
                 for (const pres of sorted) {
                     if (remaining >= pres.cantidad) {
@@ -103,9 +104,17 @@ export function parseOrderText(
                     }
                 }
 
-                if (remaining > 0 || !foundAny) {
+                if (remaining > 0) {
+                    // Si sobró algo, no es un match exacto de paquetes armados.
+                    // Descartamos los paquetes parciales de este token.
+                    while (detalles.length > initialDetallesLength) {
+                        detalles.pop();
+                    }
                     isFullyMatched = false;
-                    if (remaining > 0) unmatchedParts.push(`${remaining}${aliasOcodigo}`);
+                    unmatchedParts.push(token);
+                } else if (!foundAny) {
+                    isFullyMatched = false;
+                    unmatchedParts.push(token);
                 }
             } else {
                 isFullyMatched = false;
