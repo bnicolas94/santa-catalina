@@ -638,6 +638,7 @@ export default function ProduccionPage() {
                                         <th style={{ textAlign: 'center' }}>{activeTurno === 'Totales' ? 'Stock Total (Fab+Local)' : 'Stock Fab.'}</th>
                                         <th style={{ textAlign: 'center' }}>En Proceso</th>
                                         <th style={{ textAlign: 'center' }}>A Producir</th>
+                                        <th style={{ textAlign: 'center' }}>Stock Final</th>
                                         <th style={{ textAlign: 'right' }}>Sugerencia</th>
                                     </tr>
                                 </thead>
@@ -662,7 +663,7 @@ export default function ProduccionPage() {
                                         })
 
                                         if (items.length === 0) return (
-                                            <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
+                                            <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
                                         )
 
                                         return (
@@ -707,6 +708,10 @@ export default function ProduccionPage() {
                                                     const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
                                                     const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
                                                     
+                                                    const finalUnits = stockValue + enProcUnits - totalUnits
+                                                    const finalPaq = (finalUnits / presSize).toFixed(1).replace('.0', '')
+                                                    const finalColor = finalUnits < 0 ? 'var(--color-error)' : 'var(--color-success)'
+                                                    
                                                     const unitsPerRonda = (prodInfo?.paquetesPorRonda || 14) * presSize
                                                     const rondasReal = Math.ceil(faltanteUnits / unitsPerRonda)
 
@@ -738,6 +743,7 @@ export default function ProduccionPage() {
                                                                     <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
                                                                 )}
                                                             </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 600, color: finalColor }}>{finalPaq} paq</td>
                                                             <td style={{ textAlign: 'right' }}>
                                                                 {faltanteUnits > 0 ? (
                                                                     <button
@@ -766,13 +772,13 @@ export default function ProduccionPage() {
                                             return codeA.localeCompare(codeB)
                                         })
 
-                                        if (items.length === 0) return (
-                                            <tr>
-                                                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
-                                                    No hay requerimientos para el turno {activeTurno}
-                                                </td>
-                                            </tr>
-                                        )
+                                            if (items.length === 0) return (
+                                                <tr>
+                                                    <td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                        No hay requerimientos para el turno {activeTurno}
+                                                    </td>
+                                                </tr>
+                                            )
 
                                         return items.map(([key, totalUnits]) => {
                                             const prodInfo = planning.infoProductos[key]
@@ -795,6 +801,10 @@ export default function ProduccionPage() {
                                             const stockPaq = (stockUnits / presSize).toFixed(1).replace('.0', '')
                                             const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
                                             const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
+                                            
+                                            const finalUnits = stockUnits + enProcUnits - totalUnits
+                                            const finalPaq = (finalUnits / presSize).toFixed(1).replace('.0', '')
+                                            const finalColor = finalUnits < 0 ? 'var(--color-error)' : 'var(--color-success)'
                                             const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
 
                                             const unitsPerRonda = (prodInfo?.paquetesPorRonda || 14) * presSize
@@ -836,6 +846,7 @@ export default function ProduccionPage() {
                                                             <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
                                                         )}
                                                     </td>
+                                                    <td style={{ textAlign: 'center', fontWeight: 600, color: finalColor }}>{finalPaq} paq</td>
                                                     <td style={{ textAlign: 'right' }}>
                                                         {faltanteUnits > 0 ? (
                                                             <button 
@@ -863,7 +874,7 @@ export default function ProduccionPage() {
                                     {/* Fila agregar producto extra — solo en turnos normales */}
                                     {activeTurno !== 'Totales' && (
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                            <td colSpan={2}>
+                                            <td colSpan={3}>
                                                 <select 
                                                     className="form-select" 
                                                     style={{ height: '32px', fontSize: '12px' }}
