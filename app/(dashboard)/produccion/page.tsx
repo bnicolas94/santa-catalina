@@ -622,17 +622,19 @@ export default function ProduccionPage() {
                                     {activeTurno === 'Totales' ? (() => {
                                         // Consolidar todos los turnos
                                         const todosPids = new Set<string>()
-                                        Object.values(planning.necesidades).forEach(t => Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid)))
+                                        Object.values(planning?.necesidades || {}).forEach(t => {
+                                            if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
+                                        })
 
                                         const totalPorPidPresid: Record<string, number> = {}
                                         todosPids.forEach(pid_presid => {
-                                            totalPorPidPresid[pid_presid] = Object.values(planning.necesidades).reduce((sum, t) => sum + (t[pid_presid] || 0), 0)
+                                            totalPorPidPresid[pid_presid] = Object.values(planning?.necesidades || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
                                         })
 
                                         // ALFABÉTICO POR CÓDIGO INTERNO
                                         const items = Object.entries(totalPorPidPresid).sort(([keyA], [keyB]) => {
-                                            const codeA = planning.infoProductos[keyA]?.codigoInterno || ''
-                                            const codeB = planning.infoProductos[keyB]?.codigoInterno || ''
+                                            const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
+                                            const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
                                             return codeA.localeCompare(codeB)
                                         })
 
@@ -726,12 +728,12 @@ export default function ProduccionPage() {
                                             </>
                                         )
                                     })() : (() => {
-                                        const necesidadesTurno = planning.necesidades[activeTurno] || {}
+                                        const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
                                         
                                         // ALFABÉTICO POR CÓDIGO INTERNO
                                         const items = Object.entries(necesidadesTurno).sort(([keyA], [keyB]) => {
-                                            const codeA = planning.infoProductos[keyA]?.codigoInterno || ''
-                                            const codeB = planning.infoProductos[keyB]?.codigoInterno || ''
+                                            const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
+                                            const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
                                             return codeA.localeCompare(codeB)
                                         })
 
@@ -749,12 +751,12 @@ export default function ProduccionPage() {
                                             const pid = prodInfo?.id
                                             const presid = prodInfo?.presentacion?.id || null
 
-                                            const manualUnits = planning.manuales[activeTurno]?.[key] || 0
+                                            const manualUnits = planning?.manuales?.[activeTurno]?.[key] || 0
                                             const rutaUnits = Math.max(0, totalUnits - manualUnits)
                                             
                                             // El stock ahora lo buscamos por KEY (pid_presid)
-                                            const stockUnits = planning.stockFabricacion[key] || 0
-                                            const enProcUnits = planning.enProduccion[pid] || 0
+                                            const stockUnits = planning?.stockFabricacion?.[key] || 0
+                                            const enProcUnits = planning?.enProduccion?.[pid] || 0
                                             const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
                                             
                                             // Conversión a paquetes para mostrar

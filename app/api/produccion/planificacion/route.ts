@@ -169,12 +169,19 @@ export async function GET(request: Request) {
         return NextResponse.json({
             necesidades,
             infoProductos,
+            manuales: manuales.reduce((acc, m) => {
+                const turno = m.turno
+                const key = m.presentacionId ? `${m.productoId}_${m.presentacionId}` : `${m.productoId}_null`
+                if (!acc[turno]) acc[turno] = {}
+                acc[turno][key] = (acc[turno][key] || 0) + m.cantidad
+                return acc
+            }, {} as Record<string, Record<string, number>>),
             stockFabricacion: stockActual.reduce((acc, s) => {
                 const key = s.presentacionId ? `${s.productoId}_${s.presentacionId}` : `${s.productoId}_null`
                 acc[key] = s._sum.cantidad || 0
                 return acc
             }, {} as Record<string, number>),
-            enProduccion: consolidadoProduccion // Ojo: esto es por productoId, el dashboard tendrá que manejarlo
+            enProduccion: consolidadoProduccion
         })
 
     } catch (error) {
