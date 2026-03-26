@@ -152,7 +152,7 @@ export default function ProduccionPage() {
         fetchData()
         const interval = setInterval(fetchData, 5000) // Poll every 5s for real-time updates
         return () => clearInterval(interval)
-    }, [])
+    }, [filterFecha])
 
     async function fetchData() {
         try {
