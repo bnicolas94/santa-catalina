@@ -333,6 +333,29 @@ export default function CajaPage() {
             {success && <div className="toast toast-success">{success}</div>}
             {error && <div className="toast toast-error">{error}</div>}
 
+            {/* ═══ Saldo Total Global (Solo Administratores) ═══ */}
+            {userRol === 'ADMIN' && (
+                <div className="card" style={{ 
+                    marginBottom: 'var(--space-6)', 
+                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', 
+                    color: 'white',
+                    border: 'none',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)'
+                }}>
+                    <div className="card-body" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-gray-400)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 'var(--space-2)' }}>
+                            💰 Dinero Disponible Global (Todas las Cajas)
+                        </div>
+                        <div style={{ fontSize: '3rem', fontWeight: 800, color: '#10b981', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoMercadoPago, showMontos)}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
+                            Suma de Madre + Chica + Local + Mercado Pago
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ═══ Saldos de Caja ═══ */}
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allowedBoxes.length}, 1fr)`, gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 {/* Caja Madre */}
