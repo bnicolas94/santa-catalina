@@ -200,3 +200,36 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Error interno' }, { status: 500 })
     }
 }
+export async function DELETE(request: Request) {
+    try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        if (userRol !== 'ADMIN' && !permisos.permisoProduccion) {
+            return NextResponse.json({ error: 'No tienes permiso para borrar planificación' }, { status: 403 })
+        }
+
+        const { searchParams } = new URL(request.url)
+        const fechaStr = searchParams.get('fecha')
+
+        if (!fechaStr) {
+            return NextResponse.json({ error: 'Fecha es requerida' }, { status: 400 })
+        }
+
+        const startOfDay = new Date(fechaStr)
+        startOfDay.setUTCHours(0, 0, 0, 0)
+        const endOfDay = new Date(fechaStr)
+        endOfDay.setUTCHours(23, 59, 59, 999)
+
+        await prisma.requerimientoProduccion.deleteMany({
+            where: { fecha: { gte: startOfDay, lte: endOfDay } }
+        })
+
+        return NextResponse.json({ success: true, message: 'Planificación eliminada' })
+
+    } catch (error) {
+        console.error('Error al borrar planificación:', error)
+        return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+    }
+}

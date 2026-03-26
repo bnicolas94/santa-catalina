@@ -196,6 +196,20 @@ export default function ProduccionPage() {
         fetchData() // Re-fetch all data to update planning
     }
 
+    const handleClearPlan = async () => {
+        if (!confirm('¿Estás seguro de que deseas borrar TODA la planificación manual (Cargas Express e Importaciones) de este día?')) return
+        try {
+            const res = await fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`, {
+                method: 'DELETE'
+            })
+            if (!res.ok) throw new Error('Error al borrar')
+            setSuccess('Planificación limpiada')
+            mutatePlanning()
+        } catch (err: any) {
+            setError(err.message)
+        }
+    }
+
     // Producto seleccionado en el form
     const productoSel = productos.find((p) => p.id === form.productoId)
     const rondasNum = parseInt(form.rondas) || 0
@@ -589,6 +603,14 @@ export default function ProduccionPage() {
                                     onClick={() => { setImportStep('upload'); setImportHeaders([]); setImportRawRows([]); setShowImportModal(true) }}
                                 >
                                     📥 Importar Excel
+                                </button>
+                                <button
+                                    className="btn btn-xs btn-ghost"
+                                    style={{ fontSize: '11px', padding: '4px 10px', color: 'var(--color-error)', border: '1px solid transparent' }}
+                                    onClick={handleClearPlan}
+                                    title="Borrar todos los requerimientos manuales de este día"
+                                >
+                                    🗑️ Limpiar
                                 </button>
                                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
                                     {['Mañana', 'Siesta', 'Tarde', 'Totales'].map(t => (
