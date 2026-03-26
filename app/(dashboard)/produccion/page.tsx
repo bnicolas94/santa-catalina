@@ -139,6 +139,7 @@ export default function ProduccionPage() {
     // Estado para importación Excel
     const [showImportModal, setShowImportModal] = useState(false)
     const [importStep, setImportStep] = useState<'upload' | 'preview' | 'done'>('upload')
+    const [importMode, setImportMode] = useState<'file' | 'paste'>('file')
     const [importColTurno, setImportColTurno] = useState('')
     const [importColTexto, setImportColTexto] = useState('')
     const [importColFecha, setImportColFecha] = useState('')
@@ -513,6 +514,37 @@ export default function ProduccionPage() {
             setImportColFecha(fechaCol)
         } catch (err: any) {
             setError('Error al leer el archivo: ' + err.message)
+        }
+    }
+
+    function handlePasteText(text: string) {
+        try {
+            if (!text.trim()) return
+            const lines = text.trim().split(/\r?\n/)
+            if (lines.length < 2) return
+
+            const headers = lines[0].split('\t').map(h => h.trim())
+            setImportHeaders(headers)
+
+            const rows = lines.slice(1).map(line => {
+                const values = line.split('\t')
+                const row: any = {}
+                headers.forEach((h, idx) => {
+                    row[h] = values[idx] || ''
+                })
+                return row
+            })
+            setImportRawRows(rows)
+
+            // Auto-detectar columnas
+            const turnoCol = headers.find(h => /turno/i.test(h)) || ''
+            const textoCol = headers.find(h => /neces|pedido|prod|item|detalle/i.test(h)) || ''
+            const fechaCol = headers.find(h => /fecha|dia|date/i.test(h)) || ''
+            setImportColTurno(turnoCol)
+            setImportColTexto(textoCol)
+            setImportColFecha(fechaCol)
+        } catch (err: any) {
+            setError('Error al procesar el texto pegado: ' + err.message)
         }
     }
 
@@ -1796,24 +1828,49 @@ export default function ProduccionPage() {
                 <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
                     <div className="modal" style={{ maxWidth: '640px', width: '95vw' }} onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>📥 Importar Necesidades desde Excel</h3>
-                            <button className="btn btn-ghost" style={{ fontSize: '1.2rem' }} onClick={() => setShowImportModal(false)}>✕</button>
+                            <h3>📥 Importar Necesidades</h3>
+                            <button className="btn btn-ghost" style={{ fontSize: '1.2rem' }} onClick={() => { setShowImportModal(false); setImportHeaders([]); setImportRawRows([]); setImportStep('upload'); setImportMode('file'); }}>✕</button>
                         </div>
 
                         {importStep === 'upload' && (
                             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                                <div style={{ background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: '12px', color: 'var(--color-gray-600)' }}>
-                                    <strong>Formato esperado del Excel:</strong><br />
-                                    Mínimo 2 columnas: una para el <strong>Turno</strong> (Mañana / Siesta / Tarde) y otra para <strong>Necesidades</strong> (ej: <code>48jyq 24clasicos 12esp</code>).
+                                {/* TABS DE MODO */}
+                                <div style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: 'var(--space-2)' }}>
+                                    <button 
+                                        onClick={() => setImportMode('file')}
+                                        style={{ padding: '10px 20px', border: 'none', background: 'none', borderBottom: importMode === 'file' ? '2px solid #3498DB' : 'none', cursor: 'pointer', fontWeight: importMode === 'file' ? 'bold' : 'normal', color: importMode === 'file' ? '#3498DB' : '#666' }}
+                                    >📁 Subir Excel</button>
+                                    <button 
+                                        onClick={() => setImportMode('paste')}
+                                        style={{ padding: '10px 20px', border: 'none', background: 'none', borderBottom: importMode === 'paste' ? '2px solid #3498DB' : 'none', cursor: 'pointer', fontWeight: importMode === 'paste' ? 'bold' : 'normal', color: importMode === 'paste' ? '#3498DB' : '#666' }}
+                                    >📋 Pegar desde Excel</button>
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Archivo Excel (.xlsx / .xls)</label>
-                                    <input
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        className="form-input"
-                                        onChange={e => { if (e.target.files?.[0]) handleExcelFile(e.target.files[0]) }}
-                                    />
+
+                                {importMode === 'file' ? (
+                                    <div className="form-group">
+                                        <label className="form-label">Archivo Excel (.xlsx / .xls)</label>
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.xls"
+                                            className="form-input"
+                                            onChange={e => { if (e.target.files?.[0]) handleExcelFile(e.target.files[0]) }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="form-group">
+                                        <label className="form-label">Pegar celdas de Excel (incluir encabezados)</label>
+                                        <textarea 
+                                            className="form-input" 
+                                            style={{ minHeight: '120px', fontFamily: 'monospace', fontSize: '11px' }}
+                                            placeholder={"Ejemplo:\nTurno\tNecesidades\nMañana\t10 48jyq\nSiesta\t5 24jyq"}
+                                            onChange={(e) => handlePasteText(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+
+                                <div style={{ background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', fontSize: '12px', color: 'var(--color-gray-600)' }}>
+                                    <strong>Formato esperado:</strong><br />
+                                    Al menos 2 columnas: una para el <strong>Turno</strong> y otra para <strong>Necesidades</strong>.
                                 </div>
                                 {importHeaders.length > 0 && (
                                     <>
