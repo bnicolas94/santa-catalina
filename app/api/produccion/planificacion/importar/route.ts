@@ -44,6 +44,16 @@ function normalizarFecha(raw: any, fallbackStr: string): Date {
     return new Date(fallbackStr + 'T00:00:00')
 }
 
+// Normaliza el texto del turno al nombre canónico
+function normalizarTurno(raw: string): string | null {
+    const clean = raw.toLowerCase().trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
+    if (clean.includes('man') || clean === 'm') return 'Mañana'
+    if (clean.includes('sies') || clean === 's') return 'Siesta'
+    if (clean.includes('tard') || clean === 't') return 'Tarde'
+    return null
+}
+
 // POST /api/produccion/planificacion/importar
 // Body: { fecha: 'YYYY-MM-DD', filas: [{ fechaRaw?: any, turno: string, texto: string }] }
 export async function POST(req: NextRequest) {
