@@ -6,11 +6,10 @@ import { parseOrderText, PresentacionData } from '@/lib/parsers/orderText'
 
 // Normaliza la fecha desde Excel (pueden ser números de serie o strings)
 function normalizarFecha(raw: any, fallbackStr: string): Date {
-    if (!raw) return new Date(fallbackStr + 'T00:00:00')
+    if (!raw) return new Date(fallbackStr + 'T00:00:00Z')
     
     // Caso: Número de serie de Excel (e.g. 45371)
     if (typeof raw === 'number') {
-        // Excel base date is Dec 30, 1899 (due to a leap year bug in Lotus 1-2-3)
         const excelEpoch = new Date(Date.UTC(1899, 11, 30))
         const d = new Date(excelEpoch.getTime() + raw * 24 * 60 * 60 * 1000)
         d.setUTCHours(0, 0, 0, 0)
@@ -21,7 +20,6 @@ function normalizarFecha(raw: any, fallbackStr: string): Date {
     if (typeof raw === 'string') {
         const parts = raw.split(/[-/]/)
         if (parts.length === 3) {
-            // Asumimos DD/MM/YYYY si el primer campo es <= 31
             let d: Date | null = null
             if (parseInt(parts[0]) <= 31) {
                 const day = parseInt(parts[0])
@@ -29,7 +27,6 @@ function normalizarFecha(raw: any, fallbackStr: string): Date {
                 const year = parseInt(parts[2].length === 2 ? '20' + parts[2] : parts[2])
                 d = new Date(Date.UTC(year, month, day))
             } else if (parseInt(parts[0]) > 1000) {
-                // Asumimos YYYY/MM/DD
                 const year = parseInt(parts[0])
                 const month = parseInt(parts[1]) - 1
                 const day = parseInt(parts[2])
@@ -37,11 +34,11 @@ function normalizarFecha(raw: any, fallbackStr: string): Date {
             }
             if (d && !isNaN(d.getTime())) return d
         }
-        const d = new Date(raw + 'T00:00:00')
+        const d = new Date(raw.includes('T') ? raw : raw + 'T00:00:00Z')
         if (!isNaN(d.getTime())) return d
     }
 
-    return new Date(fallbackStr + 'T00:00:00')
+    return new Date(fallbackStr + 'T00:00:00Z')
 }
 
 // Normaliza el texto del turno al nombre canónico
@@ -206,7 +203,7 @@ export async function POST(req: NextRequest) {
         let guardados = 0
         for (const resultado of resultados) {
             if (!resultado.turnoNorm || resultado.items.length === 0) continue
-            const fechaFila = resultado.fechaValue || new Date(fechaDefault + 'T00:00:00')
+            const fechaFila = resultado.fechaValue || new Date(fechaDefault + 'T00:00:00Z')
 
             for (const item of resultado.items) {
                 await prisma.requerimientoProduccion.create({
@@ -216,6 +213,7 @@ export async function POST(req: NextRequest) {
                         productoId: item.productoId,
                         presentacionId: item.presentacionId,
                         cantidad: item.cantidadPaquetes,
+                        // @ts-ignore
                         destino: resultado.destino
                     }
                 })

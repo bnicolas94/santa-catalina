@@ -20,10 +20,8 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Fecha es requerida' }, { status: 400 })
         }
 
-        const startOfDay = new Date(fechaStr)
-        startOfDay.setUTCHours(0, 0, 0, 0)
-        const endOfDay = new Date(fechaStr)
-        endOfDay.setUTCHours(23, 59, 59, 999)
+        const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
+        const endOfDay = new Date(`${fechaStr}T23:59:59.999Z`)
 
         // 1. Obtener todas las rutas del día con sus pedidos y detalles
         const rutas = await prisma.ruta.findMany({
@@ -217,6 +215,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Error interno' }, { status: 500 })
     }
 }
+
 export async function DELETE(request: Request) {
     try {
         const session = await getServerSession(authOptions)
@@ -234,10 +233,8 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: 'Fecha es requerida' }, { status: 400 })
         }
 
-        const startOfDay = new Date(fechaStr)
-        startOfDay.setUTCHours(0, 0, 0, 0)
-        const endOfDay = new Date(fechaStr)
-        endOfDay.setUTCHours(23, 59, 59, 999)
+        const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
+        const endOfDay = new Date(`${fechaStr}T23:59:59.999Z`)
 
         await prisma.requerimientoProduccion.deleteMany({
             where: { fecha: { gte: startOfDay, lte: endOfDay } }

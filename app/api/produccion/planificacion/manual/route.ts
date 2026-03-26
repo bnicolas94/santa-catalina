@@ -10,10 +10,8 @@ export async function GET(request: Request) {
         const fechaStr = searchParams.get('fecha')
         if (!fechaStr) return NextResponse.json({ error: 'Fecha requerida' }, { status: 400 })
 
-        const startOfDay = new Date(fechaStr)
-        startOfDay.setUTCHours(0, 0, 0, 0)
-        const endOfDay = new Date(fechaStr)
-        endOfDay.setUTCHours(23, 59, 59, 999)
+        const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
+        const endOfDay = new Date(`${fechaStr}T23:59:59.999Z`)
 
         const requerimientos = await prisma.requerimientoProduccion.findMany({
             where: { fecha: { gte: startOfDay, lte: endOfDay } },
@@ -37,8 +35,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
         }
 
-        const startOfDay = new Date(fechaStr)
-        startOfDay.setUTCHours(0, 0, 0, 0)
+        const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
 
         // Upsert: Si ya existe para ese día, turno, producto y presentación, actualizamos
         const targetDestino = body.destino || 'FABRICA'
