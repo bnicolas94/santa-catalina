@@ -570,14 +570,14 @@ export default function ProduccionPage() {
                                     📥 Importar Excel
                                 </button>
                                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
-                                    {['Mañana', 'Siesta', 'Tarde', 'Por Asignar'].map(t => (
+                                    {['Mañana', 'Siesta', 'Tarde', 'Totales'].map(t => (
                                         <button 
                                             key={t}
-                                            className={`btn btn-xs ${activeTurno === t ? 'btn-primary' : 'btn-ghost'}`}
+                                            className={`btn btn-xs ${activeTurno === t ? (t === 'Totales' ? 'btn-success' : 'btn-primary') : 'btn-ghost'}`}
                                             onClick={() => setActiveTurno(t)}
-                                            style={{ fontSize: '11px', padding: '4px 12px' }}
+                                            style={{ fontSize: '11px', padding: '4px 12px', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
                                         >
-                                            {t}
+                                            {t === 'Totales' ? '📊 Totales del Día' : t}
                                         </button>
                                     ))}
                                 </div>
@@ -589,16 +589,80 @@ export default function ProduccionPage() {
                                 <thead>
                                     <tr>
                                         <th>Producto</th>
-                                        <th style={{ textAlign: 'center' }}>H. Ruta</th>
-                                        <th style={{ textAlign: 'center' }}>Carga Express</th>
-                                        <th style={{ textAlign: 'center' }}>Stock Fab.</th>
+                                        {activeTurno !== 'Totales' && <th style={{ textAlign: 'center' }}>H. Ruta</th>}
+                                        {activeTurno !== 'Totales' && <th style={{ textAlign: 'center' }}>Carga Express</th>}
+                                        <th style={{ textAlign: 'center' }}>Total Necesario</th>
+                                        <th style={{ textAlign: 'center' }}>{activeTurno === 'Totales' ? 'Stock Total (Fab+Local)' : 'Stock Fab.'}</th>
                                         <th style={{ textAlign: 'center' }}>En Proceso</th>
-                                        <th style={{ textAlign: 'center' }}>Total Faltante</th>
+                                        <th style={{ textAlign: 'center' }}>A Producir</th>
                                         <th style={{ textAlign: 'right' }}>Sugerencia</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {Object.keys(planning.necesidades[activeTurno] || {}).length === 0 ? (
+                                    {activeTurno === 'Totales' ? (() => {
+                                        // Consolidar todos los turnos
+                                        const todosPids = new Set<string>()
+                                        Object.values(planning.necesidades).forEach(t => Object.keys(t).forEach(pid => todosPids.add(pid)))
+
+                                        const totalPorPid: Record<string, number> = {}
+                                        todosPids.forEach(pid => {
+                                            totalPorPid[pid] = Object.values(planning.necesidades).reduce((sum, t) => sum + (t[pid] || 0), 0)
+                                        })
+
+                                        const items = Object.entries(totalPorPid).sort(([,a],[,b]) => b - a)
+
+                                        if (items.length === 0) return (
+                                            <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
+                                        )
+
+                                        return items.map(([pid, totalReq]) => {
+                                            const prod = planning.infoProductos[pid]
+                                            // Stock total = fabrica + local (de stockProductos)
+                                            const stockEntry = stockProductos.find(s => s.productoId === pid)
+                                            const stockTotal = (stockEntry?.fabrica || 0) + (stockEntry?.local || 0)
+                                            const enProc = planning.enProduccion[pid] || 0
+                                            const faltante = Math.max(0, totalReq - stockTotal - enProc)
+                                            const rondasSugeridas = Math.ceil(faltante / (prod?.paquetesPorRonda || 14))
+
+                                            return (
+                                                <tr key={pid}>
+                                                    <td>
+                                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
+                                                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '14px' }}>{totalReq} paq</td>
+                                                    <td style={{ textAlign: 'center', color: stockTotal < totalReq ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
+                                                        {stockTotal} paq
+                                                        <div style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>Fab: {stockEntry?.fabrica || 0} + Local: {stockEntry?.local || 0}</div>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
+                                                        {enProc > 0 ? `${enProc} paq` : '—'}
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        {faltante > 0 ? (
+                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '15px' }}>{faltante} paq</span>
+                                                        ) : (
+                                                            <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ textAlign: 'right' }}>
+                                                        {faltante > 0 ? (
+                                                            <button
+                                                                className="btn btn-xs btn-primary"
+                                                                onClick={() => {
+                                                                    setForm({ ...form, productoId: pid, rondas: String(rondasSugeridas), paquetesPersonales: String(rondasSugeridas * (prod?.paquetesPorRonda || 14)), fechaProduccion: filterFecha || getLocalDateString() })
+                                                                    setShowModal(true)
+                                                                }}
+                                                            >
+                                                                Producir {rondasSugeridas} rondas
+                                                            </button>
+                                                        ) : '—'}
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })
+                                    })() : (
+                                    Object.keys(planning.necesidades[activeTurno] || {}).length === 0 ? (
                                         <tr>
                                             <td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
                                                 No hay requerimientos para el turno {activeTurno}
@@ -631,6 +695,7 @@ export default function ProduccionPage() {
                                                             onChange={(e) => handleManualChange(pid, e.target.value)}
                                                         />
                                                     </td>
+                                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalReq} paq</td>
                                                     <td style={{ textAlign: 'center', color: stock < totalReq ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                         {stock} paq
                                                     </td>
@@ -666,27 +731,29 @@ export default function ProduccionPage() {
                                                 </tr>
                                             )
                                         })
+                                    ))}
+                                    {/* Fila agregar producto extra — solo en turnos normales */}
+                                    {activeTurno !== 'Totales' && (
+                                        <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
+                                            <td colSpan={2}>
+                                                <select 
+                                                    className="form-select" 
+                                                    style={{ height: '32px', fontSize: '12px' }}
+                                                    onChange={(e) => {
+                                                        if(e.target.value) handleManualChange(e.target.value, '1')
+                                                        e.target.value = ''
+                                                    }}
+                                                >
+                                                    <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
+                                                    {productos
+                                                        .filter(p => !planning.necesidades[activeTurno]?.[p.id])
+                                                        .map(p => <option key={p.id} value={p.id}>[{p.codigoInterno}] {p.nombre}</option>)
+                                                    }
+                                                </select>
+                                            </td>
+                                            <td colSpan={5}></td>
+                                        </tr>
                                     )}
-                                    {/* Fila para agregar producto extra al turno */}
-                                    <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                        <td colSpan={2}>
-                                            <select 
-                                                className="form-select" 
-                                                style={{ height: '32px', fontSize: '12px' }}
-                                                onChange={(e) => {
-                                                    if(e.target.value) handleManualChange(e.target.value, '1')
-                                                    e.target.value = ''
-                                                }}
-                                            >
-                                                <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
-                                                {productos
-                                                    .filter(p => !planning.necesidades[activeTurno]?.[p.id])
-                                                    .map(p => <option key={p.id} value={p.id}>[{p.codigoInterno}] {p.nombre}</option>)
-                                                }
-                                            </select>
-                                        </td>
-                                        <td colSpan={5}></td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
