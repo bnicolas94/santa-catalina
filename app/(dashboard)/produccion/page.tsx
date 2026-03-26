@@ -115,7 +115,7 @@ export default function ProduccionPage() {
     const [stockProductos, setStockProductos] = useState<StockProd[]>([])
     interface PlanningData {
         necesidades: Record<string, Record<string, number>>
-        infoProductos: Record<string, Producto & { presentacion?: { id: string, cantidad: number } }> // Added presentacion to Producto type for planning
+        infoProductos: Record<string, Producto & { presentacion?: { id: string, cantidad: number }, isPrimary: boolean }> // Added presentacion and isPrimary to Producto type for planning
         manuales: Record<string, Record<string, number>>
         stockFabricacion: Record<string, number>
         stockLocal: Record<string, number>
