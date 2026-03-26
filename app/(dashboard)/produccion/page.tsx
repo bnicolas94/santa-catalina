@@ -118,6 +118,7 @@ export default function ProduccionPage() {
         infoProductos: Record<string, Producto & { presentacion?: { id: string, cantidad: number } }> // Added presentacion to Producto type for planning
         manuales: Record<string, Record<string, number>>
         stockFabricacion: Record<string, number>
+        stockLocal: Record<string, number>
         enProduccion: Record<string, number>
     }
     const [planning, setPlanning] = useState<PlanningData | null>(null)
@@ -668,9 +669,15 @@ export default function ProduccionPage() {
                                                     const pid = prodInfo?.id
                                                     const presid = prodInfo?.presentacion?.id || ''
 
-                                                    const stockValue = planning.stockFabricacion[key] || 0 
+                                                    const stockValue = (() => {
+                                                        const fab = planning?.stockFabricacion?.[key] || 0
+                                                        const loc = planning?.stockLocal?.[key] || 0
+                                                        if (stockSource === 'fabrica') return fab
+                                                        if (stockSource === 'local') return loc
+                                                        return fab + loc
+                                                    })()
                                                     
-                                                    const enProcUnits = planning.enProduccion[pid] || 0
+                                                    const enProcUnits = planning?.enProduccion?.[pid] || 0
                                                     const faltanteUnits = Math.max(0, totalUnits - stockValue - enProcUnits)
                                                     
                                                     const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
@@ -755,6 +762,7 @@ export default function ProduccionPage() {
                                             const rutaUnits = Math.max(0, totalUnits - manualUnits)
                                             
                                             // El stock ahora lo buscamos por KEY (pid_presid)
+                                            // En vista de turnos, mostramos solo stock de fabricación como referencia
                                             const stockUnits = planning?.stockFabricacion?.[key] || 0
                                             const enProcUnits = planning?.enProduccion?.[pid] || 0
                                             const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)

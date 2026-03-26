@@ -141,29 +141,43 @@ export async function GET(request: Request) {
             necesidades[turno][key] = (necesidades[turno][key] || 0) + m.cantidad
         })
 
-        // 5. Obtener stock actual consolidado por PRESENTACION (solo FABRICA)
-        const stockActual = await prisma.stockProducto.groupBy({
-            by: ['productoId', 'presentacionId'],
-            where: { ubicacion: { tipo: 'FABRICA' } },
-            _sum: { cantidad: true }
+        // 5. Obtener stock actual consolidado por PRESENTACION (FABRICA y LOCAL)
+        const stockActualRaw = await prisma.stockProducto.findMany({
+            include: { 
+                presentacion: true,
+                ubicacion: true
+            }
         })
 
-        // 6. Obtener lo que ya está en producción hoy (Lotes solo tienen productoId)
-        const enProduccion = await prisma.lote.findMany({
+        const stockFabricacion: Record<string, number> = {}
+        const stockLocal: Record<string, number> = {}
+        
+        stockActualRaw.forEach(s => {
+            const key = s.presentacionId ? `${s.productoId}_${s.presentacionId}` : `${s.productoId}_null`
+            const units = s.cantidad * (s.presentacion?.cantidad || 48)
+            
+            if (s.ubicacion.tipo === 'FABRICA') {
+                stockFabricacion[key] = (stockFabricacion[key] || 0) + units
+            } else if (s.ubicacion.tipo === 'LOCAL') {
+                stockLocal[key] = (stockLocal[key] || 0) + units
+            }
+        })
+
+        // 6. Obtener lo que ya está en producción hoy
+        const enProduccionRaw = await prisma.lote.findMany({
             where: {
                 fechaProduccion: { gte: startOfDay, lte: endOfDay },
                 estado: 'en_produccion'
             },
-            select: { productoId: true, unidadesProducidas: true }
+            include: { producto: { include: { presentaciones: { orderBy: { cantidad: 'desc' } } } } }
         })
 
-        const consolidadoProduccion: Record<string, number> = {}
-        enProduccion.forEach(l => {
-            // Como el Lote no tiene presentación, consolidamos por productoId
-            // En el frontend sumaremos esto al "total sándwiches" del producto o lo prorratearemos
-            consolidadoProduccion[l.productoId] = (consolidadoProduccion[l.productoId] || 0) + l.unidadesProducidas
-            // Nota: Aquí l.unidadesProducidas son PAQUETES. Necesitamos normalizar a unidades.
-            // Para simplificar, asumimos que un Lote en producción usa el estándar (48) o buscamos el producto
+        const enProduccion: Record<string, number> = {}
+        enProduccionRaw.forEach(l => {
+            // Unidades por paquete: usamos la presentación más grande del producto como estándar
+            // o 48 si no tiene presentaciones definidas
+            const size = l.producto.presentaciones[0]?.cantidad || 48
+            enProduccion[l.productoId] = (enProduccion[l.productoId] || 0) + (l.unidadesProducidas * size)
         })
 
         return NextResponse.json({
@@ -176,12 +190,9 @@ export async function GET(request: Request) {
                 acc[turno][key] = (acc[turno][key] || 0) + m.cantidad
                 return acc
             }, {} as Record<string, Record<string, number>>),
-            stockFabricacion: stockActual.reduce((acc, s) => {
-                const key = s.presentacionId ? `${s.productoId}_${s.presentacionId}` : `${s.productoId}_null`
-                acc[key] = s._sum.cantidad || 0
-                return acc
-            }, {} as Record<string, number>),
-            enProduccion: consolidadoProduccion
+            stockFabricacion,
+            stockLocal,
+            enProduccion
         })
 
     } catch (error) {
