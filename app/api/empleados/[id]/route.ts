@@ -37,6 +37,7 @@ export async function PUT(
             horarioSalida,
             codigoBiometrico,
             ubicacionId,
+            rolId,
             activo
         } = body;
 
@@ -70,6 +71,7 @@ export async function PUT(
             horarioSalida: (horarioSalida !== undefined) ? (horarioSalida || null) : undefined,
             codigoBiometrico: (codigoBiometrico !== undefined) ? (codigoBiometrico || null) : undefined,
             ubicacionId: (ubicacionId !== undefined) ? (ubicacionId || null) : undefined,
+            rolId: (rolId !== undefined) ? (rolId || null) : undefined,
         }
 
         if (activo !== undefined) {

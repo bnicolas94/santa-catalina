@@ -36,6 +36,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         horarioSalida: empleado?.horarioSalida || '',
         codigoBiometrico: empleado?.codigoBiometrico || '',
         ubicacionId: empleado?.ubicacionId || '',
+        rolId: empleado?.rolId || '',
         valorHoraExtra: empleado?.valorHoraExtra?.toString() || '0'
     })
 
@@ -95,6 +96,14 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
             )
             if (horas) {
                 newFormData.horasTrabajoDiarias = horas
+            }
+        }
+
+        // Si cambia el rol, actualizar también el rolId
+        if (name === 'rol') {
+            const selectedRole = roles.find(r => r.nombre === value)
+            if (selectedRole) {
+                newFormData.rolId = selectedRole.id
             }
         }
 

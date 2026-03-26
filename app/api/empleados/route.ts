@@ -46,25 +46,10 @@ export async function POST(request: Request) {
     try {
         const body = await request.json()
         const {
-            nombre,
-            apellido,
-            dni,
-            email,
-            password,
-            rol,
-            telefono,
-            fechaIngreso,
-            sueldoBaseMensual,
-            cicloPago,
-            porcentajeHoraExtra,
-            valorHoraExtra,
-            porcentajeFeriado,
-            horasTrabajoDiarias,
-            diasTrabajoSemana,
-            horarioEntrada,
-            horarioSalida,
-            codigoBiometrico,
-            ubicacionId
+            nombre, apellido, dni, email, password, rol, rolId, telefono, fechaIngreso,
+            sueldoBaseMensual, cicloPago, porcentajeHoraExtra, valorHoraExtra,
+            porcentajeFeriado, horasTrabajoDiarias, diasTrabajoSemana,
+            horarioEntrada, horarioSalida, codigoBiometrico, ubicacionId
         } = body
 
         if (!nombre || !rol) {
@@ -132,6 +117,7 @@ export async function POST(request: Request) {
                 horarioSalida: horarioSalida || null,
                 codigoBiometrico: codigoBiometrico || null,
                 ubicacionId: ubicacionId || null,
+                rolId: rolId || null,
             },
         })
 

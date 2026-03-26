@@ -232,7 +232,13 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                 <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                     <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-2)' }}>
                         <div style={{ fontWeight: 600 }}>{empleado.nombre} {empleado.apellido}</div>
-                        <div style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>Sueldo Base: ${empleado.sueldoBaseMensual.toLocaleString()} ({empleado.cicloPago})</div>
+                        <div style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>
+                            {empleado.rolRel?.jornal > 0 ? (
+                                <>Sueldo Base del Rol: ${empleado.rolRel.jornal.toLocaleString()} ({empleado.cicloPago})</>
+                            ) : (
+                                <>Sueldo Base Indiv.: ${empleado.sueldoBaseMensual.toLocaleString()} ({empleado.cicloPago})</>
+                            )}
+                        </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
