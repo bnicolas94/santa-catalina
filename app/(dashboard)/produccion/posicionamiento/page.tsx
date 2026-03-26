@@ -32,6 +32,7 @@ interface Ubicacion {
 
 export default function PosicionamientoPage() {
     const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+    const [turno, setTurno] = useState('AM')
     const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
     const [ubicacionId, setUbicacionId] = useState('')
     const [conceptos, setConceptos] = useState<Concepto[]>([])
@@ -54,7 +55,7 @@ export default function PosicionamientoPage() {
         if (ubicacionId && fecha) {
             fetchPosicionamiento()
         }
-    }, [ubicacionId, fecha])
+    }, [ubicacionId, fecha, turno])
 
     async function fetchInitialData() {
         try {
@@ -90,7 +91,7 @@ export default function PosicionamientoPage() {
 
     async function fetchPosicionamiento() {
         try {
-            const res = await fetch(`/api/produccion/posicionamiento?fecha=${fecha}&ubicacionId=${ubicacionId}`)
+            const res = await fetch(`/api/produccion/posicionamiento?fecha=${fecha}&ubicacionId=${ubicacionId}&turno=${turno}`)
             const data = await res.json()
             setAsignaciones(Array.isArray(data) ? data : [])
         } catch (err) {
@@ -123,6 +124,7 @@ export default function PosicionamientoPage() {
                 body: JSON.stringify({
                     fecha,
                     ubicacionId,
+                    turno,
                     asignaciones: asignaciones.map(a => ({
                         empleadoId: a.empleadoId,
                         conceptoId: a.conceptoId,
@@ -191,6 +193,25 @@ export default function PosicionamientoPage() {
                                 <option key={u.id} value={u.id}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>
                             ))}
                         </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Turno</label>
+                        <div style={{ display: 'flex', gap: '2px', background: 'var(--color-gray-100)', padding: '2px', borderRadius: '6px' }}>
+                            <button 
+                                className={`btn btn-sm ${turno === 'AM' ? 'btn-primary' : 'btn-ghost'}`}
+                                onClick={() => setTurno('AM')}
+                                style={{ padding: '4px 12px' }}
+                            >
+                                AM
+                            </button>
+                            <button 
+                                className={`btn btn-sm ${turno === 'PM' ? 'btn-primary' : 'btn-ghost'}`}
+                                onClick={() => setTurno('PM')}
+                                style={{ padding: '4px 12px' }}
+                            >
+                                PM
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

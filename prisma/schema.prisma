@@ -567,6 +567,7 @@ model ConceptoProduccion {
 model AsignacionOperario {
   id            String             @id @default(uuid())
   fecha         DateTime
+  turno         String             @default("AM")
   empleadoId    String             @map("id_empleado")
   conceptoId    String             @map("id_concepto")
   ubicacionId   String             @map("id_ubicacion")

@@ -7,6 +7,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const fechaStr = searchParams.get('fecha')
         const ubicacionId = searchParams.get('ubicacionId')
+        const turno = searchParams.get('turno') || 'AM'
 
         if (!fechaStr || !ubicacionId) {
             return NextResponse.json(
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
                     lte: endOfDay,
                 },
                 ubicacionId: ubicacionId,
+                turno: turno,
             },
             include: {
                 empleado: {
@@ -49,9 +51,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { fecha: fechaStr, ubicacionId, asignaciones } = body
+        const { fecha: fechaStr, ubicacionId, turno, asignaciones } = body
 
-        if (!fechaStr || !ubicacionId || !Array.isArray(asignaciones)) {
+        if (!fechaStr || !ubicacionId || !turno || !Array.isArray(asignaciones)) {
             return NextResponse.json(
                 { error: 'Datos incompletos' },
                 { status: 400 }
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
 
         // Usamos una transacción para asegurar consistencia
         const result = await prisma.$transaction(async (tx) => {
-            // 1. Eliminar asignaciones previas para ese día y ubicación
+            // 1. Eliminar asignaciones previas para ese día, ubicación y turno
             await tx.asignacionOperario.deleteMany({
                 where: {
                     fecha: {
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
                         lte: endOfDay,
                     },
                     ubicacionId: ubicacionId,
+                    turno: turno,
                 }
             })
 
@@ -81,6 +84,7 @@ export async function POST(request: Request) {
                     tx.asignacionOperario.create({
                         data: {
                             fecha: startOfDay, // Guardamos siempre el inicio del día
+                            turno: turno,
                             empleadoId: a.empleadoId,
                             conceptoId: a.conceptoId,
                             ubicacionId: ubicacionId,
