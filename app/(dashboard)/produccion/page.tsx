@@ -132,6 +132,7 @@ export default function ProduccionPage() {
     const [ubiForm, setUbiForm] = useState({ nombre: '', tipo: 'FABRICA' })
     const [showMermaModal, setShowMermaModal] = useState(false)
     const [mermaForm, setMermaForm] = useState({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
+    const [stockSource, setStockSource] = useState<'fabrica' | 'local' | 'ambos'>('fabrica')
 
     // Estado para importación Excel
     const [showImportModal, setShowImportModal] = useState(false)
@@ -440,6 +441,14 @@ export default function ProduccionPage() {
 
     async function handleManualChange(productoId: string, cantidad: string) {
         try {
+            const prod = productos.find(p => p.id === productoId)
+            const standardSize = prod?.presentaciones?.length 
+                ? Math.max(...prod.presentaciones.map(pr => pr.cantidad)) 
+                : 48
+
+            const qtyNum = parseFloat(cantidad) || 0
+            const unidadesTotales = Math.round(qtyNum * standardSize)
+
             const res = await fetch('/api/produccion/planificacion/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -447,7 +456,7 @@ export default function ProduccionPage() {
                     fecha: filterFecha || getLocalDateString(),
                     turno: activeTurno,
                     productoId,
-                    cantidad
+                    cantidad: unidadesTotales // Guardar unidades (sándwiches)
                 })
             })
             if (!res.ok) throw new Error('Error al guardar')
@@ -609,74 +618,144 @@ export default function ProduccionPage() {
                                             totalPorPid[pid] = Object.values(planning.necesidades).reduce((sum, t) => sum + (t[pid] || 0), 0)
                                         })
 
-                                        const items = Object.entries(totalPorPid).sort(([,a],[,b]) => b - a)
+                                        // ORDEN ALFABÉTICO
+                                        const items = Object.entries(totalPorPid).sort(([pidA], [pidB]) => {
+                                            const codeA = planning.infoProductos[pidA]?.codigoInterno || ''
+                                            const codeB = planning.infoProductos[pidB]?.codigoInterno || ''
+                                            return codeA.localeCompare(codeB)
+                                        })
 
                                         if (items.length === 0) return (
                                             <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
                                         )
 
-                                        return items.map(([pid, totalReq]) => {
-                                            const prod = planning.infoProductos[pid]
-                                            // Stock total = fabrica + local (de stockProductos)
-                                            const stockEntry = stockProductos.find(s => s.productoId === pid)
-                                            const stockTotal = (stockEntry?.fabrica || 0) + (stockEntry?.local || 0)
-                                            const enProc = planning.enProduccion[pid] || 0
-                                            const faltante = Math.max(0, totalReq - stockTotal - enProc)
-                                            const rondasSugeridas = Math.ceil(faltante / (prod?.paquetesPorRonda || 14))
-
-                                            return (
-                                                <tr key={pid}>
-                                                    <td>
-                                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
-                                                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
-                                                    </td>
-                                                    <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '14px' }}>{totalReq} paq</td>
-                                                    <td style={{ textAlign: 'center', color: stockTotal < totalReq ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
-                                                        {stockTotal} paq
-                                                        <div style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>Fab: {stockEntry?.fabrica || 0} + Local: {stockEntry?.local || 0}</div>
-                                                    </td>
-                                                    <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                        {enProc > 0 ? `${enProc} paq` : '—'}
-                                                    </td>
-                                                    <td style={{ textAlign: 'center' }}>
-                                                        {faltante > 0 ? (
-                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '15px' }}>{faltante} paq</span>
-                                                        ) : (
-                                                            <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ textAlign: 'right' }}>
-                                                        {faltante > 0 ? (
-                                                            <button
-                                                                className="btn btn-xs btn-primary"
-                                                                onClick={() => {
-                                                                    setForm({ ...form, productoId: pid, rondas: String(rondasSugeridas), paquetesPersonales: String(rondasSugeridas * (prod?.paquetesPorRonda || 14)), fechaProduccion: filterFecha || getLocalDateString() })
-                                                                    setShowModal(true)
-                                                                }}
-                                                            >
-                                                                Producir {rondasSugeridas} rondas
-                                                            </button>
-                                                        ) : '—'}
+                                        return (
+                                            <>
+                                                <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
+                                                    <td colSpan={6} style={{ padding: 'var(--space-2) var(--space-4)' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', fontSize: '12px' }}>
+                                                            <span style={{ fontWeight: 600, color: 'var(--color-gray-600)' }}>Considerar Stock de:</span>
+                                                            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                                                    <input type="radio" name="stockSource" checked={stockSource === 'fabrica'} onChange={() => setStockSource('fabrica')} /> Fábrica
+                                                                </label>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                                                    <input type="radio" name="stockSource" checked={stockSource === 'local'} onChange={() => setStockSource('local')} /> Local
+                                                                </label>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                                                                    <input type="radio" name="stockSource" checked={stockSource === 'ambos'} onChange={() => setStockSource('ambos')} /> Ambos
+                                                                </label>
+                                                            </div>
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            )
+                                                {items.map(([pid, totalUnits]) => {
+                                                    const prod = planning.infoProductos[pid]
+                                                    const standardSize = prod?.presentaciones?.length 
+                                                        ? Math.max(...prod.presentaciones.map(pr => pr.cantidad)) 
+                                                        : 48
+
+                                                    const stockEntry = stockProductos.find(s => s.productoId === pid)
+                                                    
+                                                    let stockTotalUnits = 0
+                                                    if (stockSource === 'fabrica') stockTotalUnits = (stockEntry?.fabrica || 0)
+                                                    else if (stockSource === 'local') stockTotalUnits = (stockEntry?.local || 0)
+                                                    else stockTotalUnits = (stockEntry?.fabrica || 0) + (stockEntry?.local || 0)
+
+                                                    const enProcUnits = planning.enProduccion[pid] || 0
+                                                    const faltanteUnits = Math.max(0, totalUnits - stockTotalUnits - enProcUnits)
+                                                    
+                                                    const totalPaq = (totalUnits / standardSize).toFixed(1).replace('.0', '')
+                                                    const stockPaq = (stockTotalUnits / standardSize).toFixed(1).replace('.0', '')
+                                                    const enProcPaq = (enProcUnits / standardSize).toFixed(1).replace('.0', '')
+                                                    const faltantePaq = (faltanteUnits / standardSize).toFixed(1).replace('.0', '')
+                                                    
+                                                    const unitsPerRonda = (prod?.paquetesPorRonda || 14) * standardSize
+                                                    const rondasReal = Math.ceil(faltanteUnits / unitsPerRonda)
+
+                                                    return (
+                                                        <tr key={pid}>
+                                                            <td>
+                                                                <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
+                                                                <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '14px' }}>{totalPaq} paq</td>
+                                                            <td style={{ textAlign: 'center', color: stockTotalUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
+                                                                {stockPaq} paq
+                                                                <div style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>
+                                                                    {stockSource === 'ambos' ? `Fab: ${stockEntry?.fabrica || 0} + Local: ${stockEntry?.local || 0}` : 
+                                                                     stockSource === 'fabrica' ? `Solo Fábrica: ${stockEntry?.fabrica || 0}` : 
+                                                                     `Solo Local: ${stockEntry?.local || 0}`}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
+                                                                {enProcUnits > 0 ? `${enProcPaq} paq` : '—'}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center' }}>
+                                                                {faltanteUnits > 0 ? (
+                                                                    <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '15px' }}>{faltantePaq} paq</span>
+                                                                ) : (
+                                                                    <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right' }}>
+                                                                {faltanteUnits > 0 ? (
+                                                                    <button
+                                                                        className="btn btn-xs btn-primary"
+                                                                        onClick={() => {
+                                                                            setForm({ ...form, productoId: pid, rondas: String(rondasReal), paquetesPersonales: String(rondasReal * (prod?.paquetesPorRonda || 14)), fechaProduccion: filterFecha || getLocalDateString() })
+                                                                            setShowModal(true)
+                                                                        }}
+                                                                    >
+                                                                        Producir {rondasReal} rondas
+                                                                    </button>
+                                                                ) : '—'}
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </>
+                                        )
+                                    })() : (() => {
+                                        const necesidadesTurno = planning.necesidades[activeTurno] || {}
+                                        
+                                        // ORDEN ALFABÉTICO
+                                        const items = Object.entries(necesidadesTurno).sort(([pidA], [pidB]) => {
+                                            const codeA = planning.infoProductos[pidA]?.codigoInterno || ''
+                                            const codeB = planning.infoProductos[pidB]?.codigoInterno || ''
+                                            return codeA.localeCompare(codeB)
                                         })
-                                    })() : (
-                                    Object.keys(planning.necesidades[activeTurno] || {}).length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
-                                                No hay requerimientos para el turno {activeTurno}
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        Object.entries(planning.necesidades[activeTurno]).map(([pid, totalReq]) => {
+
+                                        if (items.length === 0) return (
+                                            <tr>
+                                                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                    No hay requerimientos para el turno {activeTurno}
+                                                </td>
+                                            </tr>
+                                        )
+
+                                        return items.map(([pid, totalUnits]) => {
                                             const prod = planning.infoProductos[pid]
-                                            const manualQty = planning.manuales[activeTurno]?.[pid] || 0
-                                            const rutaQty = totalReq - manualQty
-                                            const stock = planning.stockFabricacion[pid] || 0
-                                            const enProc = planning.enProduccion[pid] || 0
-                                            const faltante = Math.max(0, totalReq - stock - enProc)
-                                            const rondasSugeridas = Math.ceil(faltante / (prod?.paquetesPorRonda || 14))
+                                            const standardSize = prod?.presentaciones?.length 
+                                                ? Math.max(...prod.presentaciones.map(pr => pr.cantidad)) 
+                                                : 48
+
+                                            const manualUnits = planning.manuales[activeTurno]?.[pid] || 0
+                                            const rutaUnits = totalUnits - manualUnits
+                                            const stockUnits = planning.stockFabricacion[pid] || 0
+                                            const enProcUnits = planning.enProduccion[pid] || 0
+                                            const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
+                                            
+                                            // Conversión a paquetes para mostrar
+                                            const rutaPaq = (rutaUnits / standardSize).toFixed(1).replace('.0', '')
+                                            const manualPaq = (manualUnits / standardSize).toFixed(1).replace('.0', '')
+                                            const stockPaq = (stockUnits / standardSize).toFixed(1).replace('.0', '')
+                                            const enProcPaq = (enProcUnits / standardSize).toFixed(1).replace('.0', '')
+                                            const faltantePaq = (faltanteUnits / standardSize).toFixed(1).replace('.0', '')
+                                            const totalPaq = (totalUnits / standardSize).toFixed(1).replace('.0', '')
+
+                                            const unitsPerRonda = (prod?.paquetesPorRonda || 14) * standardSize
+                                            const rondasReal = Math.ceil(faltanteUnits / unitsPerRonda)
 
                                             return (
                                                 <tr key={pid}>
@@ -684,54 +763,54 @@ export default function ProduccionPage() {
                                                         <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
                                                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
                                                     </td>
-                                                    <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaQty > 0 ? `${rutaQty} paq` : '—'}</td>
+                                                    <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaUnits > 0 ? `${rutaPaq} paq` : '—'}</td>
                                                     <td style={{ textAlign: 'center' }}>
                                                         <input 
                                                             type="number" 
                                                             className="form-input" 
                                                             style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
-                                                            value={manualQty || ''} 
+                                                            value={manualUnits > 0 ? manualPaq : ''} 
                                                             placeholder="0"
                                                             onChange={(e) => handleManualChange(pid, e.target.value)}
                                                         />
                                                     </td>
-                                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalReq} paq</td>
-                                                    <td style={{ textAlign: 'center', color: stock < totalReq ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
-                                                        {stock} paq
+                                                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
+                                                    <td style={{ textAlign: 'center', color: stockUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
+                                                        {stockPaq} paq
                                                     </td>
                                                     <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                        {enProc > 0 ? `${enProc} paq` : '—'}
+                                                        {enProcUnits > 0 ? `${enProcPaq} paq` : '—'}
                                                     </td>
                                                     <td style={{ textAlign: 'center' }}>
-                                                        {faltante > 0 ? (
-                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltante} paq</span>
+                                                        {faltanteUnits > 0 ? (
+                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltantePaq} paq</span>
                                                         ) : (
                                                             <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
                                                         )}
                                                     </td>
                                                     <td style={{ textAlign: 'right' }}>
-                                                        {faltante > 0 ? (
+                                                        {faltanteUnits > 0 ? (
                                                             <button 
                                                                 className="btn btn-xs btn-primary"
                                                                 onClick={() => {
                                                                     setForm({
                                                                         ...form,
                                                                         productoId: pid,
-                                                                        rondas: String(rondasSugeridas),
-                                                                        paquetesPersonales: String(rondasSugeridas * (prod?.paquetesPorRonda || 14)),
+                                                                        rondas: String(rondasReal),
+                                                                        paquetesPersonales: String(rondasReal * (prod?.paquetesPorRonda || 14)),
                                                                         fechaProduccion: filterFecha || getLocalDateString()
                                                                     })
                                                                     setShowModal(true)
                                                                 }}
                                                             >
-                                                                Producir {rondasSugeridas} rondas
+                                                                Producir {rondasReal} rondas
                                                             </button>
                                                         ) : '—'}
                                                     </td>
                                                 </tr>
                                             )
                                         })
-                                    ))}
+                                    })()}
                                     {/* Fila agregar producto extra — solo en turnos normales */}
                                     {activeTurno !== 'Totales' && (
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>

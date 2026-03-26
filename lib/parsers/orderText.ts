@@ -47,8 +47,9 @@ export function parseOrderText(
     const tokens = cleanText.split(/[\s/]+/).filter(t => t && !fillerWords.includes(t));
 
     // Regex para detectar "[cantidad][codigo]" ej: "24jyq" o "48clasicos"
-    // Incluimos ñ y acentos
     const itemRegex = /^(\d+)([a-zñáéíóú]+)$/;
+    // Regex para detectar "[codigo][cantidad]" ej: "jyq24" o "clasicos48"
+    const itemRegexReverse = /^([a-zñáéíóú]+)(\d+)$/;
 
     const currentObservaciones: string[] = [];
 
@@ -56,10 +57,11 @@ export function parseOrderText(
         if (!token) continue;
 
         const match = token.match(itemRegex);
+        const matchReverse = token.match(itemRegexReverse);
 
-        if (match) {
-            const cantidad = parseInt(match[1], 10);
-            const codigoInterno = match[2];
+        if (match || matchReverse) {
+            const cantidad = match ? parseInt(match[1], 10) : parseInt(matchReverse![2], 10);
+            const codigoInterno = match ? match[2] : matchReverse![1];
 
             // Buscamos si existe la presentación exacta
             const exactMatch = presentaciones.find(

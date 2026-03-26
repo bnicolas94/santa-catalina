@@ -95,7 +95,8 @@ export async function POST(req: NextRequest) {
                     }
                 }
                 // cantidad = número de paquetes (1 paquete = 1 detalle en pedidos, pero aquí la cantidad del detalle puede ser > 1 si era divisor)
-                porProducto[pid].cantidadPaquetes += det.cantidad
+                // Sumamos el total de sándwiches (unidades)
+                porProducto[pid].cantidadPaquetes += det.cantidad * pres.cantidad
             }
 
             resultados.push({
@@ -121,32 +122,40 @@ export async function POST(req: NextRequest) {
         }
 
         // Si es confirmación, guardamos en DB
+        // BORRÓN Y CUENTA NUEVA: Identificamos todos los turnos que están en el Excel
+        const turnosAImportar = Array.from(new Set(resultados.filter(r => r.turnoNorm).map(r => r.turnoNorm!)))
+        
+        if (turnosAImportar.length > 0) {
+            // Eliminamos los requerimientos existentes para esos turnos en esa fecha
+            await prisma.requerimientoProduccion.deleteMany({
+                where: {
+                    fecha: startOfDay,
+                    turno: { in: turnosAImportar }
+                }
+            })
+        }
+
         let guardados = 0
+        const itemsAInsertar: any[] = []
+
         for (const resultado of resultados) {
             if (!resultado.turnoNorm || resultado.items.length === 0) continue
 
             for (const item of resultado.items) {
-                const existing = await prisma.requerimientoProduccion.findFirst({
-                    where: { fecha: startOfDay, turno: resultado.turnoNorm, productoId: item.productoId }
+                itemsAInsertar.push({
+                    fecha: startOfDay,
+                    turno: resultado.turnoNorm,
+                    productoId: item.productoId,
+                    cantidad: item.cantidadPaquetes // Ahora son unidades (sándwiches)
                 })
-
-                if (existing) {
-                    await prisma.requerimientoProduccion.update({
-                        where: { id: existing.id },
-                        data: { cantidad: existing.cantidad + item.cantidadPaquetes }
-                    })
-                } else {
-                    await prisma.requerimientoProduccion.create({
-                        data: {
-                            fecha: startOfDay,
-                            turno: resultado.turnoNorm,
-                            productoId: item.productoId,
-                            cantidad: item.cantidadPaquetes
-                        }
-                    })
-                }
                 guardados++
             }
+        }
+
+        if (itemsAInsertar.length > 0) {
+            await prisma.requerimientoProduccion.createMany({
+                data: itemsAInsertar
+            })
         }
 
         return NextResponse.json({ success: true, guardados, resultados })

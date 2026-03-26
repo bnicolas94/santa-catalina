@@ -136,7 +136,11 @@ export async function GET(request: Request) {
 
         const consolidadoProduccion: Record<string, number> = {}
         enProduccion.forEach(l => {
-            consolidadoProduccion[l.productoId] = (consolidadoProduccion[l.productoId] || 0) + l.unidadesProducidas
+            const prod = infoProductos[l.productoId]
+            const standardSize = (prod?.presentaciones && (prod.presentaciones as any[]).length > 0)
+                ? Math.max(...(prod.presentaciones as any[]).map((p: any) => p.cantidad))
+                : 48
+            consolidadoProduccion[l.productoId] = (consolidadoProduccion[l.productoId] || 0) + (l.unidadesProducidas * standardSize)
         })
 
         return NextResponse.json({
