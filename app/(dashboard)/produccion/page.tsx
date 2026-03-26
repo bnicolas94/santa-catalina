@@ -700,7 +700,7 @@ export default function ProduccionPage() {
                                                         return fab + loc
                                                     })()
                                                     
-                                                    const enProcUnits = planning?.enProduccion?.[pid] || 0
+                                                    const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
                                                     const faltanteUnits = Math.max(0, totalUnits - stockValue - enProcUnits)
                                                     
                                                     const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
@@ -734,7 +734,7 @@ export default function ProduccionPage() {
                                                                 </div>
                                                             </td>
                                                             <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                                {enProcUnits > 0 ? `${enProcPaq} paq` : '—'}
+                                                                {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
                                                             </td>
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (
@@ -792,7 +792,7 @@ export default function ProduccionPage() {
                                             // El stock ahora lo buscamos por KEY (pid_presid)
                                             // En vista de turnos, mostramos solo stock de fabricación como referencia
                                             const stockUnits = planning?.stockFabricacion?.[key] || 0
-                                            const enProcUnits = planning?.enProduccion?.[pid] || 0
+                                            const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
                                             const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
                                             
                                             // Conversión a paquetes para mostrar
@@ -837,7 +837,7 @@ export default function ProduccionPage() {
                                                         {stockPaq} paq
                                                     </td>
                                                     <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                        {enProcUnits > 0 ? `${enProcPaq} paq` : '—'}
+                                                        {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
                                                     </td>
                                                     <td style={{ textAlign: 'center' }}>
                                                         {faltanteUnits > 0 ? (

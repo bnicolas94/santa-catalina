@@ -73,7 +73,16 @@ export async function GET(request: Request) {
             }
         })
 
-        // 4. Consolidar necesidades por [productoId_presentacionId] y turno
+        // 4. Obtener todos los productos con sus presentaciones para determinar la primaria
+        const allProducts = await prisma.producto.findMany({
+            include: { presentaciones: { orderBy: { cantidad: 'desc' } } }
+        })
+        const primaryPresIds: Record<string, string> = {}
+        allProducts.forEach(p => {
+            if (p.presentaciones[0]) primaryPresIds[p.id] = p.presentaciones[0].id
+        })
+
+        // 5. Consolidar necesidades por [productoId_presentacionId] y turno
         const necesidades: Record<string, Record<string, number>> = {
             'Mañana': {},
             'Siesta': {},
@@ -89,7 +98,8 @@ export async function GET(request: Request) {
             if (!infoProductos[key]) {
                 infoProductos[key] = {
                     ...prod,
-                    presentacion: pres
+                    presentacion: pres,
+                    isPrimary: pres ? (primaryPresIds[prod.id] === pres.id) : true
                 }
             }
             return key
