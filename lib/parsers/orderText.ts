@@ -69,12 +69,16 @@ export function parseOrderText(
             const cantidad = match ? parseInt(match[1], 10) : parseInt(matchReverse![2], 10);
             const aliasOcodigo = match ? match[2] : matchReverse![1];
 
-            // 1. Filtrar presentaciones del producto que coincida con el código o alias
-            const related = presentaciones.filter(p => {
-                const matchesCodigo = p.producto.codigoInterno.toLowerCase() === aliasOcodigo.toLowerCase();
-                const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase().trim()) : [];
-                return matchesCodigo || aliases.includes(aliasOcodigo.toLowerCase());
-            });
+            // 1. Intentar match por código interno (prioridad máxima)
+            let related = presentaciones.filter(p => p.producto.codigoInterno.toLowerCase() === aliasOcodigo.toLowerCase());
+            
+            // 2. Si no hay match por código, buscar por alias
+            if (related.length === 0) {
+                related = presentaciones.filter(p => {
+                    const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase().trim()) : [];
+                    return aliases.includes(aliasOcodigo.toLowerCase());
+                });
+            }
 
             if (related.length > 0) {
                 // 2. Intentar match exacto (ej. 24jyq matches x24)
