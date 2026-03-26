@@ -141,6 +141,7 @@ export default function ProduccionPage() {
     const [importStep, setImportStep] = useState<'upload' | 'preview' | 'done'>('upload')
     const [importColTurno, setImportColTurno] = useState('')
     const [importColTexto, setImportColTexto] = useState('')
+    const [importColFecha, setImportColFecha] = useState('')
     const [importHeaders, setImportHeaders] = useState<string[]>([])
     const [importRawRows, setImportRawRows] = useState<any[]>([])
     const [importPreview, setImportPreview] = useState<any[]>([])
@@ -506,8 +507,10 @@ export default function ProduccionPage() {
             // Auto-detectar columnas
             const turnoCol = headers.find(h => /turno/i.test(h)) || ''
             const textoCol = headers.find(h => /neces|pedido|prod|item|detalle/i.test(h)) || ''
+            const fechaCol = headers.find(h => /fecha|dia|date/i.test(h)) || ''
             setImportColTurno(turnoCol)
             setImportColTexto(textoCol)
+            setImportColFecha(fechaCol)
         } catch (err: any) {
             setError('Error al leer el archivo: ' + err.message)
         }
@@ -517,7 +520,11 @@ export default function ProduccionPage() {
         if (!importColTurno || !importColTexto) { setError('Seleccioná las columnas de Turno y Necesidades.'); return }
         setImportLoading(true)
         try {
-            const filas = importRawRows.map(r => ({ turno: String(r[importColTurno] || ''), texto: String(r[importColTexto] || '') }))
+            const filas = importRawRows.map(r => ({ 
+                fechaRaw: importColFecha ? r[importColFecha] : null,
+                turno: String(r[importColTurno] || ''), 
+                texto: String(r[importColTexto] || '') 
+            }))
             const res = await fetch('/api/produccion/planificacion/importar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -538,7 +545,11 @@ export default function ProduccionPage() {
     async function handleImportConfirm() {
         setImportLoading(true)
         try {
-            const filas = importRawRows.map(r => ({ turno: String(r[importColTurno] || ''), texto: String(r[importColTexto] || '') }))
+            const filas = importRawRows.map(r => ({ 
+                fechaRaw: importColFecha ? r[importColFecha] : null,
+                turno: String(r[importColTurno] || ''), 
+                texto: String(r[importColTexto] || '') 
+            }))
             const res = await fetch('/api/produccion/planificacion/importar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1806,7 +1817,14 @@ export default function ProduccionPage() {
                                 </div>
                                 {importHeaders.length > 0 && (
                                     <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                                            <div className="form-group">
+                                                <label className="form-label">Columna Fecha</label>
+                                                <select className="form-select" value={importColFecha} onChange={e => setImportColFecha(e.target.value)}>
+                                                    <option value="">(Usar fecha actual)</option>
+                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                </select>
+                                            </div>
                                             <div className="form-group">
                                                 <label className="form-label">Columna de Turno</label>
                                                 <select className="form-select" value={importColTurno} onChange={e => setImportColTurno(e.target.value)}>
@@ -1815,7 +1833,7 @@ export default function ProduccionPage() {
                                                 </select>
                                             </div>
                                             <div className="form-group">
-                                                <label className="form-label">Columna de Necesidades</label>
+                                                <label className="form-label">Columna Necesidades</label>
                                                 <select className="form-select" value={importColTexto} onChange={e => setImportColTexto(e.target.value)}>
                                                     <option value="">— Seleccionar —</option>
                                                     {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
@@ -1841,7 +1859,8 @@ export default function ProduccionPage() {
                                     <table className="table table-sm">
                                         <thead>
                                             <tr>
-                                                <th>Turno</th>
+                                                <th style={{ width: '90px' }}>Fecha</th>
+                                                <th style={{ width: '90px' }}>Turno</th>
                                                 <th>Texto original</th>
                                                 <th>Productos detectados</th>
                                                 <th style={{ textAlign: 'center' }}>Estado</th>
@@ -1850,6 +1869,7 @@ export default function ProduccionPage() {
                                         <tbody>
                                             {importPreview.map((r: any, i: number) => (
                                                 <tr key={i}>
+                                                    <td style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{r.fechaValue ? formatDateOnly(r.fechaValue) : '—'}</td>
                                                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.turnoNorm || <span style={{ color: 'var(--color-danger)' }}>{r.turnoRaw}</span>}</td>
                                                     <td style={{ fontSize: '11px', color: 'var(--color-gray-500)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.texto}</td>
                                                     <td style={{ fontSize: '11px' }}>
