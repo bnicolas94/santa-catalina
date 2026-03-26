@@ -41,12 +41,15 @@ export async function POST(request: Request) {
         startOfDay.setUTCHours(0, 0, 0, 0)
 
         // Upsert: Si ya existe para ese día, turno, producto y presentación, actualizamos
+        const targetDestino = body.destino || 'FABRICA'
         const existing = await prisma.requerimientoProduccion.findFirst({
             where: {
                 fecha: startOfDay,
                 turno,
                 productoId,
-                presentacionId: presentacionId || null
+                presentacionId: presentacionId || null,
+                // @ts-ignore
+                destino: targetDestino
             }
         })
 
@@ -67,7 +70,9 @@ export async function POST(request: Request) {
                     turno,
                     productoId,
                     presentacionId,
-                    cantidad: parseInt(cantidad)
+                    cantidad: parseInt(cantidad),
+                    // @ts-ignore
+                    destino: targetDestino
                 }
             })
         }

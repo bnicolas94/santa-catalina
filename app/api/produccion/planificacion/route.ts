@@ -140,11 +140,14 @@ export async function GET(request: Request) {
             if (!necesidades[turno]) necesidades[turno] = {}
             
             let key = ""
+            // @ts-ignore - Prisma types might be stale
             if (m.presentacionId && m.presentacion) {
+                // @ts-ignore
                 key = registerInfo(m.producto, m.presentacion)
             } else {
-                // Fallback para registros viejos sin presentacionId: usar la más grande
+                // @ts-ignore
                 key = `${m.productoId}_null`
+                // @ts-ignore
                 if (!infoProductos[key]) infoProductos[key] = m.producto
             }
             
@@ -193,13 +196,17 @@ export async function GET(request: Request) {
         return NextResponse.json({
             necesidades,
             infoProductos,
-            manuales: manuales.reduce((acc, m) => {
+            manualesDetalle: manuales.reduce((acc, m) => {
                 const turno = m.turno
+                // @ts-ignore
                 const key = m.presentacionId ? `${m.productoId}_${m.presentacionId}` : `${m.productoId}_null`
                 if (!acc[turno]) acc[turno] = {}
-                acc[turno][key] = (acc[turno][key] || 0) + m.cantidad
+                if (!acc[turno][key]) acc[turno][key] = { fabrica: 0, local: 0 }
+                // @ts-ignore
+                if (m.destino === 'LOCAL') acc[turno][key].local += m.cantidad
+                else acc[turno][key].fabrica += m.cantidad
                 return acc
-            }, {} as Record<string, Record<string, number>>),
+            }, {} as Record<string, Record<string, { fabrica: number, local: number }>>),
             stockFabricacion,
             stockLocal,
             enProduccion

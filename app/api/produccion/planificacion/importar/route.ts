@@ -93,26 +93,28 @@ export async function POST(req: NextRequest) {
             turnoNorm: string | null
             texto: string
             status: 'ok' | 'sin_turno' | 'sin_match' | 'parcial'
+            destino: 'FABRICA' | 'LOCAL'
             items: Array<{ productoId: string, presentacionId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }>
             errores: string[]
         }
         const resultados: FilaResultado[] = []
 
         for (let i = 0; i < filas.length; i++) {
-            const { fechaRaw, turno: turnoRaw, texto } = filas[i]
+            const { fechaRaw, turno: turnoRaw, texto, destino: destinoRaw } = filas[i]
             const fechaNorm = normalizarFecha(fechaRaw, fechaDefault)
             const turnoNorm = normalizarTurno(turnoRaw || '')
+            const destino = String(destinoRaw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('retir') ? 'LOCAL' : 'FABRICA'
             const errores: string[] = []
 
             if (!turnoNorm) {
                 errores.push(`Turno no reconocido: "${turnoRaw}". Use Mañana, Siesta o Tarde.`)
-                resultados.push({ filaIndex: i, fechaValue: fechaNorm, turnoRaw, turnoNorm, texto, status: 'sin_turno', items: [], errores })
+                resultados.push({ filaIndex: i, fechaValue: fechaNorm, turnoRaw, turnoNorm, texto, status: 'sin_turno', destino, items: [], errores })
                 continue
             }
 
             if (!texto?.trim()) {
                 errores.push('Texto de necesidades vacío.')
-                resultados.push({ filaIndex: i, fechaValue: fechaNorm, turnoRaw, turnoNorm, texto, status: 'sin_match', items: [], errores })
+                resultados.push({ filaIndex: i, fechaValue: fechaNorm, turnoRaw, turnoNorm, texto, status: 'sin_match', destino, items: [], errores })
                 continue
             }
 
@@ -155,6 +157,7 @@ export async function POST(req: NextRequest) {
                 turnoNorm,
                 texto,
                 status: !parsed.isFullyMatched ? 'parcial' : 'ok',
+                destino,
                 items: Object.values(agrupado).map(item => ({
                     productoId: item.productoId,
                     presentacionId: item.presentacionId,
@@ -212,7 +215,8 @@ export async function POST(req: NextRequest) {
                         turno: resultado.turnoNorm!,
                         productoId: item.productoId,
                         presentacionId: item.presentacionId,
-                        cantidad: item.cantidadPaquetes
+                        cantidad: item.cantidadPaquetes,
+                        destino: resultado.destino
                     }
                 })
                 guardados++

@@ -115,14 +115,16 @@ export default function ProduccionPage() {
     const [stockProductos, setStockProductos] = useState<StockProd[]>([])
     interface PlanningData {
         necesidades: Record<string, Record<string, number>>
-        infoProductos: Record<string, Producto & { presentacion?: { id: string, cantidad: number }, isPrimary: boolean }> // Added presentacion and isPrimary to Producto type for planning
-        manuales: Record<string, Record<string, number>>
+        infoProductos: Record<string, any>
+        manuales?: Record<string, Record<string, number>>
+        manualesDetalle?: Record<string, Record<string, { fabrica: number, local: number }>>
         stockFabricacion: Record<string, number>
         stockLocal: Record<string, number>
         enProduccion: Record<string, number>
     }
     const [planning, setPlanning] = useState<PlanningData | null>(null)
     const [activeTurno, setActiveTurno] = useState('Mañana')
+    const [filterDestino, setFilterDestino] = useState<'TODOS' | 'FABRICA' | 'LOCAL'>('TODOS')
     interface UbicacionOption { id: string, nombre: string, tipo: string }
     const [ubicaciones, setUbicaciones] = useState<UbicacionOption[]>([])
     const [showMovModal, setShowMovModal] = useState(false)
@@ -143,6 +145,7 @@ export default function ProduccionPage() {
     const [importColTurno, setImportColTurno] = useState('')
     const [importColTexto, setImportColTexto] = useState('')
     const [importColFecha, setImportColFecha] = useState('')
+    const [importColDestino, setImportColDestino] = useState('')
     const [importHeaders, setImportHeaders] = useState<string[]>([])
     const [importRawRows, setImportRawRows] = useState<any[]>([])
     const [importPreview, setImportPreview] = useState<any[]>([])
@@ -480,7 +483,8 @@ export default function ProduccionPage() {
                     turno,
                     productoId,
                     presentacionId,
-                    cantidad: cantidadUnits
+                    cantidad: cantidadUnits,
+                    destino: filterDestino === 'LOCAL' ? 'LOCAL' : 'FABRICA'
                 })
             });
             if (res.ok) {
@@ -555,7 +559,8 @@ export default function ProduccionPage() {
             const filas = importRawRows.map(r => ({ 
                 fechaRaw: importColFecha ? r[importColFecha] : null,
                 turno: String(r[importColTurno] || ''), 
-                texto: String(r[importColTexto] || '') 
+                texto: String(r[importColTexto] || ''),
+                destino: importColDestino ? String(r[importColDestino] || '') : ''
             }))
             const res = await fetch('/api/produccion/planificacion/importar', {
                 method: 'POST',
@@ -580,7 +585,8 @@ export default function ProduccionPage() {
             const filas = importRawRows.map(r => ({ 
                 fechaRaw: importColFecha ? r[importColFecha] : null,
                 turno: String(r[importColTurno] || ''), 
-                texto: String(r[importColTexto] || '') 
+                texto: String(r[importColTexto] || ''),
+                destino: importColDestino ? String(r[importColDestino] || '') : ''
             }))
             const res = await fetch('/api/produccion/planificacion/importar', {
                 method: 'POST',
@@ -667,6 +673,20 @@ export default function ProduccionPage() {
                                         </button>
                                     ))}
                                 </div>
+                                {activeTurno !== 'Totales' && (
+                                    <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                        {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
+                                            <button
+                                                key={d}
+                                                className={`btn btn-xs ${filterDestino === d ? 'btn-neutral' : 'btn-ghost'}`}
+                                                onClick={() => setFilterDestino(d)}
+                                                style={{ fontSize: '10px', padding: '4px 8px' }}
+                                            >
+                                                {d === 'TODOS' ? '🌐 Todos' : d === 'FABRICA' ? '🏭 Fábrica' : '🏪 Local'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -687,15 +707,34 @@ export default function ProduccionPage() {
                                 </thead>
                                 <tbody>
                                     {activeTurno === 'Totales' ? (() => {
-                                        // Consolidar todos los turnos
+                                        // Consolidar todos los turnos, considerando el filtro de destino
                                         const todosPids = new Set<string>()
                                         Object.values(planning?.necesidades || {}).forEach(t => {
                                             if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
                                         })
 
                                         const totalPorPidPresid: Record<string, number> = {}
+                                        const manualesDetalleConsolidado: Record<string, { fabrica: number, local: number }> = {}
+
+                                        // Consolidar manuales detalle de todos los turnos
+                                        Object.values(planning?.manualesDetalle || {}).forEach(turnoData => {
+                                            Object.entries(turnoData).forEach(([key, det]) => {
+                                                if (!manualesDetalleConsolidado[key]) manualesDetalleConsolidado[key] = { fabrica: 0, local: 0 }
+                                                manualesDetalleConsolidado[key].fabrica += det.fabrica
+                                                manualesDetalleConsolidado[key].local += det.local
+                                            })
+                                        })
+
                                         todosPids.forEach(pid_presid => {
-                                            totalPorPidPresid[pid_presid] = Object.values(planning?.necesidades || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
+                                            const totalUnitsOriginal = Object.values(planning?.necesidades || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
+                                            const det = manualesDetalleConsolidado[pid_presid] || { fabrica: 0, local: 0 }
+                                            const rutaUnitsTotal = Math.max(0, totalUnitsOriginal - (det.fabrica + det.local))
+                                            
+                                            // Aplicar lógica de filtro: rutaUnits siempre es fábrica
+                                            const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsTotal
+                                            const manualUnits = filterDestino === 'TODOS' ? (det.fabrica + det.local) : (filterDestino === 'LOCAL' ? det.local : det.fabrica)
+                                            
+                                            totalPorPidPresid[pid_presid] = rutaUnits + manualUnits
                                         })
 
                                         // ALFABÉTICO POR CÓDIGO INTERNO
@@ -730,6 +769,7 @@ export default function ProduccionPage() {
                                                     </td>
                                                 </tr>
                                                 {items.map(([key, totalUnits]) => {
+                                                    if (totalUnits === 0 && filterDestino !== 'TODOS') return null
                                                     const prodInfo = planning.infoProductos[key]
                                                     const presSize = prodInfo?.presentacion?.cantidad || 48
                                                     const pid = prodInfo?.id
@@ -807,6 +847,7 @@ export default function ProduccionPage() {
                                         )
                                     })() : (() => {
                                         const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
+                                        const manualesTurno = planning?.manualesDetalle?.[activeTurno] || {}
                                         
                                         // ALFABÉTICO POR CÓDIGO INTERNO
                                         const items = Object.entries(necesidadesTurno).sort(([keyA], [keyB]) => {
@@ -823,14 +864,21 @@ export default function ProduccionPage() {
                                                 </tr>
                                             )
 
-                                        return items.map(([key, totalUnits]) => {
+                                        return items.map(([key, totalUnitsOriginal]) => {
                                             const prodInfo = planning.infoProductos[key]
                                             const presSize = prodInfo?.presentacion?.cantidad || 48
                                             const pid = prodInfo?.id
                                             const presid = prodInfo?.presentacion?.id || null
 
-                                            const manualUnits = planning?.manuales?.[activeTurno]?.[key] || 0
-                                            const rutaUnits = Math.max(0, totalUnits - manualUnits)
+                                            const manInfo = manualesTurno[key] || { fabrica: 0, local: 0 }
+                                            const rutaUnitsRaw = Math.max(0, totalUnitsOriginal - (manInfo.fabrica + manInfo.local))
+                                            
+                                            // Aplicar filtro
+                                            const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
+                                            const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
+                                            const totalUnits = rutaUnits + manualUnits
+
+                                            if (totalUnits === 0 && filterDestino !== 'TODOS') return null
                                             
                                             // El stock ahora lo buscamos por KEY (pid_presid)
                                             // En vista de turnos, mostramos solo stock de fabricación como referencia
@@ -1874,25 +1922,32 @@ export default function ProduccionPage() {
                                 </div>
                                 {importHeaders.length > 0 && (
                                     <>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-3)' }}>
                                             <div className="form-group">
-                                                <label className="form-label">Columna Fecha</label>
+                                                <label className="form-label" style={{ fontSize: '10px' }}>Columna Fecha</label>
                                                 <select className="form-select" value={importColFecha} onChange={e => setImportColFecha(e.target.value)}>
-                                                    <option value="">(Usar fecha actual)</option>
+                                                    <option value="">(Auto: Hoy)</option>
                                                     {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                                                 </select>
                                             </div>
                                             <div className="form-group">
-                                                <label className="form-label">Columna de Turno</label>
+                                                <label className="form-label" style={{ fontSize: '10px' }}>Columna Turno</label>
                                                 <select className="form-select" value={importColTurno} onChange={e => setImportColTurno(e.target.value)}>
                                                     <option value="">— Seleccionar —</option>
                                                     {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                                                 </select>
                                             </div>
                                             <div className="form-group">
-                                                <label className="form-label">Columna Necesidades</label>
+                                                <label className="form-label" style={{ fontSize: '10px' }}>Columna Necesidades</label>
                                                 <select className="form-select" value={importColTexto} onChange={e => setImportColTexto(e.target.value)}>
                                                     <option value="">— Seleccionar —</option>
+                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label" style={{ fontSize: '10px' }}>Columna Destino</label>
+                                                <select className="form-select" value={importColDestino} onChange={e => setImportColDestino(e.target.value)}>
+                                                    <option value="">(Auto: Fábrica)</option>
                                                     {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                                                 </select>
                                             </div>
@@ -1918,6 +1973,7 @@ export default function ProduccionPage() {
                                             <tr>
                                                 <th style={{ width: '90px' }}>Fecha</th>
                                                 <th style={{ width: '90px' }}>Turno</th>
+                                                <th style={{ width: '80px' }}>Destino</th>
                                                 <th>Texto original</th>
                                                 <th>Productos detectados</th>
                                                 <th style={{ textAlign: 'center' }}>Estado</th>
@@ -1928,6 +1984,11 @@ export default function ProduccionPage() {
                                                 <tr key={i}>
                                                     <td style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{r.fechaValue ? formatDateOnly(r.fechaValue) : '—'}</td>
                                                     <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{r.turnoNorm || <span style={{ color: 'var(--color-danger)' }}>{r.turnoRaw}</span>}</td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span className={`badge ${r.destino === 'LOCAL' ? 'badge-primary' : 'badge-neutral'}`} style={{ fontSize: '10px' }}>
+                                                            {r.destino}
+                                                        </span>
+                                                    </td>
                                                     <td style={{ fontSize: '11px', color: 'var(--color-gray-500)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.texto}</td>
                                                     <td style={{ fontSize: '11px' }}>
                                                         {r.items?.length > 0

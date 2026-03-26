@@ -678,6 +678,7 @@ model RequerimientoProduccion {
   productoId     String        @map("id_producto")
   presentacionId String?       @map("id_presentacion")
   cantidad       Int
+  destino        String        @default("FABRICA")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   presentacion   Presentacion? @relation(fields: [presentacionId], references: [id])
