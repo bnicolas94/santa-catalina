@@ -46,6 +46,14 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                 const res = await fetch('/api/empleados/roles')
                 const data = await res.json()
                 setRoles(data)
+                
+                // Vinculación automática si tiene rol (string) pero no rolId
+                if (data.length > 0 && !formData.rolId && formData.rol) {
+                    const match = data.find((r: any) => r.nombre === formData.rol)
+                    if (match) {
+                        setFormData(prev => ({ ...prev, rolId: match.id }))
+                    }
+                }
             } catch (error) {
                 console.error('Error fetching roles:', error)
             }
@@ -99,11 +107,13 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
             }
         }
 
-        // Si cambia el rol, actualizar también el rolId
-        if (name === 'rol') {
-            const selectedRole = roles.find(r => r.nombre === value)
+        // Si cambia el rolId, actualizar también el string 'rol' para compatibilidad legacy
+        if (name === 'rolId') {
+            const selectedRole = roles.find(r => r.id === value)
             if (selectedRole) {
-                newFormData.rolId = selectedRole.id
+                newFormData.rol = selectedRole.nombre
+            } else if (value === '') {
+                newFormData.rol = ''
             }
         }
 
@@ -246,22 +256,14 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                         {tab === 'laboral' && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                 <div className="form-group">
-                                    <label className="form-label">Rol</label>
-                                    <select name="rol" value={formData.rol} onChange={handleChange} className="form-select">
-                                        {roles.length > 0 ? (
-                                            roles.map(r => (
-                                                <option key={r.id} value={r.nombre}>{r.nombre}</option>
-                                            ))
-                                        ) : (
-                                            <>
-                                                <option value="OPERARIO">OPERARIO</option>
-                                                <option value="LOGISTICA">LOGÍSTICA / CHOFER</option>
-                                                <option value="COORD_PROD">COORD. PRODUCCIÓN</option>
-                                                <option value="ADMIN_OPS">ADMINISTRATIVO</option>
-                                                <option value="ADMIN">ADMIN GENERAL</option>
-                                            </>
-                                        )}
+                                    <label className="form-label">Rol / Especialidad</label>
+                                    <select name="rolId" value={formData.rolId} onChange={handleChange} className="form-select">
+                                        <option value="">— Seleccionar un Rol —</option>
+                                        {roles.map(r => (
+                                            <option key={r.id} value={r.id}>{r.nombre}</option>
+                                        ))}
                                     </select>
+                                    {!formData.rolId && <small style={{ color: 'var(--color-danger)', fontSize: '10px' }}>* Requerido para automatizar salarios</small>}
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Fecha de Ingreso</label>

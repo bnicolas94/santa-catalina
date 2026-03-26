@@ -56,14 +56,16 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         if (empleado) {
             // Prioridad: 1) Jornal del Rol, 2) Sueldo base individual del empleado
             const rolJornal = empleado.rolRel?.jornal || 0
-            let base = rolJornal > 0 ? rolJornal : empleado.sueldoBaseMensual
+            const sueldoIndiv = empleado.sueldoBaseMensual || 0
             
-            // Si usamos sueldoBaseMensual individual, calcular proporcional según ciclo de pago
-            if (rolJornal <= 0) {
+            let base = rolJornal > 0 ? rolJornal : sueldoIndiv
+            
+            // Si usamos sueldoBaseMensual individual (y no el del rol), calcular proporcional según ciclo de pago
+            if (rolJornal <= 0 && sueldoIndiv > 0) {
                 if (empleado.cicloPago === 'SEMANAL') {
-                    base = empleado.sueldoBaseMensual / 4.3
+                    base = sueldoIndiv / 4.3
                 } else if (empleado.cicloPago === 'QUINCENAL') {
-                    base = empleado.sueldoBaseMensual / 2
+                    base = sueldoIndiv / 2
                 }
             }
             setSueldoBase(Math.round(base))
