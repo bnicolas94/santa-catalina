@@ -100,6 +100,7 @@ model Presentacion {
   movimientos    MovimientoProducto[]
   producto       Producto             @relation(fields: [productoId], references: [id], onDelete: Cascade)
   stocks         StockProducto[]
+  requerimientos RequerimientoProduccion[]
 
   @@unique([productoId, cantidad])
   @@map("presentaciones")
@@ -671,14 +672,16 @@ model MovimientoMercadoPago {
 }
 
 model RequerimientoProduccion {
-  id         String   @id @default(uuid())
-  fecha      DateTime
-  turno      String
-  productoId String   @map("id_producto")
-  cantidad   Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  producto   Producto @relation(fields: [productoId], references: [id])
+  id             String        @id @default(uuid())
+  fecha          DateTime
+  turno          String
+  productoId     String        @map("id_producto")
+  presentacionId String?       @map("id_presentacion")
+  cantidad       Int
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  presentacion   Presentacion? @relation(fields: [presentacionId], references: [id])
+  producto       Producto      @relation(fields: [productoId], references: [id])
 
   @@map("requerimientos_produccion")
 }

@@ -90,6 +90,7 @@ export default function ProduccionPage() {
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [form, setForm] = useState({
         productoId: '',
+        presentacionId: '',
         fechaProduccion: getLocalDateString(),
         rondas: '1',
         paquetesPersonales: '',
@@ -114,7 +115,7 @@ export default function ProduccionPage() {
     const [stockProductos, setStockProductos] = useState<StockProd[]>([])
     interface PlanningData {
         necesidades: Record<string, Record<string, number>>
-        infoProductos: Record<string, Producto>
+        infoProductos: Record<string, Producto & { presentacion?: { id: string, cantidad: number } }> // Added presentacion to Producto type for planning
         manuales: Record<string, Record<string, number>>
         stockFabricacion: Record<string, number>
         enProduccion: Record<string, number>
@@ -190,6 +191,10 @@ export default function ProduccionPage() {
         }
     }
 
+    const mutatePlanning = () => {
+        fetchData() // Re-fetch all data to update planning
+    }
+
     // Producto seleccionado en el form
     const productoSel = productos.find((p) => p.id === form.productoId)
     const rondasNum = parseInt(form.rondas) || 0
@@ -200,7 +205,8 @@ export default function ProduccionPage() {
         const val = e.target.value
         const prod = productos.find((p) => p.id === val)
         const paq = prod ? rondasNum * prod.paquetesPorRonda : 0
-        setForm({ ...form, productoId: val, paquetesPersonales: val ? String(paq) : '' })
+        const defaultPresentacionId = prod?.presentaciones?.[0]?.id || ''
+        setForm({ ...form, productoId: val, presentacionId: defaultPresentacionId, paquetesPersonales: val ? String(paq) : '' })
     }
 
     const handleRondasChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,6 +225,7 @@ export default function ProduccionPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     productoId: form.productoId,
+                    presentacionId: form.presentacionId,
                     fechaProduccion: form.fechaProduccion,
                     unidadesProducidas: paquetesTotal,
                     empleadosRonda: form.empleadosRonda,
@@ -235,6 +242,7 @@ export default function ProduccionPage() {
             setShowModal(false)
             setForm({
                 productoId: '',
+                presentacionId: '',
                 fechaProduccion: getLocalDateString(),
                 rondas: '1',
                 paquetesPersonales: '',
@@ -274,7 +282,7 @@ export default function ProduccionPage() {
             empleadosRonda: String(lote.empleadosRonda),
             fechaProduccion: lote.fechaProduccion.slice(0, 10),
             coordinadorId: lote.coordinador?.id || '',
-            ubicacionId: (lote as any).ubicacionId || '',
+            ubicacionId: lote.ubicacion?.id || '',
             distribucionPresentaciones: distribucion
         })
         setShowCerrarModal(true)
@@ -439,32 +447,35 @@ export default function ProduccionPage() {
         }
     }
 
-    async function handleManualChange(productoId: string, cantidad: string) {
+    const handleSaveManual = async (productoId: string, presentacionId: string | null, value: string, turno: string) => {
         try {
-            const prod = productos.find(p => p.id === productoId)
-            const standardSize = prod?.presentaciones?.length 
-                ? Math.max(...prod.presentaciones.map(pr => pr.cantidad)) 
-                : 48
-
-            const qtyNum = parseFloat(cantidad) || 0
-            const unidadesTotales = Math.round(qtyNum * standardSize)
+            const key = presentacionId ? `${productoId}_${presentacionId}` : `${productoId}_null`;
+            const prod = planning?.infoProductos[key];
+            
+            const multiplier = prod?.presentacion?.cantidad || 48; // Default to 48 if not found
+            const cantidadUnits = Math.round(parseFloat(value || '0') * multiplier);
 
             const res = await fetch('/api/produccion/planificacion/manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fecha: filterFecha || getLocalDateString(),
-                    turno: activeTurno,
+                    turno,
                     productoId,
-                    cantidad: unidadesTotales // Guardar unidades (sándwiches)
+                    presentacionId,
+                    cantidad: cantidadUnits
                 })
-            })
-            if (!res.ok) throw new Error('Error al guardar')
-            fetchData() // Actualizar vista
-        } catch (err: any) {
-            setError(err.message)
+            });
+            if (res.ok) {
+                mutatePlanning();
+            } else {
+                const data = await res.json();
+                throw new Error(data.error || 'Error al guardar');
+            }
+        } catch (error: any) {
+            setError(error.message);
         }
-    }
+    };
 
     async function handleExcelFile(file: File) {
         try {
@@ -611,17 +622,17 @@ export default function ProduccionPage() {
                                     {activeTurno === 'Totales' ? (() => {
                                         // Consolidar todos los turnos
                                         const todosPids = new Set<string>()
-                                        Object.values(planning.necesidades).forEach(t => Object.keys(t).forEach(pid => todosPids.add(pid)))
+                                        Object.values(planning.necesidades).forEach(t => Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid)))
 
-                                        const totalPorPid: Record<string, number> = {}
-                                        todosPids.forEach(pid => {
-                                            totalPorPid[pid] = Object.values(planning.necesidades).reduce((sum, t) => sum + (t[pid] || 0), 0)
+                                        const totalPorPidPresid: Record<string, number> = {}
+                                        todosPids.forEach(pid_presid => {
+                                            totalPorPidPresid[pid_presid] = Object.values(planning.necesidades).reduce((sum, t) => sum + (t[pid_presid] || 0), 0)
                                         })
 
-                                        // ORDEN ALFABÉTICO
-                                        const items = Object.entries(totalPorPid).sort(([pidA], [pidB]) => {
-                                            const codeA = planning.infoProductos[pidA]?.codigoInterno || ''
-                                            const codeB = planning.infoProductos[pidB]?.codigoInterno || ''
+                                        // ALFABÉTICO POR CÓDIGO INTERNO
+                                        const items = Object.entries(totalPorPidPresid).sort(([keyA], [keyB]) => {
+                                            const codeA = planning.infoProductos[keyA]?.codigoInterno || ''
+                                            const codeB = planning.infoProductos[keyB]?.codigoInterno || ''
                                             return codeA.localeCompare(codeB)
                                         })
 
@@ -649,43 +660,41 @@ export default function ProduccionPage() {
                                                         </div>
                                                     </td>
                                                 </tr>
-                                                {items.map(([pid, totalUnits]) => {
-                                                    const prod = planning.infoProductos[pid]
-                                                    const standardSize = prod?.presentaciones?.length 
-                                                        ? Math.max(...prod.presentaciones.map(pr => pr.cantidad)) 
-                                                        : 48
+                                                {items.map(([key, totalUnits]) => {
+                                                    const prodInfo = planning.infoProductos[key]
+                                                    const presSize = prodInfo?.presentacion?.cantidad || 48
+                                                    const pid = prodInfo?.id
+                                                    const presid = prodInfo?.presentacion?.id || ''
 
-                                                    const stockEntry = stockProductos.find(s => s.productoId === pid)
+                                                    const stockValue = planning.stockFabricacion[key] || 0 
                                                     
-                                                    let stockTotalUnits = 0
-                                                    if (stockSource === 'fabrica') stockTotalUnits = (stockEntry?.fabrica || 0)
-                                                    else if (stockSource === 'local') stockTotalUnits = (stockEntry?.local || 0)
-                                                    else stockTotalUnits = (stockEntry?.fabrica || 0) + (stockEntry?.local || 0)
-
                                                     const enProcUnits = planning.enProduccion[pid] || 0
-                                                    const faltanteUnits = Math.max(0, totalUnits - stockTotalUnits - enProcUnits)
+                                                    const faltanteUnits = Math.max(0, totalUnits - stockValue - enProcUnits)
                                                     
-                                                    const totalPaq = (totalUnits / standardSize).toFixed(1).replace('.0', '')
-                                                    const stockPaq = (stockTotalUnits / standardSize).toFixed(1).replace('.0', '')
-                                                    const enProcPaq = (enProcUnits / standardSize).toFixed(1).replace('.0', '')
-                                                    const faltantePaq = (faltanteUnits / standardSize).toFixed(1).replace('.0', '')
+                                                    const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
+                                                    const stockPaq = (stockValue / presSize).toFixed(1).replace('.0', '')
+                                                    const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
+                                                    const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
                                                     
-                                                    const unitsPerRonda = (prod?.paquetesPorRonda || 14) * standardSize
+                                                    const unitsPerRonda = (prodInfo?.paquetesPorRonda || 14) * presSize
                                                     const rondasReal = Math.ceil(faltanteUnits / unitsPerRonda)
 
                                                     return (
-                                                        <tr key={pid}>
+                                                        <tr key={key}>
                                                             <td>
-                                                                <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
-                                                                <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
+                                                                <div style={{ fontWeight: 600, fontSize: '13px' }}>
+                                                                    {prodInfo?.nombre} 
+                                                                    <span style={{ color: 'var(--color-primary)', marginLeft: '6px' }}>
+                                                                        [{prodInfo?.presentacion?.cantidad ? `x${prodInfo.presentacion.cantidad}` : 'S/P'}]
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                             </td>
                                                             <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '14px' }}>{totalPaq} paq</td>
-                                                            <td style={{ textAlign: 'center', color: stockTotalUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
+                                                            <td style={{ textAlign: 'center', color: stockValue < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                                 {stockPaq} paq
                                                                 <div style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>
-                                                                    {stockSource === 'ambos' ? `Fab: ${stockEntry?.fabrica || 0} + Local: ${stockEntry?.local || 0}` : 
-                                                                     stockSource === 'fabrica' ? `Solo Fábrica: ${stockEntry?.fabrica || 0}` : 
-                                                                     `Solo Local: ${stockEntry?.local || 0}`}
+                                                                    {stockSource === 'fabrica' ? 'Solo Fábrica' : stockSource === 'local' ? 'Solo Local' : 'Stock Total'}
                                                                 </div>
                                                             </td>
                                                             <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
@@ -703,7 +712,7 @@ export default function ProduccionPage() {
                                                                     <button
                                                                         className="btn btn-xs btn-primary"
                                                                         onClick={() => {
-                                                                            setForm({ ...form, productoId: pid, rondas: String(rondasReal), paquetesPersonales: String(rondasReal * (prod?.paquetesPorRonda || 14)), fechaProduccion: filterFecha || getLocalDateString() })
+                                                                            setForm({ ...form, productoId: pid, presentacionId: prodInfo.presentacion?.id || '', rondas: String(rondasReal), paquetesPersonales: String(rondasReal * (prodInfo?.paquetesPorRonda || 14)), fechaProduccion: filterFecha || getLocalDateString() })
                                                                             setShowModal(true)
                                                                         }}
                                                                     >
@@ -719,10 +728,10 @@ export default function ProduccionPage() {
                                     })() : (() => {
                                         const necesidadesTurno = planning.necesidades[activeTurno] || {}
                                         
-                                        // ORDEN ALFABÉTICO
-                                        const items = Object.entries(necesidadesTurno).sort(([pidA], [pidB]) => {
-                                            const codeA = planning.infoProductos[pidA]?.codigoInterno || ''
-                                            const codeB = planning.infoProductos[pidB]?.codigoInterno || ''
+                                        // ALFABÉTICO POR CÓDIGO INTERNO
+                                        const items = Object.entries(necesidadesTurno).sort(([keyA], [keyB]) => {
+                                            const codeA = planning.infoProductos[keyA]?.codigoInterno || ''
+                                            const codeB = planning.infoProductos[keyB]?.codigoInterno || ''
                                             return codeA.localeCompare(codeB)
                                         })
 
@@ -734,34 +743,41 @@ export default function ProduccionPage() {
                                             </tr>
                                         )
 
-                                        return items.map(([pid, totalUnits]) => {
-                                            const prod = planning.infoProductos[pid]
-                                            const standardSize = prod?.presentaciones?.length 
-                                                ? Math.max(...prod.presentaciones.map(pr => pr.cantidad)) 
-                                                : 48
+                                        return items.map(([key, totalUnits]) => {
+                                            const prodInfo = planning.infoProductos[key]
+                                            const presSize = prodInfo?.presentacion?.cantidad || 48
+                                            const pid = prodInfo?.id
+                                            const presid = prodInfo?.presentacion?.id || null
 
-                                            const manualUnits = planning.manuales[activeTurno]?.[pid] || 0
-                                            const rutaUnits = totalUnits - manualUnits
-                                            const stockUnits = planning.stockFabricacion[pid] || 0
+                                            const manualUnits = planning.manuales[activeTurno]?.[key] || 0
+                                            const rutaUnits = Math.max(0, totalUnits - manualUnits)
+                                            
+                                            // El stock ahora lo buscamos por KEY (pid_presid)
+                                            const stockUnits = planning.stockFabricacion[key] || 0
                                             const enProcUnits = planning.enProduccion[pid] || 0
                                             const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
                                             
                                             // Conversión a paquetes para mostrar
-                                            const rutaPaq = (rutaUnits / standardSize).toFixed(1).replace('.0', '')
-                                            const manualPaq = (manualUnits / standardSize).toFixed(1).replace('.0', '')
-                                            const stockPaq = (stockUnits / standardSize).toFixed(1).replace('.0', '')
-                                            const enProcPaq = (enProcUnits / standardSize).toFixed(1).replace('.0', '')
-                                            const faltantePaq = (faltanteUnits / standardSize).toFixed(1).replace('.0', '')
-                                            const totalPaq = (totalUnits / standardSize).toFixed(1).replace('.0', '')
+                                            const rutaPaq = (rutaUnits / presSize).toFixed(1).replace('.0', '')
+                                            const manualPaq = (manualUnits / presSize).toFixed(1).replace('.0', '')
+                                            const stockPaq = (stockUnits / presSize).toFixed(1).replace('.0', '')
+                                            const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
+                                            const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
+                                            const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
 
-                                            const unitsPerRonda = (prod?.paquetesPorRonda || 14) * standardSize
+                                            const unitsPerRonda = (prodInfo?.paquetesPorRonda || 14) * presSize
                                             const rondasReal = Math.ceil(faltanteUnits / unitsPerRonda)
 
                                             return (
-                                                <tr key={pid}>
+                                                <tr key={key}>
                                                     <td>
-                                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{prod?.nombre}</div>
-                                                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prod?.codigoInterno}</div>
+                                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>
+                                                            {prodInfo?.nombre}
+                                                            <span style={{ color: 'var(--color-primary)', marginLeft: '6px' }}>
+                                                                [{prodInfo?.presentacion?.cantidad ? `x${prodInfo.presentacion.cantidad}` : 'S/P'}]
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaUnits > 0 ? `${rutaPaq} paq` : '—'}</td>
                                                     <td style={{ textAlign: 'center' }}>
@@ -769,9 +785,9 @@ export default function ProduccionPage() {
                                                             type="number" 
                                                             className="form-input" 
                                                             style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
-                                                            value={manualUnits > 0 ? manualPaq : ''} 
+                                                            defaultValue={manualUnits > 0 ? manualPaq : ''} 
                                                             placeholder="0"
-                                                            onChange={(e) => handleManualChange(pid, e.target.value)}
+                                                            onBlur={(e) => handleSaveManual(pid, presid, e.target.value, activeTurno)}
                                                         />
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
@@ -796,8 +812,9 @@ export default function ProduccionPage() {
                                                                     setForm({
                                                                         ...form,
                                                                         productoId: pid,
+                                                                        presentacionId: presid || '',
                                                                         rondas: String(rondasReal),
-                                                                        paquetesPersonales: String(rondasReal * (prod?.paquetesPorRonda || 14)),
+                                                                        paquetesPersonales: String(rondasReal * (prodInfo?.paquetesPorRonda || 14)),
                                                                         fechaProduccion: filterFecha || getLocalDateString()
                                                                     })
                                                                     setShowModal(true)
@@ -819,18 +836,29 @@ export default function ProduccionPage() {
                                                     className="form-select" 
                                                     style={{ height: '32px', fontSize: '12px' }}
                                                     onChange={(e) => {
-                                                        if(e.target.value) handleManualChange(e.target.value, '1')
+                                                        const val = e.target.value
+                                                        if (val) {
+                                                            const [pid, presid] = val.split('_')
+                                                            handleSaveManual(pid, presid || null, '1', activeTurno)
+                                                        }
                                                         e.target.value = ''
                                                     }}
                                                 >
                                                     <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
-                                                    {productos
-                                                        .filter(p => !planning.necesidades[activeTurno]?.[p.id])
-                                                        .map(p => <option key={p.id} value={p.id}>[{p.codigoInterno}] {p.nombre}</option>)
-                                                    }
+                                                    {productos.flatMap(p => 
+                                                        (p.presentaciones || []).map(pr => {
+                                                            const key = `${p.id}_${pr.id}`
+                                                            if (planning.necesidades[activeTurno]?.[key]) return null
+                                                            return (
+                                                                <option key={key} value={key}>
+                                                                    [{p.codigoInterno}] {p.nombre} (x{pr.cantidad})
+                                                                </option>
+                                                            )
+                                                        })
+                                                    )}
                                                 </select>
                                             </td>
-                                            <td colSpan={5}></td>
+                                            <td colSpan={6}></td>
                                         </tr>
                                     )}
                                 </tbody>

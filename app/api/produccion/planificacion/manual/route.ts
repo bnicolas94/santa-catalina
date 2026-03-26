@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { fecha: fechaStr, turno, productoId, cantidad } = body
+        const { fecha: fechaStr, turno, productoId, presentacionId, cantidad } = body
 
         if (!fechaStr || !turno || !productoId) {
             return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 })
@@ -40,12 +40,13 @@ export async function POST(request: Request) {
         const startOfDay = new Date(fechaStr)
         startOfDay.setUTCHours(0, 0, 0, 0)
 
-        // Upsert: Si ya existe para ese día, turno y producto, actualizamos
+        // Upsert: Si ya existe para ese día, turno, producto y presentación, actualizamos
         const existing = await prisma.requerimientoProduccion.findFirst({
             where: {
                 fecha: startOfDay,
                 turno,
-                productoId
+                productoId,
+                presentacionId: presentacionId || null
             }
         })
 
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
                     fecha: startOfDay,
                     turno,
                     productoId,
+                    presentacionId,
                     cantidad: parseInt(cantidad)
                 }
             })

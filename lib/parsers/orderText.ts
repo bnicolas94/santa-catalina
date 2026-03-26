@@ -1,7 +1,9 @@
 export type PresentacionData = {
     id: string;
     cantidad: number;
+    productoId: string;
     producto: {
+        id: string;
         codigoInterno: string;
         alias?: string | null;
     };
@@ -10,7 +12,8 @@ export type PresentacionData = {
 export type ParseResult = {
     detalles: Array<{
         presentacionId: string;
-        cantidad: number; // Siempre 1 para el pedido, la "cantidad de planchas" está en la presentacion
+        productoId: string;
+        cantidad: number; // Cantidad de paquetes
         observaciones?: string;
     }>;
     unmatchedText?: string;
@@ -18,10 +21,10 @@ export type ParseResult = {
 };
 
 /**
- * Parsea el texto libre de un pedido de Excel buscando patrones como "24jyq", "48esp", etc.
- * @param text - Texto del pedido en Excel, ej: "24jyq / 8hue 8tom"
- * @param presentaciones - Lista de todas las presentaciones activas en el sistema
- * @returns ParseResult con los IDs matcheados o el texto no reconocido.
+ * Parsea el texto libre buscando patrones como "24jyq", "48esp", "96jyq", etc.
+ * @param text - Texto a parsear
+ * @param presentaciones - Lista de todas las presentaciones del sistema (con datos del producto)
+ * @returns ParseResult con los IDs matcheados.
  */
 export function parseOrderText(
     text: string,
@@ -31,8 +34,13 @@ export function parseOrderText(
         return { detalles: [], isFullyMatched: false, unmatchedText: "Texto vacío" };
     }
 
-    const detalles = [];
-    const unmatchedParts = [];
+    const detalles: Array<{
+        presentacionId: string;
+        productoId: string;
+        cantidad: number;
+        observaciones?: string;
+    }> = [];
+    const unmatchedParts: string[] = [];
     let isFullyMatched = true;
 
     // Normalizamos el texto: a minusculas y removemos paréntesis
@@ -51,92 +59,80 @@ export function parseOrderText(
     // Regex para detectar "[codigo][cantidad]" ej: "jyq24" o "clasicos48"
     const itemRegexReverse = /^([a-zñáéíóú]+)(\d+)$/;
 
-    const currentObservaciones: string[] = [];
+    const globalObservaciones: string[] = [];
 
     for (const token of tokens) {
-        if (!token) continue;
-
         const match = token.match(itemRegex);
         const matchReverse = token.match(itemRegexReverse);
 
         if (match || matchReverse) {
             const cantidad = match ? parseInt(match[1], 10) : parseInt(matchReverse![2], 10);
-            const codigoInterno = match ? match[2] : matchReverse![1];
+            const aliasOcodigo = match ? match[2] : matchReverse![1];
 
-            // Buscamos si existe la presentación exacta
-            const exactMatch = presentaciones.find(
-                (p) => {
-                    const matchesCodigo = p.producto.codigoInterno.toLowerCase() === codigoInterno;
-                    const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase()) : [];
-                    const matchesAlias = aliases.includes(codigoInterno);
-                    
-                    return p.cantidad === cantidad && (matchesCodigo || matchesAlias);
+            // 1. Filtrar presentaciones del producto que coincida con el código o alias
+            const related = presentaciones.filter(p => {
+                const matchesCodigo = p.producto.codigoInterno.toLowerCase() === aliasOcodigo.toLowerCase();
+                const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase().trim()) : [];
+                return matchesCodigo || aliases.includes(aliasOcodigo.toLowerCase());
+            });
+
+            if (related.length > 0) {
+                // 2. Intentar match exacto (ej. 24jyq matches x24)
+                let selectedPres = related.find(p => p.cantidad === cantidad);
+                let numPaquetes = 1;
+
+                if (!selectedPres) {
+                    // 3. Buscar el divisor más grande posible (ej. 96jyq matches 2 x x48)
+                    const sorted = [...related].sort((a, b) => b.cantidad - a.cantidad);
+                    const divisor = sorted.find(p => cantidad % p.cantidad === 0);
+                    if (divisor) {
+                        selectedPres = divisor;
+                        numPaquetes = cantidad / divisor.cantidad;
+                    } else {
+                        // 4. Fallback: usar el más grande disponible
+                        selectedPres = sorted[0];
+                        numPaquetes = cantidad / sorted[0].cantidad;
+                    }
                 }
-            );
 
-            if (exactMatch) {
-                const isAlias = exactMatch.producto.codigoInterno.toLowerCase() !== codigoInterno.toLowerCase();
-                const detailObs = isAlias ? codigoInterno.toUpperCase() : "";
-
-                detalles.push({
-                    presentacionId: exactMatch.id,
-                    cantidad: 1, 
-                    observaciones: detailObs, 
-                });
-            } else {
-                // Si no hay match exacto, buscamos si la cantidad es múltiplo de alguna presentación
-                // Filtramos presentaciones que coincidan con el código/alias
-                const related = presentaciones.filter(p => {
-                    const matchesCodigo = p.producto.codigoInterno.toLowerCase() === codigoInterno;
-                    const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase()) : [];
-                    return matchesCodigo || aliases.includes(codigoInterno);
-                }).sort((a, b) => b.cantidad - a.cantidad); // Ordenamos de mayor a menor para usar el paquete más grande
-
-                const divisor = related.find(p => cantidad % p.cantidad === 0);
-
-                if (divisor) {
-                    const isAlias = divisor.producto.codigoInterno.toLowerCase() !== codigoInterno.toLowerCase();
-                    const detailObs = isAlias ? codigoInterno.toUpperCase() : "";
-
+                if (selectedPres) {
+                    const isAlias = selectedPres.producto.codigoInterno.toLowerCase() !== aliasOcodigo.toLowerCase();
                     detalles.push({
-                        presentacionId: divisor.id,
-                        cantidad: cantidad / divisor.cantidad,
-                        observaciones: detailObs,
+                        presentacionId: selectedPres.id,
+                        productoId: selectedPres.productoId,
+                        cantidad: numPaquetes,
+                        observaciones: isAlias ? aliasOcodigo.toUpperCase() : ""
                     });
                 } else {
-                    // Encontramos el patrón pero no hay forma de cubrir esa cantidad con presentaciones existentes
                     isFullyMatched = false;
                     unmatchedParts.push(token);
                 }
+            } else {
+                isFullyMatched = false;
+                unmatchedParts.push(token);
             }
         } else {
-            // Si no hace match con "[CANTIDAD][CODIGO]", lo consideramos una observacion o unmatched
-            // Consideramos tokens estándar "s/algo" (sin), "c/algo" (con), "p/n" (para noche)
-            if (token.startsWith('s/') || token.startsWith('c/') || token === 'p/n' || token === 'bandejas') {
-                currentObservaciones.push(token);
+            // Tokens que no son [cant][cod], ej: "s/morron", "c/huevo", "bandejas"
+            if (token.length > 2 && (token.startsWith('s/') || token.startsWith('c/') || token === 'p/n' || token === 'bandejas')) {
+                globalObservaciones.push(token);
             } else {
-                // Token desconocido que no logramos matchear del todo
-                // Si hay una estandarización a futuro, los tokens raros hacen que la fila sea manual.
                 isFullyMatched = false;
                 unmatchedParts.push(token);
             }
         }
     }
 
-    // Si hubo observaciones globales, se las sumamos a todos los detalles
-    const obsString = currentObservaciones.join(" ");
-    if (obsString && detalles.length > 0) {
-        detalles.forEach((d) => {
-            d.observaciones = d.observaciones ? `${d.observaciones} ${obsString}` : obsString;
+    // Aplicar observaciones globales a todos los detalles
+    if (globalObservaciones.length > 0 && detalles.length > 0) {
+        const obs = globalObservaciones.join(" ");
+        detalles.forEach(d => {
+            d.observaciones = d.observaciones ? `${d.observaciones} ${obs}` : obs;
         });
-    } else if (obsString) {
-        unmatchedParts.push(obsString);
     }
 
-    // Si no logramos procesar algo, devolvemos isFullyMatched = false
     return {
-        detalles: detalles,
+        detalles,
         isFullyMatched,
-        unmatchedText: isFullyMatched ? undefined : text, // Devolvemos todo el texto original para carga manual
+        unmatchedText: isFullyMatched ? undefined : tokens.join(" ")
     };
 }

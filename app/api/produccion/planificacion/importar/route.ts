@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
             turnoNorm: string | null
             texto: string
             status: 'ok' | 'sin_turno' | 'sin_match' | 'parcial'
-            items: Array<{ productoId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }>
+            items: Array<{ productoId: string, presentacionId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }>
             errores: string[]
         }
         const resultados: FilaResultado[] = []
@@ -79,24 +79,27 @@ export async function POST(req: NextRequest) {
 
             const parsed = parseOrderText(texto, presentacionesDB as PresentacionData[])
 
-            // Convertir detalles de pedido (presentacionId + cantidad paquetes) → agrupado por productoId
-            const porProducto: Record<string, { productoId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }> = {}
+            // Convertir detalles de pedido (presentacionId + cantidad paquetes) → agrupado por productoId + presentacionId
+            const agrupado: Record<string, { productoId: string, presentacionId: string, productoNombre: string, cantidadPaquetes: number, tokenOriginal: string }> = {}
 
             for (const det of parsed.detalles) {
                 const pres = presentacionesDB.find(p => p.id === det.presentacionId)
                 if (!pres) continue
                 const pid = (pres.producto as any).id
-                if (!porProducto[pid]) {
-                    porProducto[pid] = {
+                const key = `${pid}_${det.presentacionId}`
+                
+                if (!agrupado[key]) {
+                    agrupado[key] = {
                         productoId: pid,
-                        productoNombre: (pres.producto as any).codigoInterno,
+                        presentacionId: det.presentacionId,
+                        productoNombre: `${(pres.producto as any).codigoInterno} [x${pres.cantidad}]`,
                         cantidadPaquetes: 0,
                         tokenOriginal: texto
                     }
                 }
-                // cantidad = número de paquetes (1 paquete = 1 detalle en pedidos, pero aquí la cantidad del detalle puede ser > 1 si era divisor)
-                // Sumamos el total de sándwiches (unidades)
-                porProducto[pid].cantidadPaquetes += det.cantidad * pres.cantidad
+                // det.cantidad es el número de paquetes matcheados (ej: 2 si 96jyq matchea 2x48)
+                // Guardamos la cantidad en UNIDADES (sándwiches) para el registro en DB
+                agrupado[key].cantidadPaquetes += det.cantidad * pres.cantidad
             }
 
             resultados.push({
@@ -105,7 +108,7 @@ export async function POST(req: NextRequest) {
                 turnoNorm,
                 texto,
                 status: !parsed.isFullyMatched ? 'parcial' : 'ok',
-                items: Object.values(porProducto),
+                items: Object.values(agrupado),
                 errores: parsed.unmatchedText ? [`Tokens no reconocidos: "${parsed.unmatchedText}"`] : []
             })
         }
@@ -136,28 +139,25 @@ export async function POST(req: NextRequest) {
         }
 
         let guardados = 0
-        const itemsAInsertar: any[] = []
+        // itemsAInsertar is no longer needed as we are using create inside the loop
+        // const itemsAInsertar: any[] = []
 
         for (const resultado of resultados) {
             if (!resultado.turnoNorm || resultado.items.length === 0) continue
 
             for (const item of resultado.items) {
-                itemsAInsertar.push({
-                    fecha: startOfDay,
-                    turno: resultado.turnoNorm,
-                    productoId: item.productoId,
-                    cantidad: item.cantidadPaquetes // Ahora son unidades (sándwiches)
+                await prisma.requerimientoProduccion.create({
+                    data: {
+                        fecha: startOfDay,
+                        turno: resultado.turnoNorm!,
+                        productoId: item.productoId,
+                        presentacionId: item.presentacionId,
+                        cantidad: item.cantidadPaquetes
+                    }
                 })
                 guardados++
             }
         }
-
-        if (itemsAInsertar.length > 0) {
-            await prisma.requerimientoProduccion.createMany({
-                data: itemsAInsertar
-            })
-        }
-
         return NextResponse.json({ success: true, guardados, resultados })
 
     } catch (error: any) {
