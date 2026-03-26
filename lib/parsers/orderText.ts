@@ -81,35 +81,31 @@ export function parseOrderText(
             }
 
             if (related.length > 0) {
-                // 2. Intentar match exacto (ej. 24jyq matches x24)
-                let selectedPres = related.find(p => p.cantidad === cantidad);
-                let numPaquetes = 1;
+                // 2. Greedy matching: consumir la cantidad usando las presentaciones más grandes primero
+                const sorted = [...related].sort((a, b) => b.cantidad - a.cantidad);
+                let remaining = cantidad;
+                let foundAny = false;
 
-                if (!selectedPres) {
-                    // 3. Buscar el divisor más grande posible (ej. 96jyq matches 2 x x48)
-                    const sorted = [...related].sort((a, b) => b.cantidad - a.cantidad);
-                    const divisor = sorted.find(p => cantidad % p.cantidad === 0);
-                    if (divisor) {
-                        selectedPres = divisor;
-                        numPaquetes = cantidad / divisor.cantidad;
-                    } else {
-                        // 4. Fallback: usar el más grande disponible
-                        selectedPres = sorted[0];
-                        numPaquetes = cantidad / sorted[0].cantidad;
+                for (const pres of sorted) {
+                    if (remaining >= pres.cantidad) {
+                        const numPaquetes = Math.floor(remaining / pres.cantidad);
+                        const isAlias = pres.producto.codigoInterno.toLowerCase() !== aliasOcodigo.toLowerCase();
+                        
+                        detalles.push({
+                            presentacionId: pres.id,
+                            productoId: pres.productoId,
+                            cantidad: numPaquetes,
+                            observaciones: isAlias ? aliasOcodigo.toUpperCase() : ""
+                        });
+                        
+                        remaining -= (numPaquetes * pres.cantidad);
+                        foundAny = true;
                     }
                 }
 
-                if (selectedPres) {
-                    const isAlias = selectedPres.producto.codigoInterno.toLowerCase() !== aliasOcodigo.toLowerCase();
-                    detalles.push({
-                        presentacionId: selectedPres.id,
-                        productoId: selectedPres.productoId,
-                        cantidad: numPaquetes,
-                        observaciones: isAlias ? aliasOcodigo.toUpperCase() : ""
-                    });
-                } else {
+                if (remaining > 0 || !foundAny) {
                     isFullyMatched = false;
-                    unmatchedParts.push(token);
+                    if (remaining > 0) unmatchedParts.push(`${remaining}${aliasOcodigo}`);
                 }
             } else {
                 isFullyMatched = false;
