@@ -471,7 +471,7 @@ export default function ProduccionPage() {
         try {
             const key = presentacionId ? `${productoId}_${presentacionId}` : `${productoId}_null`;
             const prod = planning?.infoProductos[key];
-            
+
             const multiplier = prod?.presentacion?.cantidad || 48; // Default to 48 if not found
             const cantidadUnits = Math.round(parseFloat(value || '0') * multiplier);
 
@@ -557,9 +557,9 @@ export default function ProduccionPage() {
         if (!importColTurno || !importColTexto) { setError('Seleccioná las columnas de Turno y Necesidades.'); return }
         setImportLoading(true)
         try {
-            const filas = importRawRows.map(r => ({ 
+            const filas = importRawRows.map(r => ({
                 fechaRaw: importColFecha ? r[importColFecha] : null,
-                turno: String(r[importColTurno] || ''), 
+                turno: String(r[importColTurno] || ''),
                 texto: String(r[importColTexto] || ''),
                 destino: importColDestino ? String(r[importColDestino] || '') : ''
             }))
@@ -583,9 +583,9 @@ export default function ProduccionPage() {
     async function handleImportConfirm() {
         setImportLoading(true)
         try {
-            const filas = importRawRows.map(r => ({ 
+            const filas = importRawRows.map(r => ({
                 fechaRaw: importColFecha ? r[importColFecha] : null,
-                turno: String(r[importColTurno] || ''), 
+                turno: String(r[importColTurno] || ''),
                 texto: String(r[importColTexto] || ''),
                 destino: importColDestino ? String(r[importColDestino] || '') : ''
             }))
@@ -664,7 +664,7 @@ export default function ProduccionPage() {
                                 </button>
                                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
                                     {['Mañana', 'Siesta', 'Tarde', 'Totales'].map(t => (
-                                        <button 
+                                        <button
                                             key={t}
                                             className={`btn btn-xs ${activeTurno === t ? (t === 'Totales' ? 'btn-success' : 'btn-primary') : 'btn-ghost'}`}
                                             onClick={() => setActiveTurno(t)}
@@ -674,20 +674,18 @@ export default function ProduccionPage() {
                                         </button>
                                     ))}
                                 </div>
-                                {activeTurno !== 'Totales' && (
-                                    <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
-                                        {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
-                                            <button
-                                                key={d}
-                                                className={`btn btn-xs ${filterDestino === d ? 'btn-neutral' : 'btn-ghost'}`}
-                                                onClick={() => setFilterDestino(d)}
-                                                style={{ fontSize: '10px', padding: '4px 8px' }}
-                                            >
-                                                {d === 'TODOS' ? '🌐 Todos' : d === 'FABRICA' ? '🏭 Fábrica' : '🏪 Local'}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                    {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
+                                        <button
+                                            key={d}
+                                            className={`btn btn-xs ${filterDestino === d ? 'btn-neutral' : 'btn-ghost'}`}
+                                            onClick={() => setFilterDestino(d)}
+                                            style={{ fontSize: '10px', padding: '4px 8px' }}
+                                        >
+                                            {d === 'TODOS' ? '🌐 Todos' : d === 'FABRICA' ? '🏭 Fábrica' : '🏪 Local'}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
@@ -696,8 +694,8 @@ export default function ProduccionPage() {
                                 <thead>
                                     <tr>
                                         <th>Producto</th>
-                                        {activeTurno !== 'Totales' && <th style={{ textAlign: 'center' }}>H. Ruta</th>}
-                                        {activeTurno !== 'Totales' && <th style={{ textAlign: 'center' }}>Carga Express</th>}
+                                        <th style={{ textAlign: 'center' }}>H. Ruta</th>
+                                        <th style={{ textAlign: 'center' }}>Carga Express</th>
                                         <th style={{ textAlign: 'center' }}>Total Necesario</th>
                                         <th style={{ textAlign: 'center' }}>{activeTurno === 'Totales' ? 'Stock Total (Fab+Local)' : 'Stock Fab.'}</th>
                                         <th style={{ textAlign: 'center' }}>En Proceso</th>
@@ -714,7 +712,7 @@ export default function ProduccionPage() {
                                             if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
                                         })
 
-                                        const totalPorPidPresid: Record<string, number> = {}
+                                        const consolidado: Record<string, { ruta: number, manual: number, total: number }> = {}
                                         const manualesDetalleConsolidado: Record<string, { fabrica: number, local: number }> = {}
 
                                         // Consolidar manuales detalle de todos los turnos
@@ -734,25 +732,29 @@ export default function ProduccionPage() {
                                             // Aplicar lógica de filtro: rutaUnits siempre es fábrica
                                             const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsTotal
                                             const manualUnits = filterDestino === 'TODOS' ? (det.fabrica + det.local) : (filterDestino === 'LOCAL' ? det.local : det.fabrica)
-                                            
-                                            totalPorPidPresid[pid_presid] = rutaUnits + manualUnits
+
+                                            consolidado[pid_presid] = {
+                                                ruta: rutaUnits,
+                                                manual: manualUnits,
+                                                total: rutaUnits + manualUnits
+                                            }
                                         })
 
                                         // ALFABÉTICO POR CÓDIGO INTERNO
-                                        const items = Object.entries(totalPorPidPresid).sort(([keyA], [keyB]) => {
+                                        const items = Object.entries(consolidado).sort(([keyA], [keyB]) => {
                                             const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
                                             const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
                                             return codeA.localeCompare(codeB)
                                         })
 
                                         if (items.length === 0) return (
-                                            <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
+                                            <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
                                         )
 
                                         return (
                                             <>
                                                 <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                                    <td colSpan={6} style={{ padding: 'var(--space-2) var(--space-4)' }}>
+                                                    <td colSpan={9} style={{ padding: 'var(--space-2) var(--space-4)' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', fontSize: '12px' }}>
                                                             <span style={{ fontWeight: 600, color: 'var(--color-gray-600)' }}>Considerar Stock de:</span>
                                                             <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
@@ -769,7 +771,8 @@ export default function ProduccionPage() {
                                                         </div>
                                                     </td>
                                                 </tr>
-                                                {items.map(([key, totalUnits]) => {
+                                                {items.map(([key, data]) => {
+                                                    const { ruta, manual, total: totalUnits } = data
                                                     if (totalUnits === 0 && filterDestino !== 'TODOS') return null
                                                     const prodInfo = planning.infoProductos[key]
                                                     const presSize = prodInfo?.presentacion?.cantidad || 48
@@ -783,19 +786,21 @@ export default function ProduccionPage() {
                                                         if (stockSource === 'local') return loc
                                                         return fab + loc
                                                     })()
-                                                    
+
                                                     const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
                                                     const faltanteUnits = Math.max(0, totalUnits - stockValue - enProcUnits)
-                                                    
+
+                                                    const rutaPaq = (ruta / presSize).toFixed(1).replace('.0', '')
+                                                    const manualPaq = (manual / presSize).toFixed(1).replace('.0', '')
                                                     const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
                                                     const stockPaq = (stockValue / presSize).toFixed(1).replace('.0', '')
                                                     const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
                                                     const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
-                                                    
+
                                                     const finalUnits = stockValue + enProcUnits - totalUnits
                                                     const finalPaq = (finalUnits / presSize).toFixed(1).replace('.0', '')
                                                     const finalColor = finalUnits < 0 ? 'var(--color-error)' : 'var(--color-success)'
-                                                    
+
                                                     const unitsPerRonda = (prodInfo?.paquetesPorRonda || 14) * presSize
                                                     const rondasReal = Math.ceil(faltanteUnits / unitsPerRonda)
 
@@ -803,14 +808,16 @@ export default function ProduccionPage() {
                                                         <tr key={key}>
                                                             <td>
                                                                 <div style={{ fontWeight: 600, fontSize: '13px' }}>
-                                                                    {prodInfo?.nombre} 
+                                                                    {prodInfo?.nombre}
                                                                     <span style={{ color: 'var(--color-primary)', marginLeft: '6px' }}>
                                                                         [{prodInfo?.presentacion?.cantidad ? `x${prodInfo.presentacion.cantidad}` : 'S/P'}]
                                                                     </span>
                                                                 </div>
                                                                 <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                             </td>
-                                                            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '14px' }}>{totalPaq} paq</td>
+                                                            <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{ruta > 0 ? `${rutaPaq} paq` : '—'}</td>
+                                                            <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-primary)' }}>{manual > 0 ? `${manualPaq} paq` : '—'}</td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
                                                             <td style={{ textAlign: 'center', color: stockValue < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                                 {stockPaq} paq
                                                                 <div style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>
@@ -822,7 +829,7 @@ export default function ProduccionPage() {
                                                             </td>
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (
-                                                                    <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '15px' }}>{faltantePaq} paq</span>
+                                                                    <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltantePaq} paq</span>
                                                                 ) : (
                                                                     <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
                                                                 )}
@@ -849,7 +856,7 @@ export default function ProduccionPage() {
                                     })() : (() => {
                                         const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
                                         const manualesTurno = planning?.manualesDetalle?.[activeTurno] || {}
-                                        
+
                                         // ALFABÉTICO POR CÓDIGO INTERNO
                                         const items = Object.entries(necesidadesTurno).sort(([keyA], [keyB]) => {
                                             const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
@@ -857,13 +864,13 @@ export default function ProduccionPage() {
                                             return codeA.localeCompare(codeB)
                                         })
 
-                                            if (items.length === 0) return (
-                                                <tr>
-                                                    <td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
-                                                        No hay requerimientos para el turno {activeTurno}
-                                                    </td>
-                                                </tr>
-                                            )
+                                        if (items.length === 0) return (
+                                            <tr>
+                                                <td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                    No hay requerimientos para el turno {activeTurno}
+                                                </td>
+                                            </tr>
+                                        )
 
                                         return items.map(([key, totalUnitsOriginal]) => {
                                             const prodInfo = planning.infoProductos[key]
@@ -873,27 +880,27 @@ export default function ProduccionPage() {
 
                                             const manInfo = manualesTurno[key] || { fabrica: 0, local: 0 }
                                             const rutaUnitsRaw = Math.max(0, totalUnitsOriginal - (manInfo.fabrica + manInfo.local))
-                                            
+
                                             // Aplicar filtro
                                             const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
                                             const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
                                             const totalUnits = rutaUnits + manualUnits
 
                                             if (totalUnits === 0 && filterDestino !== 'TODOS') return null
-                                            
+
                                             // El stock ahora lo buscamos por KEY (pid_presid)
                                             // En vista de turnos, mostramos solo stock de fabricación como referencia
                                             const stockUnits = planning?.stockFabricacion?.[key] || 0
                                             const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
                                             const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
-                                            
+
                                             // Conversión a paquetes para mostrar
                                             const rutaPaq = (rutaUnits / presSize).toFixed(1).replace('.0', '')
                                             const manualPaq = (manualUnits / presSize).toFixed(1).replace('.0', '')
                                             const stockPaq = (stockUnits / presSize).toFixed(1).replace('.0', '')
                                             const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
                                             const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
-                                            
+
                                             const finalUnits = stockUnits + enProcUnits - totalUnits
                                             const finalPaq = (finalUnits / presSize).toFixed(1).replace('.0', '')
                                             const finalColor = finalUnits < 0 ? 'var(--color-error)' : 'var(--color-success)'
@@ -915,11 +922,11 @@ export default function ProduccionPage() {
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaUnits > 0 ? `${rutaPaq} paq` : '—'}</td>
                                                     <td style={{ textAlign: 'center' }}>
-                                                        <input 
-                                                            type="number" 
-                                                            className="form-input" 
+                                                        <input
+                                                            type="number"
+                                                            className="form-input"
                                                             style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
-                                                            defaultValue={manualUnits > 0 ? manualPaq : ''} 
+                                                            defaultValue={manualUnits > 0 ? manualPaq : ''}
                                                             placeholder="0"
                                                             onBlur={(e) => handleSaveManual(pid, presid, e.target.value, activeTurno)}
                                                         />
@@ -941,7 +948,7 @@ export default function ProduccionPage() {
                                                     <td style={{ textAlign: 'center', fontWeight: 600, color: finalColor }}>{finalPaq} paq</td>
                                                     <td style={{ textAlign: 'right' }}>
                                                         {faltanteUnits > 0 ? (
-                                                            <button 
+                                                            <button
                                                                 className="btn btn-xs btn-primary"
                                                                 onClick={() => {
                                                                     setForm({
@@ -967,8 +974,8 @@ export default function ProduccionPage() {
                                     {activeTurno !== 'Totales' && (
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
                                             <td colSpan={3}>
-                                                <select 
-                                                    className="form-select" 
+                                                <select
+                                                    className="form-select"
                                                     style={{ height: '32px', fontSize: '12px' }}
                                                     onChange={(e) => {
                                                         const val = e.target.value
@@ -980,7 +987,7 @@ export default function ProduccionPage() {
                                                     }}
                                                 >
                                                     <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
-                                                    {productos.flatMap(p => 
+                                                    {productos.flatMap(p =>
                                                         (p.presentaciones || []).map(pr => {
                                                             const key = `${p.id}_${pr.id}`
                                                             if (planning.necesidades[activeTurno]?.[key]) return null
@@ -1885,11 +1892,11 @@ export default function ProduccionPage() {
                             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                                 {/* TABS DE MODO */}
                                 <div style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: 'var(--space-2)' }}>
-                                    <button 
+                                    <button
                                         onClick={() => setImportMode('file')}
                                         style={{ padding: '10px 20px', border: 'none', background: 'none', borderBottom: importMode === 'file' ? '2px solid #3498DB' : 'none', cursor: 'pointer', fontWeight: importMode === 'file' ? 'bold' : 'normal', color: importMode === 'file' ? '#3498DB' : '#666' }}
                                     >📁 Subir Excel</button>
-                                    <button 
+                                    <button
                                         onClick={() => setImportMode('paste')}
                                         style={{ padding: '10px 20px', border: 'none', background: 'none', borderBottom: importMode === 'paste' ? '2px solid #3498DB' : 'none', cursor: 'pointer', fontWeight: importMode === 'paste' ? 'bold' : 'normal', color: importMode === 'paste' ? '#3498DB' : '#666' }}
                                     >📋 Pegar desde Excel</button>
@@ -1908,8 +1915,8 @@ export default function ProduccionPage() {
                                 ) : (
                                     <div className="form-group">
                                         <label className="form-label">Pegar celdas de Excel (incluir encabezados)</label>
-                                        <textarea 
-                                            className="form-input" 
+                                        <textarea
+                                            className="form-input"
                                             style={{ minHeight: '120px', fontFamily: 'monospace', fontSize: '11px' }}
                                             placeholder={"Ejemplo:\nTurno\tNecesidades\nMañana\t10 48jyq\nSiesta\t5 24jyq"}
                                             onChange={(e) => handlePasteText(e.target.value)}
