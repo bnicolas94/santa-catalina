@@ -97,35 +97,107 @@ export default function ImportarPedidosPage() {
         }
     };
 
+    const [colMapping, setColMapping] = useState<Record<number, string>>({});
+    const [pasteRows, setPasteRows] = useState<string[][]>([]);
+
+    const MAPPABLE_FIELDS = [
+        { id: 'fecha', label: '📅 Fecha', required: true },
+        { id: 'nombreCliente', label: '👤 Cliente', required: true },
+        { id: 'pedidoTexto', label: '📦 Pedido', required: true },
+        { id: 'direccion', label: '🏠 Dirección', required: true },
+        { id: 'localidad', label: '📍 Localidad', required: true },
+        { id: 'telefono', label: '📞 Teléfono', required: true },
+        { id: 'turno', label: '⏰ Turno', required: false },
+        { id: 'ignore', label: '🚫 Ignorar', required: false },
+    ];
+
+    // Detectar cabeceras automáticamente
+    const autoDetectMapping = (firstRow: string[]) => {
+        const mapping: Record<number, string> = {};
+        const keywords: Record<string, RegExp[]> = {
+            fecha: [/fecha/i, /dia/i],
+            nombreCliente: [/cliente/i, /nombre/i, /apellido/i, /comercial/i],
+            pedidoTexto: [/pedido/i, /detalle/i, /texto/i, /concepto/i],
+            direccion: [/direccion/i, /calle/i, /domicilio/i],
+            localidad: [/localidad/i, /barrio/i, /ciudad/i],
+            telefono: [/tel/i, /cel/i, /contacto/i, /whatsapp/i],
+            turno: [/turno/i, /horario/i],
+        };
+
+        firstRow.forEach((val, idx) => {
+            const cleanVal = val.toLowerCase().trim();
+            for (const [field, regexes] of Object.entries(keywords)) {
+                if (regexes.some(r => r.test(cleanVal))) {
+                    mapping[idx] = field;
+                    break;
+                }
+            }
+        });
+        setColMapping(mapping);
+    };
+
+    const handlePasteChange = (text: string) => {
+        setPasteText(text);
+        if (!text.trim()) {
+            setPasteRows([]);
+            return;
+        }
+        const lines = text.trim().split("\n");
+        const parsedRows = lines.map(line => line.split("\t"));
+        setPasteRows(parsedRows);
+        
+        // Si acabamos de pegar y no hay mapeo, intentamos auto-detectar con la primera fila
+        if (Object.keys(colMapping).length === 0 && parsedRows.length > 0) {
+            autoDetectMapping(parsedRows[0]);
+        }
+    };
+
     const handlePastePreview = async () => {
         if (!pasteText.trim()) return;
+
+        // Validar que los campos requeridos estén mapeados
+        const missing = MAPPABLE_FIELDS.filter(f => f.required && !Object.values(colMapping).includes(f.id));
+        if (missing.length > 0) {
+            setImportStatus({ type: "error", msg: `Faltan mapear columnas obligatorias: ${missing.map(m => m.label).join(", ")}` });
+            return;
+        }
+
         setLoading(true);
-        setImportStatus({ type: "info", msg: "Procesando texto pegado..." });
+        setImportStatus({ type: "info", msg: "Procesando mapeo de columnas..." });
 
         try {
-            const lines = pasteText.trim().split("\n");
-            const rows: ExcelRow[] = lines.map((line, index) => {
-                const cols = line.split("\t"); 
-                
-                // Mapeo: 0:Fecha, 1:Cliente, 2:Pedido, 3:Direccion, 4:Localidad, 5:Tel, 6:Turno
-                const rawFecha = cols[0]?.trim();
-                const rawTurno = cols[6]?.trim()?.toUpperCase() || "";
+            // Decidir si la primera fila es cabecera para ignorarla si es necesario
+            // (Si alguna columna mapeada coincide con el nombre del campo en la primera fila, es cabecera)
+            const firstRowIsHeader = pasteRows.length > 0 && pasteRows[0].some(cell => 
+                MAPPABLE_FIELDS.some(f => f.label.toLowerCase().includes(cell.toLowerCase().trim()))
+            );
+
+            const dataRows = firstRowIsHeader ? pasteRows.slice(1) : pasteRows;
+
+            const rows: ExcelRow[] = dataRows.map((cols, index) => {
+                const getVal = (fieldId: string) => {
+                    const idx = Object.keys(colMapping).find(k => colMapping[parseInt(k)] === fieldId);
+                    return idx !== undefined ? cols[parseInt(idx)]?.trim() : "";
+                };
+
+                const rawFecha = getVal('fecha');
+                const rawTurno = getVal('turno')?.toUpperCase() || "";
                 
                 return {
                     rowId: index,
                     fecha: rawFecha || new Date().toISOString().split("T")[0],
-                    nombreCliente: cols[1]?.trim() || "",
-                    pedidoTexto: cols[2]?.trim() || "",
-                    direccion: cols[3]?.trim() || "",
-                    localidad: cols[4]?.trim() || "",
-                    telefono: cols[5]?.trim() || "",
+                    nombreCliente: getVal('nombreCliente'),
+                    pedidoTexto: getVal('pedidoTexto'),
+                    direccion: getVal('direccion'),
+                    localidad: getVal('localidad'),
+                    telefono: getVal('telefono'),
                     turno: (rawTurno.includes("MA") ? "MANANA" : 
                             rawTurno.includes("SI") ? "SIESTA" : 
                             rawTurno.includes("TA") ? "TARDE" : undefined) as any,
                 };
-            }).filter(r => r.nombreCliente && r.pedidoTexto && r.direccion && r.localidad && r.telefono);
+            }).filter(r => r.nombreCliente && r.pedidoTexto);
 
-            if (rows.length === 0) throw new Error("No se detectaron filas válidas (Recuerde que todas las columnas son obligatorias: Fecha, Cliente, Pedido, Dirección, Localidad, Teléfono, Turno)");
+            if (rows.length === 0) throw new Error("No se detectaron filas válidas con el mapeo actual.");
 
             const res = await fetch("/api/importar-pedidos/preview", {
                 method: "POST",
@@ -213,26 +285,74 @@ export default function ImportarPedidosPage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <div className="text-xs text-gray-500 mb-2">
-                            Pegue las celdas copiadas de Excel. Orden de columnas: 
-                            <span className="font-mono bg-gray-50 px-1 ml-1">Fecha | Cliente | Pedido | Dirección | Localidad | Teléfono | Turno</span>
+                    <div className="space-y-6">
+                        <div className="bg-blue-50 p-4 rounded-lg flex items-start space-x-3 text-sm text-blue-800">
+                            <span className="text-xl">💡</span>
+                            <div>
+                                <p className="font-semibold">Modo Inteligente Activado</p>
+                                <p>Pegue sus celdas y el sistema intentará detectar el orden automáticamente. Puede corregir el mapeo usando los selectores debajo.</p>
+                            </div>
                         </div>
+
                         <textarea 
-                            className="w-full h-40 p-3 text-sm font-mono border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Ej: 27/03&#9;Juan Perez&#9;24jyq 12h&#9;Calle 123&#9;City Bell&#9;221444555&#9;Mañana"
+                            className="w-full h-40 p-3 text-sm font-mono border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            placeholder="Pegue aquí (Ctrl+V) las celdas de Excel..."
                             value={pasteText}
-                            onChange={(e) => setPasteText(e.target.value)}
+                            onChange={(e) => handlePasteChange(e.target.value)}
                         />
-                        <div className="flex justify-end">
-                            <button
-                                onClick={handlePastePreview}
-                                disabled={!pasteText.trim() || loading}
-                                className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                            >
-                                {loading ? "Procesando..." : "Previsualizar Pegado"}
-                            </button>
-                        </div>
+
+                        {pasteRows.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="text-sm font-bold text-gray-700">Configuración de Columnas ({pasteRows[0].length} detectadas)</h3>
+                                <div className="overflow-x-auto border rounded-lg bg-gray-50">
+                                    <table className="w-full text-xs text-left">
+                                        <thead>
+                                            <tr>
+                                                {pasteRows[0].map((_, idx) => (
+                                                    <th key={idx} className="p-2 min-w-[140px] border-r border-b bg-white">
+                                                        <select 
+                                                            value={colMapping[idx] || "ignore"}
+                                                            onChange={(e) => setColMapping({...colMapping, [idx]: e.target.value})}
+                                                            className={`w-full p-1 border rounded font-bold ${colMapping[idx] && colMapping[idx] !== 'ignore' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-500'}`}
+                                                        >
+                                                            <option value="ignore">🔽 Ignorar</option>
+                                                            {MAPPABLE_FIELDS.filter(f => f.id !== 'ignore').map(field => (
+                                                                <option key={field.id} value={field.id}>
+                                                                    {field.label} {field.required ? '*' : ''}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {pasteRows.slice(0, 3).map((row, rIdx) => (
+                                                <tr key={rIdx} className="bg-white">
+                                                    {row.map((cell, cIdx) => (
+                                                        <td key={cIdx} className="p-2 border-r border-b text-gray-400 truncate max-w-[140px]">
+                                                            {cell}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div className="text-[11px] text-gray-400 italic">
+                                        * Columnas con (*) son obligatorias para previsualizar.
+                                    </div>
+                                    <button
+                                        onClick={handlePastePreview}
+                                        disabled={loading || !pasteText.trim()}
+                                        className="px-6 py-2 bg-blue-600 text-white font-bold rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all"
+                                    >
+                                        {loading ? "Procesando..." : "Analizar y Previsualizar"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
