@@ -121,6 +121,7 @@ export default function ProduccionPage() {
         stockFabricacion: Record<string, number>
         stockLocal: Record<string, number>
         enProduccion: Record<string, number>
+        shipmentCounts?: Record<string, number>
     }
     const [planning, setPlanning] = useState<PlanningData | null>(null)
     const [activeTurno, setActiveTurno] = useState('Mañana')
@@ -671,6 +672,11 @@ export default function ProduccionPage() {
                                             style={{ fontSize: '11px', padding: '4px 12px', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
                                         >
                                             {t === 'Totales' ? '📊 Totales del Día' : t}
+                                            {planning?.shipmentCounts?.[t] > 0 && (
+                                                <span style={{ marginLeft: '6px', backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px' }}>
+                                                    {planning.shipmentCounts[t]}
+                                                </span>
+                                            )}
                                         </button>
                                     ))}
                                 </div>

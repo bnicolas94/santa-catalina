@@ -217,6 +217,7 @@ export async function POST(req: NextRequest) {
         for (const resultado of resultados) {
             if (!resultado.turnoNorm || resultado.items.length === 0) continue
             const fechaFila = resultado.fechaValue || new Date(fechaDefault + 'T00:00:00Z')
+            const shipmentId = crypto.randomUUID()
 
             for (const item of resultado.items) {
                 await prisma.requerimientoProduccion.create({
@@ -226,7 +227,8 @@ export async function POST(req: NextRequest) {
                         productoId: item.productoId,
                         presentacionId: item.presentacionId,
                         cantidad: item.cantidadPaquetes,
-                        destino: resultado.destino
+                        destino: resultado.destino,
+                        shipmentId
                     }
                 })
                 guardados++

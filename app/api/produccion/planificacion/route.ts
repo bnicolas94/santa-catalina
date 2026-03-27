@@ -186,9 +186,40 @@ export async function GET(request: Request) {
             enProduccion[l.productoId] = (enProduccion[l.productoId] || 0) + (l.unidadesProducidas * size)
         })
 
+        const shipmentCounts: Record<string, number> = {}
+        const shipmentsSet: Record<string, Set<string>> = {}
+
+        // 1. Contar envíos de Rutas
+        rutas.forEach(ruta => {
+            const turno = ruta.turno || 'Sin Turno'
+            if (!shipmentCounts[turno]) shipmentCounts[turno] = 0
+            shipmentCounts[turno] += ruta.entregas.length
+        })
+
+        // 2. Contar envíos de Requerimientos Manuales/Importados (usando shipmentId único)
+        manuales.forEach(m => {
+            if (m.destino === 'LOCAL') return // No es un envío de reparto
+            const turno = m.turno
+            if (!shipmentsSet[turno]) shipmentsSet[turno] = new Set()
+            
+            // Si tiene shipmentId lo usamos para agrupar, si no (legacy) lo contamos como 1 individual
+            if (m.shipmentId) {
+                shipmentsSet[turno].add(m.shipmentId)
+            } else {
+                // Para datos viejos sin shipmentId, usamos el ID del registro para no subestimar
+                shipmentsSet[turno].add(m.id)
+            }
+        })
+
+        // Sumar conteos de manuales al total
+        Object.entries(shipmentsSet).forEach(([turno, set]) => {
+            shipmentCounts[turno] = (shipmentCounts[turno] || 0) + set.size
+        })
+
         return NextResponse.json({
             necesidades,
             infoProductos,
+            shipmentCounts,
             manualesDetalle: manuales.reduce((acc, m) => {
                 const turno = m.turno
                 // @ts-ignore

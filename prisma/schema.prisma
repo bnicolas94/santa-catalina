@@ -681,6 +681,7 @@ model RequerimientoProduccion {
   destino        String        @default("FABRICA")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  shipmentId     String?       @map("shipment_id")
   presentacion   Presentacion? @relation(fields: [presentacionId], references: [id])
   producto       Producto      @relation(fields: [productoId], references: [id])
 
