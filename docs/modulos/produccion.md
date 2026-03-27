@@ -48,10 +48,33 @@ El sistema consolidado de planificación en `/api/produccion/planificacion` real
 
 - **Dashboard Principal (`/produccion`)**: Vista unificada de planificación por turnos y control de lotes activos.
 - **Selector de Ubicación:** Permite alternar la vista entre Fábrica y Local para gestionar stock distribuido.
-- **Cierre de Lote:** Proceso que moviliza el producto de "Producción" a "Cámara" o "Distribución", actualizando el stock final de producto terminado.
+## 6. Funcionamiento Operativo (Paso a Paso)
 
-## 5. Seguridad y Permisos
+El ciclo de vida de la producción en el sistema sigue este flujo:
 
-El módulo utiliza un sistema de **Permisos Dinámicos** (`permisoProduccion`). 
-- **Middleware:** Valida que el token de sesión incluya el bit de permiso de producción habilitado.
-- **Backend:** Cada endpoint verifica el permiso del usuario antes de procesar transacciones de escritura.
+### Paso 1: Planificación Sensible a la Demanda
+El sistema analiza automáticamente la **Hoja de Ruta** (pedidos de clientes) y las **Cargas Express** (pedidos manuales). 
+- **Cálculo Inteligente:** Resta el stock actual y lo que ya está "En Producción" hoy para dar una **Sugerencia** de cuánto fabricar por cada turno (Mañana, Siesta, Tarde).
+
+### Paso 2: Posicionamiento de Operarios
+Antes de iniciar la jornada, se asignan los empleados a sus puestos (Conceptos de Producción) en una ubicación específica. Esto permite llevar un registro histórico de quién trabajó en qué lote.
+
+### Paso 3: Apertura de Lote y Consumo de Insumos
+Cuando se crea un lote (estado `en_produccion`):
+1. Se genera un código identificador único (ej: `SC-20240327-PRD-01`).
+2. El sistema consulta la **Ficha Técnica** del producto.
+3. Se descuentan automáticamente los **Insumos** (harina, fiambres, etc.) del stock de la ubicación seleccionada.
+4. Se registra un movimiento de salida de insumos vinculado al ID del lote.
+
+### Paso 4: Finalización y Movimiento a Cámara
+Al terminar la producción, el usuario cambia el estado a `en_camara`. En este punto:
+- Se registra el ingreso formal de **Producto Terminado** al stock de la ubicación (Fábrica).
+- Se permite reportar **Mermas** (unidades rechazadas o fallidas) con su respectivo motivo.
+
+### Paso 5: Distribución y Venta
+Una vez en cámara, el producto puede:
+- Ser **Trasladado** de Fábrica al Local (Movimiento de Producto).
+- Ser **Asignado** a pedidos de clientes para su despacho final.
+
+---
+*Nota: Este flujo garantiza que el stock de insumos y productos siempre esté sincronizado con la realidad física de la fábrica.*
