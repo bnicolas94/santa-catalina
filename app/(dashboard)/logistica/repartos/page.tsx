@@ -113,12 +113,12 @@ export default function RepartosPage() {
 
                             {/* Botón iniciar recorrido (Google Maps multi-stop) */}
                             {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (() => {
-                                const companyAddress = encodeURIComponent("Camino General Belgrano 7287, Gutierrez, Buenos Aires")
+                                const companyCoords = "-34.8237468,-58.1873516"
                                 const pendingWaypoints = entregasSorted.filter(e => !e.horaEntrega && e.cliente.direccion).map(e => encodeURIComponent(e.cliente.direccion || '')).join('|')
                                 
                                 return (
                                     <a
-                                        href={`https://www.google.com/maps/dir/?api=1&origin=${companyAddress}&destination=${companyAddress}&waypoints=${pendingWaypoints}&travelmode=driving`}
+                                        href={`https://www.google.com/maps/dir/?api=1&origin=${companyCoords}&destination=${companyCoords}&waypoints=${pendingWaypoints}&travelmode=driving`}
                                         target="_blank" rel="noreferrer"
                                         className="btn"
                                     style={{ width: '100%', marginBottom: 'var(--space-4)', backgroundColor: '#4285F4', color: 'white', fontWeight: 600, fontSize: '1.1rem', height: '48px' }}

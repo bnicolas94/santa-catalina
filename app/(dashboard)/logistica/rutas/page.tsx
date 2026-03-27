@@ -123,6 +123,7 @@ export default function PlanificacionRutasPage() {
                         return; // Se cancela la creación
                     }
                 }
+                setIsOptimizing(false)
             } catch (e) { 
                 console.error('Error optimizando, guardando sin optimizar', e) 
                 setIsOptimizing(false)
@@ -146,6 +147,18 @@ export default function PlanificacionRutasPage() {
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+    }
+
+    async function handleFixCoords() {
+        if (!confirm('¿Desea buscar coordenadas para todos los clientes que no las tengan? (Esto puede tardar unos segundos)')) return
+        try {
+            const res = await fetch('/api/admin/geocode-all', { method: 'POST' })
+            const data = await res.json()
+            alert(data.mensaje || 'Proceso finalizado')
+            fetchData()
+        } catch (e) {
+            alert('Error al procesar coordenadas')
+        }
     }
 
     async function handleDeleteRuta(rutaId: string) {
@@ -190,6 +203,12 @@ export default function PlanificacionRutasPage() {
                     {filterFecha && (
                         <button className="btn btn-ghost" onClick={() => setFilterFecha('')} title="Ver todas" style={{ padding: '0 8px', fontSize: '1.2rem' }}>✕</button>
                     )}
+                    <button 
+                        className="btn btn-ghost" 
+                        onClick={handleFixCoords}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                        title="Reparar coordenadas de clientes"
+                    >⚙️ Rep. Coords</button>
                     <button className="btn btn-primary" onClick={() => {
                         setFormRuta(f => ({ ...f, fecha: filterFecha || getLocalDateString() }))
                         setShowModal(true)
@@ -470,7 +489,14 @@ export default function PlanificacionRutasPage() {
                                                     <input type="checkbox" checked={pedidosSeleccionados.includes(p.id)} readOnly style={{ width: 18, height: 18, accentColor: 'var(--color-primary)' }} />
                                                     <div style={{ flex: 1 }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                            <strong style={{ fontSize: 'var(--text-sm)' }}>{p.cliente.nombreComercial}</strong>
+                                                            <strong style={{ fontSize: 'var(--text-sm)' }}>
+                                                                {p.cliente.nombreComercial}
+                                                                {p.cliente.latitud && p.cliente.longitud ? (
+                                                                    <span title="Ubicación verificada (optimizable)" style={{ marginLeft: '8px', cursor: 'help' }}>📍</span>
+                                                                ) : (
+                                                                    <span title="Falta ubicación (no optimizable)" style={{ marginLeft: '8px', cursor: 'help', opacity: 0.5 }}>❓</span>
+                                                                )}
+                                                            </strong>
                                                             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{new Date(p.fechaEntrega).toLocaleDateString('es-AR')}</span>
                                                         </div>
                                                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>

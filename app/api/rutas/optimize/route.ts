@@ -30,18 +30,17 @@ export async function POST(request: Request) {
             })
         }
 
-        // Use predefined factory address as origin and destination (round trip)
-        const companyAddress = "Camino General Belgrano 7287, Gutierrez, Buenos Aires"
-        const startParam = encodeURIComponent(companyAddress)
-        const waypointsForApi = waypoints // include all waypoints
-
-        const waypointsParam = waypointsForApi
+        // Use predefined factory coordinates as origin and destination (round trip)
+        // Camino General Belgrano 7287, Gutierrez
+        const factoryCoords = "-34.8237468,-58.1873516"
+        
+        const waypointsParam = waypoints
             .map(w => `${w.lat},${w.lng}`)
             .join('|')
 
         const url = `https://maps.googleapis.com/maps/api/directions/json?` +
-            `origin=${startParam}` +
-            `&destination=${startParam}` + // round trip to factory
+            `origin=${factoryCoords}` +
+            `&destination=${factoryCoords}` + // round trip to factory
             `&waypoints=optimize:true|${waypointsParam}` +
             `&key=${GOOGLE_MAPS_API_KEY}` +
             `&region=ar`
