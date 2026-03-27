@@ -179,7 +179,7 @@ export default function ProduccionPage() {
             const planData = await planRes.json()
             setLotes(Array.isArray(lotesData) ? lotesData : [])
             setProductos(Array.isArray(prodData) ? prodData : [])
-            setCoordinadores(Array.isArray(empData) ? empData.filter((e: { rol: string; activo: boolean }) => ['ADMIN', 'COORD_PROD'].includes(e.rol) && e.activo) : [])
+            setCoordinadores(Array.isArray(empData) ? empData.filter((e: { rol: string; activo: boolean }) => ['ADMIN', 'COORD_PROD', 'LOCAL'].includes(e.rol) && e.activo) : [])
             setStockProductos(Array.isArray(stockData) ? stockData : [])
             setMovimientos(Array.isArray(movData) ? movData : [])
             setPlanning(planData && !planData.error ? planData : null)
@@ -672,9 +672,9 @@ export default function ProduccionPage() {
                                             style={{ fontSize: '11px', padding: '4px 12px', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
                                         >
                                             {t === 'Totales' ? '📊 Totales del Día' : t}
-                                            {planning?.shipmentCounts?.[t] > 0 && (
+                                            {(planning?.shipmentCounts?.[t] ?? 0) > 0 && (
                                                 <span style={{ marginLeft: '6px', backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px' }}>
-                                                    {planning.shipmentCounts[t]}
+                                                    {planning?.shipmentCounts?.[t]}
                                                 </span>
                                             )}
                                         </button>

@@ -18,15 +18,26 @@ export default withAuth(
         const token = req.nextauth.token
         const pathname = req.nextUrl.pathname
 
-        // Buscar la regla de rol que aplica a esta ruta
+        if (!token) return NextResponse.redirect(new URL('/login', req.url))
+
+        const userRol = token.rol as string
+        const permisos = (token.permisos as any) || {}
+
+        // 1. Verificación por permisos dinámicos (Prioridad)
+        if (pathname.startsWith('/produccion') && permisos.permisoProduccion) return NextResponse.next()
+        if (pathname.startsWith('/stock') && permisos.permisoStock) return NextResponse.next()
+        if (pathname.startsWith('/insumos') && permisos.permisoStock) return NextResponse.next()
+        if (pathname.startsWith('/caja') && permisos.permisoCaja) return NextResponse.next()
+        if (pathname.startsWith('/empleados') && permisos.permisoPersonal) return NextResponse.next()
+        if (pathname.startsWith('/costos') && permisos.permisoCostos) return NextResponse.next()
+        if (pathname.startsWith('/') && pathname.length === 1 && permisos.permisoDashboard) return NextResponse.next()
+
+        // 2. Fallback a mapa estático para rutas legacy o roles base
         const matchingRoute = Object.keys(routeRoles).find((route) => pathname.startsWith(route))
 
-        if (matchingRoute && token) {
+        if (matchingRoute) {
             const allowedRoles = routeRoles[matchingRoute]
-            const userRole = token.rol as string
-
-            if (!allowedRoles.includes(userRole)) {
-                // Redirigir al dashboard si no tiene permisos
+            if (!allowedRoles.includes(userRol)) {
                 return NextResponse.redirect(new URL('/', req.url))
             }
         }
