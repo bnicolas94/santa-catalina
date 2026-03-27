@@ -16,7 +16,7 @@ function normalizarFecha(raw: any, fallbackStr: string): Date {
         return d
     }
 
-    // Caso: String (e.g. "26/03/2024" o "2024-03-26")
+    // Caso: String (e.g. "26/03/2024" o "2024-03-26" o "27-mar")
     if (typeof raw === 'string') {
         const parts = raw.split(/[-/]/)
         if (parts.length === 3) {
@@ -34,6 +34,19 @@ function normalizarFecha(raw: any, fallbackStr: string): Date {
             }
             if (d && !isNaN(d.getTime())) return d
         }
+        
+        // Manejo específico para "DD-MMM" (ej: "27-mar")
+        if (parts.length === 2) {
+            const day = parseInt(parts[0])
+            const monthStr = parts[1].toLowerCase()
+            const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+            const month = months.findIndex(m => monthStr.startsWith(m))
+            if (day > 0 && day <= 31 && month !== -1) {
+                const year = new Date().getFullYear()
+                return new Date(Date.UTC(year, month, day))
+            }
+        }
+
         const d = new Date(raw.includes('T') ? raw : raw + 'T00:00:00Z')
         if (!isNaN(d.getTime())) return d
     }
@@ -213,7 +226,6 @@ export async function POST(req: NextRequest) {
                         productoId: item.productoId,
                         presentacionId: item.presentacionId,
                         cantidad: item.cantidadPaquetes,
-                        // @ts-ignore
                         destino: resultado.destino
                     }
                 })

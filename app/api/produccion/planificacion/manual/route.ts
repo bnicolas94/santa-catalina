@@ -45,7 +45,6 @@ export async function POST(request: Request) {
                 turno,
                 productoId,
                 presentacionId: presentacionId || null,
-                // @ts-ignore
                 destino: targetDestino
             }
         })
@@ -68,7 +67,6 @@ export async function POST(request: Request) {
                     productoId,
                     presentacionId,
                     cantidad: parseInt(cantidad),
-                    // @ts-ignore
                     destino: targetDestino
                 }
             })

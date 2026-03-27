@@ -523,18 +523,19 @@ export default function ProduccionPage() {
 
     function handlePasteText(text: string) {
         try {
-            if (!text.trim()) return
-            const lines = text.trim().split(/\r?\n/)
+            // 1. Obtener cabeceras (primera línea no vacía)
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0)
             if (lines.length < 2) return
 
-            const headers = lines[0].split('\t').map(h => h.trim())
+            const headers = lines[0].split('\t').map((h, i) => h.trim() || `Columna ${i + 1}`)
             setImportHeaders(headers)
 
+            // 2. Obtener datos
             const rows = lines.slice(1).map(line => {
                 const values = line.split('\t')
                 const row: any = {}
                 headers.forEach((h, idx) => {
-                    row[h] = values[idx] || ''
+                    row[h] = (values[idx] || '').trim()
                 })
                 return row
             })
@@ -1926,29 +1927,29 @@ export default function ProduccionPage() {
                                             <div className="form-group">
                                                 <label className="form-label" style={{ fontSize: '10px' }}>Columna Fecha</label>
                                                 <select className="form-select" value={importColFecha} onChange={e => setImportColFecha(e.target.value)}>
-                                                    <option value="">(Auto: Hoy)</option>
-                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                    <option key="auto-hoy" value="">(Auto: Hoy)</option>
+                                                    {importHeaders.map((h, idx) => <option key={`${h}_${idx}`} value={h}>{h || `Columna ${idx + 1}`}</option>)}
                                                 </select>
                                             </div>
                                             <div className="form-group">
                                                 <label className="form-label" style={{ fontSize: '10px' }}>Columna Turno</label>
                                                 <select className="form-select" value={importColTurno} onChange={e => setImportColTurno(e.target.value)}>
                                                     <option value="">— Seleccionar —</option>
-                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                    {importHeaders.map((h, idx) => <option key={`${h}_${idx}`} value={h}>{h || `Columna ${idx + 1}`}</option>)}
                                                 </select>
                                             </div>
                                             <div className="form-group">
                                                 <label className="form-label" style={{ fontSize: '10px' }}>Columna Necesidades</label>
                                                 <select className="form-select" value={importColTexto} onChange={e => setImportColTexto(e.target.value)}>
                                                     <option value="">— Seleccionar —</option>
-                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                    {importHeaders.map((h, idx) => <option key={`${h}_${idx}`} value={h}>{h || `Columna ${idx + 1}`}</option>)}
                                                 </select>
                                             </div>
                                             <div className="form-group">
                                                 <label className="form-label" style={{ fontSize: '10px' }}>Columna Destino</label>
                                                 <select className="form-select" value={importColDestino} onChange={e => setImportColDestino(e.target.value)}>
-                                                    <option value="">(Auto: Fábrica)</option>
-                                                    {importHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                                                    <option key="auto-destino" value="">(Auto: Fábrica)</option>
+                                                    {importHeaders.map((h, idx) => <option key={`hdest_${idx}`} value={h}>{h || `Columna ${idx + 1}`}</option>)}
                                                 </select>
                                             </div>
                                         </div>
@@ -1992,7 +1993,11 @@ export default function ProduccionPage() {
                                                     <td style={{ fontSize: '11px', color: 'var(--color-gray-500)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.texto}</td>
                                                     <td style={{ fontSize: '11px' }}>
                                                         {r.items?.length > 0
-                                                            ? r.items.map((it: any) => <span key={it.productoId} className="badge badge-info" style={{ marginRight: '2px' }}>{it.productoNombre} ×{it.cantidadPaquetes}</span>)
+                                                            ? r.items.map((it: any, itIdx: number) => (
+                                                                <span key={`${it.productoId}_${itIdx}`} className="badge badge-info" style={{ marginRight: '2px' }}>
+                                                                    {it.productoNombre} ×{it.cantidadPaquetes}
+                                                                </span>
+                                                            ))
                                                             : <span style={{ color: 'var(--color-danger)', fontSize: '10px' }}>{r.errores?.[0] || 'Sin datos'}</span>
                                                         }
                                                     </td>

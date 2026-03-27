@@ -132,20 +132,15 @@ export async function GET(request: Request) {
             })
         })
 
-        // Procesar requerimientos manuales
         manuales.forEach(m => {
             const turno = m.turno
             if (!necesidades[turno]) necesidades[turno] = {}
             
             let key = ""
-            // @ts-ignore - Prisma types might be stale
             if (m.presentacionId && m.presentacion) {
-                // @ts-ignore
                 key = registerInfo(m.producto, m.presentacion)
             } else {
-                // @ts-ignore
                 key = `${m.productoId}_null`
-                // @ts-ignore
                 if (!infoProductos[key]) infoProductos[key] = m.producto
             }
             
@@ -200,7 +195,6 @@ export async function GET(request: Request) {
                 const key = m.presentacionId ? `${m.productoId}_${m.presentacionId}` : `${m.productoId}_null`
                 if (!acc[turno]) acc[turno] = {}
                 if (!acc[turno][key]) acc[turno][key] = { fabrica: 0, local: 0 }
-                // @ts-ignore
                 if (m.destino === 'LOCAL') acc[turno][key].local += m.cantidad
                 else acc[turno][key].fabrica += m.cantidad
                 return acc
