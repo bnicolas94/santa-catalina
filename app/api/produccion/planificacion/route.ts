@@ -133,6 +133,7 @@ export async function GET(request: Request) {
         })
 
         manuales.forEach(m => {
+            if (!m.productoId) return // Ignorar "marcadores" de envíos sin productos
             const turno = m.turno
             if (!necesidades[turno]) necesidades[turno] = {}
             

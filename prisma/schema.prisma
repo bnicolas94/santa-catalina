@@ -675,15 +675,16 @@ model RequerimientoProduccion {
   id             String        @id @default(uuid())
   fecha          DateTime
   turno          String
-  productoId     String        @map("id_producto")
+  productoId     String?       @map("id_producto")
   presentacionId String?       @map("id_presentacion")
   cantidad       Int
   destino        String        @default("FABRICA")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   shipmentId     String?       @map("shipment_id")
+  textoOriginal  String?       @map("texto_original")
   presentacion   Presentacion? @relation(fields: [presentacionId], references: [id])
-  producto       Producto      @relation(fields: [productoId], references: [id])
+  producto       Producto?     @relation(fields: [productoId], references: [id])
 
   @@map("requerimientos_produccion")
 }

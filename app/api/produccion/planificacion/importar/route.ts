@@ -215,23 +215,41 @@ export async function POST(req: NextRequest) {
 
         let guardados = 0
         for (const resultado of resultados) {
-            if (!resultado.turnoNorm || resultado.items.length === 0) continue
+            if (!resultado.turnoNorm) continue
             const fechaFila = resultado.fechaValue || new Date(fechaDefault + 'T00:00:00Z')
             const shipmentId = crypto.randomUUID()
 
-            for (const item of resultado.items) {
+            if (resultado.items.length === 0) {
+                // Fila "rara" o no identificada: Guardamos solo para el contador
                 await prisma.requerimientoProduccion.create({
                     data: {
                         fecha: fechaFila,
                         turno: resultado.turnoNorm!,
-                        productoId: item.productoId,
-                        presentacionId: item.presentacionId,
-                        cantidad: item.cantidadPaquetes,
+                        productoId: null,
+                        presentacionId: null,
+                        cantidad: 0,
                         destino: resultado.destino,
-                        shipmentId
+                        shipmentId,
+                        textoOriginal: resultado.texto
                     }
                 })
                 guardados++
+            } else {
+                for (const item of resultado.items) {
+                    await prisma.requerimientoProduccion.create({
+                        data: {
+                            fecha: fechaFila,
+                            turno: resultado.turnoNorm!,
+                            productoId: item.productoId,
+                            presentacionId: item.presentacionId,
+                            cantidad: item.cantidadPaquetes,
+                            destino: resultado.destino,
+                            shipmentId,
+                            textoOriginal: resultado.texto
+                        }
+                    })
+                    guardados++
+                }
             }
         }
         return NextResponse.json({ success: true, guardados, resultados })
