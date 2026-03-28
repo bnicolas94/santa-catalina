@@ -3,7 +3,15 @@
 import { useState, useEffect } from 'react'
 
 interface Cliente { id: string; nombreComercial: string; zona?: string; direccion?: string; latitud?: number; longitud?: number }
-interface DetallePedido { cantidad: number; presentacion?: { cantidad: number; producto?: { codigoInterno: string; nombre: string } } }
+interface DetallePedido { 
+    cantidad: number; 
+    presentacion?: { 
+        id: string;
+        productoId: string;
+        cantidad: number; 
+        producto?: { id: string; codigoInterno: string; nombre: string } 
+    } 
+}
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
     totalUnidades: number; totalImporte: number

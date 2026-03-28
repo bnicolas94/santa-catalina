@@ -107,10 +107,12 @@ export async function POST(request: Request) {
             const consolidado: Record<string, { productoId: string, cantidad: number }> = {}
             detallesPedidos.forEach(det => {
                 const key = det.presentacionId
-                if (!consolidado[key]) {
-                    consolidado[key] = { productoId: det.productoId, cantidad: 0 }
+                if (!consolidado[key] && det.presentacion) {
+                    consolidado[key] = { productoId: det.presentacion.productoId, cantidad: 0 }
                 }
-                consolidado[key].cantidad += det.cantidad
+                if (consolidado[key]) {
+                    consolidado[key].cantidad += det.cantidad
+                }
             })
 
             for (const [presId, info] of Object.entries(consolidado)) {

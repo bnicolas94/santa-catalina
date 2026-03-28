@@ -16,7 +16,13 @@ export async function PUT(
                 where: { id },
                 include: { 
                     ruta: true,
-                    pedido: { include: { detalles: true } }
+                    pedido: { 
+                        include: { 
+                            detalles: {
+                                include: { presentacion: true }
+                            } 
+                        } 
+                    }
                 }
             })
 
@@ -45,17 +51,8 @@ export async function PUT(
                 // En este sistema, asumimos que unidadesRechazadas se refiere al total de "paquetes".
                 
                 for (const detalle of entregaPrevia.pedido.detalles) {
-                    // Calculamos cuánto de este detalle fue rechazado. 
-                    // Si es rechazo total, es fácil. Si es parcial, es complejo saber CUÁL producto se rechazó.
-                    // Por ahora, si hay rechazo, devolvemos lo que corresponda.
-                    // Si el usuario rechaza "N" unidades, necesitamos saber de qué producto.
-                    // Dado que el pedido puede tener varios productos, y el input es un solo número de "unidades rechazadas",
-                    // asumiremos por ahora que si rechaza, se devuelve esa cantidad al primer producto del pedido 
-                    // (o prorrateado). 
-                    // TODO: Mejorar esto pidiendo rechazo por ítem si es necesario.
+                    if (!detalle.presentacion) continue;
                     
-                    // Implementación simplificada: Si rechaza unidades, las sumamos de vuelta al stock de los productos del pedido
-                    // (asumiendo que unidadesRechazadas <= pedido.totalUnidades)
                     const factorRechazo = upEntrega.unidadesRechazadas / entregaPrevia.pedido.totalUnidades
                     const cantADevolver = Math.round(detalle.cantidad * factorRechazo)
 
@@ -63,14 +60,14 @@ export async function PUT(
                         await tx.stockProducto.upsert({
                             where: { 
                                 productoId_presentacionId_ubicacionId: { 
-                                    productoId: detalle.productoId, 
+                                    productoId: detalle.presentacion.productoId, 
                                     presentacionId: detalle.presentacionId, 
                                     ubicacionId: origenId 
                                 } 
                             },
                             update: { cantidad: { increment: cantADevolver } },
                             create: { 
-                                productoId: detalle.productoId, 
+                                productoId: detalle.presentacion.productoId, 
                                 presentacionId: detalle.presentacionId, 
                                 ubicacionId: origenId, 
                                 cantidad: cantADevolver 
@@ -82,7 +79,7 @@ export async function PUT(
                                 tipo: 'devolucion_rechazo',
                                 cantidad: cantADevolver,
                                 signo: 'entrada',
-                                productoId: detalle.productoId,
+                                productoId: detalle.presentacion.productoId,
                                 presentacionId: detalle.presentacionId,
                                 ubicacionId: origenId,
                                 entregaId: upEntrega.id,
