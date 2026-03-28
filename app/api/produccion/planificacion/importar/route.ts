@@ -205,10 +205,27 @@ export async function POST(req: NextRequest) {
         })
         
         for (const [fStr, data] of gruposABorrar) {
+            // PREVENCIÓN: No permitir borrar ni sobreescribir si el turno ya fue descontado
+            const turnosArray = Array.from(data.turnos)
+            // @ts-ignore
+            const yaDescontados = await prisma.planificacionDescuento.findMany({
+                where: {
+                    fecha: data.fecha,
+                    turno: { in: turnosArray }
+                }
+            })
+
+            if (yaDescontados.length > 0) {
+                const nombres = yaDescontados.map(d => d.turno).join(', ')
+                return NextResponse.json({ 
+                    error: `No se puede importar: Los turnos (${nombres}) del día ${fStr} ya han sido procesados y su stock descontado.` 
+                }, { status: 400 })
+            }
+
             await prisma.requerimientoProduccion.deleteMany({
                 where: {
                     fecha: data.fecha,
-                    turno: { in: Array.from(data.turnos) }
+                    turno: { in: turnosArray }
                 }
             })
         }

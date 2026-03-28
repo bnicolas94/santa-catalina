@@ -216,11 +216,18 @@ export async function GET(request: Request) {
         Object.entries(shipmentsSet).forEach(([turno, set]) => {
             shipmentCounts[turno] = (shipmentCounts[turno] || 0) + set.size
         })
+        
+        // @ts-ignore
+        const descuentosTurnos = await prisma.planificacionDescuento.findMany({
+            where: { fecha: { gte: startOfDay, lte: endOfDay } },
+            select: { turno: true }
+        })
 
         return NextResponse.json({
             necesidades,
             infoProductos,
             shipmentCounts,
+            descuentosRealizados: descuentosTurnos.map((d: any) => d.turno),
             manualesDetalle: manuales.reduce((acc, m) => {
                 const turno = m.turno
                 // @ts-ignore
@@ -261,6 +268,17 @@ export async function DELETE(request: Request) {
 
         const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
         const endOfDay = new Date(`${fechaStr}T23:59:59.999Z`)
+
+        // PREVENCIÓN: No permitir borrar si ya hubo algún descuento ese día
+        // @ts-ignore
+        const yaDescontados = await prisma.planificacionDescuento.findFirst({
+            where: { fecha: startOfDay }
+        })
+        if (yaDescontados) {
+            return NextResponse.json({ 
+                error: 'No se puede limpiar la planificación: Ya existen turnos procesados y descontados para este día.' 
+            }, { status: 400 })
+        }
 
         await prisma.requerimientoProduccion.deleteMany({
             where: { fecha: { gte: startOfDay, lte: endOfDay } }

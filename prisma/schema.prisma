@@ -697,3 +697,13 @@ model RequerimientoProduccion {
 
   @@map("requerimientos_produccion")
 }
+
+model PlanificacionDescuento {
+  id        String   @id @default(uuid())
+  fecha     DateTime
+  turno     String
+  createdAt DateTime @default(now())
+
+  @@unique([fecha, turno])
+  @@map("planificacion_descuentos")
+}

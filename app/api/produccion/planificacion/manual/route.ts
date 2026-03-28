@@ -37,6 +37,15 @@ export async function POST(request: Request) {
 
         const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
 
+        // PREVENCIÓN: No permitir cambios si el turno ya fue descontado
+        // @ts-ignore
+        const isDiscounted = await prisma.planificacionDescuento.findFirst({
+            where: { fecha: startOfDay, turno }
+        })
+        if (isDiscounted) {
+            return NextResponse.json({ error: `El turno ${turno} ya fue procesado y su stock descontado. No se permiten más cambios.` }, { status: 400 })
+        }
+
         // Upsert: Si ya existe para ese día, turno, producto y presentación, actualizamos
         const targetDestino = body.destino || 'FABRICA'
         const existing = await prisma.requerimientoProduccion.findFirst({

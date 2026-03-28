@@ -122,6 +122,7 @@ export default function ProduccionPage() {
         stockLocal: Record<string, number>
         enProduccion: Record<string, number>
         shipmentCounts?: Record<string, number>
+        descuentosRealizados?: string[]
     }
     const [planning, setPlanning] = useState<PlanningData | null>(null)
     const [activeTurno, setActiveTurno] = useState('Mañana')
@@ -152,6 +153,9 @@ export default function ProduccionPage() {
     const [importPreview, setImportPreview] = useState<any[]>([])
     const [importSummary, setImportSummary] = useState({ ok: 0, parcial: 0, error: 0 })
     const [importLoading, setImportLoading] = useState(false)
+    const [showDiscountModal, setShowDiscountModal] = useState(false)
+    const [isDiscounting, setIsDiscounting] = useState(false)
+    const isDiscounted = activeTurno !== 'Totales' && !!planning?.descuentosRealizados?.includes(activeTurno)
 
     useEffect(() => {
         fetchData()
@@ -198,22 +202,33 @@ export default function ProduccionPage() {
         }
     }
 
-    const mutatePlanning = () => {
-        fetchData() // Re-fetch all data to update planning
-    }
-
-    const handleClearPlan = async () => {
-        if (!confirm('¿Estás seguro de que deseas borrar TODA la planificación manual (Cargas Express e Importaciones) de este día?')) return
+    async function handleDescontar() {
+        if (!activeTurno || activeTurno === 'Totales') return
+        setIsDiscounting(true)
         try {
-            const res = await fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`, {
-                method: 'DELETE'
+            const res = await fetch('/api/produccion/planificacion/descontar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fecha: filterFecha || getLocalDateString(),
+                    turno: activeTurno
+                })
             })
-            if (!res.ok) throw new Error('Error al borrar')
-            setSuccess('Planificación limpiada')
-            mutatePlanning()
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error)
+            setSuccess(data.message)
+            fetchData()
+            setShowDiscountModal(false)
+            setTimeout(() => setSuccess(''), 5000)
         } catch (err: any) {
             setError(err.message)
+        } finally {
+            setIsDiscounting(false)
         }
+    }
+
+    const mutatePlanning = () => {
+        fetchData() // Re-fetch all data to update planning
     }
 
     // Producto seleccionado en el form
@@ -468,6 +483,23 @@ export default function ProduccionPage() {
         }
     }
 
+    const handleClearPlan = async () => {
+        if (!confirm('¿Estás seguro de que quieres borrar todos los requerimientos manuales de este día?')) return
+        try {
+            const res = await fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                mutatePlanning()
+            } else {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al borrar')
+            }
+        } catch (error: any) {
+            setError(error.message)
+        }
+    }
+
     const handleSaveManual = async (productoId: string, presentacionId: string | null, value: string, turno: string) => {
         try {
             const key = presentacionId ? `${productoId}_${presentacionId}` : `${productoId}_null`;
@@ -695,19 +727,22 @@ export default function ProduccionPage() {
                             </div>
                         </div>
 
-                        <div className="table-container" style={{ margin: 0, border: '1px solid var(--color-gray-100)' }}>
-                            <table className="table table-sm">
+                        <table className="table table-planning">
                                 <thead>
                                     <tr>
                                         <th>Producto</th>
                                         <th style={{ textAlign: 'center' }}>H. Ruta</th>
-                                        <th style={{ textAlign: 'center' }}>Carga Express</th>
+                                        {!isDiscounted && <th style={{ textAlign: 'center' }}>Carga Express</th>}
                                         <th style={{ textAlign: 'center' }}>Total Necesario</th>
-                                        <th style={{ textAlign: 'center' }}>{activeTurno === 'Totales' ? 'Stock Total (Fab+Local)' : 'Stock Fab.'}</th>
-                                        <th style={{ textAlign: 'center' }}>En Proceso</th>
-                                        <th style={{ textAlign: 'center' }}>A Producir</th>
-                                        <th style={{ textAlign: 'center' }}>Stock Final</th>
-                                        <th style={{ textAlign: 'right' }}>Sugerencia</th>
+                                        {!isDiscounted && (
+                                            <>
+                                                <th style={{ textAlign: 'center' }}>Stock Fab./Local</th>
+                                                <th style={{ textAlign: 'center' }}>En Proceso</th>
+                                                <th style={{ textAlign: 'center' }}>A Producir</th>
+                                                <th style={{ textAlign: 'center' }}>Stock Final</th>
+                                            </>
+                                        )}
+                                        <th style={{ textAlign: 'right' }}>{isDiscounted ? 'Estado' : 'Sugerencia'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -927,91 +962,118 @@ export default function ProduccionPage() {
                                                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaUnits > 0 ? `${rutaPaq} paq` : '—'}</td>
-                                                    <td style={{ textAlign: 'center' }}>
-                                                        <input
-                                                            type="number"
-                                                            className="form-input"
-                                                            style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
-                                                            defaultValue={manualUnits > 0 ? manualPaq : ''}
-                                                            placeholder="0"
-                                                            onBlur={(e) => handleSaveManual(pid, presid, e.target.value, activeTurno)}
-                                                        />
-                                                    </td>
+                                                    {!isDiscounted && (
+                                                        <td style={{ textAlign: 'center' }}>
+                                                            <input
+                                                                type="number"
+                                                                className="form-input"
+                                                                style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
+                                                                defaultValue={manualUnits > 0 ? manualPaq : ''}
+                                                                placeholder="0"
+                                                                onBlur={(e) => handleSaveManual(pid, presid, e.target.value, activeTurno)}
+                                                            />
+                                                        </td>
+                                                    )}
                                                     <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
-                                                    <td style={{ textAlign: 'center', color: stockUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
-                                                        {stockPaq} paq
-                                                    </td>
-                                                    <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                        {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
-                                                    </td>
-                                                    <td style={{ textAlign: 'center' }}>
-                                                        {faltanteUnits > 0 ? (
-                                                            <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltantePaq} paq</span>
-                                                        ) : (
-                                                            <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
-                                                        )}
-                                                    </td>
-                                                    <td style={{ textAlign: 'center', fontWeight: 600, color: finalColor }}>{finalPaq} paq</td>
+                                                    {!isDiscounted && (
+                                                        <>
+                                                            <td style={{ textAlign: 'center', color: stockUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
+                                                                {stockPaq} paq
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
+                                                                {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center' }}>
+                                                                {faltanteUnits > 0 ? (
+                                                                    <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltantePaq} paq</span>
+                                                                ) : (
+                                                                    <span style={{ color: 'var(--color-success)', fontSize: '12px' }}>Cubierto ✅</span>
+                                                                )}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', fontWeight: 600, color: finalColor }}>{finalPaq} paq</td>
+                                                        </>
+                                                    )}
                                                     <td style={{ textAlign: 'right' }}>
-                                                        {faltanteUnits > 0 ? (
-                                                            <button
-                                                                className="btn btn-xs btn-primary"
-                                                                onClick={() => {
-                                                                    setForm({
-                                                                        ...form,
-                                                                        productoId: pid,
-                                                                        presentacionId: presid || '',
-                                                                        rondas: String(rondasReal),
-                                                                        paquetesPersonales: String(rondasReal * (prodInfo?.paquetesPorRonda || 14)),
-                                                                        fechaProduccion: filterFecha || getLocalDateString()
-                                                                    })
-                                                                    setShowModal(true)
-                                                                }}
-                                                            >
-                                                                Producir {rondasReal} rondas
-                                                            </button>
-                                                        ) : '—'}
+                                                        {isDiscounted ? (
+                                                            <span style={{ color: 'var(--color-success)', fontSize: '11px', fontWeight: 600 }}>Stock Descontado ✅</span>
+                                                        ) : (
+                                                            faltanteUnits > 0 ? (
+                                                                <button
+                                                                    className="btn btn-xs btn-primary"
+                                                                    onClick={() => {
+                                                                        setForm({
+                                                                            ...form,
+                                                                            productoId: pid,
+                                                                            presentacionId: presid || '',
+                                                                            rondas: String(rondasReal),
+                                                                            paquetesPersonales: String(rondasReal * (prodInfo?.paquetesPorRonda || 14)),
+                                                                            fechaProduccion: filterFecha || getLocalDateString()
+                                                                        })
+                                                                        setShowModal(true)
+                                                                    }}
+                                                                >
+                                                                    Producir {rondasReal} rondas
+                                                                </button>
+                                                            ) : '—'
+                                                        )}
                                                     </td>
                                                 </tr>
                                             )
                                         })
                                     })()}
-                                    {/* Fila agregar producto extra — solo en turnos normales */}
+                                    {/* Fila agregar producto extra / Descontar — solo en turnos normales */}
                                     {activeTurno !== 'Totales' && (
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                            <td colSpan={3}>
-                                                <select
-                                                    className="form-select"
-                                                    style={{ height: '32px', fontSize: '12px' }}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value
-                                                        if (val) {
-                                                            const [pid, presid] = val.split('_')
-                                                            handleSaveManual(pid, presid || null, '1', activeTurno)
-                                                        }
-                                                        e.target.value = ''
-                                                    }}
-                                                >
-                                                    <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
-                                                    {productos.flatMap(p =>
-                                                        (p.presentaciones || []).map(pr => {
-                                                            const key = `${p.id}_${pr.id}`
-                                                            if (planning.necesidades[activeTurno]?.[key]) return null
-                                                            return (
-                                                                <option key={key} value={key}>
-                                                                    [{p.codigoInterno}] {p.nombre} (x{pr.cantidad})
-                                                                </option>
-                                                            )
-                                                        })
-                                                    )}
-                                                </select>
+                                            <td colSpan={isDiscounted ? 2 : 3}>
+                                                {!isDiscounted ? (
+                                                    <select
+                                                        className="form-select"
+                                                        style={{ height: '32px', fontSize: '12px' }}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value
+                                                            if (val) {
+                                                                const [pid, presid] = val.split('_')
+                                                                handleSaveManual(pid, presid || null, '1', activeTurno)
+                                                            }
+                                                            e.target.value = ''
+                                                        }}
+                                                    >
+                                                        <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
+                                                        {productos.flatMap(p =>
+                                                            (p.presentaciones || []).map(pr => {
+                                                                const key = `${p.id}_${pr.id}`
+                                                                if (planning.necesidades[activeTurno]?.[key]) return null
+                                                                return (
+                                                                    <option key={key} value={key}>
+                                                                        [{p.codigoInterno}] {p.nombre} (x{pr.cantidad})
+                                                                    </option>
+                                                                )
+                                                            })
+                                                        )}
+                                                    </select>
+                                                ) : (
+                                                    <div style={{ padding: '8px', fontSize: '12px', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
+                                                        Este turno ya fue procesado y su stock descontado.
+                                                    </div>
+                                                )}
                                             </td>
-                                            <td colSpan={6}></td>
+                                            <td colSpan={isDiscounted ? 2 : 6} style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 'var(--space-4)' }}>
+                                                <button 
+                                                    className={`btn btn-sm ${isDiscounted ? 'btn-ghost' : 'btn-primary'}`}
+                                                    disabled={isDiscounted || isDiscounting || !planning?.necesidades[activeTurno]}
+                                                    onClick={() => setShowDiscountModal(true)}
+                                                    style={{ gap: 'var(--space-2)' }}
+                                                >
+                                                    {isDiscounted 
+                                                        ? '✅ Stock Descontado' 
+                                                        : `📦 Descontar Stock: Turno ${activeTurno}`
+                                                    }
+                                                </button>
+                                            </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
-                        </div>
                     </div>
                 </div>
             )}
@@ -2055,6 +2117,62 @@ export default function ProduccionPage() {
                                     </button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showDiscountModal && (
+                <div className="modal-overlay" style={{ display: 'flex', zIndex: 9999 }} onClick={(e) => e.target === e.currentTarget && setShowDiscountModal(false)}>
+                    <div className="modal" style={{ maxWidth: '500px', backgroundColor: '#fff' }}>
+                        <div className="modal-header">
+                            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Confirmar Descuento de Stock: {activeTurno}</h2>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setShowDiscountModal(false)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <p style={{ margin: 0, color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>
+                                Se descontarán los siguientes paquetes del **Stock de Fábrica**. Esta acción generará movimientos de egreso automáticos.
+                            </p>
+                            <div className="table-container" style={{ margin: 0, maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)' }}>
+                                <table className="table table-sm">
+                                    <thead style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#fff' }}>
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th style={{ textAlign: 'center' }}>Total</th>
+                                            <th style={{ textAlign: 'center' }}>A Descontar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Object.entries(planning?.necesidades?.[activeTurno] || {}).map(([key, units]) => {
+                                            const prod = planning?.infoProductos?.[key]
+                                            if (!prod || !prod.presentacion || units <= 0) return null
+                                            const packetsToSubtract = Math.ceil(units / prod.presentacion.cantidad)
+                                            return (
+                                                <tr key={key}>
+                                                    <td style={{ fontSize: '12px' }}>
+                                                        <span className="badge badge-neutral" style={{ marginRight: '8px' }}>{prod.codigoInterno}</span>
+                                                        <strong>{prod.nombre}</strong> (x{prod.presentacion.cantidad})
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{units} uni</td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span className="badge badge-danger" style={{ background: 'var(--color-danger)', color: '#fff', padding: '4px 10px', borderRadius: '14px', fontWeight: 700 }}>
+                                                            -{packetsToSubtract} paq
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', background: '#FEF9E7', borderRadius: 'var(--radius-md)', border: '1px solid #F7DC6F', color: '#B7950B', fontSize: '11px' }}>
+                                ⚠️ <strong>Nota:</strong> Solo se descuentan requerimientos destinados a Fábrica (Repartos). Los pedidos con destino "LOCAL" (Retiros) deben ser descontados desde logística o entrega final.
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-ghost" onClick={() => setShowDiscountModal(false)}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleDescontar} disabled={isDiscounting}>
+                                {isDiscounting ? 'Descontando...' : 'Confirmar y Descontar'}
+                            </button>
                         </div>
                     </div>
                 </div>
