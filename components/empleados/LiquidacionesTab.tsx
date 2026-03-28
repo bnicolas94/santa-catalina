@@ -13,10 +13,18 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
     const [mes, setMes] = useState(new Date().toISOString().substring(0, 7)) // YYYY-MM
     const [fechaDesde, setFechaDesde] = useState(() => {
         const d = new Date()
-        d.setDate(d.getDate() - 7)
+        const day = d.getDay()
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+        d.setDate(diff)
         return d.toISOString().split('T')[0]
     })
-    const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
+    const [fechaHasta, setFechaHasta] = useState(() => {
+        const d = new Date()
+        const day = d.getDay()
+        const diff = d.getDate() - day + (day === 0 ? 0 : 7)
+        d.setDate(diff)
+        return d.toISOString().split('T')[0]
+    })
     const [tipoPeriodo, setTipoPeriodo] = useState(empleadoDatos.cicloPago === 'SEMANAL' ? 'semana' : 'mes')
 
     const [cajas, setCajas] = useState<any[]>([])

@@ -17,13 +17,21 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const [licenciaId, setLicenciaId] = useState<string>('')
     const [tiposLicencias, setTiposLicencias] = useState<any[]>([])
     
-    // Fechas
+    // Fechas: Default a Lunes y Domingo de la semana actual
     const [fechaDesde, setFechaDesde] = useState(() => {
         const d = new Date()
-        d.setDate(d.getDate() - 7)
+        const day = d.getDay()
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+        d.setDate(diff)
         return d.toISOString().split('T')[0]
     })
-    const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
+    const [fechaHasta, setFechaHasta] = useState(() => {
+        const d = new Date()
+        const day = d.getDay()
+        const diff = d.getDate() - day + (day === 0 ? 0 : 7)
+        d.setDate(diff)
+        return d.toISOString().split('T')[0]
+    })
     const [fechaImpresion, setFechaImpresion] = useState(new Date().toISOString().split('T')[0])
     
     // Cajas
