@@ -1,3 +1,5 @@
+import { parseDireccion } from "./addressUtils";
+
 export type ClienteData = {
     id: string;
     nombreComercial: string;
@@ -58,7 +60,7 @@ export function matchClient(
             confidence: "low",
             proposedData: { 
                 nombreComercial: "CLIENTE DESCONOCIDO",
-                direccion: direccionExcel || undefined,
+                direccion: parseDireccion(direccionExcel, localidadExcel).full || undefined,
                 localidad: localidadExcel || undefined,
             },
         };
@@ -79,7 +81,7 @@ export function matchClient(
                 proposedData: {
                     nombreComercial: nombreExcel,
                     contactoTelefono: telefonoExcel || undefined,
-                    direccion: direccionExcel || undefined,
+                    direccion: parseDireccion(direccionExcel, localidadExcel).full || undefined,
                     localidad: localidadExcel || undefined,
                 },
             };
@@ -101,7 +103,7 @@ export function matchClient(
             proposedData: {
                 nombreComercial: nombreExcel,
                 contactoTelefono: telefonoExcel || undefined,
-                direccion: direccionExcel || undefined,
+                direccion: parseDireccion(direccionExcel, localidadExcel).full || undefined,
                 localidad: localidadExcel || undefined,
             },
         };
@@ -114,7 +116,7 @@ export function matchClient(
         proposedData: {
             nombreComercial: nombreExcel.trim(),
             contactoTelefono: telefonoExcel ? telefonoExcel.trim() : undefined,
-            direccion: direccionExcel ? direccionExcel.trim() : undefined,
+            direccion: direccionExcel ? parseDireccion(direccionExcel, localidadExcel).full || undefined : undefined,
             localidad: localidadExcel ? localidadExcel.trim() : undefined,
         },
     };

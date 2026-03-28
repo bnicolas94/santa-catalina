@@ -84,3 +84,27 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Error al crear pedido' }, { status: 500 })
     }
 }
+// DELETE /api/pedidos — Borrado masivo por IDs
+export async function DELETE(request: Request) {
+    try {
+        const body = await request.json()
+        const { ids } = body
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return NextResponse.json({ error: 'Se requiere un array de IDs' }, { status: 400 })
+        }
+
+        // Ejecutar borrado en transacción para asegurar consistencia
+        await prisma.$transaction([
+            prisma.movimientoCaja.deleteMany({ where: { pedidoId: { in: ids } } }),
+            prisma.entrega.deleteMany({ where: { pedidoId: { in: ids } } }),
+            prisma.detallePedido.deleteMany({ where: { pedidoId: { in: ids } } }),
+            prisma.pedido.deleteMany({ where: { id: { in: ids } } }),
+        ])
+
+        return NextResponse.json({ success: true, count: ids.length })
+    } catch (error) {
+        console.error('Error in bulk delete pedidos:', error)
+        return NextResponse.json({ error: 'Error al eliminar pedidos de forma masiva' }, { status: 500 })
+    }
+}

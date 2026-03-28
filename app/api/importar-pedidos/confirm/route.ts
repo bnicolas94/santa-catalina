@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PreviewRowResult } from "../preview/route";
+import { parseDireccion } from "@/lib/parsers/addressUtils";
+import { geocodeAddress } from "@/lib/services/geocoding";
 
 export async function POST(req: NextRequest) {
     try {
@@ -40,28 +42,19 @@ export async function POST(req: NextRequest) {
                 await prisma.$transaction(async (tx) => {
                     let finalClientId = row.clientMatch.clienteId;
 
-                    // Helper para parsear calle y número
-                    const parseDireccion = (dir: string | null) => {
-                        if (!dir) return { calle: null, numero: null };
-                        
-                        let tempCalle = dir.trim();
-                        let numero = null;
+                    const { calle, numero, full } = parseDireccion(
+                        row.clientMatch.proposedData.direccion || null,
+                        row.clientMatch.proposedData.localidad || null
+                    );
 
-                        const match = dir.match(/^(.*?)\s+(?:N°|#|nro|num|altura|n)\.?\s*(\d+.*)$/i);
-                        if (match) {
-                            tempCalle = match[1].trim();
-                            numero = match[2].trim();
-                        }
-
-                        // Si la calle empieza con un número y no tiene la palabra "calle", se la agregamos
-                        if (/^\d/.test(tempCalle) && !/^calle\s/i.test(tempCalle)) {
-                            tempCalle = `Calle ${tempCalle}`;
-                        }
-
-                        return { calle: tempCalle, numero };
-                    };
-
-                    const { calle, numero } = parseDireccion(row.clientMatch.proposedData.direccion || null);
+                    // Geocoding data
+                    let latitud: number | null = null;
+                    let longitud: number | null = null;
+                    const geocode = await geocodeAddress(calle, numero, row.clientMatch.proposedData.localidad || null);
+                    if (geocode) {
+                        latitud = geocode.lat;
+                        longitud = geocode.lng;
+                    }
 
                     // 1. Crear o Actualizar cliente
                     if (row.clientMatch.isNew || !finalClientId) {
@@ -69,11 +62,13 @@ export async function POST(req: NextRequest) {
                             data: {
                                 nombreComercial: row.clientMatch.proposedData.nombreComercial,
                                 contactoTelefono: row.clientMatch.proposedData.contactoTelefono || null,
-                                direccion: row.clientMatch.proposedData.direccion || null,
+                                direccion: full || row.clientMatch.proposedData.direccion || null,
                                 calle,
                                 numero,
                                 localidad: row.clientMatch.proposedData.localidad || null,
-                                zona: "C", 
+                                zona: "C",
+                                latitud,
+                                longitud
                             },
                         });
                         finalClientId = newClient.id;
@@ -82,9 +77,11 @@ export async function POST(req: NextRequest) {
                         if (existing) {
                             const updateData: any = {};
                             if (!existing.direccion && row.clientMatch.proposedData.direccion) {
-                                updateData.direccion = row.clientMatch.proposedData.direccion;
+                                updateData.direccion = full || row.clientMatch.proposedData.direccion;
                                 updateData.calle = calle;
                                 updateData.numero = numero;
+                                updateData.latitud = latitud;
+                                updateData.longitud = longitud;
                             }
                             if (!existing.localidad && row.clientMatch.proposedData.localidad) {
                                 updateData.localidad = row.clientMatch.proposedData.localidad;

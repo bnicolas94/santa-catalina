@@ -1,12 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { geocodeAddress, geocodeRawAddress } from '@/lib/services/geocoding'
 
 export async function POST() {
-    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY
-    if (!GOOGLE_MAPS_API_KEY) {
-        return NextResponse.json({ error: 'GOOGLE_MAPS_API_KEY no configurada' }, { status: 500 })
-    }
-
     try {
         const clientes = await prisma.cliente.findMany({
             where: {
@@ -20,15 +16,21 @@ export async function POST() {
 
         for (const cliente of clientes) {
             try {
-                const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cliente.direccion!)}&key=${GOOGLE_MAPS_API_KEY}&region=ar`
-                const res = await fetch(url)
-                const data = await res.json()
+                // Try with components first if available
+                let geocode = await geocodeAddress(cliente.calle, cliente.numero, cliente.localidad)
+                
+                // Fallback to raw address if components failed
+                if (!geocode && cliente.direccion) {
+                    geocode = await geocodeRawAddress(cliente.direccion)
+                }
 
-                if (data.status === 'OK' && data.results.length > 0) {
-                    const { lat, lng } = data.results[0].geometry.location
+                if (geocode) {
                     await prisma.cliente.update({
                         where: { id: cliente.id },
-                        data: { latitud: lat, longitud: lng }
+                        data: { 
+                            latitud: geocode.lat, 
+                            longitud: geocode.lng 
+                        }
                     })
                     successCount++
                 } else {

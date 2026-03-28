@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import ImportarPedidosModal from '@/components/pedidos/ImportarPedidosModal'
 
 interface Presentacion {
     id: string; cantidad: number; precioVenta: number
@@ -49,6 +50,7 @@ export default function PedidosPage() {
     const [editingPedido, setEditingPedido] = useState<Pedido | null>(null)
     const [editForm, setEditForm] = useState({ fechaEntrega: '', medioPago: 'efectivo', estado: 'pendiente' })
     const [showEditModal, setShowEditModal] = useState(false)
+    const [showImportModal, setShowImportModal] = useState(false)
 
     useEffect(() => { fetchData() }, [])
 
@@ -148,6 +150,33 @@ export default function PedidosPage() {
         } catch { setError('Error al eliminar pedido') }
     }
 
+    async function handleLimpiarPedidos() {
+        if (filtered.length === 0) return;
+        const confirmMsg = filterEstado 
+            ? `¿Estás seguro de que deseas eliminar los ${filtered.length} pedidos filtrados ("${getEstadoInfo(filterEstado).label}")?`
+            : `¿Estás seguro de que deseas eliminar TODOS los pedidos (${pedidos.length})?`;
+        
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            setLoading(true);
+            const ids = filtered.map(p => p.id);
+            const res = await fetch('/api/pedidos', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            });
+            if (!res.ok) throw new Error();
+            setSuccess(`${ids.length} pedidos eliminados`);
+            fetchData();
+            setTimeout(() => setSuccess(''), 3000);
+        } catch { 
+            setError('Error al eliminar pedidos de forma masiva');
+        } finally {
+            setLoading(false);
+        }
+    }
+
     function addDetalle() { setDetalles([...detalles, { presentacionId: '', cantidad: '1' }]) }
     function removeDetalle(i: number) { setDetalles(detalles.filter((_, idx) => idx !== i)) }
     function updateDetalle(i: number, field: string, value: string) {
@@ -172,8 +201,14 @@ export default function PedidosPage() {
             <div className="page-header">
                 <h1>📋 Pedidos</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <Link href="/importar" className="btn btn-ghost">📂 Importar Excel</Link>
-                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Nuevo Pedido</button>
+                    {pedidos.length > 0 && (
+                        <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={handleLimpiarPedidos}>🧹 Limpiar</button>
+                    )}
+                    <button className="btn btn-ghost" onClick={() => setShowImportModal(true)}>📂 Importar Excel</button>
+                    <button className="btn btn-primary" onClick={() => {
+                        setForm({ ...form, fechaEntrega: new Date().toISOString().split('T')[0] });
+                        setShowModal(true);
+                    }}>+ Nuevo Pedido</button>
                 </div>
             </div>
 
@@ -427,6 +462,16 @@ export default function PedidosPage() {
                     </div>
                 </div>
             )}
+            {/* Modal Importar */}
+            <ImportarPedidosModal 
+                isOpen={showImportModal} 
+                onClose={() => setShowImportModal(false)} 
+                onSuccess={(msg) => {
+                    setSuccess(msg);
+                    fetchData();
+                    setTimeout(() => setSuccess(''), 4000);
+                }}
+            />
         </div>
     )
 }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { geocodeAddress } from '@/lib/services/geocoding'
 
 // GET /api/clientes
 export async function GET() {
@@ -37,18 +38,10 @@ export async function POST(request: Request) {
         // Auto-geocode if we have at least calle and numero
         let latitud: number | null = null
         let longitud: number | null = null
-        if (calleFormatted && numero && process.env.GOOGLE_MAPS_API_KEY) {
-            try {
-                // To help Google Maps, if localidad is missing, we append a default province context
-                const queryAddress = [calleFormatted, numero, localidad || 'Buenos Aires'].filter(Boolean).join(', ')
-                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(queryAddress)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
-                const geoRes = await fetch(geoUrl)
-                const geoData = await geoRes.json()
-                if (geoData.status === 'OK' && geoData.results?.length) {
-                    latitud = geoData.results[0].geometry.location.lat
-                    longitud = geoData.results[0].geometry.location.lng
-                }
-            } catch (e) { console.error('Geocode failed (non-blocking):', e) }
+        const geocode = await geocodeAddress(calleFormatted, numero, localidad)
+        if (geocode) {
+            latitud = geocode.lat
+            longitud = geocode.lng
         }
 
         const cliente = await prisma.cliente.create({
@@ -74,5 +67,50 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('Error creating cliente:', error)
         return NextResponse.json({ error: 'Error al crear cliente' }, { status: 500 })
+    }
+}
+// DELETE /api/clientes — Borrado masivo por IDs (Incluye limpieza de cascada manual)
+export async function DELETE(request: Request) {
+    try {
+        const body = await request.json()
+        const { ids } = body
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return NextResponse.json({ error: 'Se requiere un array de IDs' }, { status: 400 })
+        }
+
+        // Ejecutar borrado en transacción para asegurar consistencia
+        // Borramos en orden de dependencias
+        await prisma.$transaction(async (tx) => {
+            // 1. Movimientos de Caja asociados a pedidos de estos clientes
+            await tx.movimientoCaja.deleteMany({
+                where: { pedido: { clienteId: { in: ids } } }
+            })
+
+            // 2. Entregas de estos clientes
+            await tx.entrega.deleteMany({
+                where: { clienteId: { in: ids } }
+            })
+
+            // 3. Detalles de Pedido de estos clientes
+            await tx.detallePedido.deleteMany({
+                where: { pedido: { clienteId: { in: ids } } }
+            })
+
+            // 4. Pedidos de estos clientes
+            await tx.pedido.deleteMany({
+                where: { clienteId: { in: ids } }
+            })
+
+            // 5. Finalmente, los Clientes
+            await tx.cliente.deleteMany({
+                where: { id: { in: ids } }
+            })
+        })
+
+        return NextResponse.json({ success: true, count: ids.length })
+    } catch (error) {
+        console.error('Error in bulk delete clientes:', error)
+        return NextResponse.json({ error: 'Error al eliminar clientes de forma masiva' }, { status: 500 })
     }
 }

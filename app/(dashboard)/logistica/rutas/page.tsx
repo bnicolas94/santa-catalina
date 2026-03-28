@@ -18,7 +18,10 @@ interface Entrega {
 interface Ruta {
     id: string; fecha: string; zona: string; turno?: string
     chofer: { nombre: string }; entregas: Entrega[]
+    ubicacionOrigenId?: string; ubicacionOrigen?: { nombre: string }
 }
+interface Ubicacion { id: string; nombre: string; tipo: string }
+interface StockInfo { [key: string]: number }
 
 function getLocalDateString(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -36,8 +39,17 @@ export default function PlanificacionRutasPage() {
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
     const [expandedRutas, setExpandedRutas] = useState<Record<string, boolean>>({})
 
+    const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
+    const [stockActual, setStockActual] = useState<StockInfo>({})
+
     // Formulario de nueva ruta
-    const [formRuta, setFormRuta] = useState({ choferId: '', fecha: getLocalDateString(), zona: '', turno: 'Mañana' })
+    const [formRuta, setFormRuta] = useState({ 
+        choferId: '', 
+        fecha: getLocalDateString(), 
+        zona: '', 
+        turno: 'Mañana',
+        ubicacionOrigenId: '' 
+    })
     const [pedidosSeleccionados, setPedidosSeleccionados] = useState<string[]>([])
 
     useEffect(() => { fetchData() }, [filterFecha])
@@ -45,14 +57,18 @@ export default function PlanificacionRutasPage() {
     async function fetchData() {
         try {
             const params = filterFecha ? `?fecha=${filterFecha}` : ''
-            const [pedRes, empRes, rutaRes] = await Promise.all([
+            const [pedRes, empRes, rutaRes, ubiRes, planRes] = await Promise.all([
                 fetch('/api/pedidos'),
                 fetch('/api/empleados'),
-                fetch(`/api/rutas${params}`)
+                fetch(`/api/rutas${params}`),
+                fetch('/api/ubicaciones'),
+                fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`)
             ])
             const pedData = await pedRes.json()
             const empData = await empRes.json()
             const rutaData = await rutaRes.json()
+            const ubiData = await ubiRes.json()
+            const planData = await planRes.json()
 
             const disponibles = Array.isArray(pedData)
                 ? pedData.filter((p: Pedido) => p.estado === 'pendiente' || p.estado === 'confirmado')
@@ -65,6 +81,27 @@ export default function PlanificacionRutasPage() {
             setChoferes(soloChoferes)
 
             setRutas(Array.isArray(rutaData) ? rutaData : [])
+            
+            const ubis = Array.isArray(ubiData) ? ubiData : []
+            setUbicaciones(ubis)
+            
+            // Set default origen to first FABRICA
+            if (!formRuta.ubicacionOrigenId && ubis.length > 0) {
+                const defaultUbi = ubis.find(u => u.tipo === 'FABRICA') || ubis[0]
+                setFormRuta(prev => ({ ...prev, ubicacionOrigenId: defaultUbi.id }))
+            }
+
+            // Stock data consolidada (usamos stockLocal o stockFabricacion según corresponda más adelante)
+            // Para simplificar, consolidamos ambos para la vista previa
+            const combinedStock: StockInfo = {}
+            if (planData.stockFabricacion) Object.assign(combinedStock, planData.stockFabricacion)
+            if (planData.stockLocal) {
+                Object.entries(planData.stockLocal).forEach(([k, v]: [string, any]) => {
+                    combinedStock[k] = (combinedStock[k] || 0) + v
+                })
+            }
+            setStockActual(combinedStock)
+
         } catch { setError('Error al cargar datos') } finally { setLoading(false) }
     }
 
@@ -140,9 +177,15 @@ export default function PlanificacionRutasPage() {
                 body: JSON.stringify({ ...formRuta, pedidos: payloadPedidos }),
             })
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
-            setSuccess('Ruta creada con éxito')
+            setSuccess('Ruta creada con éxito (Stock descontado)')
             setShowModal(false)
-            setFormRuta({ choferId: '', fecha: filterFecha || getLocalDateString(), zona: '', turno: 'Mañana' })
+            setFormRuta({ 
+                choferId: '', 
+                fecha: filterFecha || getLocalDateString(), 
+                zona: '', 
+                turno: 'Mañana',
+                ubicacionOrigenId: formRuta.ubicacionOrigenId 
+            })
             setPedidosSeleccionados([])
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
@@ -439,6 +482,13 @@ export default function PlanificacionRutasPage() {
                                         <input type="date" className="form-input" value={formRuta.fecha} onChange={e => setFormRuta({ ...formRuta, fecha: e.target.value })} required />
                                     </div>
                                     <div className="form-group">
+                                        <label className="form-label">Ubicación de Origen (Stock)</label>
+                                        <select className="form-select" value={formRuta.ubicacionOrigenId} onChange={e => setFormRuta({ ...formRuta, ubicacionOrigenId: e.target.value })} required>
+                                            <option value="">Seleccionar origen...</option>
+                                            {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre} ({u.tipo})</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
                                         <label className="form-label">Turno</label>
                                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                                             {['Mañana', 'Siesta', 'Tarde'].map(t => (
@@ -468,6 +518,44 @@ export default function PlanificacionRutasPage() {
                                             {pedidosSeleccionados.length} pedido{pedidosSeleccionados.length !== 1 ? 's' : ''} seleccionado{pedidosSeleccionados.length !== 1 ? 's' : ''}
                                         </p>
                                     </div>
+                                    
+                                    {/* Stock Warning UI */}
+                                    {(() => {
+                                        const faltantes: string[] = []
+                                        const necesarios: Record<string, { total: number, label: string }> = {}
+                                        
+                                        pedidosSeleccionados.forEach(pid => {
+                                            const p = pedidosDisponibles.find(ped => ped.id === pid)
+                                            p?.detalles.forEach(d => {
+                                                const pres = d.presentacion
+                                                if (pres && pres.producto) {
+                                                    const key = `${pres.productoId}_${pres.id}`
+                                                    const label = `[x${pres.cantidad}] ${pres.producto.codigoInterno}`
+                                                    if (!necesarios[key]) necesarios[key] = { total: 0, label }
+                                                    necesarios[key].total += d.cantidad
+                                                }
+                                            })
+                                        })
+
+                                        Object.entries(necesarios).forEach(([key, info]) => {
+                                            const stockDisp = stockActual[key] || 0
+                                            if (stockDisp < info.total) {
+                                                faltantes.push(`${info.label}: faltan ${info.total - stockDisp} un.`)
+                                            }
+                                        })
+
+                                        if (faltantes.length > 0) {
+                                            return (
+                                                <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', backgroundColor: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)' }}>
+                                                    <p style={{ margin: '0 0 5px 0', fontSize: 'var(--text-xs)', fontWeight: 700, color: '#C0392B' }}>⚠️ STOCK INSUFICIENTE EN ORIGEN</p>
+                                                    <ul style={{ margin: 0, paddingLeft: '15px', color: '#C0392B', fontSize: 'var(--text-xs)' }}>
+                                                        {faltantes.map((f, i) => <li key={i}>{f}</li>)}
+                                                    </ul>
+                                                </div>
+                                            )
+                                        }
+                                        return null
+                                    })()}
                                 </div>
 
                                 {/* Pedidos */}

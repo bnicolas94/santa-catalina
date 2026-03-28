@@ -92,6 +92,33 @@ export default function ClientesPage() {
         } catch { setError('Error al eliminar') }
     }
 
+    async function handleLimpiarClientes() {
+        if (filtered.length === 0) return;
+        const confirmMsg = filterZona 
+            ? `¿Estás seguro de que deseas eliminar los ${filtered.length} clientes de la Zona ${filterZona}? (Esta acción borrará también todos sus pedidos y entregas).`
+            : `¿Estás seguro de que deseas eliminar TODOS los clientes (${clientes.length})? (Esta acción borrará todos los pedidos y entregas vinculadas).`;
+        
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            setLoading(true);
+            const ids = filtered.map(c => c.id);
+            const res = await fetch('/api/clientes', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+            });
+            if (!res.ok) throw new Error();
+            setSuccess(`${ids.length} clientes eliminados`);
+            fetchData();
+            setTimeout(() => setSuccess(''), 3000);
+        } catch { 
+            setError('Error al eliminar clientes de forma masiva');
+        } finally {
+            setLoading(false);
+        }
+    }
+
     const filtered = filterZona ? clientes.filter((c) => c.zona === filterZona) : clientes
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando clientes...</p></div>
@@ -100,7 +127,14 @@ export default function ClientesPage() {
         <div>
             <div className="page-header">
                 <h1>👥 Clientes</h1>
-                <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }}>+ Nuevo Cliente</button>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    {clientes.length > 0 && (
+                        <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={handleLimpiarClientes}>
+                            🧹 Limpiar
+                        </button>
+                    )}
+                    <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true) }}>+ Nuevo Cliente</button>
+                </div>
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}
