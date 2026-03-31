@@ -26,6 +26,7 @@ function StockContent() {
     const [showFacturaModal, setShowFacturaModal] = useState(false)
     const [facturaForm, setFacturaForm] = useState({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] as any[] })
     const [tempItem, setTempItem] = useState({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+    const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [filterTipo, setFilterTipo] = useState('')
     const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
@@ -275,6 +276,7 @@ function StockContent() {
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
                         setFacturaForm({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: defaultUbi, observaciones: '', items: [] })
                         setTempItem({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+                        setMostrarTodosInsumos(false)
                         setShowFacturaModal(true)
                     }}>📑 Múltiples</button>
                     <button className="btn btn-primary" onClick={() => {
@@ -808,10 +810,16 @@ function StockContent() {
                                 <div style={{ padding: 'var(--space-3)', backgroundColor: '#F8F9F9', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7E9', marginBottom: 'var(--space-4)' }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 'var(--space-3)' }}>
                                         <div className="form-group">
-                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Insumo (Filtro por proveedor)</label>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Insumo</label>
+                                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)' }}>
+                                                    <input type="checkbox" checked={mostrarTodosInsumos} onChange={(e) => setMostrarTodosInsumos(e.target.checked)} />
+                                                    Mostrar todos
+                                                </label>
+                                            </div>
                                             <select className="form-select" value={tempItem.insumoId} onChange={(e) => setTempItem({ ...tempItem, insumoId: e.target.value })}>
                                                 <option value="">Seleccionar insumo...</option>
-                                                {insumos.filter(i => !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
+                                                {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
                                                     <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
                                                 ))}
                                             </select>

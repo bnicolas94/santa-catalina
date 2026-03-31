@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useProduccionData } from '@/components/produccion/hooks/useProduccionData'
 
 interface Producto {
     id: string
@@ -77,16 +78,19 @@ function formatDateOnly(isoString: string) {
 }
 
 export default function ProduccionPage() {
-    const [lotes, setLotes] = useState<Lote[]>([])
-    const [productos, setProductos] = useState<Producto[]>([])
-    const [coordinadores, setCoordinadores] = useState<Coordinador[]>([])
-    const [movimientos, setMovimientos] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showCerrarModal, setShowCerrarModal] = useState(false)
     const [loteSeleccionado, setLoteSeleccionado] = useState<Lote | null>(null)
     const [filterEstado, setFilterEstado] = useState('')
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
+
+    const { data: swrData, isLoading: loading, mutate } = useProduccionData(filterFecha || getLocalDateString())
+    const fetchData = () => mutate()
+
+    const lotes = swrData?.lotes || []
+    const productos = swrData?.productos || []
+    const coordinadores = swrData?.coordinadores || []
+    const movimientos = swrData?.movimientos || []
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [form, setForm] = useState({
         productoId: '',
@@ -112,7 +116,7 @@ export default function ProduccionPage() {
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
-    const [stockProductos, setStockProductos] = useState<StockProd[]>([])
+    const stockProductos = swrData?.stockProductos || []
     interface PlanningData {
         necesidades: Record<string, Record<string, number>>
         infoProductos: Record<string, any>
@@ -124,11 +128,18 @@ export default function ProduccionPage() {
         shipmentCounts?: Record<string, number>
         descuentosRealizados?: string[]
     }
-    const [planning, setPlanning] = useState<PlanningData | null>(null)
+    const planning = swrData?.planning || null
     const [activeTurno, setActiveTurno] = useState('Mañana')
     const [filterDestino, setFilterDestino] = useState<'TODOS' | 'FABRICA' | 'LOCAL'>('TODOS')
     interface UbicacionOption { id: string, nombre: string, tipo: string }
-    const [ubicaciones, setUbicaciones] = useState<UbicacionOption[]>([])
+    const ubicaciones = swrData?.ubicaciones || []
+
+    useEffect(() => {
+        if (!form.ubicacionId && ubicaciones.length > 0) {
+            const def = ubicaciones.find((u: UbicacionOption) => u.tipo === 'FABRICA') || ubicaciones[0]
+            setForm(f => ({ ...f, ubicacionId: def.id }))
+        }
+    }, [ubicaciones, form.ubicacionId])
     const [showMovModal, setShowMovModal] = useState(false)
     const [movForm, setMovForm] = useState({ productoId: '', presentacionId: '', tipo: 'traslado', cantidad: '', observaciones: '' })
     const [movExtraForm, setMovExtraForm] = useState({ ubicacionId: '', destinoUbicacionId: '' })
@@ -163,50 +174,7 @@ export default function ProduccionPage() {
         else setStockSource('ambos')
     }, [filterDestino])
 
-    useEffect(() => {
-        fetchData()
-        const interval = setInterval(fetchData, 5000) // Poll every 5s for real-time updates
-        return () => clearInterval(interval)
-    }, [filterFecha])
-
-    async function fetchData() {
-        try {
-            const [lotesRes, prodRes, empRes, stockRes, movRes, ubiRes, planRes] = await Promise.all([
-                fetch('/api/lotes'),
-                fetch('/api/productos'),
-                fetch('/api/empleados'),
-                fetch('/api/stock-producto'),
-                fetch('/api/movimientos-producto?limit=10'),
-                fetch('/api/ubicaciones'),
-                fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`)
-            ])
-            const lotesData = await lotesRes.json()
-            const prodData = await prodRes.json()
-            const empData = await empRes.json()
-            const stockData = await stockRes.json()
-            const movData = await movRes.json()
-            const ubiData = await ubiRes.json()
-            const planData = await planRes.json()
-            setLotes(Array.isArray(lotesData) ? lotesData : [])
-            setProductos(Array.isArray(prodData) ? prodData : [])
-            setCoordinadores(Array.isArray(empData) ? empData.filter((e: { rol: string; activo: boolean }) => ['ADMIN', 'COORD_PROD', 'LOCAL'].includes(e.rol) && e.activo) : [])
-            setStockProductos(Array.isArray(stockData) ? stockData : [])
-            setMovimientos(Array.isArray(movData) ? movData : [])
-            setPlanning(planData && !planData.error ? planData : null)
-            const validUbi = Array.isArray(ubiData) ? ubiData : []
-            setUbicaciones(validUbi)
-
-            // Set default location if none selected
-            if (!form.ubicacionId && validUbi.length > 0) {
-                const def = validUbi.find(u => u.tipo === 'FABRICA') || validUbi[0]
-                setForm(f => ({ ...f, ubicacionId: def.id }))
-            }
-        } catch {
-            setError('Error al cargar datos')
-        } finally {
-            setLoading(false)
-        }
-    }
+    // Data fetching and polling is now handled entirely by the useProduccionData SWR hook.
 
     async function handleDescontar() {
         if (!activeTurno || activeTurno === 'Totales') return
