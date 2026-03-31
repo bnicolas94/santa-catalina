@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
+import useSWR from 'swr'
 
 interface MovCaja {
     id: string; tipo: string; concepto: string; monto: number; medioPago: string
@@ -29,14 +30,54 @@ function formatCurrency(n: number, visible = true) {
     return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+const cajaFetcher = async ([_, fecha]: [string, string]) => {
+    const [cajaRes, rendRes, saldosRes, conceptosRes, empRes] = await Promise.all([
+        fetch(`/api/caja?fecha=${fecha}`),
+        fetch('/api/caja/rendiciones'),
+        fetch('/api/caja/saldos'),
+        fetch('/api/caja/conceptos'),
+        fetch('/api/empleados')
+    ])
+    
+    return {
+        cajaData: await cajaRes.json(),
+        rendicionesData: await rendRes.json(),
+        saldosData: await saldosRes.json(),
+        conceptosData: await conceptosRes.json(),
+        empleadosData: await empRes.json()
+    }
+}
+
 export default function CajaPage() {
-    const [movimientos, setMovimientos] = useState<MovCaja[]>([])
-    const [resumen, setResumen] = useState<Resumen>({ ingresosEfectivo: 0, ingresosTransferencia: 0, egresosTotal: 0, saldo: 0 })
-    const [rendiciones, setRendiciones] = useState<Rendicion[]>([])
-    const [saldoMadre, setSaldoMadre] = useState(0)
-    const [saldoChica, setSaldoChica] = useState(0)
-    const [saldoLocal, setSaldoLocal] = useState(0)
-    const [saldoMercadoPago, setSaldoMercadoPago] = useState(0)
+    const { data: session } = useSession()
+    const userRol = (session?.user as any)?.rol
+    const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+
+    const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0])
+
+    const { data: swrData, isLoading: loading, mutate } = useSWR(['caja-data', fechaFiltro], cajaFetcher, {
+        refreshInterval: 15000,
+        revalidateOnFocus: true
+    })
+    const fetchData = () => mutate()
+
+    const movimientos = swrData?.cajaData?.movimientos || []
+    const resumen = swrData?.cajaData?.resumen || { ingresosEfectivo: 0, ingresosTransferencia: 0, egresosTotal: 0, saldo: 0 }
+    
+    const rendDataRaw = swrData?.rendicionesData
+    const rendiciones = Array.isArray(rendDataRaw) ? rendDataRaw.filter((r: Rendicion) => r.estado === 'pendiente' && r.montoEsperado > 0) : []
+
+    const saldosData = swrData?.saldosData || {}
+    const saldoMadre = saldosData.cajaMadre?.saldo ?? 0
+    const saldoChica = saldosData.cajaChica?.saldo ?? 0
+    const saldoLocal = saldosData.local?.saldo ?? 0
+    const saldoMercadoPago = saldosData.mercadoPago?.saldo ?? 0
+
+    const conceptosData = swrData?.conceptosData
+    const conceptos = Array.isArray(conceptosData) ? conceptosData : []
+
+    const empData = swrData?.empleadosData
+    const choferes = Array.isArray(empData) ? empData : []
     const [showMPModal, setShowMPModal] = useState(false)
     const [liveMPData, setLiveMPData] = useState<any[]>([])
     const [loadingMP, setLoadingMP] = useState(false)
@@ -61,25 +102,18 @@ export default function CajaPage() {
     }
 
     const [showMontos, setShowMontos] = useState(true)
-    const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showTransferModal, setShowTransferModal] = useState(false)
     const [transfForm, setTransfForm] = useState({ origen: 'local', destino: 'caja_chica', monto: '', fecha: new Date().toISOString().split('T')[0] })
     const [showRendicionModal, setShowRendicionModal] = useState<Rendicion | null>(null)
-    const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0])
     const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
     const [rendForm, setRendForm] = useState({ montoEntregado: '', observaciones: '' })
 
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
-    const [conceptos, setConceptos] = useState<Concepto[]>([])
     const [showConceptosModal, setShowConceptosModal] = useState(false)
     const [nuevoConcepto, setNuevoConcepto] = useState('')
     const [editingMov, setEditingMov] = useState<MovCaja | null>(null)
-    const [choferes, setChoferes] = useState<any[]>([])
-    const { data: session } = useSession()
-    const userRol = (session?.user as any)?.rol
-    const ubicacionTipo = (session?.user as any)?.ubicacionTipo
 
     const allowedBoxes = userRol === 'ADMIN' 
         ? ['caja_madre', 'caja_chica', 'local', 'mercado_pago'] 
@@ -98,74 +132,38 @@ export default function CajaPage() {
 
 
     useEffect(() => { 
-        fetchData() 
-
         // Solicitar permisos de notificación de escritorio
         if ("Notification" in window && Notification.permission === "default") {
             Notification.requestPermission();
         }
+    }, [])
 
-        // Polling para actualizar caja en tiempo real y emitir toast
-        const interval = setInterval(() => {
-            fetchData(true)
-        }, 15000)
-        return () => clearInterval(interval)
-    }, [fechaFiltro])
+    useEffect(() => {
+        if (!swrData?.cajaData?.movimientos) return
+        
+        if (movimientosRef.current.length > 0) {
+            const oldIds = new Set(movimientosRef.current.map((m: MovCaja) => m.id))
+            const newIncomes = swrData.cajaData.movimientos.filter((m: MovCaja) => 
+                m.cajaOrigen === 'mercado_pago' && m.tipo === 'ingreso' && !oldIds.has(m.id)
+            )
+            if (newIncomes.length > 0) {
+                const latest = newIncomes[0];
+                setToastNotif({ message: '¡Cobro M.Pago acreditado!', amount: latest.monto, id: latest.id })
+                
+                const audio = new Audio('/sounds/notification.mp3');
+                audio.play().catch(err => console.log('Autoplay preventer by browser:', err));
 
-    async function fetchData(isPolling = false) {
-        try {
-            const [cajaRes, rendRes, saldosRes] = await Promise.all([
-                fetch(`/api/caja?fecha=${fechaFiltro}`),
-                fetch('/api/caja/rendiciones'),
-                fetch('/api/caja/saldos'),
-            ])
-            const cajaData = await cajaRes.json()
-            const rendData = await rendRes.json()
-            const saldosData = await saldosRes.json()
-
-            if (isPolling && cajaData.movimientos) {
-                const oldIds = new Set(movimientosRef.current.map((m: MovCaja) => m.id))
-                const newIncomes = cajaData.movimientos.filter((m: MovCaja) => 
-                    m.cajaOrigen === 'mercado_pago' && m.tipo === 'ingreso' && !oldIds.has(m.id)
-                )
-                if (newIncomes.length > 0) {
-                    const latest = newIncomes[0];
-                    setToastNotif({ message: '¡Cobro M.Pago acreditado!', amount: latest.monto, id: latest.id })
-                    
-                    // Sonido de notificación
-                    const audio = new Audio('/sounds/notification.mp3');
-                    audio.play().catch(err => console.log('Autoplay preventer by browser:', err));
-
-                    // Notificación de escritorio
-                    if ("Notification" in window && Notification.permission === "granted") {
-                        new Notification("Nuevo Pago Mercado Pago", {
-                            body: `Acreditado: $${latest.monto.toLocaleString('es-AR')}\n${latest.descripcion || ''}`,
-                            icon: '/favicon.ico'
-                        });
-                    }
-
-                    setTimeout(() => setToastNotif(null), 8000)
+                if ("Notification" in window && Notification.permission === "granted") {
+                    new Notification("Nuevo Pago Mercado Pago", {
+                        body: `Acreditado: $${latest.monto.toLocaleString('es-AR')}\n${latest.descripcion || ''}`,
+                        icon: '/favicon.ico'
+                    });
                 }
+                setTimeout(() => setToastNotif(null), 8000)
             }
-            movimientosRef.current = cajaData.movimientos || []
-
-            setMovimientos(cajaData.movimientos || [])
-            setResumen(cajaData.resumen || { ingresosEfectivo: 0, ingresosTransferencia: 0, egresosTotal: 0, saldo: 0 })
-            setRendiciones(Array.isArray(rendData) ? rendData.filter((r: Rendicion) => r.estado === 'pendiente' && r.montoEsperado > 0) : [])
-            setSaldoMadre(saldosData.cajaMadre?.saldo ?? 0)
-            setSaldoChica(saldosData.cajaChica?.saldo ?? 0)
-            setSaldoLocal(saldosData.local?.saldo ?? 0)
-            setSaldoMercadoPago(saldosData.mercadoPago?.saldo ?? 0)
-            const conceptosRes = await fetch('/api/caja/conceptos')
-            const conceptosData = await conceptosRes.json()
-            if (Array.isArray(conceptosData)) setConceptos(conceptosData)
-
-            const empRes = await fetch('/api/empleados')
-            const empData = await empRes.json()
-            if (Array.isArray(empData)) setChoferes(empData)
-        } catch { setError('Error al cargar datos') } finally { setLoading(false) }
-
-    }
+        }
+        movimientosRef.current = swrData.cajaData.movimientos
+    }, [swrData])
 
     async function updateSaldo(tipo: string) {
         try {
@@ -602,7 +600,7 @@ export default function CajaPage() {
                     <tbody>
                         {movimientos.length === 0 ? (
                             <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>Sin movimientos para esta fecha</td></tr>
-                        ) : movimientos.map((m) => (
+                        ) : movimientos.map((m: MovCaja) => (
                             <tr key={m.id}>
                                 <td>
                                     <span className="badge" style={{

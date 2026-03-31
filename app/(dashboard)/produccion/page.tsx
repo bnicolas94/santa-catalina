@@ -733,16 +733,17 @@ export default function ProduccionPage() {
                                         const manualesDetalleConsolidado: Record<string, { fabrica: number, local: number }> = {}
 
                                         // Consolidar manuales detalle de todos los turnos
-                                        Object.values(planning?.manualesDetalle || {}).forEach(turnoData => {
-                                            Object.entries(turnoData).forEach(([key, det]) => {
+                                        Object.values(planning?.manualesDetalle || {}).forEach((turnoData: any) => {
+                                            if (!turnoData) return;
+                                            Object.entries(turnoData).forEach(([key, det]: [string, any]) => {
                                                 if (!manualesDetalleConsolidado[key]) manualesDetalleConsolidado[key] = { fabrica: 0, local: 0 }
-                                                manualesDetalleConsolidado[key].fabrica += det.fabrica
-                                                manualesDetalleConsolidado[key].local += det.local
+                                                manualesDetalleConsolidado[key].fabrica += det.fabrica || 0
+                                                manualesDetalleConsolidado[key].local += det.local || 0
                                             })
                                         })
 
                                         todosPids.forEach(pid_presid => {
-                                            const totalUnitsOriginal = Object.values(planning?.necesidades || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
+                                            const totalUnitsOriginal = Object.values(planning?.necesidades || {}).reduce((sum: number, t: any) => sum + (t?.[pid_presid] || 0), 0) as number
                                             const det = manualesDetalleConsolidado[pid_presid] || { fabrica: 0, local: 0 }
                                             const rutaUnitsTotal = Math.max(0, totalUnitsOriginal - (det.fabrica + det.local))
                                             
@@ -870,7 +871,7 @@ export default function ProduccionPage() {
                                             </tr>
                                         )
 
-                                        return items.map(([key, totalUnitsOriginal]) => {
+                                        return items.map(([key, totalUnitsOriginal]: [string, any]) => {
                                             const prodInfo = planning.infoProductos[key]
                                             const presSize = prodInfo?.presentacion?.cantidad || 48
                                             const pid = prodInfo?.id
@@ -1003,7 +1004,7 @@ export default function ProduccionPage() {
                                                     >
                                                         <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
                                                         {productos.flatMap(p =>
-                                                            (p.presentaciones || []).map(pr => {
+                                                            (p.presentaciones || []).map((pr: any) => {
                                                                 const key = `${p.id}_${pr.id}`
                                                                 if (planning.necesidades[activeTurno]?.[key]) return null
                                                                 return (
@@ -1105,7 +1106,7 @@ export default function ProduccionPage() {
                                                     if (ubiA?.tipo !== 'FABRICA' && ubiB?.tipo === 'FABRICA') return 1
                                                     return nameA.localeCompare(nameB)
                                                 })
-                                                .map(([ubiName, qty]) => {
+                                                .map(([ubiName, qty]: [string, any]) => {
                                                     const ubi = ubicaciones.find(x => x.nombre === ubiName)
                                                     const isFab = ubi?.tipo === 'FABRICA'
                                                     const color = isFab ? (isLowStock ? '#E74C3C' : '#2ECC71') : '#3498DB'
@@ -1205,7 +1206,7 @@ export default function ProduccionPage() {
                         return acc
                     }, {} as Record<string, { producto: Producto, lotes: Lote[], totalPaquetes: number, totalPlanchas: number, totalRechazados: number }>)
 
-                    const sortedGroups = Object.values(grouped).sort((a, b) => a.producto.nombre.localeCompare(b.producto.nombre))
+                    const sortedGroups = Object.values(grouped).sort((a: any, b: any) => a.producto.nombre.localeCompare(b.producto.nombre))
 
                     if (sortedGroups.length === 0) {
                         return (
@@ -1216,7 +1217,7 @@ export default function ProduccionPage() {
                         )
                     }
 
-                    return sortedGroups.map((group) => {
+                    return sortedGroups.map((group: any) => {
                         const isExpanded = !!expandedGroups[group.producto.id]
                         return (
                             <div key={group.producto.id} className="card" style={{ border: '1px solid var(--color-gray-200)', overflow: 'hidden' }}>
@@ -1282,7 +1283,7 @@ export default function ProduccionPage() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {group.lotes.map((lote) => {
+                                                    {group.lotes.map((lote: any) => {
                                                         const est = getEstadoInfo(lote.estado)
                                                         const mermaPercent = lote.unidadesProducidas > 0 ? ((lote.unidadesRechazadas / lote.unidadesProducidas) * 100).toFixed(1) : '0'
                                                         const planchas = lote.unidadesProducidas * (lote.producto.planchasPorPaquete || 6)
@@ -1614,7 +1615,7 @@ export default function ProduccionPage() {
                                     >
                                         <option value="">Seleccionar...</option>
                                         {productos.flatMap(p =>
-                                            (p.presentaciones || []).map(pr => (
+                                            (p.presentaciones || []).map((pr: any) => (
                                                 <option key={`${p.id}_${pr.id}`} value={`${p.id}_${pr.id}`}>
                                                     [{pr.cantidad === 48 ? 'x48' : pr.cantidad === 24 ? 'x24' : `x${pr.cantidad}`}] {p.nombre}
                                                 </option>
@@ -1841,7 +1842,7 @@ export default function ProduccionPage() {
                                     >
                                         <option value="">Seleccionar...</option>
                                         {productos.flatMap(p =>
-                                            (p.presentaciones || []).map(pr => (
+                                            (p.presentaciones || []).map((pr: any) => (
                                                 <option key={`${p.id}_${pr.id}`} value={`${p.id}_${pr.id}`}>
                                                     [x{pr.cantidad}] {p.nombre} ({p.planchasPorPaquete} pl/paq)
                                                 </option>
@@ -2105,7 +2106,7 @@ export default function ProduccionPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {Object.entries(planning?.necesidades?.[activeTurno] || {}).map(([key, units]) => {
+                                        {Object.entries((planning?.necesidades?.[activeTurno] || {}) as Record<string, number>).map(([key, units]) => {
                                             const prod = planning?.infoProductos?.[key]
                                             if (!prod || !prod.presentacion || units <= 0) return null
                                             const packetsToSubtract = Math.ceil(units / prod.presentacion.cantidad)

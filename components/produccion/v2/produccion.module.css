@@ -1,0 +1,123 @@
+/* components/produccion/v2/produccion.module.css */
+
+.container {
+    padding: var(--space-4);
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-8);
+}
+
+.titleGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+.title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 0.85rem;
+    color: var(--color-gray-500);
+}
+
+.controls {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+}
+
+.actionGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.sectionTitle {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.glassCard {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.cardHover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    transition: all 0.2s ease;
+}
+
+.badgeCustom {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.planningTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.planningTable th {
+    padding: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-gray-500);
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--color-gray-100);
+}
+
+.planningTable td {
+    padding: 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--color-gray-50);
+}
+
+.btnGroup {
+    display: flex;
+    gap: 4px;
+    background: var(--color-gray-100);
+    padding: 4px;
+    border-radius: var(--radius-md);
+}
+
+.statValue {
+    font-size: 1.8rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.statLabel {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+}

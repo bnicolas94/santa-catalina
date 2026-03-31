@@ -30,7 +30,31 @@ export async function POST(request: Request) {
         const result = await prisma.$transaction(async (tx) => {
             let gastoId = null
             
-            // 2. Si hay costo y está pagado, creamos UN solo gasto
+            // 2. Resolver o Crear Proveedor (Upsert Seguro)
+            let finalProveedorId = proveedorId
+            let resolvedProveedorNombre = body.proveedorNombre || 'Proveedor'
+
+            if (!finalProveedorId && body.proveedorNombre) {
+                // Chequear si existe por string
+                const provExistente = await tx.proveedor.findFirst({
+                    where: { nombre: { equals: body.proveedorNombre, mode: 'insensitive' } }
+                })
+                if (provExistente) {
+                    finalProveedorId = provExistente.id
+                    resolvedProveedorNombre = provExistente.nombre
+                } else {
+                    const nuevoProv = await tx.proveedor.create({
+                        data: { nombre: body.proveedorNombre }
+                    })
+                    finalProveedorId = nuevoProv.id
+                    resolvedProveedorNombre = nuevoProv.nombre
+                }
+            } else if (finalProveedorId) {
+                const provParams = await tx.proveedor.findUnique({ where: { id: finalProveedorId } })
+                if (provParams) resolvedProveedorNombre = provParams.nombre
+            }
+
+            // 3. Si hay costo y está pagado, creamos UN solo gasto
             if (costoTotalFactura > 0 && estadoPago === 'pagado') {
                 console.log('Factura: Processing paid entry financial records for total:', costoTotalFactura)
                 
@@ -43,7 +67,7 @@ export async function POST(request: Request) {
                     data: {
                         fecha: parsedFecha,
                         monto: costoTotalFactura,
-                        descripcion: `Factura ${numeroFactura || 'S/N'} - Proveedor`, // Maybe fetch proveedor name, but ID is enough trace or just "Compra insumos"
+                        descripcion: `Factura ${numeroFactura || 'S/N'} - ${resolvedProveedorNombre}`,
                         categoriaId: cat.id
                     }
                 })
@@ -71,17 +95,9 @@ export async function POST(request: Request) {
                 }
             }
 
-            // 3. Chequear si es proveedor manual y crearlo on the fly
-            let finalProveedorId = proveedorId
-            if (!finalProveedorId && body.proveedorNombre) {
-                const nuevoProv = await tx.proveedor.create({
-                    data: { nombre: body.proveedorNombre }
-                })
-                finalProveedorId = nuevoProv.id
-            }
-
             // 4. Crear cada MovimientoStock y actualizar Insumo
             const creados = []
+            const newInsumosCache = new Map<string, string>()
             
             for (const item of items) {
                 const cantidadFloat = parseFloat(String(item.cantidad).replace(',', '.'))
@@ -90,14 +106,28 @@ export async function POST(request: Request) {
 
                 let finalInsumoId = item.insumoId
                 if (!finalInsumoId && item.insumoNombre) {
-                    const nuevoIns = await tx.insumo.create({
-                        data: {
-                            nombre: item.insumoNombre,
-                            unidadMedida: 'unidades',
-                            proveedorId: finalProveedorId || null
+                    const normalizedName = item.insumoNombre.trim().toLowerCase()
+                    if (newInsumosCache.has(normalizedName)) {
+                        finalInsumoId = newInsumosCache.get(normalizedName)
+                    } else {
+                        const insExistente = await tx.insumo.findFirst({
+                            where: { nombre: { equals: item.insumoNombre.trim(), mode: 'insensitive' } }
+                        })
+                        if (insExistente) {
+                            finalInsumoId = insExistente.id
+                            newInsumosCache.set(normalizedName, finalInsumoId)
+                        } else {
+                            const nuevoIns = await tx.insumo.create({
+                                data: {
+                                    nombre: item.insumoNombre,
+                                    unidadMedida: 'unidades',
+                                    proveedorId: finalProveedorId || null
+                                }
+                            })
+                            finalInsumoId = nuevoIns.id
+                            newInsumosCache.set(normalizedName, finalInsumoId)
                         }
-                    })
-                    finalInsumoId = nuevoIns.id
+                    }
                 }
 
                 const movimiento = await tx.movimientoStock.create({

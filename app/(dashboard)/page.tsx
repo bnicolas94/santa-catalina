@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import styles from './page.module.css'
 import Link from 'next/link'
 
@@ -41,14 +42,35 @@ function formatCurrency(n: number) {
     return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
+const dashboardFetcher = async () => {
+    const [dRes, sRes] = await Promise.all([
+        fetch('/api/dashboard'),
+        fetch('/api/caja/saldos')
+    ])
+    if (!dRes.ok || !sRes.ok) throw new Error('Error fetching dashboard')
+    return {
+        data: await dRes.json(),
+        saldosCaja: await sRes.json()
+    }
+}
+
 export default function DashboardPage() {
     const { data: session, status } = useSession()
     const router = useRouter()
 
-    const [data, setData] = useState<DashboardData | null>(null)
-    const [saldosCaja, setSaldosCaja] = useState<any>(null)
     const [selectedCajaWidget, setSelectedCajaWidget] = useState<string>('caja_madre')
-    const [loading, setLoading] = useState(true)
+
+    const user = session?.user as any
+    const canAccessDashboard = status === 'authenticated' && (user?.rol === 'ADMIN' || user?.permisos?.permisoDashboard)
+
+    const { data: swrResponse, isLoading: loading } = useSWR(
+        canAccessDashboard ? 'dashboard-data' : null,
+        dashboardFetcher,
+        { refreshInterval: 15000, revalidateOnFocus: true }
+    )
+
+    const data: DashboardData | null = swrResponse?.data || null
+    const saldosCaja = swrResponse?.saldosCaja || null
 
     useEffect(() => {
         const saved = localStorage.getItem('dashboard_caja_widget')
@@ -84,32 +106,7 @@ export default function DashboardPage() {
         }
     }, [session, status, router])
 
-    useEffect(() => {
-        // Solo obtener datos si el usuario tiene acceso al dashboard
-        const user = session?.user as any
-        if (status === 'authenticated' && (user?.rol === 'ADMIN' || user?.permisos?.permisoDashboard)) {
-            const fetchData = async () => {
-                try {
-                    const [dRes, sRes] = await Promise.all([
-                        fetch('/api/dashboard'),
-                        fetch('/api/caja/saldos')
-                    ])
-                    const dashData = await dRes.json()
-                    const saldosData = await sRes.json()
-                    setData(dashData)
-                    setSaldosCaja(saldosData)
-                } catch (err) {
-                    console.error('Error fetching dashboard data:', err)
-                } finally {
-                    setLoading(false)
-                }
-            }
-
-            fetchData()
-            const interval = setInterval(fetchData, 5000)
-            return () => clearInterval(interval)
-        }
-    }, [session, status])
+    // La carga de datos usando SWR se maneja arriba
 
     if (status === 'loading' || loading) return <div className="empty-state"><div className="spinner" /><p>Cargando dashboard...</p></div>
 
