@@ -100,22 +100,27 @@ export const CloseLotModal: React.FC<CloseLotModalProps> = ({ lote, onClose }) =
                         {lote.producto.presentaciones && lote.producto.presentaciones.length > 0 && (
                             <div style={{ margin: '15px 0', padding: '15px', background: '#f8fafc', borderRadius: '8px' }}>
                                 <h4 style={{ marginBottom: '10px', fontSize: '0.9rem' }}>📦 Distribución por Presentación</h4>
-                                {form.distribucionPresentaciones.map((d, i) => (
-                                    <div key={d.presentacionId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '0.85rem' }}>Presentación #{i + 1}</span>
-                                        <input 
-                                            type="number" 
-                                            className="form-input" 
-                                            style={{ width: '100px' }} 
-                                            value={d.cantidad} 
-                                            onChange={(e) => {
-                                                const newDist = [...form.distribucionPresentaciones]
-                                                newDist[i].cantidad = parseInt(e.target.value) || 0
-                                                setForm({ ...form, distribucionPresentaciones: newDist })
-                                            }}
-                                        />
-                                    </div>
-                                ))}
+                                {form.distribucionPresentaciones.map((d, i) => {
+                                    const pres = lote.producto.presentaciones?.find(p => p.id === d.presentacionId)
+                                    const label = pres ? `x${pres.cantidad} unidades` : `Presentación #${i + 1}`
+                                    
+                                    return (
+                                        <div key={d.presentacionId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{label}</span>
+                                            <input 
+                                                type="number" 
+                                                className="form-input" 
+                                                style={{ width: '100px' }} 
+                                                value={d.cantidad} 
+                                                onChange={(e) => {
+                                                    const newDist = [...form.distribucionPresentaciones]
+                                                    newDist[i].cantidad = parseInt(e.target.value) || 0
+                                                    setForm({ ...form, distribucionPresentaciones: newDist })
+                                                }}
+                                            />
+                                        </div>
+                                    )
+                                })}
                             </div>
                         )}
 

@@ -122,6 +122,22 @@ export const NewLotModal: React.FC<NewLotModalProps> = ({ initialData }) => {
                             </select>
                         </div>
                         
+                        {productoSel && productoSel.presentaciones && productoSel.presentaciones.length > 1 && (
+                            <div className="form-group">
+                                <label className="form-label">Presentación</label>
+                                <select 
+                                    className="form-select" 
+                                    value={form.presentacionId} 
+                                    onChange={(e) => setForm({ ...form, presentacionId: e.target.value })}
+                                    required
+                                >
+                                    {productoSel.presentaciones.map(p => (
+                                        <option key={p.id} value={p.id}>x{p.cantidad} unidades</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                             <div className="form-group">
                                 <label className="form-label">Fecha de producción</label>

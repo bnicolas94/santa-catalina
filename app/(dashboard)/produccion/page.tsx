@@ -167,6 +167,7 @@ export default function ProduccionPage() {
     const [showDiscountModal, setShowDiscountModal] = useState(false)
     const [isDiscounting, setIsDiscounting] = useState(false)
     const isDiscounted = activeTurno !== 'Totales' && !!planning?.descuentosRealizados?.includes(activeTurno)
+    const showDiscountedUI = isDiscounted && filterDestino !== 'LOCAL'
 
     useEffect(() => {
         if (filterDestino === 'LOCAL') setStockSource('local')
@@ -706,9 +707,9 @@ export default function ProduccionPage() {
                                     <tr>
                                         <th>Producto</th>
                                         <th style={{ textAlign: 'center' }}>H. Ruta</th>
-                                        {!isDiscounted && <th style={{ textAlign: 'center' }}>Carga Express</th>}
+                                        {!showDiscountedUI && <th style={{ textAlign: 'center' }}>Carga Express</th>}
                                         <th style={{ textAlign: 'center' }}>Total Necesario</th>
-                                        {!isDiscounted && (
+                                        {!showDiscountedUI && (
                                             <>
                                                 <th style={{ textAlign: 'center' }}>
                                                     {stockSource === 'fabrica' ? 'Stock Fábrica' : (stockSource === 'local' ? 'Stock Local' : 'Stock Fab./Loc.')}
@@ -718,7 +719,7 @@ export default function ProduccionPage() {
                                                 <th style={{ textAlign: 'center' }}>Stock Final</th>
                                             </>
                                         )}
-                                        <th style={{ textAlign: 'right' }}>{isDiscounted ? 'Estado' : 'Sugerencia'}</th>
+                                        <th style={{ textAlign: 'right' }}>{showDiscountedUI ? 'Estado' : 'Sugerencia'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -926,7 +927,7 @@ export default function ProduccionPage() {
                                                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaUnits > 0 ? `${rutaPaq} paq` : '—'}</td>
-                                                    {!isDiscounted && (
+                                                    {!showDiscountedUI && (
                                                         <td style={{ textAlign: 'center' }}>
                                                             <input
                                                                 type="number"
@@ -939,7 +940,7 @@ export default function ProduccionPage() {
                                                         </td>
                                                     )}
                                                     <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
-                                                    {!isDiscounted && (
+                                                    {!showDiscountedUI && (
                                                         <>
                                                             <td style={{ textAlign: 'center', color: stockUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                                 {stockPaq} paq
@@ -958,7 +959,7 @@ export default function ProduccionPage() {
                                                         </>
                                                     )}
                                                     <td style={{ textAlign: 'right' }}>
-                                                        {isDiscounted ? (
+                                                        {showDiscountedUI ? (
                                                             <span style={{ color: 'var(--color-success)', fontSize: '11px', fontWeight: 600 }}>Stock Descontado ✅</span>
                                                         ) : (
                                                             faltanteUnits > 0 ? (
@@ -985,8 +986,8 @@ export default function ProduccionPage() {
                                             )
                                         })
                                     })()}
-                                    {/* Fila agregar producto extra / Descontar — solo en turnos normales */}
-                                    {activeTurno !== 'Totales' && (
+                                    {/* Fila agregar producto extra / Descontar — solo en turnos normales y solo si NO es vista LOCAL */}
+                                    {activeTurno !== 'Totales' && filterDestino !== 'LOCAL' && (
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
                                             <td colSpan={isDiscounted ? 2 : 3}>
                                                 {!isDiscounted ? (
