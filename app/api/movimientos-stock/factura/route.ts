@@ -17,7 +17,7 @@ export async function POST(request: Request) {
             items 
         } = body
 
-        if (!proveedorId || !ubicacionId || !items || !Array.isArray(items) || items.length === 0) {
+        if ((!proveedorId && !body.proveedorNombre) || !ubicacionId || !items || !Array.isArray(items) || items.length === 0) {
             return NextResponse.json({ error: 'Faltan campos obligatorios o ítems' }, { status: 400 })
         }
 
@@ -71,7 +71,16 @@ export async function POST(request: Request) {
                 }
             }
 
-            // 3. Crear cada MovimientoStock y actualizar Insumo
+            // 3. Chequear si es proveedor manual y crearlo on the fly
+            let finalProveedorId = proveedorId
+            if (!finalProveedorId && body.proveedorNombre) {
+                const nuevoProv = await tx.proveedor.create({
+                    data: { nombre: body.proveedorNombre }
+                })
+                finalProveedorId = nuevoProv.id
+            }
+
+            // 4. Crear cada MovimientoStock y actualizar Insumo
             const creados = []
             
             for (const item of items) {
@@ -79,15 +88,27 @@ export async function POST(request: Request) {
                 const movCantSec = item.cantidadSecundaria ? parseFloat(String(item.cantidadSecundaria).replace(',', '.')) : null
                 const costoItemFloat = item.costoTotal ? parseFloat(String(item.costoTotal).replace(',', '.')) : null
 
+                let finalInsumoId = item.insumoId
+                if (!finalInsumoId && item.insumoNombre) {
+                    const nuevoIns = await tx.insumo.create({
+                        data: {
+                            nombre: item.insumoNombre,
+                            unidadMedida: 'unidades',
+                            proveedorId: finalProveedorId || null
+                        }
+                    })
+                    finalInsumoId = nuevoIns.id
+                }
+
                 const movimiento = await tx.movimientoStock.create({
                     data: {
-                        insumoId: item.insumoId,
+                        insumoId: finalInsumoId,
                         tipo: 'entrada',
                         fecha: parsedFecha,
                         cantidad: cantidadFloat,
                         cantidadSecundaria: movCantSec,
                         observaciones: observaciones || null,
-                        proveedorId: proveedorId || null,
+                        proveedorId: finalProveedorId || null,
                         numeroFactura: numeroFactura || null,
                         costoTotal: costoItemFloat,
                         estadoPago: estadoPago || 'pendiente',
@@ -109,19 +130,19 @@ export async function POST(request: Request) {
                 }
                 
                 await tx.insumo.update({
-                    where: { id: item.insumoId },
+                    where: { id: finalInsumoId },
                     data: dataInsumo
                 })
 
                 // Actualizar StockInsumo para ubicación específica
                 await tx.stockInsumo.upsert({
-                    where: { insumoId_ubicacionId: { insumoId: item.insumoId, ubicacionId } },
+                    where: { insumoId_ubicacionId: { insumoId: finalInsumoId, ubicacionId } },
                     update: {
                         cantidad: { increment: cantidadFloat },
                         cantidadSecundaria: { increment: movCantSec || 0 }
                     },
                     create: {
-                        insumoId: item.insumoId,
+                        insumoId: finalInsumoId,
                         ubicacionId,
                         cantidad: cantidadFloat,
                         cantidadSecundaria: movCantSec || 0

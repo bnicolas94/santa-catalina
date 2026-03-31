@@ -24,9 +24,11 @@ function StockContent() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] as any[] })
-    const [tempItem, setTempItem] = useState({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] as any[] })
+    const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
+    const [isManualProveedor, setIsManualProveedor] = useState(false)
+    const [isManualInsumo, setIsManualInsumo] = useState(false)
     const [filterTipo, setFilterTipo] = useState('')
     const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
@@ -110,14 +112,15 @@ function StockContent() {
     }
 
     const addItemToFactura = () => {
-        if (!tempItem.insumoId) return setError('Seleccione un insumo')
+        if (!isManualInsumo && !tempItem.insumoId) return setError('Seleccione un insumo')
+        if (isManualInsumo && !tempItem.insumoNombre) return setError('Ingrese el nombre del insumo')
         if (tempItem.useBultos && (!tempItem.bultos || !tempItem.unidadesPorBulto)) return setError('Ingrese bultos y unidades')
         if (!tempItem.useBultos && !tempItem.cantidad) return setError('Ingrese cantidad')
 
         const computedCantidad = tempItem.useBultos ? String(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto)) : tempItem.cantidad
 
         setFacturaForm({ ...facturaForm, items: [...facturaForm.items, { ...tempItem, cantidad: computedCantidad }] })
-        setTempItem({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
     }
 
     const removeFacturaItem = (index: number) => {
@@ -129,7 +132,8 @@ function StockContent() {
     async function handleFacturaSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError('')
-        if (!facturaForm.proveedorId) return setError('Seleccione un proveedor')
+        if (!isManualProveedor && !facturaForm.proveedorId) return setError('Seleccione un proveedor')
+        if (isManualProveedor && !facturaForm.proveedorNombre) return setError('Ingrese el nombre del proveedor manual')
         if (facturaForm.items.length === 0) return setError('Debe agregar al menos un insumo a la factura')
         try {
             const res = await fetch('/api/movimientos-stock/factura', {
@@ -140,7 +144,7 @@ function StockContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Factura registrada correctamente')
             setShowFacturaModal(false)
-            setFacturaForm({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -274,9 +278,11 @@ function StockContent() {
                     )}
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setFacturaForm({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: defaultUbi, observaciones: '', items: [] })
-                        setTempItem({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: defaultUbi, observaciones: '', items: [] })
+                        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
                         setMostrarTodosInsumos(false)
+                        setIsManualProveedor(false)
+                        setIsManualInsumo(false)
                         setShowFacturaModal(true)
                     }}>📑 Múltiples</button>
                     <button className="btn btn-primary" onClick={() => {
@@ -308,56 +314,6 @@ function StockContent() {
                         ))}
                     </select>
                 </div>
-            </div>
-
-            {/* Stock de Productos Terminados */}
-            <div style={{ marginBottom: 'var(--space-8)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
-                    <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        📦 Stock de Productos Terminados {selectedUbi && <span className="badge badge-primary">en {selectedUbi}</span>}
-                    </h2>
-                </div>
-                {stockProductos.length === 0 ? (
-                    <div className="empty-state" style={{ padding: 'var(--space-4)' }}>No hay stock de productos.</div>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
-                        {stockProductos.map(sp => {
-                            const ubiName = selectedUbi || '';
-                            const qty = selectedUbi ? (sp.ubicaciones[selectedUbi] || 0) : Object.values(sp.ubicaciones).reduce((a: any, b: any) => a + b, 0);
-                            const isLowStock = sp.stockMinimo > 0 && qty < sp.stockMinimo;
-
-                            if (selectedUbi && sp.ubicaciones[selectedUbi] === undefined) return null;
-
-                            return (
-                                <div key={`${sp.productoId}_${sp.presentacionId}`} className="card" style={{
-                                    border: isLowStock ? '2px solid var(--color-danger)' : '1px solid var(--color-gray-200)',
-                                    backgroundColor: isLowStock ? 'var(--color-danger-bg)' : 'var(--white)'
-                                }}>
-                                    <div className="card-body" style={{ padding: 'var(--space-3)' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <span className="badge badge-neutral" style={{ fontWeight: 700 }}>{sp.codigoInterno}</span>
-                                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 600 }}>x{sp.cantidadPresentacion} unidades</span>
-                                        </div>
-                                        <h4 style={{ margin: 'var(--space-2) 0', fontSize: 'var(--text-sm)', fontWeight: 700 }}>{sp.nombre}</h4>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-1)' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: isLowStock ? 'var(--color-danger)' : 'var(--color-primary)' }}>
-                                                    {qty} <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400 }}>paq</span>
-                                                </span>
-                                            </div>
-                                            {isLowStock && <span title="Stock bajo" style={{ fontSize: '1.2rem' }}>⚠️</span>}
-                                        </div>
-                                        {sp.stockMinimo > 0 && (
-                                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>
-                                                Mínimo: {sp.stockMinimo} paq
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )
-                        }).filter(Boolean)}
-                    </div>
-                )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
@@ -772,11 +728,24 @@ function StockContent() {
                                         </select>
                                     </div>
                                     <div className="form-group">
-                                        <label className="form-label">Proveedor</label>
-                                        <select className="form-select" value={facturaForm.proveedorId} onChange={(e) => setFacturaForm({ ...facturaForm, proveedorId: e.target.value })} required>
-                                            <option value="">Seleccionar proveedor...</option>
-                                            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                                        </select>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                            <label className="form-label" style={{ margin: 0 }}>Proveedor</label>
+                                            <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)' }}>
+                                                <input type="checkbox" checked={isManualProveedor} onChange={(e) => {
+                                                    setIsManualProveedor(e.target.checked);
+                                                    setFacturaForm({ ...facturaForm, proveedorId: '', proveedorNombre: '' });
+                                                }} />
+                                                Ingresar manual
+                                            </label>
+                                        </div>
+                                        {isManualProveedor ? (
+                                            <input className="form-input" placeholder="Nombre completo" value={facturaForm.proveedorNombre || ''} onChange={(e) => setFacturaForm({ ...facturaForm, proveedorNombre: e.target.value })} required />
+                                        ) : (
+                                            <select className="form-select" value={facturaForm.proveedorId} onChange={(e) => setFacturaForm({ ...facturaForm, proveedorId: e.target.value })} required>
+                                                <option value="">Seleccionar proveedor...</option>
+                                                {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                            </select>
+                                        )}
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Nº Factura / Remito</label>
@@ -812,17 +781,32 @@ function StockContent() {
                                         <div className="form-group">
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                                 <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Insumo</label>
-                                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)' }}>
-                                                    <input type="checkbox" checked={mostrarTodosInsumos} onChange={(e) => setMostrarTodosInsumos(e.target.checked)} />
-                                                    Mostrar todos
-                                                </label>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    {!isManualInsumo && (
+                                                        <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)' }}>
+                                                            <input type="checkbox" checked={mostrarTodosInsumos} onChange={(e) => setMostrarTodosInsumos(e.target.checked)} />
+                                                            Todos
+                                                        </label>
+                                                    )}
+                                                    <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)' }}>
+                                                        <input type="checkbox" checked={isManualInsumo} onChange={(e) => {
+                                                            setIsManualInsumo(e.target.checked);
+                                                            setTempItem({ ...tempItem, insumoId: '', insumoNombre: '' })
+                                                        }} />
+                                                        Manual
+                                                    </label>
+                                                </div>
                                             </div>
-                                            <select className="form-select" value={tempItem.insumoId} onChange={(e) => setTempItem({ ...tempItem, insumoId: e.target.value })}>
-                                                <option value="">Seleccionar insumo...</option>
-                                                {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
-                                                    <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
-                                                ))}
-                                            </select>
+                                            {isManualInsumo ? (
+                                                <input className="form-input" placeholder="Nombre (Ej: Escoba)" value={tempItem.insumoNombre || ''} onChange={(e) => setTempItem({ ...tempItem, insumoNombre: e.target.value })} />
+                                            ) : (
+                                                <select className="form-select" value={tempItem.insumoId} onChange={(e) => setTempItem({ ...tempItem, insumoId: e.target.value })}>
+                                                    <option value="">Seleccionar insumo...</option>
+                                                    {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
+                                                        <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
+                                                    ))}
+                                                </select>
+                                            )}
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label" style={{ fontSize: '0.8rem' }}>Cantidad (Total {tempItem.insumoId ? insumos.find(i=>i.id === tempItem.insumoId)?.unidadMedida : ''})</label>
@@ -855,10 +839,10 @@ function StockContent() {
                                                 const insData = insumos.find(i => i.id === it.insumoId)
                                                 return (
                                                     <tr key={idx}>
-                                                        <td>{insData?.nombre} <br/> <span style={{fontSize:'0.7rem', color:'#666'}}>Vto: {it.fechaVencimiento || '—'}</span></td>
-                                                        <td>{it.cantidad} {insData?.unidadMedida}</td>
+                                                        <td>{it.insumoNombre || insData?.nombre} <br/> <span style={{fontSize:'0.7rem', color:'#666'}}>Vto: {it.fechaVencimiento || '—'}</span></td>
+                                                        <td>{it.cantidad} {insData?.unidadMedida || 'u'}</td>
                                                         <td>${parseFloat(it.costoTotal || '0').toLocaleString('es-AR')}</td>
-                                                        <td>{it.costoTotal && it.cantidad ? `$${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toFixed(2)} / ${insData?.unidadMedida}` : '—'}</td>
+                                                        <td>{it.costoTotal && it.cantidad ? `$${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toFixed(2)} / ${insData?.unidadMedida || 'u'}` : '—'}</td>
                                                         <td><button type="button" className="btn btn-icon" onClick={() => removeFacturaItem(idx)}>✕</button></td>
                                                     </tr>
                                                 )
