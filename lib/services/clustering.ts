@@ -44,28 +44,19 @@ export function kMeansClustering(
 
     let clusters: Cluster[] = []
 
+    // Calculate equitative max: ensures balanced distribution across clusters
+    const equitativeMax = Math.ceil(points.length / k)
+    // Use the smaller of: user-defined max OR equitative max
+    const effectiveMax = maxPerCluster 
+        ? Math.min(maxPerCluster, equitativeMax) 
+        : equitativeMax
+
     for (let iter = 0; iter < maxIterations; iter++) {
         // Assignment step: assign each point to nearest centroid
         clusters = centroids.map(c => ({ centroid: { ...c }, points: [] as GeoPoint[] }))
 
-        if (maxPerCluster) {
-            // Balanced assignment: respect max per cluster
-            assignBalanced(points, clusters, maxPerCluster)
-        } else {
-            // Standard assignment: nearest centroid
-            for (const point of points) {
-                let minDist = Infinity
-                let bestCluster = 0
-                for (let i = 0; i < centroids.length; i++) {
-                    const dist = haversineDistance(point.lat, point.lng, centroids[i].lat, centroids[i].lng)
-                    if (dist < minDist) {
-                        minDist = dist
-                        bestCluster = i
-                    }
-                }
-                clusters[bestCluster].points.push(point)
-            }
-        }
+        // Always use balanced assignment for equitative distribution
+        assignBalanced(points, clusters, effectiveMax)
 
         // Update step: recalculate centroids
         let converged = true
