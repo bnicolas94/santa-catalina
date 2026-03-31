@@ -311,6 +311,7 @@ model Pedido {
   fechaEntrega    DateTime         @map("fecha_entrega")
   estado          String           @default("pendiente")
   medioPago       String?          @default("efectivo") @map("medio_pago")
+  turno           String?
   esRetiro        Boolean          @default(false) @map("es_retiro")
   totalUnidades   Int              @default(0) @map("total_unidades")
   totalImporte    Float            @default(0) @map("total_importe")

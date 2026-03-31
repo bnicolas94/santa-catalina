@@ -14,6 +14,7 @@ interface DetallePedido {
 }
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
+    turno?: string | null
     totalUnidades: number; totalImporte: number
     cliente: Cliente; detalles: DetallePedido[]
 }
@@ -534,18 +535,32 @@ export default function PlanificacionRutasPage() {
 
                                     {/* Pedidos selection */}
                                     <div>
+                                        {(() => {
+                                            // Filtrar pedidos por turno seleccionado
+                                            const pedidosFiltrados = pedidosDisponibles.filter(p => {
+                                                if (!formRuta.turno) return true
+                                                if (!p.turno) return true // mostrar sin turno siempre
+                                                return p.turno === formRuta.turno
+                                            })
+                                            const sinTurno = pedidosFiltrados.filter(p => !p.turno).length
+                                            return (<>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                            <h3 style={{ fontSize: 'var(--text-md)', margin: 0 }}>Seleccionar Pedidos</h3>
+                                            <h3 style={{ fontSize: 'var(--text-md)', margin: 0 }}>Pedidos — {formRuta.turno} ({pedidosFiltrados.length})</h3>
                                             <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 'var(--text-xs)' }}
-                                                onClick={() => setPedidosSeleccionados(prev => prev.length === pedidosDisponibles.length ? [] : pedidosDisponibles.map(p => p.id))}>
-                                                {pedidosSeleccionados.length === pedidosDisponibles.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                                                onClick={() => setPedidosSeleccionados(prev => prev.length === pedidosFiltrados.length ? [] : pedidosFiltrados.map(p => p.id))}>
+                                                {pedidosSeleccionados.length === pedidosFiltrados.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
                                             </button>
                                         </div>
-                                        {pedidosDisponibles.length === 0 ? (
+                                        {sinTurno > 0 && (
+                                            <div style={{ fontSize: 'var(--text-xs)', color: '#F39C12', marginBottom: 'var(--space-2)', padding: 'var(--space-1) var(--space-2)', backgroundColor: '#FEF9E7', borderRadius: 'var(--radius-sm)' }}>
+                                                ⚠️ {sinTurno} pedido{sinTurno > 1 ? 's' : ''} sin turno asignado (se muestran siempre)
+                                            </div>
+                                        )}
+                                        {pedidosFiltrados.length === 0 ? (
                                             <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>No hay pedidos confirmados sin ruta.</p>
                                         ) : (
                                             <div style={{ maxHeight: '450px', overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)' }}>
-                                                {pedidosDisponibles.map(p => (
+                                                {pedidosFiltrados.map(p => (
                                                     <div key={p.id}
                                                         style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-gray-100)',
                                                             display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer',
@@ -563,7 +578,10 @@ export default function PlanificacionRutasPage() {
                                                                         <span title="Sin coordenadas" style={{ marginLeft: '8px', cursor: 'help', opacity: 0.5 }}>❓</span>
                                                                     )}
                                                                 </strong>
-                                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{new Date(p.fechaEntrega).toLocaleDateString('es-AR')}</span>
+                                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                                                    {p.turno && <span className="badge badge-neutral" style={{ fontSize: '9px', marginRight: '4px' }}>{p.turno === 'Mañana' ? '🌅' : p.turno === 'Siesta' ? '☀️' : '🌇'} {p.turno}</span>}
+                                                                    {new Date(p.fechaEntrega).toLocaleDateString('es-AR')}
+                                                                </span>
                                                             </div>
                                                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
                                                                 {p.cliente.direccion || 'Sin dirección'} {p.cliente.zona ? `· ${p.cliente.zona}` : ''}
@@ -574,6 +592,7 @@ export default function PlanificacionRutasPage() {
                                                 ))}
                                             </div>
                                         )}
+                                    </>)})()}
                                     </div>
                                 </div>
                                 <div className="modal-footer">

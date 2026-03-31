@@ -110,12 +110,15 @@ export async function POST(req: NextRequest) {
 
                     const { original } = row;
 
+                    const turnoMap: Record<string, string> = { 'MANANA': 'Mañana', 'SIESTA': 'Siesta', 'TARDE': 'Tarde' }
+
                     await tx.pedido.create({
                         data: {
                             clienteId: finalClientId,
                             fechaPedido: new Date(original.fecha),
                             fechaEntrega: new Date(original.fecha),
                             estado: "confirmado",
+                            turno: original.turno ? (turnoMap[original.turno] || original.turno) : null,
                             esRetiro: original.direccion?.toLowerCase().includes("retira") || false,
                             totalUnidades,
                             totalImporte,
