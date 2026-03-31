@@ -179,13 +179,11 @@ export default function PlanificacionRutasPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    pedidoIds: pedidosSeleccionados,
-                    choferIds: choferesSeleccionados,
                     fecha: formRuta.fecha,
                     turno: formRuta.turno,
                     ubicacionOrigenId: formRuta.ubicacionOrigenId,
-                    maxParadasPorChofer: maxParadas,
-                    mode: 'confirm'
+                    routePlans: routePreview,
+                    mode: 'confirm-plans'
                 })
             })
             const data = await res.json()
@@ -649,6 +647,31 @@ export default function PlanificacionRutasPage() {
                                                             <div style={{ flex: 1 }}>
                                                                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{p.clienteNombre} 📍</div>
                                                                 <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>{p.direccion || 'Sin dirección'}</div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <button type="button" disabled={i === 0}
+                                                                    style={{ width: 22, height: 22, border: '1px solid var(--color-gray-300)', borderRadius: 4,
+                                                                        background: 'white', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1,
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', padding: 0 }}
+                                                                    onClick={() => {
+                                                                        const updated = [...routePreview!]
+                                                                        const items = [...updated[idx].pedidos]
+                                                                        ;[items[i - 1], items[i]] = [items[i], items[i - 1]]
+                                                                        updated[idx] = { ...updated[idx], pedidos: items }
+                                                                        setRoutePreview(updated)
+                                                                    }}>▲</button>
+                                                                <button type="button" disabled={i === plan.pedidos.length - 1}
+                                                                    style={{ width: 22, height: 22, border: '1px solid var(--color-gray-300)', borderRadius: 4,
+                                                                        background: 'white', cursor: i === plan.pedidos.length - 1 ? 'default' : 'pointer',
+                                                                        opacity: i === plan.pedidos.length - 1 ? 0.3 : 1,
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', padding: 0 }}
+                                                                    onClick={() => {
+                                                                        const updated = [...routePreview!]
+                                                                        const items = [...updated[idx].pedidos]
+                                                                        ;[items[i], items[i + 1]] = [items[i + 1], items[i]]
+                                                                        updated[idx] = { ...updated[idx], pedidos: items }
+                                                                        setRoutePreview(updated)
+                                                                    }}>▼</button>
                                                             </div>
                                                         </div>
                                                     ))}

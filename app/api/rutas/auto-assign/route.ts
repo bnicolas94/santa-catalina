@@ -11,7 +11,8 @@ interface AutoAssignRequest {
     turno: string
     ubicacionOrigenId: string
     maxParadasPorChofer?: number
-    mode: 'preview' | 'confirm'
+    routePlans?: RoutePlan[]
+    mode: 'preview' | 'confirm' | 'confirm-plans'
 }
 
 interface RoutePlan {
@@ -39,8 +40,83 @@ interface RoutePlan {
 // POST /api/rutas/auto-assign
 export async function POST(request: Request) {
     try {
-        const body: AutoAssignRequest = await request.json()
-        const { pedidoIds, choferIds, fecha, turno, ubicacionOrigenId, maxParadasPorChofer, mode } = body
+        const body = await request.json()
+        const { pedidoIds, choferIds, fecha, turno, ubicacionOrigenId, maxParadasPorChofer, routePlans: incomingPlans, mode } = body
+
+        // Mode: confirm-plans — create routes from pre-built, user-reordered plans
+        if (mode === 'confirm-plans' && incomingPlans?.length > 0) {
+            const createdRoutes = []
+
+            for (const plan of incomingPlans as RoutePlan[]) {
+                const allPedidos = [
+                    ...plan.pedidos.map((p: any) => ({ pedidoId: p.pedidoId, clienteId: p.clienteId })),
+                    ...plan.sinCoordenadas.map((p: any) => ({ pedidoId: p.pedidoId, clienteId: p.clienteId }))
+                ]
+                if (allPedidos.length === 0) continue
+
+                const ruta = await prisma.$transaction(async (tx) => {
+                    const nuevaRuta = await tx.ruta.create({
+                        data: {
+                            choferId: plan.choferId,
+                            fecha: new Date(fecha),
+                            zona: null,
+                            turno: turno || null,
+                            ubicacionOrigenId: ubicacionOrigenId || null,
+                            entregas: {
+                                create: allPedidos.map((p, index) => ({
+                                    pedidoId: p.pedidoId,
+                                    clienteId: p.clienteId,
+                                    orden: index
+                                }))
+                            }
+                        },
+                        include: { entregas: true }
+                    })
+
+                    await tx.pedido.updateMany({
+                        where: { id: { in: allPedidos.map(p => p.pedidoId) } },
+                        data: { estado: 'en_ruta' }
+                    })
+
+                    // Deduct stock
+                    let finalOrigenId = ubicacionOrigenId
+                    if (!finalOrigenId) {
+                        const fabrica = await tx.ubicacion.findFirst({ where: { tipo: 'FABRICA' } })
+                        finalOrigenId = fabrica?.id || ''
+                    }
+                    if (finalOrigenId) {
+                        const detallesPedidos = await tx.detallePedido.findMany({
+                            where: { pedidoId: { in: allPedidos.map(p => p.pedidoId) } },
+                            include: { presentacion: true }
+                        })
+                        const consolidado: Record<string, { productoId: string; cantidad: number }> = {}
+                        detallesPedidos.forEach(det => {
+                            const key = det.presentacionId
+                            if (!consolidado[key] && det.presentacion) consolidado[key] = { productoId: det.presentacion.productoId, cantidad: 0 }
+                            if (consolidado[key]) consolidado[key].cantidad += det.cantidad
+                        })
+                        for (const [presId, info] of Object.entries(consolidado)) {
+                            await tx.stockProducto.upsert({
+                                where: { productoId_presentacionId_ubicacionId: { productoId: info.productoId, presentacionId: presId, ubicacionId: finalOrigenId } },
+                                update: { cantidad: { decrement: info.cantidad } },
+                                create: { productoId: info.productoId, presentacionId: presId, ubicacionId: finalOrigenId, cantidad: -info.cantidad }
+                            })
+                            await tx.movimientoProducto.create({
+                                data: { tipo: 'salida_ruta', cantidad: info.cantidad, signo: 'salida', productoId: info.productoId, presentacionId: presId, ubicacionId: finalOrigenId, rutaId: nuevaRuta.id, observaciones: `Salida por Ruta - Chofer ${plan.choferNombre}` }
+                            })
+                        }
+                    }
+                    return nuevaRuta
+                })
+                createdRoutes.push(ruta)
+            }
+
+            return NextResponse.json({
+                success: true,
+                message: `${createdRoutes.length} rutas creadas con éxito`,
+                rutasCreadas: createdRoutes.length,
+            }, { status: 201 })
+        }
 
         if (!pedidoIds?.length || !choferIds?.length || !fecha) {
             return NextResponse.json({ error: 'Faltan pedidos, choferes o fecha' }, { status: 400 })
