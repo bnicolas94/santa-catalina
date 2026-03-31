@@ -30,17 +30,19 @@ export async function POST(request: Request) {
             })
         }
 
-        // Use predefined factory coordinates as origin and destination (round trip)
-        // Camino General Belgrano 7287, Gutierrez
-        const factoryCoords = "-34.8237468,-58.1873516"
+        // Use origin if provided, otherwise fallback to factory default
+        const defaultFactoryCoords = "-34.8237468,-58.1873516"
+        const originCoords = origin?.lat && origin?.lng 
+            ? `${origin.lat},${origin.lng}` 
+            : defaultFactoryCoords
         
         const waypointsParam = waypoints
             .map(w => `${w.lat},${w.lng}`)
             .join('|')
 
         const url = `https://maps.googleapis.com/maps/api/directions/json?` +
-            `origin=${factoryCoords}` +
-            `&destination=${factoryCoords}` + // round trip to factory
+            `origin=${originCoords}` +
+            `&destination=${originCoords}` + // round trip
             `&waypoints=optimize:true|${waypointsParam}` +
             `&key=${GOOGLE_MAPS_API_KEY}` +
             `&region=ar`

@@ -159,7 +159,7 @@ export async function POST(request: Request) {
     }
 }
 
-// DELETE /api/rutas?id=xxx — Eliminar ruta y revertir pedidos
+// DELETE /api/rutas?id=xxx — Eliminar ruta y revertir pedidos + stock
 export async function DELETE(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
@@ -167,7 +167,14 @@ export async function DELETE(request: Request) {
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
         await prisma.$transaction(async (tx) => {
-            // Obtener entregas de la ruta para revertir pedidos
+            // Obtener la ruta con su origen para la reversión de stock
+            const ruta = await tx.ruta.findUnique({
+                where: { id },
+                select: { ubicacionOrigenId: true }
+            })
+            if (!ruta) throw new Error('Ruta no encontrada')
+
+            // Obtener entregas de la ruta
             const entregas = await tx.entrega.findMany({
                 where: { rutaId: id },
                 select: { pedidoId: true, horaEntrega: true }
@@ -185,12 +192,62 @@ export async function DELETE(request: Request) {
                 })
             }
 
+            // Revertir stock: buscar movimientos de salida_ruta asociados a esta ruta
+            if (ruta.ubicacionOrigenId) {
+                const movimientosSalida = await tx.movimientoProducto.findMany({
+                    where: { rutaId: id, tipo: 'salida_ruta' }
+                })
+
+                for (const mov of movimientosSalida) {
+                    // Devolver stock
+                    await tx.stockProducto.upsert({
+                        where: {
+                            productoId_presentacionId_ubicacionId: {
+                                productoId: mov.productoId,
+                                presentacionId: mov.presentacionId,
+                                ubicacionId: mov.ubicacionId,
+                            }
+                        },
+                        update: { cantidad: { increment: mov.cantidad } },
+                        create: {
+                            productoId: mov.productoId,
+                            presentacionId: mov.presentacionId,
+                            ubicacionId: mov.ubicacionId,
+                            cantidad: mov.cantidad,
+                        }
+                    })
+
+                    // Registrar movimiento de devolución
+                    await tx.movimientoProducto.create({
+                        data: {
+                            tipo: 'devolucion_ruta',
+                            cantidad: mov.cantidad,
+                            signo: 'entrada',
+                            productoId: mov.productoId,
+                            presentacionId: mov.presentacionId,
+                            ubicacionId: mov.ubicacionId,
+                            observaciones: `Devolución por eliminación de Ruta ${id}`
+                        }
+                    })
+                }
+            }
+
+            // Eliminar movimientos asociados a la ruta (salida_ruta originales)
+            await tx.movimientoProducto.deleteMany({ where: { rutaId: id } })
+            // Eliminar movimientos asociados a entregas de esta ruta
+            const entregaIds = entregas.map(e => e.pedidoId)
+            const entregaRecords = await tx.entrega.findMany({ where: { rutaId: id }, select: { id: true } })
+            if (entregaRecords.length > 0) {
+                await tx.movimientoProducto.deleteMany({ 
+                    where: { entregaId: { in: entregaRecords.map(e => e.id) } } 
+                })
+            }
             // Eliminar entregas y ruta
             await tx.entrega.deleteMany({ where: { rutaId: id } })
             await tx.ruta.delete({ where: { id } })
         })
 
-        return NextResponse.json({ ok: true, mensaje: 'Ruta eliminada y pedidos revertidos' })
+        return NextResponse.json({ ok: true, mensaje: 'Ruta eliminada, pedidos y stock revertidos' })
     } catch (error) {
         console.error('Error deleting ruta:', error)
         return NextResponse.json({ error: 'Error al eliminar ruta' }, { status: 500 })

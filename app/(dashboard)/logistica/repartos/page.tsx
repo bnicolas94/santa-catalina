@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 
-interface Cliente { id: string; nombreComercial: string; direccion: string; zona: string }
+interface Cliente { id: string; nombreComercial: string; direccion: string; zona: string; latitud?: number; longitud?: number }
 interface Pedido { id: string; totalUnidades: number; estado: string; detalles: { cantidad: number; presentacion: { cantidad: number; producto: { codigoInterno: string } } }[] }
 interface Entrega {
     id: string; horaEntrega: string | null; tempEntrega: number | null
@@ -57,15 +57,7 @@ export default function RepartosPage() {
     if (!session) return null
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando ruta de hoy...</p></div>
 
-    // Obtenemos solo la primera ruta de hoy (generalmente 1 por chofer por día)
-    const rutaDeHoy = rutas.length > 0 ? rutas[0] : null
-
-    // Sort entregas: Pendientes first, Entregadas last
-    const entregasSorted = rutaDeHoy ? [...rutaDeHoy.entregas].sort((a, b) => {
-        if (a.horaEntrega && !b.horaEntrega) return 1
-        if (!a.horaEntrega && b.horaEntrega) return -1
-        return 0
-    }) : []
+    // Mostramos TODAS las rutas del día (puede tener turnos Mañana + Tarde)
 
     return (
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
@@ -76,15 +68,24 @@ export default function RepartosPage() {
             {success && <div className="toast toast-success">{success}</div>}
             {error && <div className="toast toast-error">{error}</div>}
 
-            {!rutaDeHoy ? (
+            {rutas.length === 0 ? (
                 <div className="empty-state" style={{ padding: 'var(--space-6) 0' }}>
                     <p style={{ fontSize: '48px', margin: 0 }}>🏍️</p>
                     <p>No tenés rutas asignadas para hoy.</p>
                 </div>
-            ) : (() => {
+            ) : rutas.map(rutaDeHoy => {
+                // Respetamos el orden optimizado (campo 'orden') — NO reordenamos por estado
+                const entregasSorted = [...rutaDeHoy.entregas]
                 const completadas = entregasSorted.filter(e => !!e.horaEntrega).length
+
+                // Helper: generar coordenada para Google Maps
+                const getMapQuery = (cliente: Cliente) => {
+                    if (cliente.latitud && cliente.longitud) return `${cliente.latitud},${cliente.longitud}`
+                    return encodeURIComponent((cliente.direccion || '') + ' ' + (cliente.zona || ''))
+                }
+
                 return (
-                    <>
+                    <div key={rutaDeHoy.id} style={{ marginBottom: 'var(--space-6)' }}>
                         <div style={{ backgroundColor: 'var(--color-primary-50)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', border: '1px solid var(--color-primary-200)' }}>
                             <h2 style={{ fontSize: 'var(--text-lg)', margin: '0 0 var(--space-1) 0', color: 'var(--color-primary)' }}>Ruta en progreso</h2>
                             <span style={{ fontSize: 'var(--text-sm)' }}>
@@ -111,10 +112,16 @@ export default function RepartosPage() {
                                 </div>
                             </div>
 
-                            {/* Botón iniciar recorrido (Google Maps multi-stop) */}
+                            {/* Botón iniciar recorrido (Google Maps multi-stop) — usa coordenadas si disponibles */}
                             {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (() => {
                                 const companyCoords = "-34.8237468,-58.1873516"
-                                const pendingWaypoints = entregasSorted.filter(e => !e.horaEntrega && e.cliente.direccion).map(e => encodeURIComponent(e.cliente.direccion || '')).join('|')
+                                const pendingWaypoints = entregasSorted
+                                    .filter(e => !e.horaEntrega)
+                                    .map(e => {
+                                        if (e.cliente.latitud && e.cliente.longitud) return `${e.cliente.latitud},${e.cliente.longitud}`
+                                        return encodeURIComponent(e.cliente.direccion || '')
+                                    })
+                                    .join('|')
                                 
                                 return (
                                     <a
@@ -135,7 +142,7 @@ export default function RepartosPage() {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
                                             <div>
                                                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600, marginBottom: '2px' }}>
-                                                    VISITA #{i + 1}
+                                                    PARADA #{i + 1}
                                                 </div>
                                                 <h3 style={{
                                                     fontSize: 'var(--text-lg)', margin: 0,
@@ -171,7 +178,7 @@ export default function RepartosPage() {
 
                                         {!estaEntregado ? (
                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                                                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.cliente.direccion + ' ' + entrega.cliente.zona)}`}
+                                                <a href={`https://www.google.com/maps/search/?api=1&query=${getMapQuery(entrega.cliente)}`}
                                                     target="_blank" rel="noreferrer"
                                                     className="btn btn-outline" style={{ textAlign: 'center', color: 'var(--color-primary)' }}>
                                                     🗺️ Navegar
@@ -193,9 +200,9 @@ export default function RepartosPage() {
                                 )
                             })}
                         </div>
-                    </>
+                    </div>
                 )
-            })()}
+            })}
 
             {/* Modal de Control de Entrega (Mobile First) */}
             {selectedEntrega && (
