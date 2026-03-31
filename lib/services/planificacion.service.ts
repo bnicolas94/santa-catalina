@@ -205,11 +205,86 @@ export class PlanificacionService {
             select: { turno: true }
         })
 
+        // --- NUEVO: CÁLCULO DE PENDIENTES ANTERIORES (Cumulative Stock Projection) ---
+        // Buscamos requerimientos de los últimos 60 días que NO hayan sido descontados
+        const sesentaDiasAtras = new Date(startOfDay.getTime() - (60 * 24 * 60 * 60 * 1000))
+        
+        // 1. Obtener todos los descuentos de los últimos 60 días
+        // @ts-ignore
+        const todosDescuentosRecientes = await prisma.planificacionDescuento.findMany({
+            where: { fecha: { gte: sesentaDiasAtras, lt: startOfDay } },
+            select: { fecha: true, turno: true }
+        })
+        const descuentosSet = new Set(todosDescuentosRecientes.map((d: any) => `${d.fecha.toISOString().split('T')[0]}_${d.turno}`))
+
+        // 2. Obtener requerimientos manuales pendientes
+        const manualesPendientes = await prisma.requerimientoProduccion.findMany({
+            where: { 
+                fecha: { gte: sesentaDiasAtras, lt: startOfDay },
+                productoId: { not: null }
+            },
+            include: { producto: true, presentacion: true }
+        })
+
+        // 3. Obtener rutas pendientes (necesitamos los detalles de pedidos)
+        const rutasPendientes = await prisma.ruta.findMany({
+            where: { fecha: { gte: sesentaDiasAtras, lt: startOfDay } },
+            include: {
+                entregas: {
+                    include: {
+                        pedido: {
+                            include: {
+                                detalles: {
+                                    include: {
+                                        presentacion: {
+                                            include: { producto: true }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        const pendientesAnteriores: Record<string, number> = {}
+
+        // Procesar manuales pendientes
+        manualesPendientes.forEach(m => {
+            const keyDesc = `${m.fecha.toISOString().split('T')[0]}_${m.turno}`
+            if (descuentosSet.has(keyDesc)) return // Ya descontado
+
+            // @ts-ignore
+            const keyProd = m.presentacionId ? `${m.productoId}_${m.presentacionId}` : `${m.productoId}_null`
+            pendientesAnteriores[keyProd] = (pendientesAnteriores[keyProd] || 0) + m.cantidad
+            
+            // Asegurar que infoProductos tenga la info si no estaba hoy
+            if (m.producto) registerInfo(m.producto, m.presentacion)
+        })
+
+        // Procesar rutas pendientes
+        rutasPendientes.forEach(ruta => {
+            const keyDesc = `${ruta.fecha.toISOString().split('T')[0]}_${ruta.turno}`
+            if (descuentosSet.has(keyDesc)) return // Ya descontado
+
+            ruta.entregas.forEach(entrega => {
+                entrega.pedido.detalles.forEach(detalle => {
+                    const prod = detalle.presentacion.producto
+                    const pres = detalle.presentacion
+                    const keyProd = registerInfo(prod, pres)
+                    const cantTotal = detalle.cantidad * pres.cantidad
+                    pendientesAnteriores[keyProd] = (pendientesAnteriores[keyProd] || 0) + cantTotal
+                })
+            })
+        })
+
         return {
             necesidades,
             infoProductos,
             shipmentCounts,
             descuentosRealizados: descuentosTurnos.map((d: any) => d.turno),
+            pendientesAnteriores, // <-- Enviamos los pendientes acumulados de días pasados
             manualesDetalle: manuales.reduce((acc, m) => {
                 const turno = m.turno
                 // @ts-ignore

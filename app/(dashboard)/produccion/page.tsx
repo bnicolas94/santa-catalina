@@ -788,7 +788,11 @@ export default function ProduccionPage() {
                                                     })()
 
                                                     const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
-                                                    const faltanteUnits = Math.max(0, totalUnits - stockValue - enProcUnits)
+                                                    
+                                                    // En vista de Totales, restamos pendientes anteriores + TODO el día de hoy
+                                                    const pendAnteriores = planning?.pendientesAnteriores?.[key] || 0
+                                                    const totalDeduccionProyectada = totalUnits + pendAnteriores
+                                                    const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockValue - enProcUnits)
 
                                                     const rutaPaq = (ruta / presSize).toFixed(1).replace('.0', '')
                                                     const manualPaq = (manual / presSize).toFixed(1).replace('.0', '')
@@ -797,7 +801,7 @@ export default function ProduccionPage() {
                                                     const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
                                                     const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
 
-                                                    const finalUnits = stockValue + enProcUnits - totalUnits
+                                                    const finalUnits = stockValue + enProcUnits - totalDeduccionProyectada
                                                     const finalPaq = (finalUnits / presSize).toFixed(1).replace('.0', '')
                                                     const finalColor = finalUnits < 0 ? 'var(--color-error)' : 'var(--color-success)'
 
@@ -854,6 +858,9 @@ export default function ProduccionPage() {
                                             </>
                                         )
                                     })() : (() => {
+                                        const TURNOS_ORDEN = ['Mañana', 'Siesta', 'Tarde'];
+                                        const indexActual = TURNOS_ORDEN.indexOf(activeTurno);
+
                                         const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
                                         const manualesTurno = planning?.manualesDetalle?.[activeTurno] || {}
 
@@ -898,7 +905,31 @@ export default function ProduccionPage() {
                                             })()
 
                                             const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
-                                            const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
+                                            
+                                            // --- CÁLCULO ACUMULATIVO ---
+                                            // 1. Pendientes de días anteriores
+                                            const pendAnteriores = planning?.pendientesAnteriores?.[key] || 0
+                                            
+                                            // 2. Pendientes de turnos anteriores del MISMO día
+                                            let pendTurnosPrevios = 0
+                                            if (indexActual > 0) {
+                                                for (let i = 0; i < indexActual; i++) {
+                                                    const tNombre = TURNOS_ORDEN[i]
+                                                    const yaDescontado = planning?.descuentosRealizados?.includes(tNombre)
+                                                    if (!yaDescontado) {
+                                                        // Si no se descontó, sumamos su necesidad técnica (ajustada por filtro) al "bloqueo" de stock
+                                                        const necT = planning?.necesidades?.[tNombre]?.[key] || 0
+                                                        const manT = planning?.manualesDetalle?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
+                                                        const rutaTRaw = Math.max(0, necT - (manT.fabrica + manT.local))
+                                                        const rutaT = filterDestino === 'LOCAL' ? 0 : rutaTRaw
+                                                        const manualT = filterDestino === 'TODOS' ? (manT.fabrica + manT.local) : (filterDestino === 'LOCAL' ? manT.local : manT.fabrica)
+                                                        pendTurnosPrevios += (rutaT + manualT)
+                                                    }
+                                                }
+                                            }
+
+                                            const totalDeduccionProyectada = totalUnits + pendAnteriores + pendTurnosPrevios
+                                            const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockUnits - enProcUnits)
 
                                             // Conversión a paquetes para mostrar
                                             const rutaPaq = (rutaUnits / presSize).toFixed(1).replace('.0', '')
@@ -907,7 +938,7 @@ export default function ProduccionPage() {
                                             const enProcPaq = (enProcUnits / presSize).toFixed(1).replace('.0', '')
                                             const faltantePaq = (faltanteUnits / presSize).toFixed(1).replace('.0', '')
 
-                                            const finalUnits = stockUnits + enProcUnits - totalUnits
+                                            const finalUnits = stockUnits + enProcUnits - totalDeduccionProyectada
                                             const finalPaq = (finalUnits / presSize).toFixed(1).replace('.0', '')
                                             const finalColor = finalUnits < 0 ? 'var(--color-error)' : 'var(--color-success)'
                                             const totalPaq = (totalUnits / presSize).toFixed(1).replace('.0', '')
