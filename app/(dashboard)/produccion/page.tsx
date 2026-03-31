@@ -1113,7 +1113,15 @@ export default function ProduccionPage() {
                         <p style={{ color: 'var(--color-gray-400)', textAlign: 'center', padding: 'var(--space-4)' }}>No hay stock registrado. Registrá un lote para empezar.</p>
                     ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
-                            {stockProductos.map(sp => {
+                            {stockProductos
+                                .sort((a, b) => {
+                                    const codeOrder: Record<string, number> = { 'JQ': 1, 'CLA': 2, 'ESP': 3 }
+                                    const orderA = codeOrder[a.codigoInterno] || 99
+                                    const orderB = codeOrder[b.codigoInterno] || 99
+                                    if (orderA !== orderB) return orderA - orderB
+                                    return b.cantidadPresentacion - a.cantidadPresentacion
+                                })
+                                .map(sp => {
                                 const total = sp.fabrica + sp.local
                                 const isLowStock = sp.fabrica < sp.stockMinimo
 
