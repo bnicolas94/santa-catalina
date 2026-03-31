@@ -615,10 +615,27 @@ export default function PlanificacionRutasPage() {
                                     )}
 
                                     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(routePreview.length, 3)}, 1fr)`, gap: 'var(--space-4)' }}>
-                                        {routePreview.map((plan, idx) => (
+                                        {routePreview.map((plan, idx) => {
+                                            // Build Google Maps URL for this route
+                                            const companyCoords = "-34.8237468,-58.1873516"
+                                            const waypoints = plan.pedidos
+                                                .filter(p => p.lat && p.lng)
+                                                .map(p => `${p.lat},${p.lng}`)
+                                            const lastWp = waypoints.length > 0 ? waypoints[waypoints.length - 1] : companyCoords
+                                            const midWaypoints = waypoints.slice(0, -1).join('|')
+                                            const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${companyCoords}&destination=${lastWp}${midWaypoints ? `&waypoints=${midWaypoints}` : ''}&travelmode=driving`
+
+                                            return (
                                             <div key={idx} style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                                                 <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-50)', borderBottom: '1px solid var(--color-primary-200)' }}>
-                                                    <div style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-primary)' }}>🚛 {plan.choferNombre}</div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-primary)' }}>🚛 {plan.choferNombre}</div>
+                                                        <a href={mapsUrl} target="_blank" rel="noreferrer"
+                                                            style={{ fontSize: 'var(--text-xs)', backgroundColor: '#4285F4', color: 'white', padding: '4px 10px',
+                                                                borderRadius: 'var(--radius-sm)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            🗺️ Ver ruta
+                                                        </a>
+                                                    </div>
                                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', display: 'flex', gap: 'var(--space-3)', marginTop: '4px' }}>
                                                         <span>📦 {plan.pedidos.length + plan.sinCoordenadas.length} paradas</span>
                                                         {plan.totalDistance && <span>📏 {plan.totalDistance} km</span>}
@@ -627,27 +644,57 @@ export default function PlanificacionRutasPage() {
                                                 </div>
                                                 <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                                     {plan.pedidos.map((p, i) => (
-                                                        <div key={p.pedidoId} style={{ padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-gray-100)', display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
+                                                        <div key={p.pedidoId} style={{ padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-gray-100)', display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                                                             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-primary)', minWidth: '20px' }}>{i + 1}.</span>
-                                                            <div>
+                                                            <div style={{ flex: 1 }}>
                                                                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{p.clienteNombre} 📍</div>
                                                                 <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>{p.direccion || 'Sin dirección'}</div>
                                                             </div>
                                                         </div>
                                                     ))}
+                                                    {plan.sinCoordenadas.length > 0 && (
+                                                        <div style={{ padding: 'var(--space-2) var(--space-3)', backgroundColor: '#FEF9E7', borderBottom: '1px solid #F9E79F', fontSize: 'var(--text-xs)', fontWeight: 700, color: '#B7950B' }}>
+                                                            ⚠️ Sin coordenadas — ordenar manualmente:
+                                                        </div>
+                                                    )}
                                                     {plan.sinCoordenadas.map((p, i) => (
                                                         <div key={p.pedidoId} style={{ padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-gray-100)',
-                                                            display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start', backgroundColor: '#FEF9E7' }}>
+                                                            display: 'flex', gap: 'var(--space-2)', alignItems: 'center', backgroundColor: '#FFFDF5' }}>
                                                             <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: '#F39C12', minWidth: '20px' }}>{plan.pedidos.length + i + 1}.</span>
-                                                            <div>
+                                                            <div style={{ flex: 1 }}>
                                                                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{p.clienteNombre} ❓</div>
                                                                 <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>{p.direccion}</div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <button type="button" disabled={i === 0}
+                                                                    style={{ width: 22, height: 22, border: '1px solid var(--color-gray-300)', borderRadius: 4,
+                                                                        background: 'white', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1,
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', padding: 0 }}
+                                                                    onClick={() => {
+                                                                        const updated = [...routePreview!]
+                                                                        const items = [...updated[idx].sinCoordenadas]
+                                                                        ;[items[i - 1], items[i]] = [items[i], items[i - 1]]
+                                                                        updated[idx] = { ...updated[idx], sinCoordenadas: items }
+                                                                        setRoutePreview(updated)
+                                                                    }}>▲</button>
+                                                                <button type="button" disabled={i === plan.sinCoordenadas.length - 1}
+                                                                    style={{ width: 22, height: 22, border: '1px solid var(--color-gray-300)', borderRadius: 4,
+                                                                        background: 'white', cursor: i === plan.sinCoordenadas.length - 1 ? 'default' : 'pointer',
+                                                                        opacity: i === plan.sinCoordenadas.length - 1 ? 0.3 : 1,
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', padding: 0 }}
+                                                                    onClick={() => {
+                                                                        const updated = [...routePreview!]
+                                                                        const items = [...updated[idx].sinCoordenadas]
+                                                                        ;[items[i], items[i + 1]] = [items[i + 1], items[i]]
+                                                                        updated[idx] = { ...updated[idx], sinCoordenadas: items }
+                                                                        setRoutePreview(updated)
+                                                                    }}>▼</button>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 </div>
                                 <div className="modal-footer">
