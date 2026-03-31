@@ -3,11 +3,11 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: any[] }
+interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: any[]; proveedor?: { id: string; nombre: string } }
 interface Proveedor { id: string; nombre: string }
 interface Movimiento {
     id: string; tipo: string; cantidad: number; cantidadSecundaria: number | null; fecha: string; observaciones: string | null
-    costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null;
+    costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null; numeroFactura: string | null;
     insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
     proveedor: { id: string; nombre: string } | null
     ubicacion: { id: string; nombre: string } | null
@@ -23,6 +23,9 @@ function StockContent() {
     const [stockProductos, setStockProductos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
+    const [showFacturaModal, setShowFacturaModal] = useState(false)
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] as any[] })
+    const [tempItem, setTempItem] = useState({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
     const [filterTipo, setFilterTipo] = useState('')
     const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
@@ -100,6 +103,43 @@ function StockContent() {
             setShowModal(false)
             setEditingId(null)
             setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_madre' })
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+    }
+
+    const addItemToFactura = () => {
+        if (!tempItem.insumoId) return setError('Seleccione un insumo')
+        if (tempItem.useBultos && (!tempItem.bultos || !tempItem.unidadesPorBulto)) return setError('Ingrese bultos y unidades')
+        if (!tempItem.useBultos && !tempItem.cantidad) return setError('Ingrese cantidad')
+
+        const computedCantidad = tempItem.useBultos ? String(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto)) : tempItem.cantidad
+
+        setFacturaForm({ ...facturaForm, items: [...facturaForm.items, { ...tempItem, cantidad: computedCantidad }] })
+        setTempItem({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+    }
+
+    const removeFacturaItem = (index: number) => {
+        const newItems = [...facturaForm.items]
+        newItems.splice(index, 1)
+        setFacturaForm({ ...facturaForm, items: newItems })
+    }
+
+    async function handleFacturaSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        setError('')
+        if (!facturaForm.proveedorId) return setError('Seleccione un proveedor')
+        if (facturaForm.items.length === 0) return setError('Debe agregar al menos un insumo a la factura')
+        try {
+            const res = await fetch('/api/movimientos-stock/factura', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(facturaForm),
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess('Factura registrada correctamente')
+            setShowFacturaModal(false)
+            setFacturaForm({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -231,12 +271,18 @@ function StockContent() {
                             ✕
                         </button>
                     )}
+                    <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
+                        const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
+                        setFacturaForm({ proveedorId: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: defaultUbi, observaciones: '', items: [] })
+                        setTempItem({ insumoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+                        setShowFacturaModal(true)
+                    }}>📑 Múltiples</button>
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
                         setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi, cajaOrigen: 'caja_madre' })
                         setShowModal(true)
-                    }}>+ Registrar Movimiento</button>
+                    }}>+ Simple</button>
                 </div>
             </div>
 
@@ -476,7 +522,10 @@ function StockContent() {
                                     ) : <span style={{ color: '#aaa' }}>—</span>}
                                 </td>
                                 <td>{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                                <td>{mov.proveedor?.nombre || '—'}</td>
+                                <td>
+                                    {mov.proveedor?.nombre || '—'}
+                                    {mov.numeroFactura && <div style={{ fontSize: '10px', color: '#666', fontWeight: 600 }}>Fac: {mov.numeroFactura}</div>}
+                                </td>
                                 <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mov.observaciones || '—'}</td>
                                 <td style={{ textAlign: 'right' }}>
                                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
@@ -696,6 +745,131 @@ function StockContent() {
                                 <button type="submit" className="btn btn-primary">
                                     {editingId ? 'Guardar Cambios' : `Registrar ${form.tipo === 'entrada' ? 'entrada' : 'salida'}`}
                                 </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Factura Multiple */}
+            {showFacturaModal && (
+                <div className="modal-overlay" onClick={() => setShowFacturaModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
+                        <div className="modal-header">
+                            <h2>📑 Registrar Factura Múltiple</h2>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowFacturaModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleFacturaSubmit}>
+                            <div className="modal-body">
+                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Sede de entrada</label>
+                                        <select className="form-select" value={facturaForm.ubicacionId} onChange={(e) => setFacturaForm({ ...facturaForm, ubicacionId: e.target.value })} required>
+                                            <option value="">Seleccionar sede...</option>
+                                            {ubicaciones.map((u) => <option key={u.id} value={u.id}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Proveedor</label>
+                                        <select className="form-select" value={facturaForm.proveedorId} onChange={(e) => setFacturaForm({ ...facturaForm, proveedorId: e.target.value })} required>
+                                            <option value="">Seleccionar proveedor...</option>
+                                            {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Nº Factura / Remito</label>
+                                        <input className="form-input" value={facturaForm.numeroFactura} onChange={(e) => setFacturaForm({ ...facturaForm, numeroFactura: e.target.value })} placeholder="Opcional" />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Estado de Pago</label>
+                                        <select className="form-select" value={facturaForm.estadoPago} onChange={(e) => setFacturaForm({ ...facturaForm, estadoPago: e.target.value })}>
+                                            <option value="pagado">✅ Pagado (Contado)</option>
+                                            <option value="pendiente">⏳ Pendiente (Cta. Cte.)</option>
+                                        </select>
+                                    </div>
+                                    {facturaForm.estadoPago === 'pagado' && (
+                                        <div className="form-group">
+                                            <label className="form-label">Caja de Origen</label>
+                                            <select className="form-select" value={facturaForm.cajaOrigen} onChange={(e) => setFacturaForm({ ...facturaForm, cajaOrigen: e.target.value })}>
+                                                <option value="caja_madre">🏦 Caja Madre</option>
+                                                <option value="caja_chica">💼 Caja Chica</option>
+                                                <option value="local">🏪 Local</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <hr style={{ margin: 'var(--space-4) 0' }} />
+
+                                {/* Seleccion de Insumos */}
+                                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-2)' }}>🛒 Agregar Insumos al carro</h3>
+                                <div style={{ padding: 'var(--space-3)', backgroundColor: '#F8F9F9', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7E9', marginBottom: 'var(--space-4)' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 'var(--space-3)' }}>
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Insumo (Filtro por proveedor)</label>
+                                            <select className="form-select" value={tempItem.insumoId} onChange={(e) => setTempItem({ ...tempItem, insumoId: e.target.value })}>
+                                                <option value="">Seleccionar insumo...</option>
+                                                {insumos.filter(i => !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
+                                                    <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Cantidad (Total {tempItem.insumoId ? insumos.find(i=>i.id === tempItem.insumoId)?.unidadMedida : ''})</label>
+                                            <input type="number" step="0.001" className="form-input" value={tempItem.cantidad} onChange={(e) => setTempItem({ ...tempItem, cantidad: e.target.value })} placeholder="Ej: 15.5" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Costo Total Ítem ($)</label>
+                                            <input type="number" step="0.01" className="form-input" value={tempItem.costoTotal} onChange={(e) => setTempItem({ ...tempItem, costoTotal: e.target.value })} placeholder="Ej: 5000" />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>
+                                        <button type="button" className="btn btn-sm btn-ghost" onClick={addItemToFactura} style={{ border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}>+ Agregar a Factura</button>
+                                    </div>
+                                </div>
+
+                                {/* Lista de Insumos agregados */}
+                                {facturaForm.items.length > 0 && (
+                                    <table className="table" style={{ fontSize: '0.9rem', marginBottom: 'var(--space-4)' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Insumo</th>
+                                                <th>Cantidad</th>
+                                                <th>Costo</th>
+                                                <th>Subtotal</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {facturaForm.items.map((it, idx) => {
+                                                const insData = insumos.find(i => i.id === it.insumoId)
+                                                return (
+                                                    <tr key={idx}>
+                                                        <td>{insData?.nombre} <br/> <span style={{fontSize:'0.7rem', color:'#666'}}>Vto: {it.fechaVencimiento || '—'}</span></td>
+                                                        <td>{it.cantidad} {insData?.unidadMedida}</td>
+                                                        <td>${parseFloat(it.costoTotal || '0').toLocaleString('es-AR')}</td>
+                                                        <td>{it.costoTotal && it.cantidad ? `$${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toFixed(2)} / ${insData?.unidadMedida}` : '—'}</td>
+                                                        <td><button type="button" className="btn btn-icon" onClick={() => removeFacturaItem(idx)}>✕</button></td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr>
+                                                <td colSpan={2} style={{ textAlign: 'right', fontWeight: 'bold' }}>Total Factura:</td>
+                                                <td colSpan={3} style={{ fontWeight: 'bold', color: 'var(--color-primary)', fontSize: '1.2rem' }}>
+                                                    ${facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0).toLocaleString('es-AR')}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowFacturaModal(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary">Registrar Factura Completa</button>
                             </div>
                         </form>
                     </div>

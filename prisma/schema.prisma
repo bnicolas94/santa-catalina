@@ -251,7 +251,8 @@ model MovimientoStock {
   insumoId         String          @map("id_insumo")
   loteOrigenId     String?         @map("id_lote_origen")
   proveedorId      String?         @map("id_proveedor")
-  gastoId          String?         @unique @map("id_gasto")
+  numeroFactura    String?         @map("numero_factura")
+  gastoId          String?         @map("id_gasto")
   fechaVencimiento DateTime?       @map("fecha_vencimiento")
   ubicacionId        String?         @map("id_ubicacion")
   cantidadSecundaria Float?          @map("cantidad_secundaria")
@@ -402,7 +403,7 @@ model GastoOperativo {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   categoria       CategoriaGasto   @relation(fields: [categoriaId], references: [id])
-  movimientoStock MovimientoStock?
+  movimientosStock MovimientoStock[]
 
   @@map("gastos_operativos")
 }

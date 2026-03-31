@@ -40,16 +40,18 @@ export async function DELETE(
                 }
             })
 
-            // 4. Si tiene un gasto asociado, eliminarlo (y su movimiento de caja)
+            // 4. Si tiene un gasto asociado, verificar si hay otros ítems en esa factura
             if (movimiento.gastoId) {
-                // Primero borrar el movimiento de caja para evitar FK errors si los hay
-                await tx.movimientoCaja.deleteMany({
-                    where: { gastoId: movimiento.gastoId }
-                })
-                
-                await tx.gastoOperativo.delete({
-                    where: { id: movimiento.gastoId }
-                })
+                const countAsociados = await tx.movimientoStock.count({ where: { gastoId: movimiento.gastoId } })
+                if (countAsociados <= 1) {
+                    // Es el único o último ítem, borramos todo
+                    await tx.movimientoCaja.deleteMany({ where: { gastoId: movimiento.gastoId } })
+                    await tx.gastoOperativo.delete({ where: { id: movimiento.gastoId } })
+                } else if (movimiento.costoTotal) {
+                    // Hay otros ítems, solo restamos este monto de la caja y el gasto
+                    await tx.gastoOperativo.update({ where: { id: movimiento.gastoId }, data: { monto: { decrement: movimiento.costoTotal } } })
+                    await tx.movimientoCaja.updateMany({ where: { gastoId: movimiento.gastoId }, data: { monto: { decrement: movimiento.costoTotal } } })
+                }
             }
 
             // 5. Eliminar el movimiento
@@ -130,20 +132,23 @@ export async function PATCH(
                     }
 
                     if (gastoId) {
-                        // Actualizar gasto existente
+                        // Actualizar gasto existente mediante incremento de la diferencia
+                        const deltaCosto = nuevoCostoTotal - (movOriginal.costoTotal || 0)
                         await tx.gastoOperativo.update({
                             where: { id: gastoId },
                             data: {
                                 fecha: parsedFecha,
-                                monto: nuevoCostoTotal,
-                                descripcion: `Compra de Insumos (Editada) - ${observaciones || 'Directa'}`,
+                                monto: { increment: deltaCosto },
                                 categoriaId: cat.id
                             }
                         })
                         // Actualizar fecha en caja asociada
                         await tx.movimientoCaja.updateMany({
                             where: { gastoId: gastoId },
-                            data: { fecha: parsedFecha }
+                            data: { 
+                                fecha: parsedFecha,
+                                monto: { increment: deltaCosto }
+                            }
                         })
                     } else {
                         // Crear nuevo gasto
@@ -158,13 +163,27 @@ export async function PATCH(
                         gastoId = nuevoGasto.id
                     }
                 } else if (nuevoEstado === 'pendiente' && gastoId) {
-                    // Si pasó de pagado a pendiente, borramos el gasto
-                    await tx.gastoOperativo.delete({ where: { id: gastoId } })
+                    // Si pasó de pagado a pendiente, debemos remover su costo del Gasto Operativo o borrarlo si era el último
+                    const countAsociados = await tx.movimientoStock.count({ where: { gastoId } })
+                    if (countAsociados <= 1) {
+                        await tx.movimientoCaja.deleteMany({ where: { gastoId } })
+                        await tx.gastoOperativo.delete({ where: { id: gastoId } })
+                    } else if (movOriginal.costoTotal) {
+                        await tx.gastoOperativo.update({ where: { id: gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
+                        await tx.movimientoCaja.updateMany({ where: { gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
+                    }
                     gastoId = null
                 }
             } else if (gastoId) {
-                // Si ya no es entrada o no tiene costo, borramos el gasto
-                await tx.gastoOperativo.delete({ where: { id: gastoId } })
+                // Si ya no es entrada o no tiene costo, borramos el item del gasto
+                const countAsociados = await tx.movimientoStock.count({ where: { gastoId } })
+                if (countAsociados <= 1) {
+                    await tx.movimientoCaja.deleteMany({ where: { gastoId } })
+                    await tx.gastoOperativo.delete({ where: { id: gastoId } })
+                } else if (movOriginal.costoTotal) {
+                    await tx.gastoOperativo.update({ where: { id: gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
+                    await tx.movimientoCaja.updateMany({ where: { gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
+                }
                 gastoId = null
             }
 

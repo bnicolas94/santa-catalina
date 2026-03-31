@@ -158,6 +158,12 @@ export default function ProduccionPage() {
     const isDiscounted = activeTurno !== 'Totales' && !!planning?.descuentosRealizados?.includes(activeTurno)
 
     useEffect(() => {
+        if (filterDestino === 'LOCAL') setStockSource('local')
+        else if (filterDestino === 'FABRICA') setStockSource('fabrica')
+        else setStockSource('ambos')
+    }, [filterDestino])
+
+    useEffect(() => {
         fetchData()
         const interval = setInterval(fetchData, 5000) // Poll every 5s for real-time updates
         return () => clearInterval(interval)
@@ -736,7 +742,9 @@ export default function ProduccionPage() {
                                         <th style={{ textAlign: 'center' }}>Total Necesario</th>
                                         {!isDiscounted && (
                                             <>
-                                                <th style={{ textAlign: 'center' }}>Stock Fab./Local</th>
+                                                <th style={{ textAlign: 'center' }}>
+                                                    {stockSource === 'fabrica' ? 'Stock Fábrica' : (stockSource === 'local' ? 'Stock Local' : 'Stock Fab./Loc.')}
+                                                </th>
                                                 <th style={{ textAlign: 'center' }}>En Proceso</th>
                                                 <th style={{ textAlign: 'center' }}>A Producir</th>
                                                 <th style={{ textAlign: 'center' }}>Stock Final</th>
@@ -794,32 +802,13 @@ export default function ProduccionPage() {
 
                                         return (
                                             <>
-                                                <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                                    <td colSpan={9} style={{ padding: 'var(--space-2) var(--space-4)' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', fontSize: '12px' }}>
-                                                            <span style={{ fontWeight: 600, color: 'var(--color-gray-600)' }}>Considerar Stock de:</span>
-                                                            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                                                                    <input type="radio" name="stockSource" checked={stockSource === 'fabrica'} onChange={() => setStockSource('fabrica')} /> Fábrica
-                                                                </label>
-                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                                                                    <input type="radio" name="stockSource" checked={stockSource === 'local'} onChange={() => setStockSource('local')} /> Local
-                                                                </label>
-                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                                                                    <input type="radio" name="stockSource" checked={stockSource === 'ambos'} onChange={() => setStockSource('ambos')} /> Ambos
-                                                                </label>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
                                                 {items.map(([key, data]) => {
                                                     const { ruta, manual, total: totalUnits } = data
                                                     if (totalUnits === 0 && filterDestino !== 'TODOS') return null
                                                     const prodInfo = planning.infoProductos[key]
                                                     const presSize = prodInfo?.presentacion?.cantidad || 48
                                                     const pid = prodInfo?.id
-                                                    const presid = prodInfo?.presentacion?.id || ''
-
+                                                    const stockSource = filterDestino === 'LOCAL' ? 'local' : (filterDestino === 'FABRICA' ? 'fabrica' : 'ambos')
                                                     const stockValue = (() => {
                                                         const fab = planning?.stockFabricacion?.[key] || 0
                                                         const loc = planning?.stockLocal?.[key] || 0
@@ -929,9 +918,15 @@ export default function ProduccionPage() {
 
                                             if (totalUnits === 0 && filterDestino !== 'TODOS') return null
 
-                                            // El stock ahora lo buscamos por KEY (pid_presid)
-                                            // En vista de turnos, mostramos solo stock de fabricación como referencia
-                                            const stockUnits = planning?.stockFabricacion?.[key] || 0
+                                            // Stock dinámico según la fuente seleccionada
+                                            const stockUnits = (() => {
+                                                const fab = planning?.stockFabricacion?.[key] || 0
+                                                const loc = planning?.stockLocal?.[key] || 0
+                                                if (stockSource === 'fabrica') return fab
+                                                if (stockSource === 'local') return loc
+                                                return fab + loc
+                                            })()
+
                                             const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
                                             const faltanteUnits = Math.max(0, totalUnits - stockUnits - enProcUnits)
 
