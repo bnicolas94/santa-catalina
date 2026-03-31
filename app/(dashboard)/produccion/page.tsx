@@ -789,9 +789,26 @@ export default function ProduccionPage() {
 
                                                     const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
                                                     
-                                                    // En vista de Totales, restamos pendientes anteriores + TODO el día de hoy
+                                                    // --- CORRECCIÓN EN TOTALES ---
+                                                    // 1. Pendientes de días anteriores
                                                     const pendAnteriores = planning?.pendientesAnteriores?.[key] || 0
-                                                    const totalDeduccionProyectada = totalUnits + pendAnteriores
+                                                    
+                                                    // 2. Solo lo que Falta descontar de HOY
+                                                    let pendHoy = 0
+                                                    const TURNOS_POSIBLES = ['Mañana', 'Siesta', 'Tarde']
+                                                    TURNOS_POSIBLES.forEach(tNombre => {
+                                                        const yaDescontado = planning?.descuentosRealizados?.includes(tNombre)
+                                                        if (!yaDescontado) {
+                                                            const necT = planning?.necesidades?.[tNombre]?.[key] || 0
+                                                            const manT = planning?.manualesDetalle?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
+                                                            const rutaTRaw = Math.max(0, necT - (manT.fabrica + manT.local))
+                                                            const rutaT = filterDestino === 'LOCAL' ? 0 : rutaTRaw
+                                                            const manualT = filterDestino === 'TODOS' ? (manT.fabrica + manT.local) : (filterDestino === 'LOCAL' ? manT.local : manT.fabrica)
+                                                            pendHoy += (rutaT + manualT)
+                                                        }
+                                                    })
+
+                                                    const totalDeduccionProyectada = pendAnteriores + pendHoy
                                                     const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockValue - enProcUnits)
 
                                                     const rutaPaq = (ruta / presSize).toFixed(1).replace('.0', '')
