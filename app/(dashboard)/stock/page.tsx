@@ -294,17 +294,16 @@ function StockContent() {
                 </div>
             </div>
 
-            {/* Selector de Ubicación / Sede */}
-            <div className="card" style={{ marginBottom: 'var(--space-6)', border: '1px solid var(--color-primary-light)', backgroundColor: 'var(--color-primary-bg-light)' }}>
-                <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
+            <div className="card" style={{ marginBottom: 'var(--space-6)', backgroundColor: 'var(--color-primary-light)', border: '1px solid var(--color-primary)' }}>
+                <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', flexWrap: 'wrap' }}>
                     <div style={{ fontSize: '1.5rem' }}>📍</div>
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ margin: 0, fontSize: 'var(--text-md)', fontWeight: 700 }}>Filtrar por Punto de Venta / Sede</h3>
+                    <div style={{ flex: '1 1 200px' }}>
+                        <h3 style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 700 }}>Filtrar por Punto de Venta / Sede</h3>
                         <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>Gestioná el stock específico de cada lugar.</p>
                     </div>
                     <select
                         className="form-select"
-                        style={{ width: '250px', fontWeight: 600, border: '2px solid var(--color-primary)' }}
+                        style={{ flex: '1 1 200px', fontWeight: 600, border: '2px solid var(--color-primary)', height: '40px' }}
                         value={selectedUbi}
                         onChange={(e) => setSelectedUbi(e.target.value)}
                     >
@@ -360,22 +359,22 @@ function StockContent() {
             {error && <div className="toast toast-error">{error}</div>}
 
             {/* Filtros */}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
-                <button className={`btn btn-sm ${filterTipo === '' ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setFilterTipo('')}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
+                <button className={`btn btn-sm ${filterTipo === '' ? 'btn-secondary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setFilterTipo('')}>
                     Todos ({movimientosPorFecha.length})
                 </button>
                 <button className="btn btn-sm" onClick={() => setFilterTipo(filterTipo === 'entrada' ? '' : 'entrada')}
-                    style={{ backgroundColor: filterTipo === 'entrada' ? '#2ECC71' : '#2ECC7118', color: filterTipo === 'entrada' ? '#fff' : '#2ECC71', border: '2px solid #2ECC71', fontWeight: 600 }}>
+                    style={{ whiteSpace: 'nowrap', backgroundColor: filterTipo === 'entrada' ? '#2ECC71' : '#2ECC7118', color: filterTipo === 'entrada' ? '#fff' : '#2ECC71', border: '2px solid #2ECC71', fontWeight: 600 }}>
                     ⬆️ Entradas ({statsEntradas})
                 </button>
                 <button className="btn btn-sm" onClick={() => setFilterTipo(filterTipo === 'salida' ? '' : 'salida')}
-                    style={{ backgroundColor: filterTipo === 'salida' ? '#E74C3C' : '#E74C3C18', color: filterTipo === 'salida' ? '#fff' : '#E74C3C', border: '2px solid #E74C3C', fontWeight: 600 }}>
+                    style={{ whiteSpace: 'nowrap', backgroundColor: filterTipo === 'salida' ? '#E74C3C' : '#E74C3C18', color: filterTipo === 'salida' ? '#fff' : '#E74C3C', border: '2px solid #E74C3C', fontWeight: 600 }}>
                     ⬇️ Salidas ({statsSalidas})
                 </button>
                 {filterPago === 'pendiente' && (
                     <button className="btn btn-sm" onClick={() => setFilterPago('')}
-                        style={{ backgroundColor: '#E67E22', color: '#fff', border: '2px solid #E67E22', fontWeight: 600 }}>
-                        ⏳ Solo Pendientes (Haga clic para quitar)
+                        style={{ whiteSpace: 'nowrap', backgroundColor: '#E67E22', color: '#fff', border: '2px solid #E67E22', fontWeight: 600 }}>
+                        ⏳ Pendientes
                     </button>
                 )}
             </div>
@@ -413,12 +412,12 @@ function StockContent() {
                             <th>Tipo</th>
                             <th>Insumo</th>
                             <th>Cantidad</th>
-                            <th>Costo / Pago</th>
-                            <th>Vencimiento</th>
-                            <th>Fecha</th>
-                            <th>Proveedor</th>
-                            <th>Observaciones</th>
-                            <th style={{ textAlign: 'right' }}>Acciones</th>
+                            <th>Costo</th>
+                            <th className="hidden-mobile">Vto.</th>
+                            <th className="hidden-mobile">Fecha</th>
+                            <th className="hidden-mobile">Proveedor</th>
+                            <th className="hidden-mobile">Observaciones</th>
+                            <th style={{ textAlign: 'right' }}>Acc.</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -435,14 +434,19 @@ function StockContent() {
                                         {mov.tipo === 'entrada' ? '⬆️ Entrada' : '⬇️ Salida'}
                                     </span>
                                 </td>
-                                <td style={{ fontWeight: 600 }}>{mov.insumo.nombre}</td>
+                                <td style={{ fontWeight: 600 }}>
+                                    {mov.insumo.nombre}
+                                    <div className="visible-mobile" style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 400 }}>
+                                        {mov.proveedor?.nombre || 'S/Prov.'} • {new Date(mov.fecha).toLocaleDateString('es-AR')}
+                                    </div>
+                                </td>
                                 <td>
                                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                                         <span style={{ color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C', fontWeight: 700 }}>
                                             {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidad.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadMedida}
                                         </span>
                                         {mov.cantidadSecundaria && (
-                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600 }}>
+                                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 600 }}>
                                                 {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidadSecundaria.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadSecundaria}
                                             </span>
                                         )}
@@ -466,25 +470,25 @@ function StockContent() {
                                         <span style={{ color: '#aaa' }}>—</span>
                                     )}
                                 </td>
-                                <td>
+                                <td className="hidden-mobile">
                                     {mov.fechaVencimiento ? (
                                         <span className="badge" style={{
                                             backgroundColor: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C20' : '#F1C40F20',
                                             color: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#D35400',
                                             border: `1px solid ${new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#F1C40F'}`,
-                                            fontWeight: 600
+                                            fontWeight: 600,
+                                            fontSize: '9px'
                                         }}>
                                             {new Date(mov.fechaVencimiento).toLocaleDateString('es-AR')}
-                                            {new Date(mov.fechaVencimiento) < new Date() && ' (VENCIDO)'}
                                         </span>
                                     ) : <span style={{ color: '#aaa' }}>—</span>}
                                 </td>
-                                <td>{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                                <td>
+                                <td className="hidden-mobile">{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                                <td className="hidden-mobile">
                                     {mov.proveedor?.nombre || '—'}
                                     {mov.numeroFactura && <div style={{ fontSize: '10px', color: '#666', fontWeight: 600 }}>Fac: {mov.numeroFactura}</div>}
                                 </td>
-                                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mov.observaciones || '—'}</td>
+                                <td className="hidden-mobile" style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mov.observaciones || '—'}</td>
                                 <td style={{ textAlign: 'right' }}>
                                     <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
                                         <button

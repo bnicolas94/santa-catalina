@@ -159,13 +159,13 @@ export default function ClientesPage() {
                 <table className="table">
                     <thead>
                         <tr>
-                            <th>Nombre Comercial</th>
-                            <th>Dirección</th>
-                            <th>Contacto</th>
-                            <th>Teléfono</th>
+                            <th>Cliente</th>
+                            <th className="hidden-mobile">Dirección</th>
+                            <th className="hidden-mobile">Contacto</th>
+                            <th className="hidden-mobile">Teléfono</th>
                             <th>Zona</th>
-                            <th>Pedidos</th>
-                            <th>Acciones</th>
+                            <th className="hidden-mobile">Pedidos</th>
+                            <th>Acc.</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -173,8 +173,13 @@ export default function ClientesPage() {
                             <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem' }}>No hay clientes registrados</td></tr>
                         ) : filtered.map((c) => (
                             <tr key={c.id}>
-                                <td style={{ fontWeight: 600 }}>{c.nombreComercial}</td>
-                                <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', maxWidth: 200 }}>
+                                <td style={{ fontWeight: 600 }}>
+                                    {c.nombreComercial}
+                                    <div className="visible-mobile" style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 400 }}>
+                                        {c.direccion || 'Sin dirección'}
+                                    </div>
+                                </td>
+                                <td className="hidden-mobile" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', maxWidth: 200 }}>
                                     {c.direccion ? (
                                         <>
                                             <div>{c.direccion}</div>
@@ -188,10 +193,10 @@ export default function ClientesPage() {
                                         <span style={{ color: 'var(--color-gray-400)' }}>Sin dirección</span>
                                     )}
                                 </td>
-                                <td>{c.contactoNombre || '—'}</td>
-                                <td>{c.contactoTelefono || '—'}</td>
-                                <td>{c.zona ? <span className="badge badge-info">Zona {c.zona}</span> : '—'}</td>
-                                <td><span className="badge badge-success">{c._count.pedidos}</span></td>
+                                <td className="hidden-mobile">{c.contactoNombre || '—'}</td>
+                                <td className="hidden-mobile">{c.contactoTelefono || '—'}</td>
+                                <td>{c.zona ? <span className="badge badge-info" style={{ fontSize: '10px' }}>{c.zona}</span> : '—'}</td>
+                                <td className="hidden-mobile"><span className="badge badge-success">{c._count.pedidos}</span></td>
                                 <td>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                                         <button className="btn btn-ghost btn-sm" onClick={() => openEdit(c)}>Editar</button>

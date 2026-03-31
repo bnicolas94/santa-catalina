@@ -93,8 +93,20 @@
     .header {
         left: 0;
         padding: 0 var(--space-4);
+        height: 56px; /* Ajuste altura para mobile */
     }
     .mobileMenuBtn {
         display: flex;
+    }
+    .greeting {
+        font-size: var(--text-base);
+    }
+    .userInfo {
+        display: none; /* Ahorrar espacio en mobile */
+    }
+    .logoutBtn {
+        padding: var(--space-1) var(--space-3);
+        font-size: var(--text-xs);
+        min-height: 32px;
     }
 }

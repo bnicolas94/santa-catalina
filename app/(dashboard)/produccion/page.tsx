@@ -619,23 +619,23 @@ export default function ProduccionPage() {
 
     return (
         <div>
-            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="page-header">
                 <h1>🏭 Producción — Lotes</h1>
-                <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', width: '100%', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                     <input
                         type="date"
                         className="form-input"
                         value={filterFecha}
                         onChange={(e) => setFilterFecha(e.target.value)}
                         title="Filtrar por fecha"
-                        style={{ height: '38px' }}
+                        style={{ height: '38px', width: 'auto', flex: '1', minWidth: '130px' }}
                     />
                     {filterFecha && (
                         <button className="btn btn-ghost" onClick={() => setFilterFecha('')} title="Ver todas las fechas" style={{ padding: '0 8px', fontSize: '1.2rem' }}>
                             ✕
                         </button>
                     )}
-                    <button className="btn btn-primary" onClick={() => {
+                    <button className="btn btn-primary" style={{ flex: '1', minWidth: '120px' }} onClick={() => {
                         setForm(f => ({ ...f, fechaProduccion: filterFecha || new Date().toISOString().slice(0, 10) }))
                         setShowModal(true)
                     }}>+ Nuevo Lote</button>
@@ -647,26 +647,35 @@ export default function ProduccionPage() {
 
             {/* Planificación por Turnos */}
             {planning && (
-                <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
-                    <div className="card-body">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                <div className="card" style={{ marginBottom: 'var(--space-6)', overflow: 'hidden' }}>
+                    <div className="card-body" style={{ padding: 'var(--space-3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-4)', flexDirection: 'column', gap: 'var(--space-3)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                 <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontFamily: 'var(--font-heading)' }}>📅 Planificación — {formatDateOnly(filterFecha || getLocalDateString())}</h2>
                                 <span className="badge badge-info" style={{ fontSize: '10px' }}>Basado en Hoja de Ruta</span>
                             </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                gap: '8px', 
+                                alignItems: 'center', 
+                                width: '100%', 
+                                overflowX: 'auto', 
+                                paddingBottom: '4px',
+                                scrollbarWidth: 'none',
+                                msOverflowStyle: 'none'
+                            }}>
                                 <button
                                     className="btn btn-xs btn-ghost"
-                                    style={{ fontSize: '11px', padding: '4px 10px', border: '1px dashed var(--color-gray-300)' }}
+                                    style={{ fontSize: '10px', padding: '4px 10px', border: '1px dashed var(--color-gray-300)', whiteSpace: 'nowrap' }}
                                     onClick={() => { setImportStep('upload'); setImportHeaders([]); setImportRawRows([]); setShowImportModal(true) }}
                                 >
-                                    📥 Importar Excel
+                                    📥 Importar
                                 </button>
                                 <button
                                     className="btn btn-xs btn-ghost"
-                                    style={{ fontSize: '11px', padding: '4px 10px', color: 'var(--color-error)', border: '1px solid transparent' }}
+                                    style={{ fontSize: '10px', padding: '4px 10px', color: 'var(--color-error)', border: '1px solid transparent', whiteSpace: 'nowrap' }}
                                     onClick={handleClearPlan}
-                                    title="Borrar todos los requerimientos manuales de este día"
+                                    title="Limpiar"
                                 >
                                     🗑️ Limpiar
                                 </button>
@@ -676,11 +685,11 @@ export default function ProduccionPage() {
                                             key={t}
                                             className={`btn btn-xs ${activeTurno === t ? (t === 'Totales' ? 'btn-success' : 'btn-primary') : 'btn-ghost'}`}
                                             onClick={() => setActiveTurno(t)}
-                                            style={{ fontSize: '11px', padding: '4px 12px', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
+                                            style={{ fontSize: '10px', padding: '4px 10px', whiteSpace: 'nowrap', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
                                         >
-                                            {t === 'Totales' ? '📊 Totales del Día' : t}
+                                            {t === 'Totales' ? '📊 Totales' : t}
                                             {(planning?.shipmentCounts?.[t] ?? 0) > 0 && (
-                                                <span style={{ marginLeft: '6px', backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: '10px', fontSize: '9px' }}>
+                                                <span style={{ marginLeft: '4px', backgroundColor: 'rgba(0,0,0,0.1)', padding: '1px 4px', borderRadius: '10px', fontSize: '8px' }}>
                                                     {planning?.shipmentCounts?.[t]}
                                                 </span>
                                             )}
@@ -693,33 +702,32 @@ export default function ProduccionPage() {
                                             key={d}
                                             className={`btn btn-xs ${filterDestino === d ? 'btn-neutral' : 'btn-ghost'}`}
                                             onClick={() => setFilterDestino(d)}
-                                            style={{ fontSize: '10px', padding: '4px 8px' }}
+                                            style={{ fontSize: '10px', padding: '4px 8px', whiteSpace: 'nowrap' }}
                                         >
-                                            {d === 'TODOS' ? '🌐 Todos' : d === 'FABRICA' ? '🏭 Fábrica' : '🏪 Local'}
+                                            {d === 'TODOS' ? '🌐' : d === 'FABRICA' ? '🏭' : '🏪'}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                         </div>
 
-                        <table className="table table-planning">
+                        <div className="table-container">
+                            <table className="table table-planning">
                                 <thead>
                                     <tr>
                                         <th>Producto</th>
-                                        <th style={{ textAlign: 'center' }}>H. Ruta</th>
-                                        {!showDiscountedUI && <th style={{ textAlign: 'center' }}>Carga Express</th>}
-                                        <th style={{ textAlign: 'center' }}>Total Necesario</th>
+                                        <th style={{ textAlign: 'center' }} className="hidden-mobile">H. Ruta</th>
+                                        {!showDiscountedUI && <th style={{ textAlign: 'center' }}>Carga</th>}
+                                        <th style={{ textAlign: 'center' }}>Total</th>
                                         {!showDiscountedUI && (
                                             <>
-                                                <th style={{ textAlign: 'center' }}>
-                                                    {stockSource === 'fabrica' ? 'Stock Fábrica' : (stockSource === 'local' ? 'Stock Local' : 'Stock Fab./Loc.')}
-                                                </th>
-                                                <th style={{ textAlign: 'center' }}>En Proceso</th>
-                                                <th style={{ textAlign: 'center' }}>A Producir</th>
-                                                <th style={{ textAlign: 'center' }}>Stock Final</th>
+                                                <th style={{ textAlign: 'center' }}>Stock</th>
+                                                <th style={{ textAlign: 'center' }} className="hidden-mobile">Proceso</th>
+                                                <th style={{ textAlign: 'center' }}>Falta</th>
+                                                <th style={{ textAlign: 'center' }}>Final</th>
                                             </>
                                         )}
-                                        <th style={{ textAlign: 'right' }}>{showDiscountedUI ? 'Estado' : 'Sugerencia'}</th>
+                                        <th style={{ textAlign: 'right' }}>{showDiscountedUI ? 'Estado' : 'Acción'}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1087,6 +1095,7 @@ export default function ProduccionPage() {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
                     </div>
                 </div>
             )}

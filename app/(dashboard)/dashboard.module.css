@@ -16,7 +16,11 @@
 }
 
 @media (max-width: 768px) {
+    .mainArea {
+        margin-left: 0;
+    }
     .content {
         padding: var(--space-4);
+        padding-top: var(--space-2);
     }
 }

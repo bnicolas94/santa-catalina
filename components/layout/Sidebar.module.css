@@ -164,10 +164,11 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.4);
     z-index: 90;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(4px);
     display: none;
+    animation: fadeIn var(--transition-fast);
 }
 
 @media (max-width: 768px) {
@@ -177,9 +178,30 @@
 
     .sidebar {
         transform: translateX(-100%);
+        width: 280px;
+        box-shadow: none;
     }
 
     .sidebar.mobileOpen {
         transform: translateX(0);
+        box-shadow: var(--shadow-xl);
+    }
+
+    .logoContainer {
+        min-height: 64px;
+        padding: var(--space-3);
+    }
+
+    .nav {
+        padding: var(--space-2);
+    }
+
+    .navItem {
+        padding: var(--space-4); /* Más grande para touch */
+        font-size: var(--text-base);
+    }
+
+    .collapseBtn {
+        display: none; /* No tiene sentido colapsar en mobile drawer */
     }
 }

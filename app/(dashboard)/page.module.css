@@ -65,6 +65,33 @@
     margin-top: var(--space-2);
 }
 
+@media (max-width: 768px) {
+    .statsGrid {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-3);
+    }
+    .statIcon {
+        font-size: 1.8rem;
+    }
+    .statValue {
+        font-size: var(--text-xl);
+    }
+    .statsGridSecondary {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-2);
+    }
+    .tablesRow {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+}
+
+@media (max-width: 480px) {
+    .statsGrid, .statsGridSecondary {
+        grid-template-columns: 1fr;
+    }
+}
+
 .welcomeCard {
     margin-top: var(--space-4);
 }

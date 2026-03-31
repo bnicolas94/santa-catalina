@@ -421,13 +421,24 @@ a:hover {
   color: var(--color-gray-700);
 }
 
-/* Tables */
 .table-container {
   width: 100%;
   overflow-x: auto;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-gray-200);
   background: var(--color-white);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  position: relative;
+}
+
+.table-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: 3px;
 }
 
 .table {
@@ -666,11 +677,37 @@ a:hover {
 @media (max-width: 768px) {
   :root {
     --main-offset: 0px;
+    --space-8: 1.5rem; /* Reducir espacios grandes en mobile */
   }
+
+  h1 { font-size: var(--text-2xl); }
+  h2 { font-size: var(--text-xl); }
+  h3 { font-size: var(--text-lg); }
 
   .page-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+
+  .hidden-mobile {
+    display: none !important;
+  }
+
+  .visible-mobile {
+    display: block !important;
+  }
+
+  .table td, .table th {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+  }
+}
+
+@media (min-width: 769px) {
+  .visible-mobile {
+    display: none !important;
   }
 }
 
