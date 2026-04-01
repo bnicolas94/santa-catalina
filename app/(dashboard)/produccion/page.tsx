@@ -734,7 +734,16 @@ export default function ProduccionPage() {
                                         >
                                             {t === 'Totales' ? '📊 Totales' : t}
                                             {(planning?.shipmentCounts?.[t] ?? 0) > 0 && (
-                                                <span style={{ marginLeft: '4px', backgroundColor: 'rgba(0,0,0,0.1)', padding: '1px 4px', borderRadius: '10px', fontSize: '8px' }}>
+                                                <span style={{ 
+                                                    marginLeft: '6px', 
+                                                    backgroundColor: activeTurno === t ? 'white' : 'var(--color-gray-300)', 
+                                                    color: activeTurno === t ? 'var(--color-primary)' : 'var(--color-gray-700)', 
+                                                    padding: '2px 6px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px',
+                                                    fontWeight: 800,
+                                                    boxShadow: activeTurno === t ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                                }}>
                                                     {planning?.shipmentCounts?.[t]}
                                                 </span>
                                             )}
