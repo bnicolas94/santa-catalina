@@ -303,7 +303,6 @@ export default function ProduccionPage() {
         if (lote.estado !== 'en_produccion') return
         if (!confirm(`¿Deseas pasar el Lote ${lote.id} a CÁMARA automáticamente?\n(Se asumirán 0 rechazos y distribución total a ${lote.producto.nombre})`)) return
 
-        setLoading(true)
         setError('')
         try {
             const presentaciones = lote.producto.presentaciones || []
@@ -342,8 +341,6 @@ export default function ProduccionPage() {
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Error')
-        } finally {
-            setLoading(false)
         }
     }
 
