@@ -696,13 +696,14 @@ export default function ProduccionPage() {
                                         </button>
                                     ))}
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-200)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
                                     {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
                                         <button
                                             key={d}
-                                            className={`btn btn-xs ${filterDestino === d ? 'btn-neutral' : 'btn-ghost'}`}
+                                            className={`btn btn-xs ${filterDestino === d ? 'btn-primary' : 'btn-ghost'}`}
                                             onClick={() => setFilterDestino(d)}
-                                            style={{ fontSize: '10px', padding: '4px 8px', whiteSpace: 'nowrap' }}
+                                            style={{ fontSize: '14px', padding: '6px 10px', whiteSpace: 'nowrap' }}
+                                            title={d === 'TODOS' ? 'Ver todo el stock' : d === 'FABRICA' ? 'Solo Stock Fábrica' : 'Solo Stock Local'}
                                         >
                                             {d === 'TODOS' ? '🌐' : d === 'FABRICA' ? '🏭' : '🏪'}
                                         </button>
