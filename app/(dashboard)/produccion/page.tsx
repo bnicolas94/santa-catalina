@@ -299,6 +299,54 @@ export default function ProduccionPage() {
         setShowCerrarModal(true)
     }
 
+    async function handleQuickCloseLote(lote: any) {
+        if (lote.estado !== 'en_produccion') return
+        if (!confirm(`¿Deseas pasar el Lote ${lote.id} a CÁMARA automáticamente?\n(Se asumirán 0 rechazos y distribución total a ${lote.producto.nombre})`)) return
+
+        setLoading(true)
+        setError('')
+        try {
+            const presentaciones = lote.producto.presentaciones || []
+            const cantProducida = lote.unidadesProducidas || 0
+            
+            // Distribución por defecto: todo a la primera presentación
+            const distribucion = presentaciones.map((pred: any, idx: number) => ({
+                presentacionId: pred.id,
+                cantidad: idx === 0 ? cantProducida : 0
+            }))
+
+            const res = await fetch(`/api/lotes/${lote.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    estado: 'en_camara',
+                    unidadesRechazadas: 0,
+                    motivoRechazo: null,
+                    unidadesProducidas: cantProducida,
+                    empleadosRonda: lote.empleadosRonda,
+                    fechaProduccion: lote.fechaProduccion.slice(0, 10),
+                    coordinadorId: lote.coordinador?.id || '',
+                    ubicacionId: lote.ubicacion?.id || '',
+                    horaFin: new Date().toISOString(),
+                    distribucionPresentaciones: distribucion
+                }),
+            })
+
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al actualizar')
+            }
+            
+            setSuccess('Lote pasado a cámara correctamente')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     async function handleCerrarLote(e: React.FormEvent) {
         e.preventDefault()
         if (!loteSeleccionado) return
@@ -718,7 +766,6 @@ export default function ProduccionPage() {
                                     <tr>
                                         <th>Producto</th>
                                         <th style={{ textAlign: 'center' }} className="hidden-mobile">H. Ruta</th>
-                                        {!showDiscountedUI && <th style={{ textAlign: 'center' }}>Carga</th>}
                                         <th style={{ textAlign: 'center' }}>Total</th>
                                         {!showDiscountedUI && (
                                             <>
@@ -776,7 +823,7 @@ export default function ProduccionPage() {
                                         })
 
                                         if (items.length === 0) return (
-                                            <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
+                                            <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
                                         )
 
                                         return (
@@ -846,7 +893,6 @@ export default function ProduccionPage() {
                                                                 <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                             </td>
                                                             <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{ruta > 0 ? `${rutaPaq} paq` : '—'}</td>
-                                                            <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-primary)' }}>{manual > 0 ? `${manualPaq} paq` : '—'}</td>
                                                             <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
                                                             <td style={{ textAlign: 'center', color: stockValue < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                                 {stockPaq} paq
@@ -899,7 +945,7 @@ export default function ProduccionPage() {
 
                                         if (items.length === 0) return (
                                             <tr>
-                                                <td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
                                                     No hay requerimientos para el turno {activeTurno}
                                                 </td>
                                             </tr>
@@ -984,18 +1030,6 @@ export default function ProduccionPage() {
                                                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>{prodInfo?.codigoInterno}</div>
                                                     </td>
                                                     <td style={{ textAlign: 'center', fontSize: '11px', color: 'var(--color-gray-500)' }}>{rutaUnits > 0 ? `${rutaPaq} paq` : '—'}</td>
-                                                    {!showDiscountedUI && (
-                                                        <td style={{ textAlign: 'center' }}>
-                                                            <input
-                                                                type="number"
-                                                                className="form-input"
-                                                                style={{ width: '60px', height: '28px', textAlign: 'center', fontSize: '12px', padding: '0' }}
-                                                                defaultValue={manualUnits > 0 ? manualPaq : ''}
-                                                                placeholder="0"
-                                                                onBlur={(e) => handleSaveManual(pid, presid, e.target.value, activeTurno)}
-                                                            />
-                                                        </td>
-                                                    )}
                                                     <td style={{ textAlign: 'center', fontWeight: 700 }}>{totalPaq} paq</td>
                                                     {!showDiscountedUI && (
                                                         <>
@@ -1046,7 +1080,7 @@ export default function ProduccionPage() {
                                     {/* Fila agregar producto extra / Descontar — solo en turnos normales y solo si NO es vista LOCAL */}
                                     {activeTurno !== 'Totales' && filterDestino !== 'LOCAL' && (
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                            <td colSpan={isDiscounted ? 2 : 3}>
+                                            <td colSpan={isDiscounted ? 2 : 2}>
                                                 {!isDiscounted ? (
                                                     <select
                                                         className="form-select"
@@ -1370,7 +1404,33 @@ export default function ProduccionPage() {
                                                                 <td><span style={{ fontSize: '10px', fontWeight: 600 }}>{lote.ubicacion?.nombre || '—'}</span></td>
                                                                 <td style={{ fontSize: 'var(--text-xs)' }}>{lote.coordinador?.nombre || '—'}</td>
                                                                 <td>
-                                                                    <span className="badge" style={{ backgroundColor: `${est.color}15`, color: est.color, border: `1px solid ${est.color}30`, fontSize: '10px', padding: '2px 6px' }}>
+                                                                    <span 
+                                                                        className="badge" 
+                                                                        style={{ 
+                                                                            backgroundColor: `${est.color}15`, 
+                                                                            color: est.color, 
+                                                                            border: `1px solid ${est.color}30`, 
+                                                                            fontSize: '10px', 
+                                                                            padding: '2px 6px',
+                                                                            cursor: lote.estado === 'en_produccion' ? 'pointer' : 'default',
+                                                                            fontWeight: lote.estado === 'en_produccion' ? 700 : 400,
+                                                                            transition: 'all 0.2s'
+                                                                        }}
+                                                                        onClick={() => lote.estado === 'en_produccion' && handleQuickCloseLote(lote)}
+                                                                        title={lote.estado === 'en_produccion' ? 'Clic para pasar a CÁMARA automáticamente' : ''}
+                                                                        onMouseEnter={(e) => {
+                                                                            if (lote.estado === 'en_produccion') {
+                                                                                e.currentTarget.style.backgroundColor = `${est.color}30`
+                                                                                e.currentTarget.style.transform = 'scale(1.05)'
+                                                                            }
+                                                                        }}
+                                                                        onMouseLeave={(e) => {
+                                                                            if (lote.estado === 'en_produccion') {
+                                                                                e.currentTarget.style.backgroundColor = `${est.color}15`
+                                                                                e.currentTarget.style.transform = 'scale(1)'
+                                                                            }
+                                                                        }}
+                                                                    >
                                                                         {est.emoji} {est.label}
                                                                     </span>
                                                                 </td>
