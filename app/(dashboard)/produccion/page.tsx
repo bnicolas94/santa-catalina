@@ -711,36 +711,36 @@ export default function ProduccionPage() {
                             }}>
                                 <button
                                     className="btn btn-xs btn-ghost"
-                                    style={{ fontSize: '10px', padding: '4px 10px', border: '1px dashed var(--color-gray-300)', whiteSpace: 'nowrap' }}
+                                    style={{ fontSize: '12px', padding: '6px 12px', border: '1px dashed var(--color-gray-300)', whiteSpace: 'nowrap' }}
                                     onClick={() => { setImportStep('upload'); setImportHeaders([]); setImportRawRows([]); setShowImportModal(true) }}
                                 >
                                     📥 Importar
                                 </button>
                                 <button
                                     className="btn btn-xs btn-ghost"
-                                    style={{ fontSize: '10px', padding: '4px 10px', color: 'var(--color-error)', border: '1px solid transparent', whiteSpace: 'nowrap' }}
+                                    style={{ fontSize: '12px', padding: '6px 12px', color: 'var(--color-error)', border: '1px solid transparent', whiteSpace: 'nowrap' }}
                                     onClick={handleClearPlan}
                                     title="Limpiar"
                                 >
                                     🗑️ Limpiar
                                 </button>
-                                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-md)' }}>
+                                <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--color-gray-100)', padding: '6px', borderRadius: 'var(--radius-md)' }}>
                                     {['Mañana', 'Siesta', 'Tarde', 'Totales'].map(t => (
                                         <button
                                             key={t}
                                             className={`btn btn-xs ${activeTurno === t ? (t === 'Totales' ? 'btn-success' : 'btn-primary') : 'btn-ghost'}`}
                                             onClick={() => setActiveTurno(t)}
-                                            style={{ fontSize: '10px', padding: '4px 10px', whiteSpace: 'nowrap', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
+                                            style={{ fontSize: '13px', padding: '6px 14px', whiteSpace: 'nowrap', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
                                         >
                                             {t === 'Totales' ? '📊 Totales' : t}
                                             {(planning?.shipmentCounts?.[t] ?? 0) > 0 && (
                                                 <span style={{ 
-                                                    marginLeft: '6px', 
+                                                    marginLeft: '8px', 
                                                     backgroundColor: activeTurno === t ? 'white' : 'var(--color-gray-300)', 
                                                     color: activeTurno === t ? 'var(--color-primary)' : 'var(--color-gray-700)', 
-                                                    padding: '2px 6px', 
+                                                    padding: '2px 8px', 
                                                     borderRadius: '12px', 
-                                                    fontSize: '10px',
+                                                    fontSize: '12px',
                                                     fontWeight: 800,
                                                     boxShadow: activeTurno === t ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                                 }}>
@@ -750,13 +750,13 @@ export default function ProduccionPage() {
                                         </button>
                                     ))}
                                 </div>
-                                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-gray-200)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
+                                <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--color-gray-200)', padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
                                     {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
                                         <button
                                             key={d}
                                             className={`btn btn-xs ${filterDestino === d ? 'btn-primary' : 'btn-ghost'}`}
                                             onClick={() => setFilterDestino(d)}
-                                            style={{ fontSize: '14px', padding: '6px 10px', whiteSpace: 'nowrap' }}
+                                            style={{ fontSize: '16px', padding: '8px 12px', whiteSpace: 'nowrap' }}
                                             title={d === 'TODOS' ? 'Ver todo el stock' : d === 'FABRICA' ? 'Solo Stock Fábrica' : 'Solo Stock Local'}
                                         >
                                             {d === 'TODOS' ? '🌐' : d === 'FABRICA' ? '🏭' : '🏪'}
