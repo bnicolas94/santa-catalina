@@ -41,6 +41,7 @@ interface RoutePlanSinCoords {
 }
 interface RoutePlan {
     choferId: string; choferNombre: string
+    vehiculoId?: string; // New field
     pedidos: RoutePlanPedido[]
     totalDistance?: number; totalDuration?: number
     sinCoordenadas: RoutePlanSinCoords[]
@@ -63,6 +64,7 @@ export default function PlanificacionRutasPage() {
     const [expandedRutas, setExpandedRutas] = useState<Record<string, boolean>>({})
 
     const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
+    const [vehiculos, setVehiculos] = useState<any[]>([])
     const [stockActual, setStockActual] = useState<StockInfo>({})
 
     // Form state
@@ -94,6 +96,11 @@ export default function PlanificacionRutasPage() {
             const rutaData = await rutaRes.json()
             const ubiData = await ubiRes.json()
             const planData = await planRes.json()
+            
+            // Fetch vehicles
+            const vehRes = await fetch('/api/flota/vehiculos')
+            const vehData = await vehRes.json()
+            setVehiculos(Array.isArray(vehData) ? vehData.filter((v: any) => v.activo) : [])
 
             // Solo pedidos confirmados
             const disponibles = Array.isArray(pedData)
@@ -625,14 +632,31 @@ export default function PlanificacionRutasPage() {
 
                                             return (
                                             <div key={idx} style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-                                                <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-50)', borderBottom: '1px solid var(--color-primary-200)' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-50)', borderBottom: '1px solid ' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
                                                         <div style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--color-primary)' }}>🚛 {plan.choferNombre}</div>
-                                                        <a href={mapsUrl} target="_blank" rel="noreferrer"
-                                                            style={{ fontSize: 'var(--text-xs)', backgroundColor: '#4285F4', color: 'white', padding: '4px 10px',
-                                                                borderRadius: 'var(--radius-sm)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            🗺️ Ver ruta
-                                                        </a>
+                                                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                            <select 
+                                                                className="form-select" 
+                                                                style={{ padding: '2px 8px', fontSize: '11px', height: '28px' }}
+                                                                value={plan.vehiculoId || ''}
+                                                                onChange={(e) => {
+                                                                    const updated = [...routePreview!]
+                                                                    updated[idx].vehiculoId = e.target.value
+                                                                    setRoutePreview(updated)
+                                                                }}
+                                                            >
+                                                                <option value="">Seleccionar Vehículo...</option>
+                                                                {vehiculos.map(v => (
+                                                                    <option key={v.id} value={v.id}>{v.patente} ({v.marca})</option>
+                                                                ))}
+                                                            </select>
+                                                            <a href={mapsUrl} target="_blank" rel="noreferrer"
+                                                                style={{ fontSize: 'var(--text-xs)', backgroundColor: '#4285F4', color: 'white', padding: '4px 10px',
+                                                                    borderRadius: 'var(--radius-sm)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                🗺️ Ver
+                                                            </a>
+                                                        </div>
                                                     </div>
                                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', display: 'flex', gap: 'var(--space-3)', marginTop: '4px' }}>
                                                         <span>📦 {plan.pedidos.length + plan.sinCoordenadas.length} paradas</span>

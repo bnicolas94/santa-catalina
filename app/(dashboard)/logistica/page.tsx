@@ -36,6 +36,23 @@ export default async function LogisticaPage() {
                         </Link>
                     </div>
                 )}
+
+                {(rol === 'ADMIN' || rol === 'ADMIN_OPS') && (
+                    <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)' }}>Gestión de Flota</h2>
+                        <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', flex: 1 }}>
+                            Controlá los vehículos, mantenimientos y asigná qué auto usa cada chofer cada día.
+                        </p>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <Link href="/logistica/flota/asignacion" className="btn btn-primary" style={{ flex: 1, textAlign: 'center' }}>
+                                Asignación Diaria
+                            </Link>
+                            <Link href="/logistica/flota" className="btn btn-outline" style={{ flex: 1, textAlign: 'center' }}>
+                                Dashboard Flota
+                            </Link>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

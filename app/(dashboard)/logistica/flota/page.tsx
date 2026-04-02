@@ -26,9 +26,12 @@ export default function FlotaDashboard() {
     <div className="page-content">
       <div className="page-header">
         <h1 className="page-title">Dashboard de Flota</h1>
-        <div className="page-actions">
-          <Link href="/flota/vehiculos" className="btn btn-primary">
-            Ver Vehículos
+        <div className="page-actions" style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <Link href="/logistica/flota/asignacion" className="btn btn-outline">
+            📅 Asignación Diaria
+          </Link>
+          <Link href="/logistica/flota/vehiculos" className="btn btn-primary">
+            🚚 Ver Vehículos
           </Link>
         </div>
       </div>
@@ -85,7 +88,7 @@ export default function FlotaDashboard() {
                         </span>
                       </td>
                       <td>
-                        <Link href={`/flota/vehiculos/${a.vehiculo?.id}`} className="btn btn-ghost btn-sm">
+                        <Link href={`/logistica/flota/vehiculos/${a.vehiculo?.id}`} className="btn btn-ghost btn-sm">
                           Ver Detalle
                         </Link>
                       </td>

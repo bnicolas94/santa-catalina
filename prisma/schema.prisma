@@ -43,6 +43,8 @@ model Empleado {
   rendiciones         RendicionChofer[]   @relation("RendicionesChofer")
   rutasChofer         Ruta[]              @relation("ChoferRuta")
   asignaciones        AsignacionOperario[]
+  asignacionesVehiculo AsignacionVehiculo[] @relation("AsignacionesVehiculo")
+  preferenciasReporte Json?               @map("preferencias_reporte")
 
   @@map("empleados")
 
@@ -360,9 +362,11 @@ model Ruta {
   updatedAt        DateTime  @updatedAt
   choferId          String    @map("id_empleado_chofer")
   ubicacionOrigenId String?   @map("id_ubicacion_origen")
+  vehiculoId        String?   @map("id_vehiculo")
   entregas          Entrega[]
   chofer            Empleado  @relation("ChoferRuta", fields: [choferId], references: [id])
   ubicacionOrigen   Ubicacion? @relation("OrigenRuta", fields: [ubicacionOrigenId], references: [id])
+  vehiculo          Vehiculo?  @relation("RutaVehiculo", fields: [vehiculoId], references: [id])
   movimientos       MovimientoProducto[]
 
   @@map("rutas")
@@ -394,9 +398,19 @@ model CategoriaGasto {
   nombre      String           @unique
   descripcion String?
   color       String?
+  esOperativo Boolean          @default(true) @map("es_operativo")
   gastos      GastoOperativo[]
 
   @@map("categorias_gasto")
+}
+
+model ConfiguracionGlobal {
+  id        String   @id @default(uuid())
+  clave     String   @unique
+  valor     String
+  updatedAt DateTime @updatedAt
+
+  @@map("configuracion_global")
 }
 
 model GastoOperativo {
@@ -617,8 +631,30 @@ model Vehiculo {
   kilometrajes    KilometrajeVehiculo[]
   vencimientos    VencimientoVehiculo[]
   mantenimientos  MantenimientoVehiculo[]
+  asignaciones    AsignacionVehiculo[]  @relation("AsignacionesVehiculo")
+  rutas           Ruta[]                @relation("RutaVehiculo")
 
   @@map("vehiculos")
+}
+
+model AsignacionVehiculo {
+  id            String   @id @default(uuid())
+  fecha         DateTime
+  turno         String   // Mañana, Siesta, Tarde
+  empleadoId    String   @map("id_empleado")
+  vehiculoId    String   @map("id_vehiculo")
+  kmInicio      Int?     @map("km_inicio")
+  kmFin         Int?     @map("km_fin")
+  novedades     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  empleado      Empleado @relation("AsignacionesVehiculo", fields: [empleadoId], references: [id])
+  vehiculo      Vehiculo @relation("AsignacionesVehiculo", fields: [vehiculoId], references: [id])
+
+  @@unique([fecha, turno, empleadoId])
+  @@unique([fecha, turno, vehiculoId])
+  @@map("asignaciones_vehiculo")
 }
 
 model KilometrajeVehiculo {

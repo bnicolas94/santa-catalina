@@ -81,7 +81,7 @@ export default function VehiculosPage() {
       <div className="page-header">
         <h1 className="page-title">Gestión de Vehículos</h1>
         <div className="page-actions">
-          <Link href="/flota" className="btn btn-ghost">← Volver al Dashboard</Link>
+          <Link href="/logistica/flota" className="btn btn-ghost">← Volver al Dashboard</Link>
           <button 
             className="btn btn-primary"
             onClick={() => { setEditVehiculo(null); setShowDialog(true); }}
@@ -143,7 +143,7 @@ export default function VehiculosPage() {
                     </div>
                   </td>
                   <td>
-                    <Link href={`/flota/vehiculos/${v.id}`} className="btn btn-ghost btn-sm">
+                    <Link href={`/logistica/flota/vehiculos/${v.id}`} className="btn btn-ghost btn-sm">
                       Ver Ficha
                     </Link>
                     <button 

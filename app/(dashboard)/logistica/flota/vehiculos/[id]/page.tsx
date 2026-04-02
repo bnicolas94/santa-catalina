@@ -122,7 +122,7 @@ export default function VehiculoDetallePage() {
   }
 
   if (loading) return <div className="page-content"><p>Cargando ficha del vehículo...</p></div>
-  if (!vehiculo) return <div className="page-content"><p>Vehículo no encontrado.</p><Link href="/flota/vehiculos">Volver</Link></div>
+  if (!vehiculo) return <div className="page-content"><p>Vehículo no encontrado.</p><Link href="/logistica/flota/vehiculos">Volver</Link></div>
 
   return (
     <div className="page-content">

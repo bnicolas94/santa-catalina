@@ -1,27 +1,78 @@
 import { prisma } from '@/lib/prisma'
 import { unstable_cache } from 'next/cache'
 
-export const getReportesMetadata = async () => {
-    const ubicaciones = await prisma.ubicacion.findMany({
-        where: { activo: true },
-        select: { id: true, nombre: true, tipo: true }
-    })
+/**
+ * SERVICIOS DE CONFIGURACIÓN Y METADATA
+ */
 
-    const firstPedido = await prisma.pedido.findFirst({ orderBy: { fechaEntrega: 'asc' }, select: { fechaEntrega: true } })
-    const firstLote = await prisma.lote.findFirst({ orderBy: { fechaProduccion: 'asc' }, select: { fechaProduccion: true } })
-    
-    const startYear = Math.min(
-        firstPedido?.fechaEntrega.getFullYear() || 2024,
-        firstLote?.fechaProduccion.getFullYear() || 2024
-    )
+export const getReportesMetadata = async () => {
+    const [ubicaciones, categorias] = await Promise.all([
+        prisma.ubicacion.findMany({ 
+            where: { activo: true },
+            select: { id: true, nombre: true, tipo: true } 
+        }),
+        prisma.categoriaGasto.findMany({ 
+            select: { id: true, nombre: true, esOperativo: true } 
+        } as any)
+    ])
+
+    const startYear = 2024
     const currentYear = new Date().getFullYear()
     const years = []
-    for (let y = startYear; y <= currentYear; y++) {
-        years.push(String(y))
-    }
+    for (let y = startYear; y <= currentYear; y++) years.push(y.toString())
 
-    return { ubicaciones, years }
+    return { ubicaciones, years, categoriasGasto: categorias }
 }
+
+export const getGlobalConfig = async (clave: string, defaultValue: any) => {
+    try {
+        const config = await (prisma as any).configuracionGlobal.findUnique({ where: { clave } })
+        if (!config) return defaultValue
+        return JSON.parse(config.valor)
+    } catch (e) {
+        return defaultValue
+    }
+}
+
+export const updateGlobalConfig = async (clave: string, valor: any) => {
+    const valorStr = typeof valor === 'string' ? valor : JSON.stringify(valor)
+    return await (prisma as any).configuracionGlobal.upsert({
+        where: { clave },
+        update: { valor: valorStr },
+        create: { clave, valor: valorStr, descripcion: `Configuración de ${clave}` }
+    })
+}
+
+export const getUserReportPrefs = async (userId: string) => {
+    const user = await prisma.empleado.findUnique({
+        where: { id: userId },
+        select: { preferenciasReporte: true }
+    } as any)
+    return (user?.preferenciasReporte as any) || {
+        showIngresos: true,
+        showGastos: true,
+        showMargen: true,
+        showProduccion: true
+    }
+}
+
+export const updateUserReportPrefs = async (userId: string, prefs: any) => {
+    return await prisma.empleado.update({
+        where: { id: userId },
+        data: { preferenciasReporte: prefs }
+    } as any)
+}
+
+export const updateCategoriaOperativa = async (id: string, esOperativo: boolean) => {
+    return await prisma.categoriaGasto.update({
+        where: { id },
+        data: { esOperativo }
+    } as any)
+}
+
+/**
+ * SERVICIOS DE REPORTES
+ */
 
 export const getRentabilidadReport = unstable_cache(
     async (mes: number, anio: number, ubicacionId?: string) => {
@@ -57,8 +108,8 @@ export const getRentabilidadReport = unstable_cache(
         for (const ped of pedidos) {
             ingresosTotales += ped.totalImporte
             for (const det of ped.detalles) {
-                if (det.costoUnitarioHistorico !== null && det.costoUnitarioHistorico !== undefined) {
-                    costoMercaderiaVendida += det.costoUnitarioHistorico * det.cantidad
+                if ((det as any).costoUnitarioHistorico !== null && (det as any).costoUnitarioHistorico !== undefined) {
+                    costoMercaderiaVendida += (det as any).costoUnitarioHistorico * det.cantidad
                 } else {
                     let costoPorSandwich = 0
                     for (const ft of det.presentacion.producto.fichasTecnicas) {
@@ -79,16 +130,16 @@ export const getRentabilidadReport = unstable_cache(
             include: { categoria: true }
         })
 
-        const totalGastos = gastos
-            .filter((g) => g.categoria.nombre !== 'Proveedores')
-            .reduce((acc: number, g: { monto: number }) => acc + g.monto, 0)
+        const totalGastos = (gastos as any[])
+            .filter((g) => g.categoria.esOperativo)
+            .reduce((acc: number, g: any) => acc + g.monto, 0)
 
         const rentabilidadNeta = margenBruto - totalGastos
-
         const gastosPorCategoria: Record<string, number> = {}
-        for (const g of gastos) {
+
+        for (const g of gastos as any[]) {
             const catName = g.categoria.nombre
-            if (catName !== 'Proveedores') {
+            if (g.categoria.esOperativo) {
                 gastosPorCategoria[catName] = (gastosPorCategoria[catName] || 0) + g.monto
             }
         }
@@ -136,10 +187,13 @@ export const getProduccionReport = unstable_cache(
 
         const porProducto: Record<string, any> = {}
 
+        const planchasPorPaqDefault = await getGlobalConfig('PLANCHAS_POR_PAQUETE_DEFAULT', 6)
+        const sanguchitosPorPlancha = await getGlobalConfig('SANGUCHITOS_POR_PLANCHA', 8)
+
         for (const lote of lotes) {
-            const planchasPorPaq = lote.producto.planchasPorPaquete || 6
+            const planchasPorPaq = lote.producto.planchasPorPaquete || planchasPorPaqDefault
             const planchas = lote.unidadesProducidas * planchasPorPaq
-            const sanguchitos = planchas * 8
+            const sanguchitos = planchas * sanguchitosPorPlancha
 
             statsGlobales.totalPaquetes += lote.unidadesProducidas
             statsGlobales.totalPlanchas += planchas

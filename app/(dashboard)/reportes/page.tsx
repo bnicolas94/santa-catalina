@@ -10,7 +10,9 @@ import ProduccionReport from './ProduccionReport'
 import KpiCard from './components/KpiCard'
 import PeriodoSelector from './components/PeriodoSelector'
 import DrillDownModal from './components/DrillDownModal'
+import ReportSettingsModal from './components/ReportSettingsModal'
 import { exportReportToExcel } from './utils/exportUtils'
+import { useSession } from 'next-auth/react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
@@ -54,15 +56,33 @@ interface ProduccionData {
 interface Metadata {
     ubicaciones: { id: string, nombre: string, tipo: string }[]
     years: string[]
+    categoriasGasto: { id: string, nombre: string, esOperativo: boolean }[]
 }
 
 export default function ReportesPage() {
+    const { data: session } = useSession()
+    const isAdmin = (session?.user as any)?.rol === 'ADMIN'
+
     const [activeTab, setActiveTab] = useState<'economico' | 'produccion'>('economico')
     const [rentabilidadData, setRentabilidadData] = useState<RentabilidadData | null>(null)
     const [produccionData, setProduccionData] = useState<ProduccionData | null>(null)
-    const [metadata, setMetadata] = useState<Metadata>({ ubicaciones: [], years: [] })
+    const [metadata, setMetadata] = useState<Metadata>({ ubicaciones: [], years: [], categoriasGasto: [] })
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+
+    const [userPrefs, setUserPrefs] = useState({
+        showIngresos: true,
+        showGastos: true,
+        showMargen: true,
+        showProduccion: true
+    })
+
+    const [globalConfig, setGlobalConfig] = useState({
+        sanguchitosPorPlancha: 8,
+        planchasPorPaqueteDefault: 6
+    })
+
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
     const [mes, setMes] = useState(String(new Date().getMonth() + 1))
     const [anio, setAnio] = useState(String(new Date().getFullYear()))
@@ -76,6 +96,8 @@ export default function ReportesPage() {
 
     useEffect(() => {
         fetchMetadata()
+        fetchPrefs()
+        fetchConfig()
     }, [])
 
     useEffect(() => {
@@ -93,6 +115,65 @@ export default function ReportesPage() {
         } catch (err) {
             console.error('Error fetching metadata:', err)
         }
+    }
+
+    async function fetchPrefs() {
+        try {
+            const res = await fetch('/api/reportes/preferencias')
+            if (res.ok) {
+                const json = await res.json()
+                setUserPrefs(json)
+            }
+        } catch (err) {
+            console.error('Error fetching prefs:', err)
+        }
+    }
+
+    async function fetchConfig() {
+        try {
+            const [s, p] = await Promise.all([
+                fetch('/api/reportes/config?clave=SANGUCHITOS_POR_PLANCHA').then(r => r.json()),
+                fetch('/api/reportes/config?clave=PLANCHAS_POR_PAQUETE_DEFAULT').then(r => r.json())
+            ])
+            setGlobalConfig({
+                sanguchitosPorPlancha: s.valor || 8,
+                planchasPorPaqueteDefault: p.valor || 6
+            })
+        } catch (err) {
+            console.error('Error fetching config:', err)
+        }
+    }
+
+    async function handleUpdatePrefs(newPrefs: any) {
+        setUserPrefs(newPrefs)
+        await fetch('/api/reportes/preferencias', {
+            method: 'POST',
+            body: JSON.stringify({ preferencias: newPrefs })
+        })
+    }
+
+    async function handleUpdateCategory(id: string, esOperativo: boolean) {
+        setMetadata(prev => ({
+            ...prev,
+            categoriasGasto: prev.categoriasGasto.map(c => c.id === id ? { ...c, esOperativo } : c)
+        }))
+        await fetch('/api/reportes/categorias', {
+            method: 'POST',
+            body: JSON.stringify({ id, esOperativo })
+        })
+        fetchData() // Refrescar datos ya que cambia el cálculo
+    }
+
+    async function handleUpdateGlobalConfig(clave: string, valor: any) {
+        setGlobalConfig(prev => ({
+            ...prev,
+            [clave === 'SANGUCHITOS_POR_PLANCHA' ? 'sanguchitosPorPlancha' : 'planchasPorPaqueteDefault']: valor
+        }))
+        await fetch('/api/reportes/config', {
+            method: 'POST',
+            body: JSON.stringify({ clave, valor })
+        })
+        fetchData()
     }
 
     async function fetchData(refresh = false) {
@@ -172,6 +253,16 @@ export default function ReportesPage() {
                 onRefresh={() => fetchData(true)} onExport={handleExport}
             />
 
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
+                <button 
+                    className="btn btn-outline" 
+                    onClick={() => setIsSettingsOpen(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
+                >
+                    <span>⚙️</span> Configurar Variables
+                </button>
+            </div>
+
             {error ? (
                 <div className="empty-state"><p style={{ color: 'var(--color-danger)' }}>{error}</p></div>
             ) : loading && !rentabilidadData && !produccionData ? (
@@ -181,14 +272,22 @@ export default function ReportesPage() {
                     {activeTab === 'economico' && rentabilidadData && (
                         <div className="fade-in">
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                                <div onClick={() => setDrillDown({ tipo: 'pedidos', label: 'Ingresos Brutos' })} style={{ cursor: 'pointer' }}>
-                                    <KpiCard label="Ingresos Brutos" value={`$${rentabilidadData.ingresosTotales.toLocaleString('es-AR')}`} color="var(--color-primary)" />
-                                </div>
-                                <KpiCard label="Margen Contribución" value={`$${rentabilidadData.margenBruto.toLocaleString('es-AR')}`} color="var(--color-secondary)" />
-                                <div onClick={() => setDrillDown({ tipo: 'gastos', label: 'Gastos Operativos' })} style={{ cursor: 'pointer' }}>
-                                    <KpiCard label="Gastos Operativos" value={`$${rentabilidadData.totalGastos.toLocaleString('es-AR')}`} color="var(--color-danger)" />
-                                </div>
-                                <KpiCard label="Margen EBITDA" value={`${rentabilidadData.margenEbitda.toFixed(2)}%`} color={rentabilidadData.margenEbitda >= 15 ? 'var(--color-success)' : 'var(--color-warning)'} />
+                                {userPrefs.showIngresos && (
+                                    <div onClick={() => setDrillDown({ tipo: 'pedidos', label: 'Ingresos Brutos' })} style={{ cursor: 'pointer' }}>
+                                        <KpiCard label="Ingresos Brutos" value={`$${rentabilidadData.ingresosTotales.toLocaleString('es-AR')}`} color="var(--color-primary)" />
+                                    </div>
+                                )}
+                                {userPrefs.showMargen && (
+                                    <KpiCard label="Margen Contribución" value={`$${rentabilidadData.margenBruto.toLocaleString('es-AR')}`} color="var(--color-secondary)" />
+                                )}
+                                {userPrefs.showGastos && (
+                                    <div onClick={() => setDrillDown({ tipo: 'gastos', label: 'Gastos Operativos' })} style={{ cursor: 'pointer' }}>
+                                        <KpiCard label="Gastos Operativos" value={`$${rentabilidadData.totalGastos.toLocaleString('es-AR')}`} color="var(--color-danger)" />
+                                    </div>
+                                )}
+                                {userPrefs.showMargen && (
+                                    <KpiCard label="Margen EBITDA" value={`${rentabilidadData.margenEbitda.toFixed(2)}%`} color={rentabilidadData.margenEbitda >= 15 ? 'var(--color-success)' : 'var(--color-warning)'} />
+                                )}
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
@@ -208,13 +307,30 @@ export default function ReportesPage() {
                         </div>
                     )}
 
-                    {activeTab === 'produccion' && (
+                    {activeTab === 'produccion' && userPrefs.showProduccion && (
                         <div onClick={() => setDrillDown({ tipo: 'lotes', label: 'Detalle de Lotes' })} style={{ cursor: 'pointer' }}>
                             <ProduccionReport data={produccionData} loading={loading && !produccionData} />
                         </div>
                     )}
+                    {activeTab === 'produccion' && !userPrefs.showProduccion && (
+                        <div className="empty-state">
+                            <p>El reporte de producción está oculto según tus preferencias.</p>
+                        </div>
+                    )}
                 </>
             )}
+
+            <ReportSettingsModal 
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                userPrefs={userPrefs}
+                onUpdatePrefs={handleUpdatePrefs}
+                isAdmin={isAdmin}
+                categories={metadata.categoriasGasto}
+                onUpdateCategory={handleUpdateCategory}
+                globalConfig={globalConfig}
+                onUpdateGlobalConfig={handleUpdateGlobalConfig}
+            />
 
             {drillDown && (
                 <DrillDownModal 
