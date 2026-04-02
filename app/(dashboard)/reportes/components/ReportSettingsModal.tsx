@@ -40,7 +40,7 @@ export default function ReportSettingsModal({
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', backgroundColor: 'var(--color-white)' }}>
                 <div className="modal-header">
                     <h2>Configuración de Reportes (BI)</h2>
                     <button className="btn-close" onClick={onClose}>&times;</button>
