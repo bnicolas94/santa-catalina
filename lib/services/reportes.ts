@@ -1,0 +1,263 @@
+import { prisma } from '@/lib/prisma'
+import { unstable_cache } from 'next/cache'
+
+export const getReportesMetadata = async () => {
+    const ubicaciones = await prisma.ubicacion.findMany({
+        where: { activo: true },
+        select: { id: true, nombre: true, tipo: true }
+    })
+
+    const firstPedido = await prisma.pedido.findFirst({ orderBy: { fechaEntrega: 'asc' }, select: { fechaEntrega: true } })
+    const firstLote = await prisma.lote.findFirst({ orderBy: { fechaProduccion: 'asc' }, select: { fechaProduccion: true } })
+    
+    const startYear = Math.min(
+        firstPedido?.fechaEntrega.getFullYear() || 2024,
+        firstLote?.fechaProduccion.getFullYear() || 2024
+    )
+    const currentYear = new Date().getFullYear()
+    const years = []
+    for (let y = startYear; y <= currentYear; y++) {
+        years.push(String(y))
+    }
+
+    return { ubicaciones, years }
+}
+
+export const getRentabilidadReport = unstable_cache(
+    async (mes: number, anio: number, ubicacionId?: string) => {
+        const startOfMonth = new Date(anio, mes - 1, 1)
+        const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+
+        const wherePedido: any = {
+            estado: 'entregado',
+            fechaEntrega: { gte: startOfMonth, lte: endOfMonth }
+        }
+        if (ubicacionId) wherePedido.ubicacionId = ubicacionId
+
+        const pedidos = await prisma.pedido.findMany({
+            where: wherePedido,
+            include: {
+                detalles: {
+                    include: {
+                        presentacion: {
+                            include: {
+                                producto: {
+                                    include: { fichasTecnicas: { include: { insumo: true } } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        let ingresosTotales = 0
+        let costoMercaderiaVendida = 0
+
+        for (const ped of pedidos) {
+            ingresosTotales += ped.totalImporte
+            for (const det of ped.detalles) {
+                if (det.costoUnitarioHistorico !== null && det.costoUnitarioHistorico !== undefined) {
+                    costoMercaderiaVendida += det.costoUnitarioHistorico * det.cantidad
+                } else {
+                    let costoPorSandwich = 0
+                    for (const ft of det.presentacion.producto.fichasTecnicas) {
+                        costoPorSandwich += ft.cantidadPorUnidad * (ft.insumo.precioUnitario || 0)
+                    }
+                    costoMercaderiaVendida += costoPorSandwich * det.presentacion.cantidad * det.cantidad
+                }
+            }
+        }
+
+        const margenBruto = ingresosTotales - costoMercaderiaVendida
+
+        const whereGasto: any = { fecha: { gte: startOfMonth, lte: endOfMonth } }
+        if (ubicacionId) whereGasto.ubicacionId = ubicacionId
+
+        const gastos = await prisma.gastoOperativo.findMany({
+            where: whereGasto,
+            include: { categoria: true }
+        })
+
+        const totalGastos = gastos
+            .filter((g) => g.categoria.nombre !== 'Proveedores')
+            .reduce((acc: number, g: { monto: number }) => acc + g.monto, 0)
+
+        const rentabilidadNeta = margenBruto - totalGastos
+
+        const gastosPorCategoria: Record<string, number> = {}
+        for (const g of gastos) {
+            const catName = g.categoria.nombre
+            if (catName !== 'Proveedores') {
+                gastosPorCategoria[catName] = (gastosPorCategoria[catName] || 0) + g.monto
+            }
+        }
+
+        return {
+            mes,
+            anio,
+            ubicacionId,
+            ingresosTotales,
+            costoMercaderiaVendida,
+            margenBruto,
+            totalGastos,
+            rentabilidadNeta,
+            gastosPorCategoria,
+            margenEbitda: ingresosTotales > 0 ? (rentabilidadNeta / ingresosTotales) * 100 : 0
+        }
+    },
+    ['reporte-rentabilidad'],
+    { revalidate: 3600, tags: ['reportes'] }
+)
+
+export const getProduccionReport = unstable_cache(
+    async (mes: number, anio: number, ubicacionId?: string) => {
+        const startOfMonth = new Date(anio, mes - 1, 1)
+        const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+
+        const whereLote: any = {
+            fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
+            estado: { not: 'en_produccion' }
+        }
+        if (ubicacionId) whereLote.ubicacionId = ubicacionId
+
+        const lotes = await prisma.lote.findMany({
+            where: whereLote,
+            include: { producto: true }
+        })
+
+        let statsGlobales = {
+            totalPaquetes: 0,
+            totalPlanchas: 0,
+            totalSanguchitos: 0,
+            totalRechazados: 0,
+            totalLotes: lotes.length
+        }
+
+        const porProducto: Record<string, any> = {}
+
+        for (const lote of lotes) {
+            const planchasPorPaq = lote.producto.planchasPorPaquete || 6
+            const planchas = lote.unidadesProducidas * planchasPorPaq
+            const sanguchitos = planchas * 8
+
+            statsGlobales.totalPaquetes += lote.unidadesProducidas
+            statsGlobales.totalPlanchas += planchas
+            statsGlobales.totalSanguchitos += sanguchitos
+            statsGlobales.totalRechazados += lote.unidadesRechazadas
+
+            if (!porProducto[lote.producto.id]) {
+                porProducto[lote.producto.id] = {
+                    nombre: lote.producto.nombre,
+                    codigo: lote.producto.codigoInterno,
+                    paquetes: 0,
+                    planchas: 0,
+                    sanguchitos: 0,
+                    rechazados: 0
+                }
+            }
+
+            const p = porProducto[lote.producto.id]
+            p.paquetes += lote.unidadesProducidas
+            p.planchas += planchas
+            p.sanguchitos += sanguchitos
+            p.rechazados += lote.unidadesRechazadas
+        }
+
+        const cuatroSemanasAtras = new Date(endOfMonth)
+        cuatroSemanasAtras.setDate(cuatroSemanasAtras.getDate() - 27)
+        
+        const whereTendencia: any = {
+            fechaProduccion: { gte: cuatroSemanasAtras, lte: endOfMonth },
+            estado: { not: 'en_produccion' }
+        }
+        if (ubicacionId) whereTendencia.ubicacionId = ubicacionId
+
+        const lotesTendencia = await prisma.lote.findMany({
+            where: whereTendencia,
+            select: { fechaProduccion: true, unidadesProducidas: true }
+        })
+
+        const statsSemanales = []
+        for (let i = 3; i >= 0; i--) {
+            const start = new Date(endOfMonth)
+            start.setDate(start.getDate() - (i * 7 + 6))
+            start.setHours(0, 0, 0, 0)
+            const end = new Date(endOfMonth)
+            end.setDate(end.getDate() - (i * 7))
+            end.setHours(23, 59, 59, 999)
+            
+            const totalSemana = lotesTendencia
+                .filter(l => l.fechaProduccion >= start && l.fechaProduccion <= end)
+                .reduce((acc, l) => acc + l.unidadesProducidas, 0)
+            
+            statsSemanales.push({ semana: `Sem -${i}`, paquetes: totalSemana })
+        }
+
+        return {
+            mes,
+            anio,
+            ubicacionId,
+            globales: statsGlobales,
+            desglose: Object.values(porProducto).sort((a, b) => b.paquetes - a.paquetes),
+            tendencia: statsSemanales
+        }
+    },
+    ['reporte-produccion'],
+    { revalidate: 3600, tags: ['reportes'] }
+)
+
+export const getReporteDetalle = async (
+    tipo: 'pedidos' | 'gastos' | 'lotes',
+    mes: number,
+    anio: number,
+    ubicacionId?: string,
+    categoriaId?: string
+) => {
+    const startOfMonth = new Date(anio, mes - 1, 1)
+    const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+
+    if (tipo === 'pedidos') {
+        const where: any = {
+            estado: 'entregado',
+            fechaEntrega: { gte: startOfMonth, lte: endOfMonth }
+        }
+        if (ubicacionId) where.ubicacionId = ubicacionId
+
+        return await prisma.pedido.findMany({
+            where,
+            include: { cliente: true },
+            orderBy: { fechaEntrega: 'desc' }
+        })
+    }
+
+    if (tipo === 'gastos') {
+        const where: any = {
+            fecha: { gte: startOfMonth, lte: endOfMonth }
+        }
+        if (ubicacionId) where.ubicacionId = ubicacionId
+        if (categoriaId) where.categoriaId = categoriaId
+
+        return await prisma.gastoOperativo.findMany({
+            where,
+            include: { categoria: true },
+            orderBy: { fecha: 'desc' }
+        })
+    }
+
+    if (tipo === 'lotes') {
+        const where: any = {
+            fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
+            estado: { not: 'en_produccion' }
+        }
+        if (ubicacionId) where.ubicacionId = ubicacionId
+
+        return await prisma.lote.findMany({
+            where,
+            include: { producto: true },
+            orderBy: { fechaProduccion: 'desc' }
+        })
+    }
+
+    return []
+}

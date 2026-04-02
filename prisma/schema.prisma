@@ -195,6 +195,8 @@ model Ubicacion {
   stocks              StockProducto[]
   asignaciones        AsignacionOperario[]
   rutasOrigen         Ruta[]               @relation("OrigenRuta")
+  pedidos             Pedido[]
+  gastos              GastoOperativo[]
 
   @@map("ubicaciones")
 
@@ -318,10 +320,12 @@ model Pedido {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   clienteId       String           @map("id_cliente")
+  ubicacionId     String?          @map("id_ubicacion")
   detalles        DetallePedido[]
   entregas        Entrega[]
   movimientosCaja MovimientoCaja[]
   cliente         Cliente          @relation(fields: [clienteId], references: [id])
+  ubicacion       Ubicacion?       @relation(fields: [ubicacionId], references: [id])
 
   @@map("pedidos")
 }
@@ -331,6 +335,7 @@ model DetallePedido {
   cantidad       Int
   precioUnitario Float        @map("precio_unitario")
   observaciones  String?
+  costoUnitarioHistorico Float?      @map("costo_unitario_historico")
   pedidoId       String       @map("id_pedido")
   presentacionId String       @map("id_presentacion")
   loteId         String?      @map("id_lote")
@@ -403,7 +408,9 @@ model GastoOperativo {
   categoriaId     String           @map("id_categoria")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+  ubicacionId     String?          @map("id_ubicacion")
   categoria       CategoriaGasto   @relation(fields: [categoriaId], references: [id])
+  ubicacion       Ubicacion?       @relation(fields: [ubicacionId], references: [id])
   movimientosStock MovimientoStock[]
 
   @@map("gastos_operativos")

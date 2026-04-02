@@ -1,6 +1,7 @@
 'use client'
 
 import { Bar } from 'react-chartjs-2'
+import KpiCard from './components/KpiCard'
 
 interface ProduccionData {
     mes: number
@@ -32,7 +33,7 @@ interface Props {
 }
 
 export default function ProduccionReport({ data, loading }: Props) {
-    if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando producción...</p></div>
+    if (loading && !data) return <div className="empty-state"><div className="spinner" /><p>Calculando producción...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles para el periodo seleccionado.</p></div>
 
     const chartData = {
@@ -50,37 +51,33 @@ export default function ProduccionReport({ data, loading }: Props) {
     return (
         <div className="fade-in">
             {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Total Paquetes</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}>
-                        {data.globales.totalPaquetes.toLocaleString('es-AR')}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Total Planchas</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
-                        {data.globales.totalPlanchas.toLocaleString('es-AR')}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Total Sanguchitos</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-success)' }}>
-                        {data.globales.totalSanguchitos.toLocaleString('es-AR')}
-                    </div>
-                </div>
-                <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Merma/Rechazos</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-danger)' }}>
-                        {data.globales.totalRechazados.toLocaleString('es-AR')}
-                    </div>
-                </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                <KpiCard 
+                    label="Total Paquetes" 
+                    value={data.globales.totalPaquetes.toLocaleString('es-AR')} 
+                    color="var(--color-primary)" 
+                />
+                <KpiCard 
+                    label="Total Planchas" 
+                    value={data.globales.totalPlanchas.toLocaleString('es-AR')} 
+                    color="var(--color-secondary)" 
+                />
+                <KpiCard 
+                    label="Total Sanguchitos" 
+                    value={data.globales.totalSanguchitos.toLocaleString('es-AR')} 
+                    color="var(--color-success)" 
+                />
+                <KpiCard 
+                    label="Merma/Rechazos" 
+                    value={data.globales.totalRechazados.toLocaleString('es-AR')} 
+                    color="var(--color-danger)" 
+                />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
                 {/* Tendencia Chart */}
                 <div className="card" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Tendencia de Producción (Últimas 4 Semanas)</h3>
+                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Tendencia de Producción</h3>
                     <div style={{ height: '300px' }}>
                         <Bar
                             data={chartData}

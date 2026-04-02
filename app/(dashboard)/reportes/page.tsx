@@ -2,15 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import {
-    Chart as ChartJS,
-    CategoryScale, LinearScale, BarElement,
+    Chart as ChartJS, CategoryScale, LinearScale, BarElement,
     Title, Tooltip, Legend, ArcElement
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import ProduccionReport from './ProduccionReport'
+import KpiCard from './components/KpiCard'
+import PeriodoSelector from './components/PeriodoSelector'
+import DrillDownModal from './components/DrillDownModal'
+import { exportReportToExcel } from './utils/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
+// --- Interfaces ---
 interface RentabilidadData {
     mes: number
     anio: number
@@ -23,62 +27,124 @@ interface RentabilidadData {
     gastosPorCategoria: Record<string, number>
 }
 
+interface ProduccionData {
+    mes: number
+    anio: number
+    globales: {
+        totalPaquetes: number
+        totalPlanchas: number
+        totalSanguchitos: number
+        totalRechazados: number
+        totalLotes: number
+    }
+    desglose: {
+        nombre: string
+        codigo: string
+        paquetes: number
+        planchas: number
+        sanguchitos: number
+        rechazados: number
+    }[]
+    tendencia: {
+        semana: string
+        paquetes: number
+    }[]
+}
+
+interface Metadata {
+    ubicaciones: { id: string, nombre: string, tipo: string }[]
+    years: string[]
+}
+
 export default function ReportesPage() {
     const [activeTab, setActiveTab] = useState<'economico' | 'produccion'>('economico')
     const [rentabilidadData, setRentabilidadData] = useState<RentabilidadData | null>(null)
-    const [produccionData, setProduccionData] = useState<any | null>(null)
+    const [produccionData, setProduccionData] = useState<ProduccionData | null>(null)
+    const [metadata, setMetadata] = useState<Metadata>({ ubicaciones: [], years: [] })
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    const d = new Date()
-    const [mes, setMes] = useState(String(d.getMonth() + 1))
-    const [anio, setAnio] = useState(String(d.getFullYear()))
+    const [mes, setMes] = useState(String(new Date().getMonth() + 1))
+    const [anio, setAnio] = useState(String(new Date().getFullYear()))
+    const [ubicacionId, setUbicacionId] = useState('')
+
+    const [drillDown, setDrillDown] = useState<{
+        tipo: 'pedidos' | 'gastos' | 'lotes',
+        label: string,
+        categoriaId?: string
+    } | null>(null)
+
+    useEffect(() => {
+        fetchMetadata()
+    }, [])
 
     useEffect(() => {
         fetchData()
-    }, [mes, anio, activeTab])
+    }, [mes, anio, ubicacionId, activeTab])
 
-    async function fetchData() {
-        setLoading(true)
+    async function fetchMetadata() {
         try {
-            if (activeTab === 'economico') {
-                const res = await fetch(`/api/reportes/rentabilidad?mes=${mes}&anio=${anio}`)
-                const json = await res.json()
-                setRentabilidadData(json)
-            } else {
-                const res = await fetch(`/api/reportes/produccion?mes=${mes}&anio=${anio}`)
-                const json = await res.json()
-                setProduccionData(json)
+            const res = await fetch('/api/reportes/metadata')
+            const json = await res.json()
+            setMetadata(json)
+            if (json.years.length > 0 && !json.years.includes(anio)) {
+                setAnio(json.years[json.years.length - 1])
             }
-        } catch {
-            console.error('Error fetching reporte')
+        } catch (err) {
+            console.error('Error fetching metadata:', err)
+        }
+    }
+
+    async function fetchData(refresh = false) {
+        setLoading(true)
+        setError(null)
+        try {
+            const params = new URLSearchParams({
+                mes,
+                anio,
+                ...(ubicacionId && { ubicacionId }),
+                ...(refresh && { refresh: 'true' })
+            })
+            
+            const url = activeTab === 'economico' 
+                ? `/api/reportes/rentabilidad?${params}`
+                : `/api/reportes/produccion?${params}`
+            
+            const res = await fetch(url)
+            if (res.status === 403) {
+                setError('No tienes permisos para ver este reporte.')
+                return
+            }
+            if (!res.ok) throw new Error('Error al obtener datos')
+
+            const json = await res.json()
+            if (activeTab === 'economico') setRentabilidadData(json)
+            else setProduccionData(json)
+        } catch (err) {
+            console.error('Error fetching reporte:', err)
+            setError('Ocurrió un error al cargar el reporte.')
         } finally {
             setLoading(false)
         }
     }
 
-    // --- Economico Report Logic ---
+    const handleExport = () => {
+        const reportData = activeTab === 'economico' ? rentabilidadData : produccionData
+        if (!reportData) return
+        exportReportToExcel(reportData, activeTab, mes, anio)
+    }
+
+    // --- Economico Charts ---
     const barData = rentabilidadData ? {
-        labels: [`Mes ${mes}/${anio}`],
+        labels: [`${mes}/${anio}`],
         datasets: [
-            {
-                label: '1. Facturación (Ventas)',
-                data: [rentabilidadData.ingresosTotales],
-                backgroundColor: '#3498DB',
-            },
-            {
-                label: '2. Costo Mercadería (CMV)',
-                data: [rentabilidadData.costoMercaderiaVendida],
-                backgroundColor: '#F39C12',
-            },
-            {
-                label: '3. Gastos Operativos Totales',
-                data: [rentabilidadData.totalGastos],
-                backgroundColor: '#E74C3C',
-            },
-            {
-                label: '➔ RESULTADO NETO (EBITDA)',
-                data: [rentabilidadData.rentabilidadNeta],
-                backgroundColor: rentabilidadData.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C',
+            { label: 'Facturación', data: [rentabilidadData.ingresosTotales], backgroundColor: '#3498DB' },
+            { label: 'CMV', data: [rentabilidadData.costoMercaderiaVendida], backgroundColor: '#F39C12' },
+            { label: 'Gastos', data: [rentabilidadData.totalGastos], backgroundColor: '#E74C3C' },
+            { 
+                label: 'EBITDA', 
+                data: [rentabilidadData.rentabilidadNeta], 
+                backgroundColor: rentabilidadData.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C' 
             }
         ],
     } : null
@@ -96,107 +162,65 @@ export default function ReportesPage() {
     } : null
 
     return (
-        <div>
-            <div className="page-header" style={{ marginBottom: 'var(--space-4)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                        <h1 style={{ margin: 0 }}>📊 Reportes de Gestión</h1>
-                        <div className="tabs" style={{ display: 'flex', backgroundColor: 'var(--color-gray-100)', padding: '4px', borderRadius: 'var(--radius-lg)', marginLeft: 'var(--space-4)' }}>
-                            <button 
-                                className={`btn btn-sm ${activeTab === 'economico' ? 'btn-primary' : 'btn-ghost'}`}
-                                onClick={() => setActiveTab('economico')}
-                                style={{ borderRadius: 'var(--radius-md)' }}
-                            >
-                                💰 Económico
-                            </button>
-                            <button 
-                                className={`btn btn-sm ${activeTab === 'produccion' ? 'btn-primary' : 'btn-ghost'}`}
-                                onClick={() => setActiveTab('produccion')}
-                                style={{ borderRadius: 'var(--radius-md)' }}
-                            >
-                                🏭 Producción
-                            </button>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <select className="form-select" value={mes} onChange={e => setMes(e.target.value)} style={{ width: 140 }}>
-                            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
-                            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
-                            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
-                            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
-                        </select>
-                        <select className="form-select" value={anio} onChange={e => setAnio(e.target.value)} style={{ width: 90 }}>
-                            <option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
+        <div className="fade-in">
+            <PeriodoSelector 
+                mes={mes} anio={anio} ubicacionId={ubicacionId}
+                activeTab={activeTab} loading={loading}
+                ubicaciones={metadata.ubicaciones} anios={metadata.years}
+                onMesChange={setMes} onAnioChange={setAnio}
+                onUbicacionChange={setUbicacionId} onTabChange={setActiveTab}
+                onRefresh={() => fetchData(true)} onExport={handleExport}
+            />
 
-            {activeTab === 'economico' && rentabilidadData && (
-                <div className="fade-in">
-                    {/* KPIs Económicos */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Ingresos Brutos</div>
-                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-primary)' }}>
-                                ${rentabilidadData.ingresosTotales.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                        </div>
-                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Margen Contribución</div>
-                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
-                                ${rentabilidadData.margenBruto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                        </div>
-                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Rentabilidad Neta</div>
-                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: rentabilidadData.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C' }}>
-                                ${rentabilidadData.rentabilidadNeta.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                        </div>
-                        <div className="card" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Margen EBITDA %</div>
-                            <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)', color: rentabilidadData.margenEbitda >= 15 ? 'var(--color-success)' : rentabilidadData.margenEbitda > 0 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
-                                {rentabilidadData.margenEbitda.toFixed(2)}%
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Charts Row */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-6)' }}>
-                        <div className="card" style={{ padding: 'var(--space-6)' }}>
-                            <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Cascada de Resultados</h3>
-                            <div style={{ height: '300px' }}>
-                                {barData && (
-                                    <Bar
-                                        data={barData}
-                                        options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }}
-                                    />
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="card" style={{ padding: 'var(--space-6)' }}>
-                            <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', textAlign: 'center' }}>Distribución de Gastos</h3>
-                            <div style={{ height: '240px', position: 'relative' }}>
-                                {pieData && (
-                                    <Doughnut
-                                        data={pieData}
-                                        options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }}
-                                    />
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'produccion' && (
-                <ProduccionReport data={produccionData} loading={loading} />
-            )}
-
-            {loading && (activeTab === 'economico' && !rentabilidadData) && (
+            {error ? (
+                <div className="empty-state"><p style={{ color: 'var(--color-danger)' }}>{error}</p></div>
+            ) : loading && !rentabilidadData && !produccionData ? (
                 <div className="empty-state"><div className="spinner" /><p>Generando reporte...</p></div>
+            ) : (
+                <>
+                    {activeTab === 'economico' && rentabilidadData && (
+                        <div className="fade-in">
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                                <div onClick={() => setDrillDown({ tipo: 'pedidos', label: 'Ingresos Brutos' })} style={{ cursor: 'pointer' }}>
+                                    <KpiCard label="Ingresos Brutos" value={`$${rentabilidadData.ingresosTotales.toLocaleString('es-AR')}`} color="var(--color-primary)" />
+                                </div>
+                                <KpiCard label="Margen Contribución" value={`$${rentabilidadData.margenBruto.toLocaleString('es-AR')}`} color="var(--color-secondary)" />
+                                <div onClick={() => setDrillDown({ tipo: 'gastos', label: 'Gastos Operativos' })} style={{ cursor: 'pointer' }}>
+                                    <KpiCard label="Gastos Operativos" value={`$${rentabilidadData.totalGastos.toLocaleString('es-AR')}`} color="var(--color-danger)" />
+                                </div>
+                                <KpiCard label="Margen EBITDA" value={`${rentabilidadData.margenEbitda.toFixed(2)}%`} color={rentabilidadData.margenEbitda >= 15 ? 'var(--color-success)' : 'var(--color-warning)'} />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
+                                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Cascada de Resultados</h3>
+                                    <div style={{ height: '300px' }}>
+                                        {barData && <Bar data={barData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }} />}
+                                    </div>
+                                </div>
+                                <div className="card" style={{ padding: 'var(--space-6)' }}>
+                                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', textAlign: 'center' }}>Distribución de Gastos</h3>
+                                    <div style={{ height: '240px', position: 'relative' }}>
+                                        {pieData && <Doughnut data={pieData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} />}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'produccion' && (
+                        <div onClick={() => setDrillDown({ tipo: 'lotes', label: 'Detalle de Lotes' })} style={{ cursor: 'pointer' }}>
+                            <ProduccionReport data={produccionData} loading={loading && !produccionData} />
+                        </div>
+                    )}
+                </>
+            )}
+
+            {drillDown && (
+                <DrillDownModal 
+                    {...drillDown} mes={mes} anio={anio} ubicacionId={ubicacionId}
+                    onClose={() => setDrillDown(null)} 
+                />
             )}
         </div>
     )
