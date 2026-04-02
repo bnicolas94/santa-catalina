@@ -74,7 +74,11 @@ export default function ReportesPage() {
         showIngresos: true,
         showGastos: true,
         showMargen: true,
-        showProduccion: true
+        showProduccion: true,
+        showProdPaquetes: true,
+        showProdPlanchas: true,
+        showProdSanguchitos: true,
+        showProdRechazados: true
     })
 
     const [globalConfig, setGlobalConfig] = useState({
@@ -309,7 +313,7 @@ export default function ReportesPage() {
 
                     {activeTab === 'produccion' && userPrefs.showProduccion && (
                         <div onClick={() => setDrillDown({ tipo: 'lotes', label: 'Detalle de Lotes' })} style={{ cursor: 'pointer' }}>
-                            <ProduccionReport data={produccionData} loading={loading && !produccionData} />
+                            <ProduccionReport data={produccionData} loading={loading && !produccionData} userPrefs={userPrefs} />
                         </div>
                     )}
                     {activeTab === 'produccion' && !userPrefs.showProduccion && (

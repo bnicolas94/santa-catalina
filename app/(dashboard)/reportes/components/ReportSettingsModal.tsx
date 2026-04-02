@@ -108,8 +108,44 @@ export default function ReportSettingsModal({
                                         checked={userPrefs.showProduccion} 
                                         onChange={e => onUpdatePrefs({ ...userPrefs, showProduccion: e.target.checked })}
                                     />
-                                    Estadísticas de Producción
+                                    Sección Reporte de Producción
                                 </label>
+                                {userPrefs.showProduccion && (
+                                    <div style={{ marginLeft: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', borderLeft: '2px solid var(--color-gray-100)', paddingLeft: 'var(--space-4)' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={userPrefs.showProdPaquetes} 
+                                                onChange={e => onUpdatePrefs({ ...userPrefs, showProdPaquetes: e.target.checked })}
+                                            />
+                                            Total Paquetes
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={userPrefs.showProdPlanchas} 
+                                                onChange={e => onUpdatePrefs({ ...userPrefs, showProdPlanchas: e.target.checked })}
+                                            />
+                                            Total Planchas
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={userPrefs.showProdSanguchitos} 
+                                                onChange={e => onUpdatePrefs({ ...userPrefs, showProdSanguchitos: e.target.checked })}
+                                            />
+                                            Total Sanguchitos
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={userPrefs.showProdRechazados} 
+                                                onChange={e => onUpdatePrefs({ ...userPrefs, showProdRechazados: e.target.checked })}
+                                            />
+                                            Merma/Rechazos
+                                        </label>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

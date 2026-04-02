@@ -30,9 +30,10 @@ interface ProduccionData {
 interface Props {
     data: ProduccionData | null
     loading: boolean
+    userPrefs: any
 }
 
-export default function ProduccionReport({ data, loading }: Props) {
+export default function ProduccionReport({ data, loading, userPrefs }: Props) {
     if (loading && !data) return <div className="empty-state"><div className="spinner" /><p>Calculando producción...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles para el periodo seleccionado.</p></div>
 
@@ -52,26 +53,34 @@ export default function ProduccionReport({ data, loading }: Props) {
         <div className="fade-in">
             {/* KPIs */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                <KpiCard 
-                    label="Total Paquetes" 
-                    value={data.globales.totalPaquetes.toLocaleString('es-AR')} 
-                    color="var(--color-primary)" 
-                />
-                <KpiCard 
-                    label="Total Planchas" 
-                    value={data.globales.totalPlanchas.toLocaleString('es-AR')} 
-                    color="var(--color-secondary)" 
-                />
-                <KpiCard 
-                    label="Total Sanguchitos" 
-                    value={data.globales.totalSanguchitos.toLocaleString('es-AR')} 
-                    color="var(--color-success)" 
-                />
-                <KpiCard 
-                    label="Merma/Rechazos" 
-                    value={data.globales.totalRechazados.toLocaleString('es-AR')} 
-                    color="var(--color-danger)" 
-                />
+                {userPrefs.showProdPaquetes && (
+                    <KpiCard 
+                        label="Total Paquetes" 
+                        value={data.globales.totalPaquetes.toLocaleString('es-AR')} 
+                        color="var(--color-primary)" 
+                    />
+                )}
+                {userPrefs.showProdPlanchas && (
+                    <KpiCard 
+                        label="Total Planchas" 
+                        value={data.globales.totalPlanchas.toLocaleString('es-AR')} 
+                        color="var(--color-secondary)" 
+                    />
+                )}
+                {userPrefs.showProdSanguchitos && (
+                    <KpiCard 
+                        label="Total Sanguchitos" 
+                        value={data.globales.totalSanguchitos.toLocaleString('es-AR')} 
+                        color="var(--color-success)" 
+                    />
+                )}
+                {userPrefs.showProdRechazados && (
+                    <KpiCard 
+                        label="Merma/Rechazos" 
+                        value={data.globales.totalRechazados.toLocaleString('es-AR')} 
+                        color="var(--color-danger)" 
+                    />
+                )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
@@ -94,9 +103,9 @@ export default function ProduccionReport({ data, loading }: Props) {
                             <thead>
                                 <tr>
                                     <th>Producto</th>
-                                    <th style={{ textAlign: 'right' }}>Paq.</th>
-                                    <th style={{ textAlign: 'right' }}>Pl.</th>
-                                    <th style={{ textAlign: 'right' }}>Sang.</th>
+                                    {userPrefs.showProdPaquetes && <th style={{ textAlign: 'right' }}>Paq.</th>}
+                                    {userPrefs.showProdPlanchas && <th style={{ textAlign: 'right' }}>Pl.</th>}
+                                    {userPrefs.showProdSanguchitos && <th style={{ textAlign: 'right' }}>Sang.</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -106,9 +115,9 @@ export default function ProduccionReport({ data, loading }: Props) {
                                             <div style={{ fontWeight: 600 }}>{prod.nombre}</div>
                                             <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{prod.codigo}</div>
                                         </td>
-                                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{prod.paquetes.toLocaleString()}</td>
-                                        <td style={{ textAlign: 'right' }}>{prod.planchas.toLocaleString()}</td>
-                                        <td style={{ textAlign: 'right' }}>{prod.sanguchitos.toLocaleString()}</td>
+                                        {userPrefs.showProdPaquetes && <td style={{ textAlign: 'right', fontWeight: 600 }}>{prod.paquetes.toLocaleString()}</td>}
+                                        {userPrefs.showProdPlanchas && <td style={{ textAlign: 'right' }}>{prod.planchas.toLocaleString()}</td>}
+                                        {userPrefs.showProdSanguchitos && <td style={{ textAlign: 'right' }}>{prod.sanguchitos.toLocaleString()}</td>}
                                     </tr>
                                 ))}
                             </tbody>

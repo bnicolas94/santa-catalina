@@ -48,12 +48,17 @@ export const getUserReportPrefs = async (userId: string) => {
         where: { id: userId },
         select: { preferenciasReporte: true }
     } as any)
-    return (user?.preferenciasReporte as any) || {
+    const defaultPrefs = {
         showIngresos: true,
         showGastos: true,
         showMargen: true,
-        showProduccion: true
+        showProduccion: true,
+        showProdPaquetes: true,
+        showProdPlanchas: true,
+        showProdSanguchitos: true,
+        showProdRechazados: true
     }
+    return { ...defaultPrefs, ...(user?.preferenciasReporte as any) }
 }
 
 export const updateUserReportPrefs = async (userId: string, prefs: any) => {
@@ -253,7 +258,7 @@ export const getProduccionReport = unstable_cache(
             anio,
             ubicacionId,
             globales: statsGlobales,
-            desglose: Object.values(porProducto).sort((a, b) => b.paquetes - a.paquetes),
+            desglose: Object.values(porProducto).sort((a: any, b: any) => b.paquetes - a.paquetes),
             tendencia: statsSemanales
         }
     },

@@ -98,7 +98,7 @@ const menuItems: MenuItem[] = [
     },
     {
         label: 'Flota',
-        href: '/flota',
+        href: '/logistica/flota',
         icon: '🚐',
         roles: ['ADMIN', 'LOGISTICA'],
     },

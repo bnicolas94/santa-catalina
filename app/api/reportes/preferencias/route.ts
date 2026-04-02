@@ -1,17 +1,21 @@
+import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { NextResponse } from 'next/server'
-import { updateUserReportPrefs, getUserReportPrefs } from '@/lib/services/reportes'
+import { getUserReportPrefs, updateUserReportPrefs } from '@/lib/services/reportes'
 
-export async function GET(request: Request) {
+export async function GET() {
     try {
         const session = await getServerSession(authOptions)
-        const userId = (session?.user as any)?.id
-        if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        if (!session?.user) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        }
 
+        const userId = (session.user as any).id
         const prefs = await getUserReportPrefs(userId)
+        
         return NextResponse.json(prefs)
     } catch (error) {
+        console.error('Error fetching report preferences:', error)
         return NextResponse.json({ error: 'Error al obtener preferencias' }, { status: 500 })
     }
 }
@@ -19,20 +23,18 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const session = await getServerSession(authOptions)
-        const userId = (session?.user as any)?.id
-        
-        if (!userId) {
-            return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+        if (!session?.user) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
         }
 
-        const { preferencias } = await request.json()
-        if (!preferencias) return NextResponse.json({ error: 'Preferencias requeridas' }, { status: 400 })
-
-        await updateUserReportPrefs(userId, preferencias)
+        const userId = (session.user as any).id
+        const prefs = await request.json()
+        
+        await updateUserReportPrefs(userId, prefs)
         
         return NextResponse.json({ success: true })
     } catch (error) {
-        console.error('Error updating prefs:', error)
-        return NextResponse.json({ error: 'Error al actualizar preferencias' }, { status: 500 })
+        console.error('Error saving report preferences:', error)
+        return NextResponse.json({ error: 'Error al guardar preferencias' }, { status: 500 })
     }
 }
