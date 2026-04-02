@@ -349,11 +349,27 @@ export default function ProduccionPage() {
         if (!loteSeleccionado) return
         setError('')
         try {
-            // Verify total distributed equals the reported produced
-            const totalDistribucion = cerrarForm.distribucionPresentaciones.reduce((a, b) => a + Number(b.cantidad), 0)
+            // Verify total distributed units match the reported production units
             if (cerrarForm.estado !== 'en_produccion' && loteSeleccionado.estado === 'en_produccion') {
-                if (totalDistribucion !== Number(cerrarForm.unidadesProducidas)) {
-                    throw new Error(`La suma de paquetes distribuidos (${totalDistribucion}) no coincide con el total producido reportado (${cerrarForm.unidadesProducidas}).`)
+                const presentaciones = loteSeleccionado.producto.presentaciones || []
+                if (presentaciones.length > 0) {
+                    const primarySize = presentaciones[0].cantidad
+                    const totalUnidadesEsperadas = Number(cerrarForm.unidadesProducidas) * primarySize
+                    
+                    const totalUnidadesDistribuidas = cerrarForm.distribucionPresentaciones.reduce((acc, current) => {
+                        const pres = presentaciones.find(p => p.id === current.presentacionId)
+                        return acc + (Number(current.cantidad) * (pres?.cantidad || 0))
+                    }, 0)
+
+                    if (totalUnidadesDistribuidas !== totalUnidadesEsperadas) {
+                        throw new Error(`La suma de unidades distribuidas (${totalUnidadesDistribuidas}) no coincide con el total producido reportado (${totalUnidadesEsperadas} unidades).`)
+                    }
+                } else {
+                    // Fallback comparison if no presentations (legacy or edge case)
+                    const totalPaquetesDistribucion = cerrarForm.distribucionPresentaciones.reduce((a, b) => a + Number(b.cantidad), 0)
+                    if (totalPaquetesDistribucion !== Number(cerrarForm.unidadesProducidas)) {
+                        throw new Error(`La suma de paquetes distribuidos (${totalPaquetesDistribucion}) no coincide con el total producido reportado (${cerrarForm.unidadesProducidas}).`)
+                    }
                 }
             }
 
