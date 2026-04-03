@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData } = body
+        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData } = body
 
         if (!empleadoId || !periodo || !fechaInicio || !fechaFin) {
             return NextResponse.json({ error: 'Faltan datos para la liquidación' }, { status: 400 })
@@ -54,6 +54,17 @@ export async function POST(request: Request) {
             deduccionCuotas = manualData.descuentoPrestamos || 0
             // No calculamos días trabajados, usamos un placeholder o lo que venga
             diasTrabajados = manualData.diasTrabajados || 0
+        } else if (calculatedData) {
+            // Liquidación Automática (vía WeeklyPayrollModal)
+            sueldoProporcional = calculatedData.sueldoBase || 0
+            horasNormales = calculatedData.horasNormales || 0
+            montoHsNorm = calculatedData.montoHorasNormales || 0
+            horasExtras = calculatedData.horasExtras || 0
+            montoHsExtra = calculatedData.montoHorasExtras || 0
+            horasFeriado = calculatedData.horasFeriado || 0
+            montoHsFeriado = calculatedData.montoHorasFeriado || 0
+            deduccionCuotas = calculatedData.descuentoPrestamos || 0
+            diasTrabajados = calculatedData.diasTrabajados || 0
         } else {
             // Cálculo Automático basado en fichadas
             const fichadas = empleado.fichadas || []
@@ -99,11 +110,8 @@ export async function POST(request: Request) {
 
         const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado - deduccionCuotas
 
-        // Cuotas a afectar (solo si no es manual o si queremos integrarlas)
-        // Para simplificar, si es manual, el usuario carga el descuento. 
-        // Si no es manual, buscamos las cuotas.
         const cuotasAfectadas: any[] = []
-        if (!manualData) {
+        if (!manualData && !calculatedData) {
             empleado.prestamos.forEach((prestamo: any) => {
                 const primeraPendiente = prestamo.cuotas[0]
                 if (primeraPendiente) {
@@ -116,7 +124,7 @@ export async function POST(request: Request) {
         const liquidacion = await prisma.liquidacionSueldo.create({
             data: {
                 empleadoId: empleado.id,
-                periodo: manualData ? periodo : `${periodo} (${diasTrabajados} d. trab.)`,
+                periodo: (manualData || calculatedData) ? periodo : `${periodo} (${diasTrabajados} d. trab.)`,
                 sueldoProporcional,
                 horasNormales,
                 montoHorasNormales: montoHsNorm,
@@ -126,12 +134,24 @@ export async function POST(request: Request) {
                 montoHorasFeriado: montoHsFeriado,
                 descuentosPrestamos: deduccionCuotas,
                 totalNeto: neto,
-                estado: 'pagado'
+                estado: 'pagado',
+                desglose: calculatedData?.desglosePorDia || null
             }
         })
 
         // Marcar las cuotas como pagadas 
-        for (const cuotaId of cuotasAfectadas) {
+        // Si es calculatedData, también debemos buscar las cuotas afectadas si hubo descuento
+        const finalCuotasAfectadas = [...cuotasAfectadas]
+        if (calculatedData && calculatedData.descuentoPrestamos > 0) {
+            const cp = await prisma.cuotaPrestamo.findMany({
+                where: { prestamo: { empleadoId }, estado: 'pendiente' },
+                orderBy: { numeroCuota: 'asc' },
+                take: 1 // Asumimos 1 cuota por liquidación
+            })
+            if (cp[0]) finalCuotasAfectadas.push(cp[0].id)
+        }
+
+        for (const cuotaId of finalCuotasAfectadas) {
             await prisma.cuotaPrestamo.update({
                 where: { id: cuotaId },
                 data: {

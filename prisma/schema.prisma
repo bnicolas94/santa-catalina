@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "windows"]
 }
 
@@ -9,45 +9,45 @@ datasource db {
 }
 
 model Empleado {
-  id                  String              @id @default(uuid())
-  nombre              String
-  apellido            String?
-  dni                 String?             @unique
-  email               String?             @unique
-  password            String?
-  rol                 String
-  telefono            String?
-  activo              Boolean             @default(true)
-  fechaIngreso        DateTime?           @map("fecha_ingreso")
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  sueldoBaseMensual   Float               @default(0) @map("sueldo_base_mensual")
-  valorHoraNormal     Float?              @map("valor_hora_normal")
-  cicloPago           String              @default("SEMANAL") @map("ciclo_pago")
-  porcentajeHoraExtra Float               @default(50) @map("porcentaje_hora_extra")
-  valorHoraExtra      Float               @default(0) @map("valor_hora_extra")
-  porcentajeFeriado   Float               @default(100) @map("porcentaje_feriado")
-  horasTrabajoDiarias Float               @default(8) @map("horas_trabajo_diarias")
-  diasTrabajoSemana   String              @default("Lunes a Viernes") @map("dias_trabajo_semana")
-  horarioEntrada      String?             @map("horario_entrada")
-  horarioSalida       String?             @map("horario_salida")
-  codigoBiometrico    String?             @unique @map("codigo_biometrico")
-  ubicacionId         String?             @map("id_ubicacion")
-  rolId               String?             @map("id_rol")
-  rolRel              RolEmpleado?        @relation(fields: [rolId], references: [id])
-  ubicacion           Ubicacion?          @relation(fields: [ubicacionId], references: [id])
-  fichadas            FichadaEmpleado[]
-  liquidaciones       LiquidacionSueldo[]
-  lotesCoordinados    Lote[]              @relation("CoordinadorLote")
-  prestamos           PrestamoEmpleado[]
-  rendiciones         RendicionChofer[]   @relation("RendicionesChofer")
-  rutasChofer         Ruta[]              @relation("ChoferRuta")
-  asignaciones        AsignacionOperario[]
+  id                   String               @id @default(uuid())
+  nombre               String
+  apellido             String?
+  dni                  String?              @unique
+  email                String?              @unique
+  password             String?
+  rol                  String
+  telefono             String?
+  activo               Boolean              @default(true)
+  fechaIngreso         DateTime?            @map("fecha_ingreso")
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  sueldoBaseMensual    Float                @default(0) @map("sueldo_base_mensual")
+  jornal               Float                @default(0)
+  valorHoraNormal      Float?               @map("valor_hora_normal")
+  cicloPago            String               @default("SEMANAL") @map("ciclo_pago")
+  porcentajeHoraExtra  Float                @default(50) @map("porcentaje_hora_extra")
+  valorHoraExtra       Float                @default(0) @map("valor_hora_extra")
+  porcentajeFeriado    Float                @default(100) @map("porcentaje_feriado")
+  horasTrabajoDiarias  Float                @default(8) @map("horas_trabajo_diarias")
+  diasTrabajoSemana    String               @default("Lunes a Viernes") @map("dias_trabajo_semana")
+  horarioEntrada       String?              @map("horario_entrada")
+  horarioSalida        String?              @map("horario_salida")
+  codigoBiometrico     String?              @unique @map("codigo_biometrico")
+  ubicacionId          String?              @map("id_ubicacion")
+  rolId                String?              @map("id_rol")
+  preferenciasReporte  Json?                @map("preferencias_reporte")
+  asignaciones         AsignacionOperario[]
   asignacionesVehiculo AsignacionVehiculo[] @relation("AsignacionesVehiculo")
-  preferenciasReporte Json?               @map("preferencias_reporte")
+  rolRel               RolEmpleado?         @relation(fields: [rolId], references: [id])
+  ubicacion            Ubicacion?           @relation(fields: [ubicacionId], references: [id])
+  fichadas             FichadaEmpleado[]
+  liquidaciones        LiquidacionSueldo[]
+  lotesCoordinados     Lote[]               @relation("CoordinadorLote")
+  prestamos            PrestamoEmpleado[]
+  rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
+  rutasChofer          Ruta[]               @relation("ChoferRuta")
 
   @@map("empleados")
-
 }
 
 model Proveedor {
@@ -67,42 +67,42 @@ model Proveedor {
 }
 
 model Producto {
-  id                  String               @id @default(uuid())
+  id                  String                    @id @default(uuid())
   nombre              String
-  codigoInterno       String               @unique @map("codigo_interno")
-  costoUnitario       Float                @default(0) @map("costo_unitario")
-  planchasPorPaquete  Int                  @default(6) @map("planchas_por_paquete")
-  paquetesPorRonda    Int                  @default(14) @map("paquetes_por_ronda")
-  vidaUtilHoras       Int                  @default(48) @map("vida_util_horas")
-  tempConservacionMax Float                @default(4) @map("temp_conservacion_max")
-  activo              Boolean              @default(true)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  codigoInterno       String                    @unique @map("codigo_interno")
+  costoUnitario       Float                     @default(0) @map("costo_unitario")
+  planchasPorPaquete  Int                       @default(6) @map("planchas_por_paquete")
+  paquetesPorRonda    Int                       @default(14) @map("paquetes_por_ronda")
+  vidaUtilHoras       Int                       @default(48) @map("vida_util_horas")
+  tempConservacionMax Float                     @default(4) @map("temp_conservacion_max")
+  activo              Boolean                   @default(true)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
   alias               String?
   fichasTecnicas      FichaTecnica[]
   lotes               Lote[]
   movimientosProducto MovimientoProducto[]
   presentaciones      Presentacion[]
-  stockUbicaciones    StockProducto[]
   requerimientos      RequerimientoProduccion[]
+  stockUbicaciones    StockProducto[]
 
   @@map("productos")
 }
 
 model Presentacion {
-  id             String               @id @default(uuid())
+  id             String                    @id @default(uuid())
   cantidad       Int
-  precioVenta    Float                @map("precio_venta")
-  stockMinimo    Int                  @default(0) @map("stock_minimo")
-  activo         Boolean              @default(true)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  productoId     String               @map("id_producto")
+  precioVenta    Float                     @map("precio_venta")
+  stockMinimo    Int                       @default(0) @map("stock_minimo")
+  activo         Boolean                   @default(true)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  productoId     String                    @map("id_producto")
   detallePedidos DetallePedido[]
   movimientos    MovimientoProducto[]
-  producto       Producto             @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  stocks         StockProducto[]
+  producto       Producto                  @relation(fields: [productoId], references: [id], onDelete: Cascade)
   requerimientos RequerimientoProduccion[]
+  stocks         StockProducto[]
 
   @@unique([productoId, cantidad])
   @@map("presentaciones")
@@ -120,26 +120,26 @@ model FamiliaInsumo {
 }
 
 model Insumo {
-  id             String            @id @default(uuid())
-  nombre         String
-  unidadMedida   String            @map("unidad_medida")
-  stockActual    Float             @default(0) @map("stock_actual")
-  stockMinimo    Float             @default(0) @map("stock_minimo")
-  precioUnitario Float             @default(0) @map("precio_unitario")
-  diasReposicion Int               @default(1) @map("dias_reposicion")
-  activo         Boolean           @default(true)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  proveedorId    String?           @map("id_proveedor")
-  familiaId      String?           @map("id_familia")
-  unidadSecundaria       String?           @map("unidad_secundaria")
-  factorConversion       Float?            @map("factor_conversion")
-  stockActualSecundario  Float             @default(0) @map("stock_actual_secundario")
-  fichasTecnicas         FichaTecnica[]
-  familia                FamiliaInsumo?    @relation(fields: [familiaId], references: [id])
-  proveedor              Proveedor?        @relation(fields: [proveedorId], references: [id])
-  movimientos            MovimientoStock[]
-  stocks                 StockInsumo[]
+  id                    String            @id @default(uuid())
+  nombre                String
+  unidadMedida          String            @map("unidad_medida")
+  stockActual           Float             @default(0) @map("stock_actual")
+  stockMinimo           Float             @default(0) @map("stock_minimo")
+  precioUnitario        Float             @default(0) @map("precio_unitario")
+  diasReposicion        Int               @default(1) @map("dias_reposicion")
+  activo                Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  proveedorId           String?           @map("id_proveedor")
+  familiaId             String?           @map("id_familia")
+  unidadSecundaria      String?           @map("unidad_secundaria")
+  factorConversion      Float?            @map("factor_conversion")
+  stockActualSecundario Float             @default(0) @map("stock_actual_secundario")
+  fichasTecnicas        FichaTecnica[]
+  familia               FamiliaInsumo?    @relation(fields: [familiaId], references: [id])
+  proveedor             Proveedor?        @relation(fields: [proveedorId], references: [id])
+  movimientos           MovimientoStock[]
+  stocks                StockInsumo[]
 
   @@map("insumos")
 }
@@ -189,19 +189,18 @@ model Ubicacion {
   activo              Boolean              @default(true)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+  asignaciones        AsignacionOperario[]
   empleados           Empleado[]
+  gastos              GastoOperativo[]
   lotes               Lote[]
   movimientosProducto MovimientoProducto[]
   movimientosStock    MovimientoStock[]
+  pedidos             Pedido[]
+  rutasOrigen         Ruta[]               @relation("OrigenRuta")
   stocksInsumo        StockInsumo[]
   stocks              StockProducto[]
-  asignaciones        AsignacionOperario[]
-  rutasOrigen         Ruta[]               @relation("OrigenRuta")
-  pedidos             Pedido[]
-  gastos              GastoOperativo[]
 
   @@map("ubicaciones")
-
 }
 
 model StockProducto {
@@ -231,46 +230,46 @@ model MovimientoProducto {
   productoId     String       @map("id_producto")
   presentacionId String       @map("id_presentacion")
   loteId         String?      @map("id_lote")
+  entregaId      String?      @map("id_entrega")
+  rutaId         String?      @map("id_ruta")
+  entrega        Entrega?     @relation(fields: [entregaId], references: [id])
   lote           Lote?        @relation(fields: [loteId], references: [id])
   presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
   producto       Producto     @relation(fields: [productoId], references: [id])
-  ubicacion      Ubicacion    @relation(fields: [ubicacionId], references: [id])
-  rutaId         String?      @map("id_ruta")
-  entregaId      String?      @map("id_entrega")
   ruta           Ruta?        @relation(fields: [rutaId], references: [id])
-  entrega        Entrega?     @relation(fields: [entregaId], references: [id])
+  ubicacion      Ubicacion    @relation(fields: [ubicacionId], references: [id])
 
   @@map("movimientos_producto")
 }
 
 model MovimientoStock {
-  id               String          @id @default(uuid())
-  tipo             String
-  cantidad         Float
-  fecha            DateTime        @default(now())
-  observaciones    String?
-  costoTotal       Float?          @map("costo_total")
-  estadoPago       String?         @default("pagado")
-  createdAt        DateTime        @default(now())
-  insumoId         String          @map("id_insumo")
-  loteOrigenId     String?         @map("id_lote_origen")
-  proveedorId      String?         @map("id_proveedor")
-  numeroFactura    String?         @map("numero_factura")
-  gastoId          String?         @map("id_gasto")
-  fechaVencimiento DateTime?       @map("fecha_vencimiento")
+  id                 String          @id @default(uuid())
+  tipo               String
+  cantidad           Float
+  fecha              DateTime        @default(now())
+  observaciones      String?
+  costoTotal         Float?          @map("costo_total")
+  estadoPago         String?         @default("pagado")
+  createdAt          DateTime        @default(now())
+  insumoId           String          @map("id_insumo")
+  loteOrigenId       String?         @map("id_lote_origen")
+  proveedorId        String?         @map("id_proveedor")
+  gastoId            String?         @map("id_gasto")
+  fechaVencimiento   DateTime?       @map("fecha_vencimiento")
   ubicacionId        String?         @map("id_ubicacion")
   cantidadSecundaria Float?          @map("cantidad_secundaria")
+  numeroFactura      String?         @map("numero_factura")
   gasto              GastoOperativo? @relation(fields: [gastoId], references: [id])
-  insumo           Insumo          @relation(fields: [insumoId], references: [id])
-  loteOrigen       Lote?           @relation(fields: [loteOrigenId], references: [id])
-  proveedor        Proveedor?      @relation(fields: [proveedorId], references: [id])
-  ubicacion        Ubicacion?      @relation(fields: [ubicacionId], references: [id])
+  insumo             Insumo          @relation(fields: [insumoId], references: [id])
+  loteOrigen         Lote?           @relation(fields: [loteOrigenId], references: [id])
+  proveedor          Proveedor?      @relation(fields: [proveedorId], references: [id])
+  ubicacion          Ubicacion?      @relation(fields: [ubicacionId], references: [id])
 
   @@map("movimientos_stock")
 }
 
 model StockInsumo {
-  id          String    @id @default(uuid())
+  id                 String    @id @default(uuid())
   cantidad           Float     @default(0)
   cantidadSecundaria Float     @default(0) @map("cantidad_secundaria")
   updatedAt          DateTime  @updatedAt
@@ -315,13 +314,13 @@ model Pedido {
   fechaEntrega    DateTime         @map("fecha_entrega")
   estado          String           @default("pendiente")
   medioPago       String?          @default("efectivo") @map("medio_pago")
-  turno           String?
   esRetiro        Boolean          @default(false) @map("es_retiro")
   totalUnidades   Int              @default(0) @map("total_unidades")
   totalImporte    Float            @default(0) @map("total_importe")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   clienteId       String           @map("id_cliente")
+  turno           String?
   ubicacionId     String?          @map("id_ubicacion")
   detalles        DetallePedido[]
   entregas        Entrega[]
@@ -333,62 +332,62 @@ model Pedido {
 }
 
 model DetallePedido {
-  id             String       @id @default(uuid())
-  cantidad       Int
-  precioUnitario Float        @map("precio_unitario")
-  observaciones  String?
-  costoUnitarioHistorico Float?      @map("costo_unitario_historico")
-  pedidoId       String       @map("id_pedido")
-  presentacionId String       @map("id_presentacion")
-  loteId         String?      @map("id_lote")
-  lote           Lote?        @relation(fields: [loteId], references: [id])
-  pedido         Pedido       @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
+  id                     String       @id @default(uuid())
+  cantidad               Int
+  precioUnitario         Float        @map("precio_unitario")
+  observaciones          String?
+  pedidoId               String       @map("id_pedido")
+  presentacionId         String       @map("id_presentacion")
+  loteId                 String?      @map("id_lote")
+  costoUnitarioHistorico Float?       @map("costo_unitario_historico")
+  lote                   Lote?        @relation(fields: [loteId], references: [id])
+  pedido                 Pedido       @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  presentacion           Presentacion @relation(fields: [presentacionId], references: [id])
 
   @@map("detalle_pedidos")
 }
 
 model Ruta {
-  id               String    @id @default(uuid())
-  fecha            DateTime
-  zona             String?
-  turno            String?
-  horaSalida       DateTime? @map("hora_salida")
-  horaRegreso      DateTime? @map("hora_regreso")
-  kmRecorridos     Float     @default(0) @map("km_recorridos")
-  costoCombustible Float     @default(0) @map("costo_combustible")
-  tempSalida       Float?    @map("temp_salida")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  choferId          String    @map("id_empleado_chofer")
-  ubicacionOrigenId String?   @map("id_ubicacion_origen")
-  vehiculoId        String?   @map("id_vehiculo")
+  id                String               @id @default(uuid())
+  fecha             DateTime
+  zona              String?
+  turno             String?
+  horaSalida        DateTime?            @map("hora_salida")
+  horaRegreso       DateTime?            @map("hora_regreso")
+  kmRecorridos      Float                @default(0) @map("km_recorridos")
+  costoCombustible  Float                @default(0) @map("costo_combustible")
+  tempSalida        Float?               @map("temp_salida")
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  choferId          String               @map("id_empleado_chofer")
+  ubicacionOrigenId String?              @map("id_ubicacion_origen")
+  vehiculoId        String?              @map("id_vehiculo")
   entregas          Entrega[]
-  chofer            Empleado  @relation("ChoferRuta", fields: [choferId], references: [id])
-  ubicacionOrigen   Ubicacion? @relation("OrigenRuta", fields: [ubicacionOrigenId], references: [id])
-  vehiculo          Vehiculo?  @relation("RutaVehiculo", fields: [vehiculoId], references: [id])
   movimientos       MovimientoProducto[]
+  chofer            Empleado             @relation("ChoferRuta", fields: [choferId], references: [id])
+  ubicacionOrigen   Ubicacion?           @relation("OrigenRuta", fields: [ubicacionOrigenId], references: [id])
+  vehiculo          Vehiculo?            @relation("RutaVehiculo", fields: [vehiculoId], references: [id])
 
   @@map("rutas")
 }
 
 model Entrega {
-  id                 String    @id @default(uuid())
-  horaEntrega        DateTime? @map("hora_entrega")
-  dentroVentana      Boolean   @default(false) @map("dentro_ventana")
-  tempEntrega        Float?    @map("temp_entrega")
-  unidadesRechazadas Int       @default(0) @map("unidades_rechazadas")
-  motivoRechazo      String?   @map("motivo_rechazo")
+  id                 String               @id @default(uuid())
+  horaEntrega        DateTime?            @map("hora_entrega")
+  dentroVentana      Boolean              @default(false) @map("dentro_ventana")
+  tempEntrega        Float?               @map("temp_entrega")
+  unidadesRechazadas Int                  @default(0) @map("unidades_rechazadas")
+  motivoRechazo      String?              @map("motivo_rechazo")
   observaciones      String?
-  createdAt          DateTime  @default(now())
-  rutaId             String    @map("id_ruta")
-  pedidoId           String    @map("id_pedido")
-  clienteId          String    @map("id_cliente")
-  orden              Int       @default(0)
-  cliente            Cliente   @relation(fields: [clienteId], references: [id])
-  pedido             Pedido    @relation(fields: [pedidoId], references: [id])
+  createdAt          DateTime             @default(now())
+  rutaId             String               @map("id_ruta")
+  pedidoId           String               @map("id_pedido")
+  clienteId          String               @map("id_cliente")
+  orden              Int                  @default(0)
+  cliente            Cliente              @relation(fields: [clienteId], references: [id])
+  pedido             Pedido               @relation(fields: [pedidoId], references: [id])
+  ruta               Ruta                 @relation(fields: [rutaId], references: [id])
   movimientos        MovimientoProducto[]
-  ruta               Ruta      @relation(fields: [rutaId], references: [id])
 
   @@map("entregas")
 }
@@ -414,37 +413,37 @@ model ConfiguracionGlobal {
 }
 
 model GastoOperativo {
-  id              String           @id @default(uuid())
-  fecha           DateTime
-  monto           Float
-  descripcion     String
-  recurrente      Boolean          @default(false)
-  categoriaId     String           @map("id_categoria")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  ubicacionId     String?          @map("id_ubicacion")
-  categoria       CategoriaGasto   @relation(fields: [categoriaId], references: [id])
-  ubicacion       Ubicacion?       @relation(fields: [ubicacionId], references: [id])
+  id               String            @id @default(uuid())
+  fecha            DateTime
+  monto            Float
+  descripcion      String
+  recurrente       Boolean           @default(false)
+  categoriaId      String            @map("id_categoria")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  ubicacionId      String?           @map("id_ubicacion")
+  categoria        CategoriaGasto    @relation(fields: [categoriaId], references: [id])
+  ubicacion        Ubicacion?        @relation(fields: [ubicacionId], references: [id])
   movimientosStock MovimientoStock[]
 
   @@map("gastos_operativos")
 }
 
 model MovimientoCaja {
-  id          String           @id @default(uuid())
-  fecha       DateTime         @default(now())
-  tipo        String
-  concepto    String
-  monto       Float
-  medioPago   String           @default("efectivo") @map("medio_pago")
-  cajaOrigen  String?          @map("caja_origen")
-  descripcion String?
-  createdAt   DateTime         @default(now())
-  pedidoId    String?          @map("id_pedido")
-  gastoId     String?          @map("id_gasto")
-  rendicionId String?          @map("id_rendicion")
-  pedido      Pedido?          @relation(fields: [pedidoId], references: [id])
-  rendicion   RendicionChofer? @relation(fields: [rendicionId], references: [id])
+  id           String                 @id @default(uuid())
+  fecha        DateTime               @default(now())
+  tipo         String
+  concepto     String
+  monto        Float
+  medioPago    String                 @default("efectivo") @map("medio_pago")
+  cajaOrigen   String?                @map("caja_origen")
+  descripcion  String?
+  createdAt    DateTime               @default(now())
+  pedidoId     String?                @map("id_pedido")
+  gastoId      String?                @map("id_gasto")
+  rendicionId  String?                @map("id_rendicion")
+  pedido       Pedido?                @relation(fields: [pedidoId], references: [id])
+  rendicion    RendicionChofer?       @relation(fields: [rendicionId], references: [id])
   movimientoMp MovimientoMercadoPago?
 
   @@map("movimientos_caja")
@@ -500,17 +499,25 @@ model FichadaEmpleado {
 }
 
 model TipoLicencia {
-  id            String   @id @default(uuid())
-  nombre        String   @unique
+  id            String            @id @default(uuid())
+  nombre        String            @unique
   descripcion   String?
-  conGoceSueldo Boolean  @default(false) @map("con_goce_sueldo")
-  activo        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
+  conGoceSueldo Boolean           @default(false) @map("con_goce_sueldo")
+  activo        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   fichadas      FichadaEmpleado[]
 
   @@map("tipos_licencia")
+}
+
+model Feriado {
+  id        String   @id @default(uuid())
+  fecha     DateTime @unique
+  nombre    String
+  createdAt DateTime @default(now())
+
+  @@map("feriados")
 }
 
 model PrestamoEmpleado {
@@ -559,6 +566,7 @@ model LiquidacionSueldo {
   totalNeto           Float           @default(0) @map("total_neto")
   estado              String          @default("generado")
   empleadoId          String          @map("id_empleado")
+  desglose            Json?           @map("desglose")
   cuotasDescontadas   CuotaPrestamo[]
   empleado            Empleado        @relation(fields: [empleadoId], references: [id])
 
@@ -580,6 +588,7 @@ model RolEmpleado {
   permisoDashboard  Boolean    @default(false)
   jornal            Float      @default(0)
   valorHoraExtra    Float      @default(0) @map("valor_hora_extra")
+  cicloPago         CicloPago  @default(SEMANAL) @map("ciclo_pago")
   empleados         Empleado[]
 
   @@map("roles_empleado")
@@ -615,42 +624,40 @@ model AsignacionOperario {
 }
 
 model Vehiculo {
-  id              String                @id @default(uuid())
-  patente         String                @unique
-  marca           String
-  modelo          String
-  anio            Int
-  kmActual        Int                   @default(0) @map("km_actual")
-  kmProximoService Int?                 @map("km_proximo_service")
-  avisoKmsAntes   Int                   @default(2000) @map("aviso_kms_antes")
-  estado          String                @default("disponible") // disponible, mantenimiento, inactivo
-  activo          Boolean               @default(true)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  
-  kilometrajes    KilometrajeVehiculo[]
-  vencimientos    VencimientoVehiculo[]
-  mantenimientos  MantenimientoVehiculo[]
-  asignaciones    AsignacionVehiculo[]  @relation("AsignacionesVehiculo")
-  rutas           Ruta[]                @relation("RutaVehiculo")
+  id               String                  @id @default(uuid())
+  patente          String                  @unique
+  marca            String
+  modelo           String
+  anio             Int
+  kmActual         Int                     @default(0) @map("km_actual")
+  kmProximoService Int?                    @map("km_proximo_service")
+  avisoKmsAntes    Int                     @default(2000) @map("aviso_kms_antes")
+  estado           String                  @default("disponible")
+  activo           Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  asignaciones     AsignacionVehiculo[]    @relation("AsignacionesVehiculo")
+  kilometrajes     KilometrajeVehiculo[]
+  mantenimientos   MantenimientoVehiculo[]
+  rutas            Ruta[]                  @relation("RutaVehiculo")
+  vencimientos     VencimientoVehiculo[]
 
   @@map("vehiculos")
 }
 
 model AsignacionVehiculo {
-  id            String   @id @default(uuid())
-  fecha         DateTime
-  turno         String   // Mañana, Siesta, Tarde
-  empleadoId    String   @map("id_empleado")
-  vehiculoId    String   @map("id_vehiculo")
-  kmInicio      Int?     @map("km_inicio")
-  kmFin         Int?     @map("km_fin")
-  novedades     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  empleado      Empleado @relation("AsignacionesVehiculo", fields: [empleadoId], references: [id])
-  vehiculo      Vehiculo @relation("AsignacionesVehiculo", fields: [vehiculoId], references: [id])
+  id         String   @id @default(uuid())
+  fecha      DateTime
+  turno      String
+  empleadoId String   @map("id_empleado")
+  vehiculoId String   @map("id_vehiculo")
+  kmInicio   Int?     @map("km_inicio")
+  kmFin      Int?     @map("km_fin")
+  novedades  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  empleado   Empleado @relation("AsignacionesVehiculo", fields: [empleadoId], references: [id])
+  vehiculo   Vehiculo @relation("AsignacionesVehiculo", fields: [vehiculoId], references: [id])
 
   @@unique([fecha, turno, empleadoId])
   @@unique([fecha, turno, vehiculoId])
@@ -664,7 +671,6 @@ model KilometrajeVehiculo {
   kmRegistrado  Int      @map("km_registrado")
   observaciones String?
   createdAt     DateTime @default(now())
-  
   vehiculo      Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
 
   @@map("kilometrajes_vehiculo")
@@ -673,54 +679,51 @@ model KilometrajeVehiculo {
 model VencimientoVehiculo {
   id               String   @id @default(uuid())
   vehiculoId       String   @map("id_vehiculo")
-  tipo             String   // "VTV", "Seguro", etc.
+  tipo             String
   fechaVencimiento DateTime @map("fecha_vencimiento")
   observaciones    String?
   notificado       Boolean  @default(false)
   diasAviso        Int      @default(30) @map("dias_aviso")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-
   vehiculo         Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
 
   @@map("vencimientos_vehiculo")
 }
 
 model MantenimientoVehiculo {
-  id              String   @id @default(uuid())
-  vehiculoId      String   @map("id_vehiculo")
-  fecha           DateTime @default(now())
-  tipo            String   // "preventivo" o "correctivo"
-  taller          String?
-  costo           Float    @default(0)
-  descripcion     String
-  kilometraje     Int?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  vehiculo        Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid())
+  vehiculoId  String   @map("id_vehiculo")
+  fecha       DateTime @default(now())
+  tipo        String
+  taller      String?
+  costo       Float    @default(0)
+  descripcion String
+  kilometraje Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  vehiculo    Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
 
   @@map("mantenimientos_vehiculo")
 }
 
 model MovimientoMercadoPago {
-  id                 String          @id @default(uuid())
-  mpId               String          @unique @map("mp_id")
-  tipo               String          // "ingreso" o "egreso"
-  montoBruto         Float           @map("monto_bruto")
-  montoNeto          Float           @map("monto_neto")
-  comisionMp         Float           @default(0) @map("comision_mp")
-  metodoPago         String?         @map("metodo_pago")
-  estado             String          // "approved", "pending", "rejected"
-  fechaCreacionMp    DateTime        @map("fecha_creacion_mp")
-  fechaAprobacionMp  DateTime?       @map("fecha_aprobacion_mp")
-  descripcion        String?
-  referenciaExterna  String?         @map("referencia_externa")
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  
-  movimientoCajaId   String?         @unique @map("id_movimiento_caja")
-  movimientoCaja     MovimientoCaja? @relation(fields: [movimientoCajaId], references: [id])
+  id                String          @id @default(uuid())
+  mpId              String          @unique @map("mp_id")
+  tipo              String
+  montoBruto        Float           @map("monto_bruto")
+  montoNeto         Float           @map("monto_neto")
+  comisionMp        Float           @default(0) @map("comision_mp")
+  metodoPago        String?         @map("metodo_pago")
+  estado            String
+  fechaCreacionMp   DateTime        @map("fecha_creacion_mp")
+  fechaAprobacionMp DateTime?       @map("fecha_aprobacion_mp")
+  descripcion       String?
+  referenciaExterna String?         @map("referencia_externa")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  movimientoCajaId  String?         @unique @map("id_movimiento_caja")
+  movimientoCaja    MovimientoCaja? @relation(fields: [movimientoCajaId], references: [id])
 
   @@map("movimientos_mercado_pago")
 }
@@ -730,11 +733,11 @@ model RequerimientoProduccion {
   fecha          DateTime
   turno          String
   productoId     String?       @map("id_producto")
-  presentacionId String?       @map("id_presentacion")
   cantidad       Int
-  destino        String        @default("FABRICA")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  presentacionId String?       @map("id_presentacion")
+  destino        String        @default("FABRICA")
   shipmentId     String?       @map("shipment_id")
   textoOriginal  String?       @map("texto_original")
   presentacion   Presentacion? @relation(fields: [presentacionId], references: [id])
@@ -751,4 +754,10 @@ model PlanificacionDescuento {
 
   @@unique([fecha, turno])
   @@map("planificacion_descuentos")
+}
+
+enum CicloPago {
+  DIARIO
+  SEMANAL
+  MENSUAL
 }

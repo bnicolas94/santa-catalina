@@ -37,6 +37,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         codigoBiometrico: empleado?.codigoBiometrico || '',
         ubicacionId: empleado?.ubicacionId || '',
         rolId: empleado?.rolId || '',
+        jornal: empleado?.jornal?.toString() || '0',
         valorHoraExtra: empleado?.valorHoraExtra?.toString() || '0'
     })
 
@@ -73,11 +74,13 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
 
     // Estado local para el input de remuneración para que no "salte" con los decimales mientras tipea
     const initialMonto = (
-        formData.cicloPago === 'SEMANAL'
-            ? (parseFloat(formData.sueldoBaseMensual) || 0) / 4.3
-            : formData.cicloPago === 'QUINCENAL'
-                ? (parseFloat(formData.sueldoBaseMensual) || 0) / 2
-                : (parseFloat(formData.sueldoBaseMensual) || 0)
+        formData.cicloPago === 'DIARIO'
+            ? (parseFloat(formData.jornal) || 0)
+            : formData.cicloPago === 'SEMANAL'
+                ? (parseFloat(formData.sueldoBaseMensual) || 0) / 4.3
+                : formData.cicloPago === 'QUINCENAL'
+                    ? (parseFloat(formData.sueldoBaseMensual) || 0) / 2
+                    : (parseFloat(formData.sueldoBaseMensual) || 0)
     ).toString()
     const [montoInput, setMontoInput] = useState(initialMonto)
 
@@ -312,15 +315,22 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                             const valStr = e.target.value
                                             setMontoInput(valStr)
                                             const val = parseFloat(valStr) || 0
-                                            let monthly = val
-                                            if (formData.cicloPago === 'SEMANAL') monthly = val * 4.3
-                                            if (formData.cicloPago === 'QUINCENAL') monthly = val * 2
-                                            setFormData(prev => ({ ...prev, sueldoBaseMensual: monthly.toString() }))
+                                            
+                                            if (formData.cicloPago === 'DIARIO') {
+                                                setFormData(prev => ({ ...prev, jornal: val.toString(), sueldoBaseMensual: (val * 30).toString() }))
+                                            } else {
+                                                let monthly = val
+                                                if (formData.cicloPago === 'SEMANAL') monthly = val * 4.3
+                                                if (formData.cicloPago === 'QUINCENAL') monthly = val * 2
+                                                setFormData(prev => ({ ...prev, sueldoBaseMensual: monthly.toString(), jornal: '0' }))
+                                            }
                                         }}
                                         className="form-input"
                                         placeholder="Ingrese el monto que cobra en mano por ciclo"
                                     />
-                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px' }}>Ej: Si cobra $50.000 x semana, ingrese 50000.</p>
+                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '4px' }}>
+                                        {formData.cicloPago === 'DIARIO' ? 'Monto por día trabajado.' : 'Ej: Si cobra $50.000 x semana, ingrese 50000.'}
+                                    </p>
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Ciclo de Cobro</label>
@@ -329,16 +339,21 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                         value={formData.cicloPago}
                                         onChange={(e) => {
                                             const newCiclo = e.target.value
-                                            // Al cambiar el ciclo, recalculamos el montoInput basado en el sueldoBaseMensual actual
                                             const monthly = parseFloat(formData.sueldoBaseMensual) || 0
-                                            let newMonto = monthly
-                                            if (newCiclo === 'SEMANAL') newMonto = monthly / 4.3
-                                            if (newCiclo === 'QUINCENAL') newMonto = monthly / 2
+                                            const daily = parseFloat(formData.jornal) || 0
+                                            
+                                            let newMonto = 0
+                                            if (newCiclo === 'DIARIO') newMonto = daily > 0 ? daily : (monthly / 30)
+                                            else if (newCiclo === 'SEMANAL') newMonto = monthly / 4.3
+                                            else if (newCiclo === 'QUINCENAL') newMonto = monthly / 2
+                                            else newMonto = monthly
+                                            
                                             setMontoInput(newMonto.toFixed(2))
                                             setFormData(prev => ({ ...prev, cicloPago: newCiclo }))
                                         }}
                                         className="form-select"
                                     >
+                                        <option value="DIARIO">DIARIO (Personalizado)</option>
                                         <option value="SEMANAL">SEMANAL (x4.3)</option>
                                         <option value="QUINCENAL">QUINCENAL (x2)</option>
                                         <option value="MENSUAL">MENSUAL</option>
@@ -376,11 +391,13 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                         ${(parseFloat(formData.sueldoBaseMensual) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </div>
                                     <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', marginTop: 'var(--space-1)' }}>
-                                        {formData.cicloPago === 'SEMANAL'
-                                            ? 'Calculado como: Monto semanal × 4.3 semanas'
-                                            : formData.cicloPago === 'QUINCENAL'
-                                                ? 'Calculado como: Monto quincenal × 2 quincenas'
-                                                : 'Se toma el monto mensual directo.'}
+                                        {formData.cicloPago === 'DIARIO'
+                                            ? 'Personalizado: Valor día directo.'
+                                            : formData.cicloPago === 'SEMANAL'
+                                                ? 'Calculado como: Monto semanal × 4.3 semanas'
+                                                : formData.cicloPago === 'QUINCENAL'
+                                                    ? 'Calculado como: Monto quincenal × 2 quincenas'
+                                                    : 'Se toma el monto mensual directo.'}
                                     </p>
                                 </div>
                             </div>

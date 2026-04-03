@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { useProduccionData } from '@/components/produccion/hooks/useProduccionData'
 
 interface Producto {
@@ -83,6 +84,7 @@ export default function ProduccionPage() {
     const [loteSeleccionado, setLoteSeleccionado] = useState<Lote | null>(null)
     const [filterEstado, setFilterEstado] = useState('')
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
+    const { data: session } = useSession()
 
     const { data: swrData, isLoading: loading, mutate } = useProduccionData(filterFecha || getLocalDateString())
     const fetchData = () => mutate()
@@ -195,6 +197,30 @@ export default function ProduccionPage() {
             fetchData()
             setShowDiscountModal(false)
             setTimeout(() => setSuccess(''), 5000)
+        } catch (err: any) {
+            setError(err.message)
+        } finally {
+            setIsDiscounting(false)
+        }
+    }
+
+    async function handleRevertDescuento() {
+        if (!confirm(`¿Estás seguro de que querés revertir el descuento de stock para el turno ${activeTurno}?\n\nSe devolverá el stock a Fábrica y se eliminarán los registros de salida.`)) return
+        
+        setIsDiscounting(true)
+        setError('')
+        try {
+            const res = await fetch('/api/produccion/planificacion/descontar', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha: filterFecha || getLocalDateString(), turno: activeTurno }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Error al revertir')
+            
+            setSuccess(data.message)
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
         } catch (err: any) {
             setError(err.message)
         } finally {
@@ -1136,17 +1162,29 @@ export default function ProduccionPage() {
                                                 )}
                                             </td>
                                             <td colSpan={isDiscounted ? 2 : 6} style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 'var(--space-4)' }}>
-                                                <button 
-                                                    className={`btn btn-sm ${isDiscounted ? 'btn-ghost' : 'btn-primary'}`}
-                                                    disabled={isDiscounted || isDiscounting || !planning?.necesidades[activeTurno]}
-                                                    onClick={() => setShowDiscountModal(true)}
-                                                    style={{ gap: 'var(--space-2)' }}
-                                                >
-                                                    {isDiscounted 
-                                                        ? '✅ Stock Descontado' 
-                                                        : `📦 Descontar Stock: Turno ${activeTurno}`
-                                                    }
-                                                </button>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                                    <button 
+                                                        className={`btn btn-sm ${isDiscounted ? 'btn-ghost' : 'btn-primary'}`}
+                                                        disabled={isDiscounted || isDiscounting || !planning?.necesidades[activeTurno]}
+                                                        onClick={() => setShowDiscountModal(true)}
+                                                        style={{ gap: 'var(--space-2)' }}
+                                                    >
+                                                        {isDiscounted 
+                                                            ? '✅ Stock Descontado' 
+                                                            : `📦 Descontar Stock: Turno ${activeTurno}`
+                                                        }
+                                                    </button>
+                                                    {isDiscounted && (session?.user as any)?.rol === 'ADMIN' && (
+                                                        <button 
+                                                            className="btn btn-sm btn-error btn-outline"
+                                                            onClick={handleRevertDescuento}
+                                                            disabled={isDiscounting}
+                                                            style={{ fontSize: '11px', height: '32px' }}
+                                                        >
+                                                            Revertir
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     )}

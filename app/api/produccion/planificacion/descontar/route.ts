@@ -135,7 +135,7 @@ export async function POST(request: Request) {
                         signo: '-',
                         cantidad: item.paquetes,
                         fecha: new Date(),
-                        observaciones: `Descuento automático Planilla [Turno: ${turno}]`,
+                        observaciones: `Descuento automático Planilla [Día: ${fecha}, Turno: ${turno}]`,
                         productoId: item.productoId,
                         presentacionId: item.presentacionId,
                         ubicacionId: ubiFabrica.id
@@ -157,6 +157,94 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error('Error en descuento de stock:', error)
+        return NextResponse.json({ error: 'Error interno', details: error.message }, { status: 500 })
+    }
+}
+
+export async function DELETE(request: Request) {
+    try {
+        const session = await getServerSession(authOptions)
+        const userRol = (session?.user as any)?.rol
+        const permisos = (session?.user as any)?.permisos || {}
+
+        // Verificar permisos de stock o producción (solo ADMIN por seguridad adicional en reversión)
+        if (userRol !== 'ADMIN' && !permisos.permisoStock && !permisos.permisoProduccion) {
+            return NextResponse.json({ error: 'No tienes permiso para revertir el stock' }, { status: 403 })
+        }
+
+        const { fecha, turno } = await request.json()
+        if (!fecha || !turno) {
+            return NextResponse.json({ error: 'Faltan datos requeridos (fecha, turno)' }, { status: 400 })
+        }
+
+        const startOfDay = new Date(`${fecha}T00:00:00.000Z`)
+
+        // 1. Buscar registro de descuento
+        const descuento = await prisma.planificacionDescuento.findUnique({
+            where: { fecha_turno: { fecha: startOfDay, turno } }
+        })
+
+        if (!descuento) {
+            return NextResponse.json({ error: 'No se encontró un descuento registrado para este turno y fecha.' }, { status: 404 })
+        }
+
+        // 2. Buscar movimientos asociados (con margen de tiempo y patrón de observación)
+        const margenMinutos = 2
+        const createdMin = new Date(descuento.createdAt.getTime() - (margenMinutos * 60000))
+        const createdMax = new Date(descuento.createdAt.getTime() + (margenMinutos * 60000))
+
+        const movimientos = await prisma.movimientoProducto.findMany({
+            where: {
+                tipo: 'egreso',
+                signo: '-',
+                createdAt: { gte: createdMin, lte: createdMax },
+                OR: [
+                    { observaciones: `Descuento automático Planilla [Turno: ${turno}]` },
+                    { observaciones: `Descuento automático Planilla [Día: ${fecha}, Turno: ${turno}]` }
+                ]
+            }
+        })
+
+        // 3. Ejecutar en transacción
+        await prisma.$transaction(async (tx) => {
+            for (const mov of movimientos) {
+                // Revertir StockProducto (sumar lo que se restó)
+                await tx.stockProducto.upsert({
+                    where: { 
+                        productoId_presentacionId_ubicacionId: {
+                            productoId: mov.productoId,
+                            presentacionId: mov.presentacionId,
+                            ubicacionId: mov.ubicacionId
+                        }
+                    },
+                    update: { cantidad: { increment: mov.cantidad } },
+                    create: {
+                        productoId: mov.productoId,
+                        presentacionId: mov.presentacionId,
+                        ubicacionId: mov.ubicacionId,
+                        cantidad: mov.cantidad
+                    }
+                })
+
+                // Eliminar el movimiento
+                await tx.movimientoProducto.delete({
+                    where: { id: mov.id }
+                })
+            }
+
+            // Eliminar registro de planificación
+            await tx.planificacionDescuento.delete({
+                where: { id: descuento.id }
+            })
+        })
+
+        return NextResponse.json({ 
+            success: true, 
+            message: `Reversión exitosa. Se han reincorporado ${movimientos.length} productos al stock.`
+        })
+
+    } catch (error: any) {
+        console.error('Error en reversión de stock:', error)
         return NextResponse.json({ error: 'Error interno', details: error.message }, { status: 500 })
     }
 }

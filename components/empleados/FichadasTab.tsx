@@ -263,7 +263,7 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {marcas.sort((a: any, b: any) => a.fechaHora.localeCompare(b.fechaHora)).map((f: any) => (
+                                                {marcas.sort((a: any, b: any) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()).map((f: any) => (
                                                     <tr key={f.id}>
                                                         <td style={{ fontWeight: 600 }}>{new Date(f.fechaHora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                                         <td>

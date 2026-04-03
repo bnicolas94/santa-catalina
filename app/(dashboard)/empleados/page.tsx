@@ -8,6 +8,8 @@ import { MassLiquidationModal } from '@/components/empleados/MassLiquidationModa
 import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
 import { ConfigLicenciasModal } from '@/components/empleados/ConfigLicenciasModal'
 import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
+import FeriadosConfigModal from '@/components/empleados/FeriadosConfigModal'
+import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -22,7 +24,9 @@ export default function EmpleadosPage() {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
+    const [weeklyPayrollOpen, setWeeklyPayrollOpen] = useState(false)
     const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
+    const [showFeriadosModal, setShowFeriadosModal] = useState(false)
     const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
     const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -232,6 +236,19 @@ export default function EmpleadosPage() {
                         className="btn btn-outline"
                     >
                         🏢 Liquidación Masiva
+                    </button>
+                    <button
+                        onClick={() => setWeeklyPayrollOpen(true)}
+                        className="btn btn-primary"
+                        style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                    >
+                        💰 Liquidación Semanal
+                    </button>
+                    <button
+                        onClick={() => setShowFeriadosModal(true)}
+                        className="btn btn-outline"
+                    >
+                        📅 Feriados
                     </button>
                     <button
                         onClick={() => setShowReportePagos(true)}
@@ -461,6 +478,16 @@ export default function EmpleadosPage() {
             {showReportePagos && (
                 <ReportePagosModal onClose={() => setShowReportePagos(false)} />
             )}
+            {showFeriadosModal && (
+                <FeriadosConfigModal onClose={() => setShowFeriadosModal(false)} />
+            )}
+            {weeklyPayrollOpen && (
+                <WeeklyPayrollModal 
+                    empleados={empleados} 
+                    onClose={() => setWeeklyPayrollOpen(false)} 
+                    onSuccess={() => fetchEmpleados()} 
+                />
+            )}
         </div>
     )
 }
@@ -489,7 +516,7 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
             tipo: type,
             originalStr: 'Manual'
         }
-        setLocalRegistros(prev => [...prev, newReg].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora)))
+        setLocalRegistros(prev => [...prev, newReg].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()))
     }
 
     const handleDelete = (idTemp: string) => {
@@ -536,7 +563,7 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
                                             {isOdd && <span className="badge badge-danger">Falta una marca</span>}
                                         </div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                                            {marcas.sort((a, b) => a.fechaHora.localeCompare(b.fechaHora)).map((m) => (
+                                            {marcas.sort((a: any, b: any) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()).map((m) => (
                                                 <div key={m.idTemp} style={{
                                                     display: 'flex',
                                                     alignItems: 'center',

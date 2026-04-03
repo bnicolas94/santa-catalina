@@ -27,6 +27,7 @@ export async function GET() {
                 diasTrabajoSemana: true,
                 horarioEntrada: true,
                 horarioSalida: true,
+                jornal: true,
                 codigoBiometrico: true,
                 ubicacionId: true,
                 rolId: true,
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
             nombre, apellido, dni, email, password, rol, rolId, telefono, fechaIngreso,
             sueldoBaseMensual, cicloPago, porcentajeHoraExtra, valorHoraExtra,
             porcentajeFeriado, horasTrabajoDiarias, diasTrabajoSemana,
-            horarioEntrada, horarioSalida, codigoBiometrico, ubicacionId
+            horarioEntrada, horarioSalida, jornal, codigoBiometrico, ubicacionId
         } = body
 
         if (!nombre || !rol) {
@@ -115,6 +116,7 @@ export async function POST(request: Request) {
                 diasTrabajoSemana: diasTrabajoSemana || 'Lunes a Viernes',
                 horarioEntrada: horarioEntrada || null,
                 horarioSalida: horarioSalida || null,
+                jornal: jornal ? parseFloat(jornal) : 0,
                 codigoBiometrico: codigoBiometrico || null,
                 ubicacionId: ubicacionId || null,
                 rolId: rolId || null,

@@ -152,16 +152,33 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                             <h4 style={{ margin: '0 0 1rem 0' }}>💰 Configuración Salarial</h4>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Jornal / Sueldo Base ($)</label>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Monto Base ($)</label>
                                     <input
                                         className="form-input"
                                         type="number"
                                         step="0.01"
                                         value={(editRole as any).jornal || 0}
                                         onChange={e => setEditRole({ ...editRole, jornal: parseFloat(e.target.value) || 0 })}
-                                        placeholder="Ej: 50000"
+                                        placeholder="Ej: 168414"
                                     />
-                                    <small style={{ color: '#666' }}>Monto base por período para este rol</small>
+                                    <small style={{ color: '#666' }}>
+                                        Monto según el ciclo seleccionado (ej: sueldo semanal).
+                                    </small>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Ciclo de Pago</label>
+                                    <select
+                                        className="form-input"
+                                        value={(editRole as any).cicloPago || 'SEMANAL'}
+                                        onChange={e => setEditRole({ ...editRole, cicloPago: e.target.value })}
+                                    >
+                                        <option value="DIARIO">Diario</option>
+                                        <option value="SEMANAL">Semanal</option>
+                                        <option value="MENSUAL">Mensual</option>
+                                    </select>
+                                    <small style={{ color: '#666' }}>
+                                        Define cómo se calcula el jornal diario a partir del monto base.
+                                    </small>
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Valor Hora Extra ($)</label>
@@ -173,7 +190,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                         onChange={e => setEditRole({ ...editRole, valorHoraExtra: parseFloat(e.target.value) || 0 })}
                                         placeholder="Ej: 1500"
                                     />
-                                    <small style={{ color: '#666' }}>Monto fijo por hora extra para este rol</small>
+                                    <small style={{ color: '#666' }}>Monto por hora extra. Si es 0, el sistema calcula el doble del valor hora normal.</small>
                                 </div>
                             </div>
                         </div>

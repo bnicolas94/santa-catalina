@@ -83,7 +83,7 @@ export function agruparFichadasPorDia(fichadas: any[]): Record<string, any[]> {
 
     // Ordenamos las marcas dentro de cada día cronológicamente
     Object.keys(grupos).forEach(dia => {
-        grupos[dia].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+        grupos[dia].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime());
     });
 
     return grupos;
