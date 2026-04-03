@@ -61,29 +61,38 @@ export async function POST(request: Request) {
 
         // 2. Ejecutar transacción para asegurar integridad
         const result = await prisma.$transaction(async (tx) => {
+            const numericMonto = Math.abs(parseFloat(monto))
+
             // Crear el Gasto Operativo
             const gasto = await tx.gastoOperativo.create({
                 data: {
-                    fecha: new Date(fecha),
-                    monto: parseFloat(monto),
+                    fecha: (() => {
+                        if (!fecha) return new Date();
+                        if (typeof fecha === 'string' && fecha.length === 10) {
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            if (fecha === todayStr) return new Date();
+                            return new Date(fecha + 'T12:00:00Z');
+                        }
+                        return new Date(fecha);
+                    })(),
+                    monto: numericMonto,
                     descripcion,
                     categoriaId,
                     vehiculoId,
                     kmVehiculo: kmVehiculo ? parseInt(kmVehiculo) : null,
                     taller: taller || null,
                     recurrente: false,
-                    // ubicacionId opcional, buscamos la fábrica por defecto
                 }
             })
 
             // Crear el Movimiento de Caja (Egreso)
             await tx.movimientoCaja.create({
                 data: {
-                    fecha: new Date(fecha),
-                    tipo: 'EGRESO',
+                    fecha: gasto.fecha,
+                    tipo: 'egreso', // En minúsculas para coincidir con el resto del sistema
                     concepto: `Gasto Flota: ${descripcion}`,
-                    monto: -Math.abs(parseFloat(monto)), // Egreso es negativo
-                    medioPago: cajaTipo,
+                    monto: numericMonto, // Almacenamos el valor absoluto, el tipo 'egreso' lo identifica
+                    medioPago: 'efectivo', // O el medio que corresponda a la cajaTipo
                     cajaOrigen: cajaTipo,
                     descripcion: `Vinculado a vehículo ${vehiculoId}`,
                     gastoId: gasto.id
@@ -94,14 +103,14 @@ export async function POST(request: Request) {
             await tx.saldoCaja.update({
                 where: { tipo: cajaTipo },
                 data: {
-                    saldo: { decrement: parseFloat(monto) }
+                    saldo: { decrement: numericMonto }
                 }
             })
 
             // Actualizar el kilometraje actual del vehículo si se proporcionó uno mayor
             if (kmVehiculo) {
-                const vehiculo = await tx.vehiculo.findUnique({ where: { id: vehiculoId } })
-                if (vehiculo && parseInt(kmVehiculo) > vehiculo.kmActual) {
+                const v = await tx.vehiculo.findUnique({ where: { id: vehiculoId } })
+                if (v && parseInt(kmVehiculo) > v.kmActual) {
                     await tx.vehiculo.update({
                         where: { id: vehiculoId },
                         data: { kmActual: parseInt(kmVehiculo) }

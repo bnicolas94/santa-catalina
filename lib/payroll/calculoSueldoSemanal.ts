@@ -124,13 +124,13 @@ export async function calcularSueldoSemanal(
         const fechaStr = `${year}-${month}-${day}`
         const marcasRaw = gruposPorDia[fechaStr] || []
         
-        // Regla: No pagar extras por llegar antes del horario configurado (ej: colectivos)
+        // Ajuste: Crear la fecha de configuración basada en la fecha de la marca pero con el horario regional
         const marcas = marcasRaw.map((m, idx) => {
             if (idx === 0 && m.tipo === 'entrada' && empleado.horarioEntrada) {
                 const [hH, hM] = empleado.horarioEntrada.split(':').map(Number)
                 const dMarca = new Date(m.fechaHora)
                 
-                // Si fichó ANTES del horario configurado, usamos el horario configurado como "inicio oficial"
+                // Usamos componentes locales para que 09:00 sea "09:00 local" sin importar el servidor
                 const dConfig = new Date(dMarca)
                 dConfig.setHours(hH, hM, 0, 0)
                 
