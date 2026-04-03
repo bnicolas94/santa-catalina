@@ -15,6 +15,7 @@ interface Role {
     permisoCostos: boolean
     jornal: number
     valorHoraExtra: number
+    cicloPago: string
 }
 
 interface RolesConfigModalProps {
@@ -157,7 +158,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                         className="form-input"
                                         type="number"
                                         step="0.01"
-                                        value={(editRole as any).jornal || 0}
+                                        value={editRole.jornal || 0}
                                         onChange={e => setEditRole({ ...editRole, jornal: parseFloat(e.target.value) || 0 })}
                                         placeholder="Ej: 168414"
                                     />
@@ -169,7 +170,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Ciclo de Pago</label>
                                     <select
                                         className="form-input"
-                                        value={(editRole as any).cicloPago || 'SEMANAL'}
+                                        value={editRole.cicloPago || 'SEMANAL'}
                                         onChange={e => setEditRole({ ...editRole, cicloPago: e.target.value })}
                                     >
                                         <option value="DIARIO">Diario</option>
@@ -186,7 +187,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                         className="form-input"
                                         type="number"
                                         step="0.01"
-                                        value={(editRole as any).valorHoraExtra || 0}
+                                        value={editRole.valorHoraExtra || 0}
                                         onChange={e => setEditRole({ ...editRole, valorHoraExtra: parseFloat(e.target.value) || 0 })}
                                         placeholder="Ej: 1500"
                                     />
