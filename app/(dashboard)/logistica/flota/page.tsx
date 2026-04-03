@@ -27,6 +27,9 @@ export default function FlotaDashboard() {
       <div className="page-header">
         <h1 className="page-title">Dashboard de Flota</h1>
         <div className="page-actions" style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <Link href="/logistica/flota/gastos" className="btn btn-outline">
+            💰 Gastos de Flota
+          </Link>
           <Link href="/logistica/flota/asignacion" className="btn btn-outline">
             📅 Asignación Diaria
           </Link>

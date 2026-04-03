@@ -1,8 +1,21 @@
+import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { updateCategoriaOperativa } from '@/lib/services/reportes'
 import { revalidateTag } from 'next/cache'
+
+export async function GET() {
+    try {
+        const categorias = await prisma.categoriaGasto.findMany({
+            orderBy: { nombre: 'asc' }
+        })
+        return NextResponse.json(categorias)
+    } catch (error) {
+        console.error('Error fetching categories:', error)
+        return NextResponse.json({ error: 'Error al obtener categorías' }, { status: 500 })
+    }
+}
 
 export async function POST(request: Request) {
     try {

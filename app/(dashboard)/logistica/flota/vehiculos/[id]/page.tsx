@@ -130,8 +130,9 @@ export default function VehiculoDetallePage() {
         <h1 className="page-title">
           Ficha: {vehiculo.patente} <span style={{ fontSize: '1rem', color: '#666' }}>{vehiculo.marca} {vehiculo.modelo} ({vehiculo.anio})</span>
         </h1>
-        <div className="page-actions">
-          <Link href="/flota/vehiculos" className="btn btn-ghost">← Volver a la Lista</Link>
+        <div className="page-actions" style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <Link href="/logistica/flota/gastos" className="btn btn-outline">💰 Cargar Gasto</Link>
+          <Link href="/logistica/flota/vehiculos" className="btn btn-ghost">← Volver</Link>
         </div>
       </div>
 
@@ -220,47 +221,44 @@ export default function VehiculoDetallePage() {
             </div>
           </div>
 
-          {/* Mantenimientos */}
+          {/* Gastos y Mantenimientos */}
           <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 className="card-title">Mantenimientos (Preventivos/Correctivos)</h2>
-              <button className="btn btn-primary btn-sm" onClick={() => { setEditMant(null); setShowMantDialog(true); }}>+ Agregar</button>
+              <h2 className="card-title">Historial de Gastos y Mantenimientos</h2>
+              <Link href={`/logistica/flota/gastos?vehiculoId=${vehiculo.id}`} className="btn btn-primary btn-sm">+ Cargar Nuevo</Link>
             </div>
             <div className="table-container">
               <table className="table">
                 <thead>
                   <tr>
                     <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Detalle</th>
+                    <th>Categoría</th>
+                    <th>Descripción</th>
                     <th>Taller</th>
-                    <th>Costo</th>
                     <th>KM</th>
-                    <th>Acciones</th>
+                    <th style={{ textAlign: 'right' }}>Monto</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {vehiculo.mantenimientos?.length > 0 ? (
-                    vehiculo.mantenimientos.map((m: any) => (
-                      <tr key={m.id}>
-                        <td>{new Date(m.fecha).toLocaleDateString()}</td>
+                  {vehiculo.gastos?.length > 0 ? (
+                    vehiculo.gastos.map((g: any) => (
+                      <tr key={g.id}>
+                        <td>{new Date(g.fecha).toLocaleDateString()}</td>
                         <td>
-                          <span className={`badge badge-${m.tipo === 'preventivo' ? 'info' : 'warning'}`}>
-                            {m.tipo.toUpperCase()}
+                          <span className="badge badge-outline">
+                            {g.categoria?.nombre}
                           </span>
                         </td>
-                        <td>{m.descripcion}</td>
-                        <td>{m.taller || '-'}</td>
-                        <td style={{ fontWeight: 'bold', color: 'var(--color-danger)' }}>${m.costo.toLocaleString()}</td>
-                        <td>{m.kilometraje ? `${m.kilometraje.toLocaleString()} km` : '-'}</td>
-                        <td>
-                          <button className="btn btn-ghost btn-sm" onClick={() => { setEditMant(m); setShowMantDialog(true); }}>Editar</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => handleDeleteMantenimiento(m.id)}>Eliminar</button>
+                        <td style={{ fontSize: 'var(--text-sm)' }}>{g.descripcion}</td>
+                        <td style={{ fontSize: 'var(--text-xs)' }}>{g.taller || '-'}</td>
+                        <td style={{ fontSize: 'var(--text-xs)' }}>{g.kmVehiculo ? `${g.kmVehiculo.toLocaleString()} km` : '-'}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-danger)' }}>
+                           ${g.monto.toLocaleString()}
                         </td>
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan={7} style={{ textAlign: 'center' }}>No hay mantenimientos registrados</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-6)' }}>No hay gastos o mantenimientos registrados</td></tr>
                   )}
                 </tbody>
               </table>

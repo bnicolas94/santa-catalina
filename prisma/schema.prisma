@@ -422,8 +422,12 @@ model GastoOperativo {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   ubicacionId      String?           @map("id_ubicacion")
+  vehiculoId       String?           @map("id_vehiculo")
+  kmVehiculo       Int?              @map("km_vehiculo")
+  taller           String?
   categoria        CategoriaGasto    @relation(fields: [categoriaId], references: [id])
   ubicacion        Ubicacion?        @relation(fields: [ubicacionId], references: [id])
+  vehiculo         Vehiculo?         @relation(fields: [vehiculoId], references: [id])
   movimientosStock MovimientoStock[]
 
   @@map("gastos_operativos")
@@ -641,6 +645,7 @@ model Vehiculo {
   mantenimientos   MantenimientoVehiculo[]
   rutas            Ruta[]                  @relation("RutaVehiculo")
   vencimientos     VencimientoVehiculo[]
+  gastos           GastoOperativo[]
 
   @@map("vehiculos")
 }

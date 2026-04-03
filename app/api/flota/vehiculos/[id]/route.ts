@@ -9,7 +9,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       include: {
         vencimientos: { orderBy: { fechaVencimiento: 'asc' } },
         kilometrajes: { orderBy: { fecha: 'desc' }, take: 20 },
-        mantenimientos: { orderBy: { fecha: 'desc' }, take: 20 },
+        gastos: { include: { categoria: true }, orderBy: { fecha: 'desc' }, take: 50 },
       },
     });
     if (!vehiculo) return NextResponse.json({ error: 'Vehiculo no encontrado' }, { status: 404 });

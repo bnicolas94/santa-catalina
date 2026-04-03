@@ -122,7 +122,25 @@ export async function calcularSueldoSemanal(
         const month = String(current.getMonth() + 1).padStart(2, '0')
         const day = String(current.getDate()).padStart(2, '0')
         const fechaStr = `${year}-${month}-${day}`
-        const marcas = gruposPorDia[fechaStr] || []
+        const marcasRaw = gruposPorDia[fechaStr] || []
+        
+        // Regla: No pagar extras por llegar antes del horario configurado (ej: colectivos)
+        const marcas = marcasRaw.map((m, idx) => {
+            if (idx === 0 && m.tipo === 'entrada' && empleado.horarioEntrada) {
+                const [hH, hM] = empleado.horarioEntrada.split(':').map(Number)
+                const dMarca = new Date(m.fechaHora)
+                
+                // Si fichó ANTES del horario configurado, usamos el horario configurado como "inicio oficial"
+                const dConfig = new Date(dMarca)
+                dConfig.setHours(hH, hM, 0, 0)
+                
+                if (dMarca < dConfig) {
+                    return { ...m, fechaHora: dConfig.toISOString() }
+                }
+            }
+            return m
+        })
+
         const resumen = calcularResumenDia(marcas, hsJornada)
         
         // Regla del usuario: HS Extras redondeadas al 0.5 más cercano
