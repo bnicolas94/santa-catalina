@@ -819,6 +819,7 @@ export default function ProduccionPage() {
                                             <>
                                                 <th style={{ textAlign: 'center' }}>Stock</th>
                                                 <th style={{ textAlign: 'center' }} className="hidden-mobile">Proceso</th>
+                                                <th style={{ textAlign: 'center' }} title="Pendientes de días anteriores o turnos previos">Previo</th>
                                                 <th style={{ textAlign: 'center' }}>Falta</th>
                                                 <th style={{ textAlign: 'center' }}>Final</th>
                                             </>
@@ -871,7 +872,7 @@ export default function ProduccionPage() {
                                         })
 
                                         if (items.length === 0) return (
-                                            <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
+                                            <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
                                         )
 
                                         return (
@@ -913,6 +914,7 @@ export default function ProduccionPage() {
                                                     })
 
                                                     const totalDeduccionProyectada = pendAnteriores + pendHoy
+                                                    const prevUnits = totalDeduccionProyectada - totalUnits
                                                     const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockValue - enProcUnits)
 
                                                     const rutaPaq = (ruta / presSize).toFixed(1).replace('.0', '')
@@ -950,6 +952,9 @@ export default function ProduccionPage() {
                                                             </td>
                                                             <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
                                                                 {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px' }}>
+                                                                {prevUnits > 0 ? `${(prevUnits / presSize).toFixed(1).replace('.0', '')} paq` : '—'}
                                                             </td>
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (
@@ -993,7 +998,7 @@ export default function ProduccionPage() {
 
                                         if (items.length === 0) return (
                                             <tr>
-                                                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
+                                                <td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>
                                                     No hay requerimientos para el turno {activeTurno}
                                                 </td>
                                             </tr>
@@ -1016,6 +1021,7 @@ export default function ProduccionPage() {
                                             if (totalUnits === 0 && filterDestino !== 'TODOS') return null
 
                                             // Stock dinámico según la fuente seleccionada
+                                            const stockSource = filterDestino === 'LOCAL' ? 'local' : (filterDestino === 'FABRICA' ? 'fabrica' : 'ambos')
                                             const stockUnits = (() => {
                                                 const fab = planning?.stockFabricacion?.[key] || 0
                                                 const loc = planning?.stockLocal?.[key] || 0
@@ -1049,6 +1055,7 @@ export default function ProduccionPage() {
                                             }
 
                                             const totalDeduccionProyectada = totalUnits + pendAnteriores + pendTurnosPrevios
+                                            const prevUnits = totalDeduccionProyectada - totalUnits
                                             const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockUnits - enProcUnits)
 
                                             // Conversión a paquetes para mostrar
@@ -1086,6 +1093,9 @@ export default function ProduccionPage() {
                                                             </td>
                                                             <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
                                                                 {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
+                                                            </td>
+                                                            <td style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px' }}>
+                                                                {prevUnits > 0 ? `${(prevUnits / presSize).toFixed(1).replace('.0', '')} paq` : '—'}
                                                             </td>
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (
@@ -1161,7 +1171,7 @@ export default function ProduccionPage() {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td colSpan={isDiscounted ? 2 : 6} style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 'var(--space-4)' }}>
+                                            <td colSpan={isDiscounted ? 2 : 7} style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 'var(--space-4)' }}>
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                                                     <button 
                                                         className={`btn btn-sm ${isDiscounted ? 'btn-ghost' : 'btn-primary'}`}
