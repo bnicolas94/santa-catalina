@@ -139,6 +139,15 @@ export async function POST(request: Request) {
             })
         }
 
+        // Antes de crear la liquidación pagada, eliminamos cualquier borrador existente para este periodo y empleado
+        await prisma.liquidacionSueldo.deleteMany({
+            where: {
+                empleadoId: empleado.id,
+                periodo: periodo,
+                estado: 'borrador'
+            }
+        })
+
         // Crear la liquidación en DB
         const liquidacion = await prisma.liquidacionSueldo.create({
             data: {

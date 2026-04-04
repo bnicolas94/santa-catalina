@@ -19,7 +19,8 @@ export async function GET(request: Request) {
                 fechaGeneracion: {
                     gte: fechaInicio,
                     lte: fechaFin
-                }
+                },
+                estado: 'pagado'
             },
             include: {
                 empleado: true
