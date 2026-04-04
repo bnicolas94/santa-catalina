@@ -28,6 +28,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
     const [periodoNombre, setPeriodoNombre] = useState('')
     const [confirmando, setConfirmando] = useState(false)
+    const [guardandoBorrador, setGuardandoBorrador] = useState(false)
+    const [borradorCargado, setBorradorCargado] = useState(false)
 
     useEffect(() => {
         const [sy, sm, sd] = fechaInicio.split('-').map(Number);
@@ -50,7 +52,42 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 })
             })
             const data = await res.json()
-            setResultados(data)
+            
+            // Buscar borradores guardados para este periodo
+            try {
+                const bRes = await fetch(`/api/liquidaciones/borrador?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`)
+                if (bRes.ok) {
+                    const borradores = await bRes.json()
+                    if (borradores.length > 0) {
+                        const merged = data.map((r: any) => {
+                            const b = borradores.find((b: any) => b.empleadoId === r.empleadoId)
+                            if (b) {
+                                return {
+                                    ...r,
+                                    ajusteHorasExtras: b.ajusteHorasExtras,
+                                    montoHorasExtras: b.montoHorasExtras,
+                                    totalNeto: b.totalNeto,
+                                    borradorId: b.id,
+                                    // Guardamos originales para el cálculo
+                                    horasExtrasOriginal: r.horasExtras,
+                                    totalNetoOriginal: r.totalNeto,
+                                    montoHorasExtrasOriginal: r.montoHorasExtras
+                                }
+                            }
+                            return r
+                        })
+                        setResultados(merged)
+                        setBorradorCargado(true)
+                    } else {
+                        setResultados(data)
+                        setBorradorCargado(false)
+                    }
+                } else {
+                    setResultados(data)
+                }
+            } catch (e) {
+                setResultados(data)
+            }
         } catch (error) {
             console.error(error)
             alert('Error al calcular')
@@ -63,7 +100,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         const validResults = resultados.filter(r => !r.error)
         if (validResults.length === 0) return
 
-        if (!confirm(`¿Confirmas la liquidación de ${validResults.length} empleados por un total de $${validResults.reduce((acc, r) => acc + r.totalNeto, 0).toLocaleString()}?`)) return
+        if (!confirm(`¿Confirmas la liquidación final de ${validResults.length} empleados? Esto generará los egresos de caja.`)) return
 
         setConfirmando(true)
         try {
@@ -84,6 +121,10 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     const err = await res.json()
                     throw new Error(`Error con ${result.empleadoNombre}: ${err.error}`)
                 }
+                
+                // Si había un borrador, borrarlo o se convierte automáticamente? 
+                // Nuestra API actual de POST /api/liquidaciones CREA uno nuevo.
+                // Podríamos borrar el borrador aquí si quisiéramos, pero el GET /api/liquidaciones/borrador solo trae "estado: borrador".
             }
             alert('¡Liquidaciones procesadas con éxito!')
             onSuccess()
@@ -92,6 +133,30 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             alert(error.message)
         } finally {
             setConfirmando(false)
+        }
+    }
+
+    const handleGuardarTodoBorrador = async () => {
+        setGuardandoBorrador(true)
+        try {
+            for (const result of resultados) {
+                if (result.error) continue;
+                await fetch('/api/liquidaciones/borrador', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        empleadoId: result.empleadoId,
+                        periodo: periodoNombre,
+                        calculatedData: result
+                    })
+                })
+            }
+            setBorradorCargado(true)
+            alert('¡Borrador guardado correctamente!')
+        } catch (error) {
+            alert('Error al guardar borrador')
+        } finally {
+            setGuardandoBorrador(false)
         }
     }
 
@@ -133,7 +198,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     ajusteHorasExtras: val,
                     montoHorasExtras: baseMontoExtras + diffMonto,
                     totalNeto: baseMontoNeto + diffMonto,
-                    // Guardamos los originales si no existen
                     horasExtrasOriginal: baseExtras,
                     totalNetoOriginal: baseMontoNeto,
                     montoHorasExtrasOriginal: baseMontoExtras
@@ -141,6 +205,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             }
             return r;
         }))
+        setBorradorCargado(false) // Al cambiar algo, el borrador en cloud ya no coincide
     }
 
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
@@ -294,11 +359,20 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         </div>
                     )}
                 </div>
-                <div className="modal-footer">
-                    <button className="btn btn-outline" onClick={onClose} disabled={confirmando}>Cerrar</button>
-                    <button className="btn btn-primary" style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)', minWidth: '200px' }} onClick={handleConfirmarTodo} disabled={resultados.length === 0 || confirmando}>
-                        {confirmando ? 'Procesando...' : `✅ Confirmar y Guardar (${resultados.length})`}
-                    </button>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                    <div>
+                        {resultados.length > 0 && (
+                            <button className="btn btn-outline" onClick={handleGuardarTodoBorrador} disabled={guardandoBorrador || confirmando}>
+                                {guardandoBorrador ? 'Guardando...' : borradorCargado ? '✅ Borrador al día' : '💾 Guardar Borrador'}
+                            </button>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <button className="btn btn-outline" onClick={onClose} disabled={confirmando}>Cerrar</button>
+                        <button className="btn btn-primary" style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)', minWidth: '200px' }} onClick={handleConfirmarTodo} disabled={resultados.length === 0 || confirmando}>
+                            {confirmando ? 'Procesando...' : `🚀 Finalizar y Liquidar (${resultados.length})`}
+                        </button>
+                    </div>
                 </div>
             </div>
             <style jsx>{`
