@@ -55,7 +55,12 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             
             // Buscar borradores guardados para este periodo
             try {
-                const bRes = await fetch(`/api/liquidaciones/borrador?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`)
+                // Generamos el nombre del periodo usando la misma lógica que el useEffect para que coincida con el de la DB
+                const [sy, sm, sd] = fechaInicio.split('-').map(Number);
+                const [ey, em, ed] = fechaFin.split('-').map(Number);
+                const p_name = `Semana del ${new Date(sy, sm - 1, sd).toLocaleDateString()} al ${new Date(ey, em - 1, ed).toLocaleDateString()}`;
+
+                const bRes = await fetch(`/api/liquidaciones/borrador?periodo=${encodeURIComponent(p_name)}`)
                 if (bRes.ok) {
                     const borradores = await bRes.json()
                     if (borradores.length > 0) {

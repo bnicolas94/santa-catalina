@@ -6,17 +6,16 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
-        const fechaInicio = searchParams.get('fechaInicio')
-        const fechaFin = searchParams.get('fechaFin')
+        const periodo = searchParams.get('periodo')
 
-        if (!fechaInicio || !fechaFin) {
-            return NextResponse.json({ error: 'Faltan fechas' }, { status: 400 })
+        if (!periodo) {
+            return NextResponse.json({ error: 'Falta periodo' }, { status: 400 })
         }
 
         const borradores = await prisma.liquidacionSueldo.findMany({
             where: {
                 estado: 'borrador',
-                periodo: { contains: `${fechaInicio} al ${fechaFin}` } // O usar un campo de fecha si existiera
+                periodo: periodo
             }
         })
 
