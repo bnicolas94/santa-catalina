@@ -236,7 +236,12 @@ export async function GET(request: Request) {
         const empleadoId = searchParams.get('empleadoId')
 
         const liquidaciones = await prisma.liquidacionSueldo.findMany({
-            where: empleadoId ? { empleadoId } : {},
+            where: empleadoId ? { 
+                empleadoId,
+                estado: 'pagado' 
+            } : {
+                estado: 'pagado'
+            },
             orderBy: { fechaGeneracion: 'desc' },
             include: {
                 cuotasDescontadas: true
