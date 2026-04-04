@@ -41,7 +41,7 @@ export async function GET(request: Request) {
                 empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
                 periodo: liq.periodo,
                 fechaGeneracion: liq.fechaGeneracion,
-                horasExtras: liq.horasExtras,
+                horasExtras: liq.horasExtras + liq.ajusteHorasExtras,
                 montoHorasExtras: liq.montoHorasExtras,
                 totalBruto: totalIngresos,
                 descuentos: totalEgresos,
