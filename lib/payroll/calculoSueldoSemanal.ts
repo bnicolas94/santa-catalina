@@ -177,15 +177,28 @@ export async function calcularSueldoSemanal(
     }
 
     // 4. Buscar Préstamos/Cuotas del período
-    const cuotasPendientes = await prisma.cuotaPrestamo.findMany({
+    // Buscamos todas las cuotas pendientes cuya fecha de vencimiento sea hoy o anterior
+    const todasPendientes = await prisma.cuotaPrestamo.findMany({
         where: {
-            prestamo: { empleadoId },
-            estado: 'pendiente'
+            prestamo: { empleadoId, estado: 'activo' },
+            estado: 'pendiente',
+            fechaVencimiento: {
+                lte: end // Hasta el final de la semana actual
+            }
         },
-        orderBy: { numeroCuota: 'asc' },
-        take: 1 // Tomamos una cuota por liquidación semanal (o ajustar según lógica)
+        orderBy: { numeroCuota: 'asc' }
     })
-    const descuentoPrestamos = cuotasPendientes.reduce((acc, c) => acc + c.monto, 0)
+
+    // Agrupamos para tomar solo UNA cuota por cada préstamo distinto (acoplamiento paralelo)
+    const porPrestamo: Record<string, any> = {}
+    todasPendientes.forEach(c => {
+        if (!porPrestamo[c.prestamoId]) {
+            porPrestamo[c.prestamoId] = c
+        }
+    })
+
+    const cuotasADescontar = Object.values(porPrestamo)
+    const descuentoPrestamos = cuotasADescontar.reduce((acc, c) => acc + c.monto, 0)
 
     // 5. Consolidar Resumen
     const diasTrabajados = desglosePorDia.filter(d => d.horasTrabajadas > 0).length

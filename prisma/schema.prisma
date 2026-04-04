@@ -530,6 +530,8 @@ model PrestamoEmpleado {
   montoTotal     Float           @map("monto_total")
   cantidadCuotas Int             @map("cantidad_cuotas")
   estado         String          @default("activo")
+  frecuencia     String          @default("SEMANAL") // SEMANAL, MENSUAL
+  modoInicio     String          @default("INMEDIATO") // INMEDIATO, FECHA, SECUENCIAL
   observaciones  String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -546,6 +548,7 @@ model CuotaPrestamo {
   monto         Float
   estado        String             @default("pendiente")
   mesAnio       String             @map("mes_anio")
+  fechaVencimiento DateTime         @default(now()) @map("fecha_vencimiento")
   fechaPago     DateTime?          @map("fecha_pago")
   prestamoId    String             @map("id_prestamo")
   liquidacionId String?            @map("id_liquidacion")

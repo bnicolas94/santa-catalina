@@ -16,6 +16,8 @@ interface Prestamo {
     montoTotal: number
     cantidadCuotas: number
     estado: string // "activo", "pagado"
+    frecuencia: string
+    modoInicio: string
     observaciones: string | null
     cuotas: Cuota[]
 }
@@ -24,7 +26,14 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
     const [prestamos, setPrestamos] = useState<Prestamo[]>([])
     const [loading, setLoading] = useState(true)
     const [showNew, setShowNew] = useState(false)
-    const [form, setForm] = useState({ montoTotal: '', cantidadCuotas: '1', observaciones: '' })
+    const [form, setForm] = useState({ 
+        montoTotal: '', 
+        cantidadCuotas: '1', 
+        observaciones: '',
+        frecuencia: 'SEMANAL',
+        modoInicio: 'INMEDIATO',
+        fechaInicio: '' 
+    })
 
     const fetchPrestamos = async () => {
         setLoading(true)
@@ -52,7 +61,14 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                 body: JSON.stringify(form)
             })
             if (res.ok) {
-                setForm({ montoTotal: '', cantidadCuotas: '1', observaciones: '' })
+                setForm({ 
+                    montoTotal: '', 
+                    cantidadCuotas: '1', 
+                    observaciones: '',
+                    frecuencia: 'SEMANAL',
+                    modoInicio: 'INMEDIATO',
+                    fechaInicio: ''
+                })
                 setShowNew(false)
                 fetchPrestamos()
             } else {
@@ -91,7 +107,28 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                             <label className="form-label">Cantidad de Cuotas</label>
                             <input required type="number" min="1" max="24" value={form.cantidadCuotas} onChange={e => setForm({ ...form, cantidadCuotas: e.target.value })} className="form-input" />
                         </div>
-                        <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <div className="form-group">
+                            <label className="form-label">Frecuencia</label>
+                            <select value={form.frecuencia} onChange={e => setForm({ ...form, frecuencia: e.target.value })} className="form-select">
+                                <option value="SEMANAL">Semanal</option>
+                                <option value="MENSUAL">Mensual</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Modo de Inicio</label>
+                            <select value={form.modoInicio} onChange={e => setForm({ ...form, modoInicio: e.target.value })} className="form-select">
+                                <option value="INMEDIATO">Inmediato (Esta semana)</option>
+                                <option value="FECHA_ESPECIFICA">A partir de fecha...</option>
+                                <option value="AL_FINALIZAR_ANTERIOR">Al finalizar actual (Secuencial)</option>
+                            </select>
+                        </div>
+                        {form.modoInicio === 'FECHA_ESPECIFICA' && (
+                            <div className="form-group">
+                                <label className="form-label">Fecha de Inicio</label>
+                                <input type="date" value={form.fechaInicio} onChange={e => setForm({ ...form, fechaInicio: e.target.value })} className="form-input" />
+                            </div>
+                        )}
+                        <div className="form-group" style={{ gridColumn: form.modoInicio === 'FECHA_ESPECIFICA' ? 'span 1' : 'span 2' }}>
                             <label className="form-label">Observaciones</label>
                             <input type="text" value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} placeholder="Ej: Especial vacaciones" className="form-input" />
                         </div>
@@ -112,8 +149,13 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                         <div key={p.id} className="card" style={{ overflow: 'hidden' }}>
                             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-4)' }}>
                                 <div>
-                                    <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>${p.montoTotal.toLocaleString()} en {p.cantidadCuotas} cuotas</div>
-                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)', marginTop: 'var(--space-1)' }}>Otorgado el {new Date(p.fechaSolicitud).toLocaleDateString()} {p.observaciones && `• ${p.observaciones}`}</div>
+                                    <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>
+                                        ${p.montoTotal.toLocaleString()} en {p.cantidadCuotas} cuotas {p.frecuencia === 'SEMANAL' ? 'semanales' : 'mensuales'}
+                                    </div>
+                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)', marginTop: 'var(--space-1)' }}>
+                                        {p.modoInicio === 'AL_FINALIZAR_ANTERIOR' ? '⏳ Secuencial ' : ''}
+                                        Otorgado el {new Date(p.fechaSolicitud).toLocaleDateString()} {p.observaciones && `• ${p.observaciones}`}
+                                    </div>
                                 </div>
                                 <span className={`badge ${p.estado === 'pagado' ? 'badge-success' : 'badge-warning'}`}>
                                     {p.estado === 'pagado' ? 'Saldado' : 'Activo'}

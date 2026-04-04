@@ -32,33 +32,61 @@ export async function POST(
     try {
         const { id } = await params
         const body = await request.json()
-        const { montoTotal, cantidadCuotas, observaciones, fechaInicio } = body
+        const { 
+            montoTotal, 
+            cantidadCuotas, 
+            observaciones, 
+            fechaInicio, 
+            frecuencia = 'SEMANAL', 
+            modoInicio = 'INMEDIATO' 
+        } = body
 
         if (!montoTotal || !cantidadCuotas) {
             return NextResponse.json({ error: 'Monto y cantidad de cuotas son requeridos' }, { status: 400 })
         }
 
-        const montoCuota = montoTotal / cantidadCuotas
+        const montoCuota = parseFloat(montoTotal) / parseInt(cantidadCuotas)
 
-        // Calcular meses para las cuotas basado en fechaInicio (o actual si no viene)
-        const fechaBase = fechaInicio ? new Date(fechaInicio) : new Date()
+        // 1. Determinar Fecha Base de Inicio
+        let fechaBase = fechaInicio ? new Date(fechaInicio) : new Date()
+
+        if (modoInicio === 'AL_FINALIZAR_ANTERIOR') {
+            const ultimaCuota = await prisma.cuotaPrestamo.findFirst({
+                where: { prestamo: { empleadoId: id }, estado: 'pendiente' },
+                orderBy: { fechaVencimiento: 'desc' }
+            })
+            if (ultimaCuota) {
+                fechaBase = new Date(ultimaCuota.fechaVencimiento)
+                // Sumamos un salto según la frecuencia para que empiece justo después
+                if (frecuencia === 'SEMANAL') fechaBase.setDate(fechaBase.getDate() + 7)
+                else fechaBase.setMonth(fechaBase.getMonth() + 1)
+            }
+        }
 
         const prestamo = await prisma.$transaction(async (tx) => {
-            // 1. Crear Préstamo
+            // 2. Crear Préstamo
             const nuevoPrestamo = await tx.prestamoEmpleado.create({
                 data: {
                     empleadoId: id,
                     montoTotal: parseFloat(montoTotal),
                     cantidadCuotas: parseInt(cantidadCuotas),
+                    frecuencia: frecuencia,
+                    modoInicio: modoInicio,
                     observaciones: observaciones || null,
                 }
             })
 
-            // 2. Crear Cuotas
+            // 3. Crear Cuotas
             for (let i = 1; i <= cantidadCuotas; i++) {
-                // Avanzamos los meses según el número de cuota
                 const fechaCuota = new Date(fechaBase)
-                fechaCuota.setMonth(fechaBase.getMonth() + (i - 1))
+                
+                if (frecuencia === 'SEMANAL') {
+                    fechaCuota.setDate(fechaBase.getDate() + (i - 1) * 7)
+                } else {
+                    fechaCuota.setMonth(fechaBase.getMonth() + (i - 1))
+                }
+
+                // Generamos etiqueta mesAnio (compatible con UI anterior)
                 const mesAnio = `${(fechaCuota.getMonth() + 1).toString().padStart(2, '0')}-${fechaCuota.getFullYear()}`
 
                 await tx.cuotaPrestamo.create({
@@ -66,7 +94,8 @@ export async function POST(
                         prestamoId: nuevoPrestamo.id,
                         numeroCuota: i,
                         monto: montoCuota,
-                        mesAnio: mesAnio
+                        mesAnio: mesAnio,
+                        fechaVencimiento: fechaCuota
                     }
                 })
             }
