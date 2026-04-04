@@ -7,6 +7,23 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData } = body
 
+        if (!empleadoId || !periodo) {
+            return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 })
+        }
+
+        // Verificamos si ya existe una liquidación PAGADA para este empleado y periodo
+        const existente = await prisma.liquidacionSueldo.findFirst({
+            where: {
+                empleadoId,
+                periodo,
+                estado: 'pagado'
+            }
+        })
+
+        if (existente) {
+            return NextResponse.json({ error: `El empleado ya tiene una liquidación pagada para el periodo ${periodo}.` }, { status: 400 })
+        }
+
         if (!empleadoId || !periodo || !fechaInicio || !fechaFin) {
             return NextResponse.json({ error: 'Faltan datos para la liquidación' }, { status: 400 })
         }

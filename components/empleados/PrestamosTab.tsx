@@ -79,6 +79,24 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
         }
     }
 
+    const handleDelete = async (id: string) => {
+        if (!confirm('¿Estás seguro de que deseas eliminar este préstamo? Esta acción borrará todas sus cuotas pendientes.')) return
+        try {
+            const res = await fetch(`/api/prestamos/${id}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                fetchPrestamos()
+            } else {
+                const err = await res.json()
+                alert(err.error || 'Error al eliminar el préstamo')
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Error técnico al eliminar')
+        }
+    }
+
     if (loading) return <div className="p-10 text-center text-gray-400">Cargando préstamos...</div>
 
     return (
@@ -157,9 +175,29 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                                         Otorgado el {new Date(p.fechaSolicitud).toLocaleDateString()} {p.observaciones && `• ${p.observaciones}`}
                                     </div>
                                 </div>
-                                <span className={`badge ${p.estado === 'pagado' ? 'badge-success' : 'badge-warning'}`}>
-                                    {p.estado === 'pagado' ? 'Saldado' : 'Activo'}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <span className={`badge ${p.estado === 'pagado' ? 'badge-success' : 'badge-warning'}`}>
+                                        {p.estado === 'pagado' ? 'Saldado' : 'Activo'}
+                                    </span>
+                                    {p.estado !== 'pagado' && (
+                                        <button 
+                                            onClick={() => handleDelete(p.id)}
+                                            style={{ 
+                                                border: 'none', 
+                                                background: 'none', 
+                                                color: 'var(--color-danger)', 
+                                                cursor: 'pointer',
+                                                padding: 'var(--space-1)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                opacity: 0.7
+                                            }}
+                                            title="Eliminar préstamo"
+                                        >
+                                            🗑️
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
                                 {p.cuotas.map((c: Cuota) => (
