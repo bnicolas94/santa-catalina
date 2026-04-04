@@ -22,7 +22,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         const diff = d.getDate() - day + (day === 0 ? 0 : 7) // Domingo
         return new Date(d.setDate(diff)).toISOString().split('T')[0]
     })
-    const [cajaId, setCajaId] = useState('CAJA_CHICA')
+    const [cajaId, setCajaId] = useState('caja_chica')
     const [loading, setLoading] = useState(false)
     const [resultados, setResultados] = useState<any[]>([])
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -243,9 +243,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label className="form-label">Caja de Egreso</label>
                             <select className="form-select" value={cajaId} onChange={e => setCajaId(e.target.value)}>
-                                <option value="CAJA_CHICA">Caja Chica</option>
-                                <option value="BANCO">Banco</option>
-                                <option value="ADMINISTRACION">Administración</option>
+                                <option value="caja_chica">Caja Chica</option>
+                                <option value="mercado_pago">Mercado Pago (MP)</option>
+                                <option value="caja_madre">Caja Madre</option>
                             </select>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'flex-end' }}>

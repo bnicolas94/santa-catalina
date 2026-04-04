@@ -169,6 +169,15 @@ export async function POST(request: Request) {
         if (cajaId && neto > 0) {
             const conceptoFinal = concepto || 'pago_sueldo'
 
+            // Verificar si la caja existe
+            const caja = await prisma.saldoCaja.findUnique({
+                where: { tipo: cajaId }
+            })
+
+            if (!caja) {
+                return NextResponse.json({ error: `La caja '${cajaId}' no existe en el sistema.` }, { status: 400 })
+            }
+
             await prisma.movimientoCaja.create({
                 data: {
                     tipo: 'egreso',
@@ -188,9 +197,9 @@ export async function POST(request: Request) {
         }
 
         return NextResponse.json(liquidacion, { status: 201 })
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error procesando liquidacion:', error)
-        return NextResponse.json({ error: 'Error interno en la liquidación' }, { status: 500 })
+        return NextResponse.json({ error: `Error en la liquidación: ${error.message || 'Error interno'}` }, { status: 500 })
     }
 }
 
