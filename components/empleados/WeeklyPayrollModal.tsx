@@ -95,6 +95,28 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         }
     }
 
+    const handleJustificar = async (empleadoId: string, fecha: string) => {
+        try {
+            const res = await fetch('/api/fichadas/justificar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ empleadoId, fecha })
+            })
+            if (res.ok) handleCalcular()
+            else alert('Error al justificar')
+        } catch (error) { console.error(error) }
+    }
+
+    const handleQuitarJustificacion = async (empleadoId: string, fecha: string) => {
+        try {
+            const res = await fetch(`/api/fichadas/justificar?empleadoId=${empleadoId}&fecha=${fecha}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) handleCalcular()
+            else alert('Error al quitar justificación')
+        } catch (error) { console.error(error) }
+    }
+
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
 
     return (
@@ -189,9 +211,22 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     <div style={{ fontWeight: 700, borderBottom: '1px solid var(--color-gray-100)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
                                                                         <span>{dia.diaSemana} {dia.fecha.split('-')[2]}</span>
                                                                         {dia.esFeriado && <span style={{ color: 'var(--color-warning)' }}>🚩</span>}
+                                                                        {dia.esJustificado && <span className="badge badge-success" style={{ fontSize: '8px', padding: '1px 3px' }}>MANUAL</span>}
                                                                     </div>
-                                                                    <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
-                                                                    <div style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas} {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)' }}>(+{dia.horasExtras})</span>}</div>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <div>
+                                                                            <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
+                                                                            <div style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas} {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)' }}>(+{dia.horasExtras})</span>}</div>
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                            {dia.horasTrabajadas === 0 && (
+                                                                                <button className="btn btn-ghost" title="Justificar día completo" onClick={() => handleJustificar(r.empleadoId, dia.fecha)} style={{ padding: '2px', height: 'auto', fontSize: '14px', color: 'var(--color-success)' }}>🟢</button>
+                                                                            )}
+                                                                            {dia.esJustificado && (
+                                                                                <button className="btn btn-ghost" title="Quitar justificación" onClick={() => handleQuitarJustificacion(r.empleadoId, dia.fecha)} style={{ padding: '2px', height: 'auto', fontSize: '14px', color: 'var(--color-danger)' }}>🔴</button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                     <div style={{ fontWeight: 600, marginTop: '4px', textAlign: 'right' }}>${dia.totalDia.toLocaleString()}</div>
                                                                 </div>
                                                             ))}

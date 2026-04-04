@@ -14,6 +14,7 @@ export interface DiaTrabajado {
     valorExtra: number
     valorFeriado: number
     totalDia: number
+    esJustificado: boolean
 }
 
 export interface ResumenSemanal {
@@ -170,7 +171,8 @@ export async function calcularSueldoSemanal(
             valorDiaBase: Math.round(valorDiaBase),
             valorExtra: Math.round(valorExtra),
             valorFeriado: Math.round(valorFeriado),
-            totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado)
+            totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado),
+            esJustificado: marcas.some(m => m.origen === 'justificada')
         })
 
         current.setDate(current.getDate() + 1)
