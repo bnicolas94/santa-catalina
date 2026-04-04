@@ -67,13 +67,18 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         const merged = data.map((r: any) => {
                             const b = borradores.find((b: any) => b.empleadoId === r.empleadoId)
                             if (b) {
+                                // REGLA: No usamos el totalNeto del borrador directo, sino que aplicamos 
+                                // el ajuste del borrador al NUEVO cálculo de la API (para que justificaciones y cambios de sueldo se vean)
+                                const adjustmentHs = b.ajusteHorasExtras || 0;
+                                const adjustmentMoney = Math.round(adjustmentHs * r.valorHoraExtra);
+
                                 return {
                                     ...r,
-                                    ajusteHorasExtras: b.ajusteHorasExtras,
-                                    montoHorasExtras: b.montoHorasExtras,
-                                    totalNeto: b.totalNeto,
+                                    ajusteHorasExtras: adjustmentHs,
+                                    montoHorasExtras: r.montoHorasExtras + adjustmentMoney,
+                                    totalNeto: r.totalNeto + adjustmentMoney,
                                     borradorId: b.id,
-                                    // Guardamos originales para el cálculo
+                                    // Guardamos originales para el cálculo local reactivo
                                     horasExtrasOriginal: r.horasExtras,
                                     totalNetoOriginal: r.totalNeto,
                                     montoHorasExtrasOriginal: r.montoHorasExtras

@@ -166,8 +166,12 @@ export async function calcularSueldoSemanal(
         // Cálculos del día
         const valorDiaBase = marcas.length > 0 ? jornalBase : 0
         const valorExtra = hsExtrasRedondeadas * valorHoraExtra
-        // Recargo feriado: 50% extra del valor de la hora por hora trabajada
-        const valorFeriado = esFeriado ? (resumen.horasTrabajadas * valorHora * 0.5) : 0
+        // Recargo feriado: 50% extra del valor de la hora.
+        // REGLA: Si trabajó, el recargo se aplica sobre MÍNIMO la hsJornada (9hs), o la real si fue mayor.
+        const hsEfectivasFeriado = (esFeriado && resumen.horasTrabajadas > 0) 
+            ? Math.max(resumen.horasTrabajadas, hsJornada) 
+            : 0
+        const valorFeriado = esFeriado ? (hsEfectivasFeriado * valorHora * 0.5) : 0
 
         const primerEntrada = marcas.find(m => m.tipo === 'entrada')?.fechaHora
         const ultimaSalida = [...marcas].reverse().find(m => m.tipo === 'salida')?.fechaHora
