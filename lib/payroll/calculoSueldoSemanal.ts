@@ -100,9 +100,21 @@ export async function calcularSueldoSemanal(
         jornalBase = montoBase / 6
     }
 
-    const hsJornada = empleado.horasTrabajoDiarias || 8
-    const valorHora = hsJornada > 0 ? jornalBase / hsJornada : 0
-    const valorHoraExtra = valorHora * 2 // HS Extras se pagan al 100% adicional (Doble)
+    const hsJornada = (empleado.horasTrabajoDiarias || 8)
+    let valorHora = hsJornada > 0 ? jornalBase / hsJornada : 0
+    
+    // Prioridad para valorHoraNormal (si está configurado manualmente)
+    if (empleado.valorHoraNormal && empleado.valorHoraNormal > 0) {
+        valorHora = empleado.valorHoraNormal
+    }
+
+    // Prioridad para valorHoraExtra (si está configurado manualmente)
+    let valorHoraExtra = valorHora * 2 // Default: doble
+    if (empleado.valorHoraExtra && empleado.valorHoraExtra > 0) {
+        valorHoraExtra = empleado.valorHoraExtra
+    } else if (empleado.rolRel?.valorHoraExtra && empleado.rolRel.valorHoraExtra > 0) {
+        valorHoraExtra = empleado.rolRel.valorHoraExtra
+    }
 
     // 3. Procesar Fichadas
     const fichadas = empleado.fichadas
