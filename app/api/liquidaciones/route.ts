@@ -45,6 +45,7 @@ export async function POST(request: Request) {
         let montoHsFeriado = 0
         let deduccionCuotas = 0
         let diasTrabajados = 0
+        let ajusteHorasExtras = 0
 
         if (manualData) {
             // Liquidación Express / Manual
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
             montoHsFeriado = calculatedData.montoHorasFeriado || 0
             deduccionCuotas = calculatedData.descuentoPrestamos || 0
             diasTrabajados = calculatedData.diasTrabajados || 0
+            ajusteHorasExtras = calculatedData.ajusteHorasExtras || 0
         } else {
             // Cálculo Automático basado en fichadas
             const fichadas = empleado.fichadas || []
@@ -132,6 +134,7 @@ export async function POST(request: Request) {
                 montoHorasExtras: montoHsExtra,
                 horasFeriado,
                 montoHorasFeriado: montoHsFeriado,
+                ajusteHorasExtras,
                 descuentosPrestamos: deduccionCuotas,
                 totalNeto: neto,
                 estado: 'pagado',

@@ -26,6 +26,7 @@ export interface ResumenSemanal {
     horasExtras: number
     horasFeriado: number
     sueldoBase: number
+    valorHoraExtra: number
     montoHorasExtras: number
     montoHorasFeriado: number
     descuentoPrestamos: number
@@ -222,6 +223,7 @@ export async function calcularSueldoSemanal(
         horasExtras: horasExtrasTotales,
         horasFeriado: parseFloat(horasFeriadoTotales.toFixed(2)),
         sueldoBase,
+        valorHoraExtra,
         montoHorasExtras,
         montoHorasFeriado,
         descuentoPrestamos,

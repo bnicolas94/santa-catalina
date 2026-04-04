@@ -569,6 +569,7 @@ model LiquidacionSueldo {
   montoHorasExtras    Float           @default(0) @map("monto_horas_extras")
   horasFeriado        Float           @default(0) @map("horas_feriado")
   montoHorasFeriado   Float           @default(0) @map("monto_horas_feriado")
+  ajusteHorasExtras   Float           @default(0) @map("ajuste_horas_extras")
   descuentosPrestamos Float           @default(0) @map("descuentos_prestamos")
   totalNeto           Float           @default(0) @map("total_neto")
   estado              String          @default("generado")

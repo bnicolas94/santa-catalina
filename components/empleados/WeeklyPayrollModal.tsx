@@ -117,6 +117,32 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         } catch (error) { console.error(error) }
     }
 
+    const handleAjusteChange = (empleadoId: string, value: string) => {
+        const val = parseFloat(value) || 0;
+        setResultados(prev => prev.map(r => {
+            if (r.empleadoId === empleadoId) {
+                const baseExtras = r.horasExtrasOriginal ?? r.horasExtras;
+                const baseMontoNeto = r.totalNetoOriginal ?? r.totalNeto;
+                const baseMontoExtras = r.montoHorasExtrasOriginal ?? r.montoHorasExtras;
+                
+                const diffHs = val;
+                const diffMonto = Math.round(diffHs * r.valorHoraExtra);
+                
+                return {
+                    ...r,
+                    ajusteHorasExtras: val,
+                    montoHorasExtras: baseMontoExtras + diffMonto,
+                    totalNeto: baseMontoNeto + diffMonto,
+                    // Guardamos los originales si no existen
+                    horasExtrasOriginal: baseExtras,
+                    totalNetoOriginal: baseMontoNeto,
+                    montoHorasExtrasOriginal: baseMontoExtras
+                }
+            }
+            return r;
+        }))
+    }
+
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
 
     return (
@@ -163,6 +189,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                         <th>Empleado</th>
                                         <th style={{ textAlign: 'center' }}>Días</th>
                                         <th style={{ textAlign: 'right' }}>Sueldo Base</th>
+                                        <th style={{ textAlign: 'center', width: '90px' }}>Ajuste (hs)</th>
                                         <th style={{ textAlign: 'right' }}>Hs. Extras</th>
                                         <th style={{ textAlign: 'right' }}>Recargo Fer.</th>
                                         <th style={{ textAlign: 'right' }}>Deducciones</th>
@@ -186,8 +213,23 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                     <>
                                                         <td style={{ textAlign: 'center' }}>{r.diasTrabajados}</td>
                                                         <td style={{ textAlign: 'right' }}>${(r.sueldoBase || 0).toLocaleString()}</td>
+                                                        <td style={{ textAlign: 'center' }}>
+                                                            <input 
+                                                                type="number" 
+                                                                step="0.5" 
+                                                                className="form-input" 
+                                                                style={{ padding: '2px 5px', fontSize: '11px', textAlign: 'center', height: '24px' }} 
+                                                                value={r.ajusteHorasExtras || ''} 
+                                                                onChange={e => handleAjusteChange(r.empleadoId, e.target.value)} 
+                                                                onClick={e => e.stopPropagation()}
+                                                                placeholder="0"
+                                                            />
+                                                        </td>
                                                         <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>
-                                                            {(r.horasExtras || 0) > 0 && <span style={{ fontSize: '10px', display: 'block' }}>({r.horasExtras}h)</span>}
+                                                            <span style={{ fontSize: '10px', display: 'block' }}>
+                                                                ({(r.horasExtrasOriginal ?? r.horasExtras) + (r.ajusteHorasExtras || 0)}h)
+                                                                {r.ajusteHorasExtras !== 0 && <span style={{ color: r.ajusteHorasExtras > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}> {r.ajusteHorasExtras > 0 ? '+' : ''}{r.ajusteHorasExtras}</span>}
+                                                            </span>
                                                             ${(r.montoHorasExtras || 0).toLocaleString()}
                                                         </td>
                                                         <td style={{ textAlign: 'right' }}>
