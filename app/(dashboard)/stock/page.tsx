@@ -21,6 +21,7 @@ function StockContent() {
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
     const [selectedUbi, setSelectedUbi] = useState<string>('')
     const [stockProductos, setStockProductos] = useState<any[]>([])
+    const [cajas, setCajas] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
@@ -55,24 +56,32 @@ function StockContent() {
 
     async function fetchData() {
         try {
-            const [movRes, insRes, provRes, ubiRes, stockProdRes] = await Promise.all([
+            const [movRes, insRes, provRes, ubiRes, stockProdRes, cajasRes] = await Promise.all([
                 fetch('/api/movimientos-stock'),
                 fetch('/api/insumos'),
                 fetch('/api/proveedores'),
                 fetch('/api/ubicaciones'),
-                fetch('/api/stock-producto')
+                fetch('/api/stock-producto'),
+                fetch('/api/caja/saldos')
             ])
             const movData = await movRes.json()
             const insData = await insRes.json()
             const provData = await provRes.json()
             const ubiData = await ubiRes.json()
             const stockProdData = await stockProdRes.json()
+            const cajasData = await cajasRes.json()
 
             setMovimientos(Array.isArray(movData) ? movData : [])
             setInsumos(Array.isArray(insData) ? insData : [])
             setProveedores(Array.isArray(provData) ? provData : [])
             setUbicaciones(Array.isArray(ubiData) ? ubiData : [])
             setStockProductos(Array.isArray(stockProdData) ? stockProdData : [])
+            
+            if (cajasData && !cajasData.error) {
+                // Convertir el objeto de cajas en un array para el select
+                const list = Object.values(cajasData).filter((c: any) => c && c.tipo)
+                setCajas(list)
+            }
         } catch { setError('Error al cargar datos') } finally { setLoading(false) }
     }
 
@@ -680,18 +689,41 @@ function StockContent() {
                                         {form.estadoPago === 'pagado' && (
                                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                                 <label className="form-label" style={{ fontSize: 'var(--text-xs)' }}>¿De qué caja sale el pago?</label>
-                                                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                                    {[
-                                                        { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' },
-                                                        { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' },
-                                                        { key: 'local', label: '🏪 Local', color: '#27AE60' }
-                                                    ].map((c) => (
-                                                        <button key={c.key} type="button" className="btn btn-sm"
-                                                            onClick={() => setForm({ ...form, cajaOrigen: c.key })}
-                                                            style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
-                                                            {c.label}
-                                                        </button>
-                                                    ))}
+                                                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                    {cajas.length > 0 ? (
+                                                        cajas.map((c) => {
+                                                            const isMP = c.tipo === 'mercado_pago';
+                                                            const color = isMP ? '#3498DB' : (c.tipo === 'caja_madre' ? '#8E44AD' : (c.tipo === 'caja_chica' ? '#E67E22' : '#27AE60'));
+                                                            const label = c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                                            return (
+                                                                <button key={c.tipo} type="button" className="btn btn-sm"
+                                                                    onClick={() => setForm({ ...form, cajaOrigen: c.tipo })}
+                                                                    style={{ 
+                                                                        flex: '1 1 100px', 
+                                                                        backgroundColor: form.cajaOrigen === c.tipo ? color : `${color}18`, 
+                                                                        color: form.cajaOrigen === c.tipo ? '#fff' : color, 
+                                                                        border: `2px solid ${color}`, 
+                                                                        fontWeight: 600, 
+                                                                        fontSize: '0.75rem',
+                                                                        padding: '6px 4px'
+                                                                    }}>
+                                                                    {isMP ? '💳 ' : '🏦 '}{label}
+                                                                </button>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        [
+                                                            { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' },
+                                                            { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' },
+                                                            { key: 'local', label: '🏪 Local', color: '#27AE60' }
+                                                        ].map((c) => (
+                                                            <button key={c.key} type="button" className="btn btn-sm"
+                                                                onClick={() => setForm({ ...form, cajaOrigen: c.key })}
+                                                                style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
+                                                                {c.label}
+                                                            </button>
+                                                        ))
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
@@ -768,9 +800,20 @@ function StockContent() {
                                         <div className="form-group">
                                             <label className="form-label">Caja de Origen</label>
                                             <select className="form-select" value={facturaForm.cajaOrigen} onChange={(e) => setFacturaForm({ ...facturaForm, cajaOrigen: e.target.value })}>
-                                                <option value="caja_madre">🏦 Caja Madre</option>
-                                                <option value="caja_chica">💼 Caja Chica</option>
-                                                <option value="local">🏪 Local</option>
+                                                {cajas.length > 0 ? (
+                                                    cajas.map(c => (
+                                                        <option key={c.tipo} value={c.tipo}>
+                                                            {c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '}
+                                                            {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                                                        </option>
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="caja_madre">Caja Madre</option>
+                                                        <option value="caja_chica">Caja Chica</option>
+                                                        <option value="local">Local</option>
+                                                    </>
+                                                )}
                                             </select>
                                         </div>
                                     )}
