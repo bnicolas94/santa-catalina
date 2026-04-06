@@ -18,7 +18,7 @@ interface DetallePedido {
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
     medioPago: string | null; totalUnidades: number; totalImporte: number
-    totalPacks: number; cliente: Cliente; detalles: DetallePedido[]
+    totalPacks: number; cliente: Cliente; detalles: DetallePedido[]; abonado: boolean
 }
 interface Producto {
     id: string; nombre: string; codigoInterno: string
@@ -52,6 +52,7 @@ export default function PedidosPage() {
     const [editForm, setEditForm] = useState({ fechaEntrega: '', medioPago: 'efectivo', estado: 'pendiente' })
     const [showEditModal, setShowEditModal] = useState(false)
     const [showImportModal, setShowImportModal] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
 
     useEffect(() => { fetchData() }, [])
 
@@ -110,6 +111,21 @@ export default function PedidosPage() {
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al actualizar estado') }
+    }
+
+    async function marcarAbonado(pedidoId: string) {
+        if (!confirm('¿Marcar este pedido como abonado? Se registrará un ingreso en la caja de Mercado Pago Juani.')) return
+        try {
+            const res = await fetch(`/api/pedidos/${pedidoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ abonado: true }),
+            })
+            if (!res.ok) throw new Error()
+            setSuccess('Pedido marcado como abonado')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch { setError('Error al marcar como abonado') }
     }
 
     function startEditPedido(ped: Pedido) {
@@ -239,7 +255,14 @@ export default function PedidosPage() {
 
     const totalPedido = calculateLiveTotal();
 
-    const filtered = filterEstado ? pedidos.filter((p) => p.estado === filterEstado) : pedidos
+    const filtered = pedidos.filter((p) => {
+        const matchesEstado = filterEstado ? p.estado === filterEstado : true;
+        const matchesSearch = searchTerm 
+            ? p.cliente.nombreComercial.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              p.detalles.some(d => d.presentacion.producto.codigoInterno.toLowerCase().includes(searchTerm.toLowerCase()))
+            : true;
+        return matchesEstado && matchesSearch;
+    });
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando pedidos...</p></div>
 
@@ -256,6 +279,20 @@ export default function PedidosPage() {
                         setForm({ ...form, fechaEntrega: new Date().toISOString().split('T')[0] });
                         setShowModal(true);
                     }}>+ Nuevo Pedido</button>
+                </div>
+            </div>
+
+            <div style={{ marginBottom: 'var(--space-4)' }}>
+                <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>🔍</span>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar por cliente o código de producto..." 
+                        className="form-input" 
+                        style={{ paddingLeft: '36px' }}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </div>
             </div>
 
@@ -344,16 +381,27 @@ export default function PedidosPage() {
                                     <td style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{ped.totalPacks}</td>
                                     <td style={{ fontWeight: 600 }}>{ped.totalUnidades.toLocaleString()}</td>
                                     <td>${ped.totalImporte.toLocaleString('es-AR')}</td>
-                                    <td>
-                                        <span className="badge" style={{
-                                            backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB15' : '#27AE6015',
-                                            color: ped.medioPago === 'transferencia' ? '#2980B9' : '#27AE60',
-                                            border: `1px solid ${ped.medioPago === 'transferencia' ? '#3498DB40' : '#27AE6040'}`,
-                                            fontSize: '0.7rem',
-                                        }}>
-                                            {ped.medioPago === 'transferencia' ? '🏦 Transf.' : '💵 Efectivo'}
-                                        </span>
-                                    </td>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span className="badge" style={{
+                                                backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB15' : '#27AE6015',
+                                                color: ped.medioPago === 'transferencia' ? '#2980B9' : '#27AE60',
+                                                border: `1px solid ${ped.medioPago === 'transferencia' ? '#3498DB40' : '#27AE6040'}`,
+                                                fontSize: '0.7rem',
+                                            }}>
+                                                {ped.medioPago === 'transferencia' ? '🏦 Transf.' : '💵 Efectivo'}
+                                            </span>
+                                            {ped.abonado && (
+                                                <span className="badge" style={{
+                                                    backgroundColor: '#27AE6020',
+                                                    color: '#27AE60',
+                                                    border: '1px solid #27AE6040',
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: 800
+                                                }}>
+                                                    ✅ ABONADO
+                                                </span>
+                                            )}
+                                        </div>
                                     <td>
                                         <span className="badge" style={{ backgroundColor: `${est.color}20`, color: est.color, border: `1px solid ${est.color}40` }}>
                                             {est.emoji} {est.label}
@@ -370,6 +418,12 @@ export default function PedidosPage() {
                                                     </button>
                                                 )
                                             })}
+                                            {!ped.abonado && ped.medioPago === 'transferencia' && (
+                                                <button className="btn btn-ghost btn-sm" title="Marcar como abonado" style={{ fontSize: '11px', color: '#27AE60' }}
+                                                    onClick={() => marcarAbonado(ped.id)}>
+                                                    💰 Abonar
+                                                </button>
+                                            )}
                                             <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '11px' }}
                                                 onClick={() => startEditPedido(ped)}>✏️</button>
                                             <button className="btn btn-ghost btn-sm" title="Eliminar" style={{ fontSize: '11px', color: 'var(--color-danger)' }}

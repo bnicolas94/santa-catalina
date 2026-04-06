@@ -1,10 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import useSWR from 'swr'
 
 interface Cliente { id: string; nombreComercial: string; direccion: string; zona: string; latitud?: number; longitud?: number }
-interface Pedido { id: string; totalUnidades: number; estado: string; detalles: { cantidad: number; presentacion: { cantidad: number; producto: { codigoInterno: string } } }[] }
+interface Pedido { 
+    id: string; totalUnidades: number; totalImporte: number; estado: string; 
+    medioPago: string | null; abonado: boolean;
+    detalles: { cantidad: number; presentacion: { cantidad: number; producto: { codigoInterno: string } } }[] 
+}
 interface Entrega {
     id: string; horaEntrega: string | null; tempEntrega: number | null
     unidadesRechazadas: number; motivoRechazo: string | null; observaciones: string | null
@@ -12,28 +17,25 @@ interface Entrega {
 }
 interface Ruta { id: string; fecha: string; zona: string; entregas: Entrega[] }
 
+const fetcher = (url: string) => fetch(url).then(res => res.json())
+
 export default function RepartosPage() {
     const { data: session } = useSession()
     const userId = (session?.user as { id?: string })?.id
 
-    const [rutas, setRutas] = useState<Ruta[]>([])
-    const [loading, setLoading] = useState(true)
+    const today = new Date().toISOString().split('T')[0]
+    const { data: rutasData, error: swrError, isLoading } = useSWR<Ruta[]>(
+        userId ? `/api/rutas?choferId=${userId}&fecha=${today}` : null,
+        fetcher,
+        { refreshInterval: 15000 } // Refresco cada 15 segundos
+    )
+
     const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null)
     const [formEntrega, setFormEntrega] = useState({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
 
-    const fetchData = useCallback(async () => {
-        if (!userId) return
-        try {
-            const today = new Date().toISOString().split('T')[0]
-            const res = await fetch(`/api/rutas?choferId=${userId}&fecha=${today}`)
-            const data = await res.json()
-            setRutas(Array.isArray(data) ? data : [])
-        } catch { setError('Error al cargar la ruta') } finally { setLoading(false) }
-    }, [userId])
-
-    useEffect(() => { fetchData() }, [fetchData])
+    const rutas = Array.isArray(rutasData) ? rutasData : []
 
     async function handleConfirmarEntrega(e: React.FormEvent) {
         e.preventDefault()
@@ -49,15 +51,12 @@ export default function RepartosPage() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Entrega registrada correctamente')
             setSelectedEntrega(null)
-            fetchData()
-            setTimeout(() => setSuccess(''), 3000)
+            // No hace falta fetchData manual por useSWR, pero podemos forzar revalidación si queremos
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
     }
 
     if (!session) return null
-    if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando ruta de hoy...</p></div>
-
-    // Mostramos TODAS las rutas del día (puede tener turnos Mañana + Tarde)
+    if (isLoading && !rutasData) return <div className="empty-state"><div className="spinner" /><p>Cargando ruta de hoy...</p></div>
 
     return (
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
@@ -66,7 +65,7 @@ export default function RepartosPage() {
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}
-            {error && <div className="toast toast-error">{error}</div>}
+            {(error || swrError) && <div className="toast toast-error">{error || 'Error de conexión'}</div>}
 
             {rutas.length === 0 ? (
                 <div className="empty-state" style={{ padding: 'var(--space-6) 0' }}>
@@ -74,11 +73,9 @@ export default function RepartosPage() {
                     <p>No tenés rutas asignadas para hoy.</p>
                 </div>
             ) : rutas.map(rutaDeHoy => {
-                // Respetamos el orden optimizado (campo 'orden') — NO reordenamos por estado
                 const entregasSorted = [...rutaDeHoy.entregas]
                 const completadas = entregasSorted.filter(e => !!e.horaEntrega).length
 
-                // Helper: generar coordenada para Google Maps
                 const getMapQuery = (cliente: Cliente) => {
                     if (cliente.latitud && cliente.longitud) return `${cliente.latitud},${cliente.longitud}`
                     return encodeURIComponent((cliente.direccion || '') + ' ' + (cliente.zona || ''))
@@ -112,7 +109,6 @@ export default function RepartosPage() {
                                 </div>
                             </div>
 
-                            {/* Botón iniciar recorrido (Google Maps multi-stop) — usa coordenadas si disponibles */}
                             {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (() => {
                                 const companyCoords = "-34.8237468,-58.1873516"
                                 const pendingWaypoints = entregasSorted
@@ -137,6 +133,7 @@ export default function RepartosPage() {
 
                             {entregasSorted.map((entrega, i) => {
                                 const estaEntregado = !!entrega.horaEntrega
+                                const esAbonado = entrega.pedido.abonado
                                 return (
                                     <div key={entrega.id} className="card" style={{ padding: 'var(--space-4)', opacity: estaEntregado ? 0.7 : 1 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
@@ -161,6 +158,27 @@ export default function RepartosPage() {
                                         <p style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--text-md)', color: 'var(--color-gray-600)' }}>
                                             📍 {entrega.cliente.direccion || 'Sin dirección registrada'}
                                         </p>
+
+                                        {/* ESTADO DE PAGO (VISTA CHOFER) */}
+                                        <div style={{ 
+                                            marginBottom: 'var(--space-3)', 
+                                            padding: 'var(--space-3)', 
+                                            borderRadius: 'var(--radius-md)',
+                                            backgroundColor: esAbonado ? '#27AE6015' : '#E67E2215',
+                                            border: `2px solid ${esAbonado ? '#27AE60' : '#E67E22'}`
+                                        }}>
+                                            {esAbonado ? (
+                                                <div style={{ color: '#27AE60', fontWeight: 800, textAlign: 'center', fontSize: 'var(--text-lg)' }}>
+                                                    ✅ YA FUE PAGADO
+                                                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-gray-600)' }}>No cobrar dinero</div>
+                                                </div>
+                                            ) : (
+                                                <div style={{ color: '#E67E22', fontWeight: 800, textAlign: 'center', fontSize: 'var(--text-lg)' }}>
+                                                    💵 COBRAR ${entrega.pedido.totalImporte.toLocaleString('es-AR')}
+                                                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-gray-600)' }}>Recibir efectivo</div>
+                                                </div>
+                                            )}
+                                        </div>
 
                                         <div style={{ backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)' }}>
                                             <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
@@ -204,7 +222,6 @@ export default function RepartosPage() {
                 )
             })}
 
-            {/* Modal de Control de Entrega (Mobile First) */}
             {selectedEntrega && (
                 <div className="modal-overlay" style={{ alignItems: 'flex-end' }} onClick={() => setSelectedEntrega(null)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()} style={{

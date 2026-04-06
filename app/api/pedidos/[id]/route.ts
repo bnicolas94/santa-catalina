@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
-// PUT /api/pedidos/:id — Editar pedido (estado, medioPago, fechaEntrega, etc.)
+// PUT /api/pedidos/:id — Editar pedido (estado, medioPago, fechaEntrega, abonado, etc.)
 export async function PUT(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -15,26 +15,59 @@ export async function PUT(
         if (body.estado !== undefined) data.estado = body.estado
         if (body.medioPago !== undefined) data.medioPago = body.medioPago
         if (body.fechaEntrega !== undefined) data.fechaEntrega = new Date(body.fechaEntrega)
+        if (body.abonado !== undefined) data.abonado = body.abonado
 
-        const pedido = await prisma.pedido.update({
-            where: { id },
-            data,
-            include: {
-                cliente: { select: { id: true, nombreComercial: true } },
-                detalles: {
-                    include: {
-                        presentacion: {
-                            include: { producto: { select: { id: true, nombre: true, codigoInterno: true } } },
+        const result = await prisma.$transaction(async (tx) => {
+            const current = await tx.pedido.findUnique({ 
+                where: { id },
+                select: { id: true, abonado: true, totalImporte: true }
+            })
+            if (!current) throw new Error('Pedido no encontrado')
+
+            const pedido = await tx.pedido.update({
+                where: { id },
+                data,
+                include: {
+                    cliente: { select: { id: true, nombreComercial: true } },
+                    detalles: {
+                        include: {
+                            presentacion: {
+                                include: { producto: { select: { id: true, nombre: true, codigoInterno: true } } },
+                            },
                         },
                     },
                 },
-            },
+            })
+
+            // Si se marca como abonado (y antes no lo estaba), registramos en caja
+            if (data.abonado === true && current.abonado === false) {
+                await tx.movimientoCaja.create({
+                    data: {
+                        tipo: 'ingreso',
+                        concepto: 'cobro_pedido',
+                        monto: pedido.totalImporte,
+                        medioPago: 'transferencia',
+                        cajaOrigen: 'mercado_pago_juani',
+                        descripcion: `Pedido abonado (${pedido.cliente.nombreComercial})`,
+                        pedidoId: pedido.id,
+                        fecha: new Date(),
+                    }
+                })
+
+                await tx.saldoCaja.upsert({
+                    where: { tipo: 'mercado_pago_juani' },
+                    create: { tipo: 'mercado_pago_juani', saldo: pedido.totalImporte },
+                    update: { saldo: { increment: pedido.totalImporte } }
+                })
+            }
+
+            return pedido
         })
 
-        return NextResponse.json(pedido)
-    } catch (error) {
+        return NextResponse.json(result)
+    } catch (error: any) {
         console.error('Error updating pedido:', error)
-        return NextResponse.json({ error: 'Error al actualizar pedido' }, { status: 500 })
+        return NextResponse.json({ error: error.message || 'Error al actualizar pedido' }, { status: 500 })
     }
 }
 

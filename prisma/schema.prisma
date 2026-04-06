@@ -321,6 +321,7 @@ model Pedido {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   clienteId       String           @map("id_cliente")
+  abonado         Boolean          @default(false)
   turno           String?
   ubicacionId     String?          @map("id_ubicacion")
   detalles        DetallePedido[]

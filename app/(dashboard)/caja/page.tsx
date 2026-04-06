@@ -72,6 +72,7 @@ export default function CajaPage() {
     const saldoChica = saldosData.cajaChica?.saldo ?? 0
     const saldoLocal = saldosData.local?.saldo ?? 0
     const saldoMercadoPago = saldosData.mercadoPago?.saldo ?? 0
+    const saldoMercadoPagoJuani = saldosData.mercadoPagoJuani?.saldo ?? 0
 
     const conceptosData = swrData?.conceptosData
     const conceptos = Array.isArray(conceptosData) ? conceptosData : []
@@ -116,7 +117,7 @@ export default function CajaPage() {
     const [editingMov, setEditingMov] = useState<MovCaja | null>(null)
 
     const allowedBoxes = userRol === 'ADMIN' 
-        ? ['caja_madre', 'caja_chica', 'local', 'mercado_pago'] 
+        ? ['caja_madre', 'caja_chica', 'local', 'mercado_pago', 'mercado_pago_juani'] 
         : (ubicacionTipo === 'LOCAL' ? ['local'] : ['caja_madre', 'caja_chica'])
 
     useEffect(() => {
@@ -345,10 +346,10 @@ export default function CajaPage() {
                             💰 Dinero Disponible Global (Todas las Cajas)
                         </div>
                         <div style={{ fontSize: '3rem', fontWeight: 800, color: '#10b981', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoMercadoPago, showMontos)}
+                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoMercadoPago + saldoMercadoPagoJuani, showMontos)}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
-                            Suma de Madre + Chica + Local + Mercado Pago
+                            Suma de Madre + Chica + Local + MP + MP Juani
                         </div>
                     </div>
                 </div>
@@ -515,6 +516,46 @@ export default function CajaPage() {
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2980B9', textAlign: 'center' }}>{formatCurrency(saldoMercadoPago, showMontos)}</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+                {/* Mercado Pago Juani */}
+                {allowedBoxes.includes('mercado_pago_juani') && (
+                    <div className="card" style={{ borderTop: '3px solid #00BFA5' }}>
+                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#00BFA5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔵 MP Juani</span>
+                                {(userRol === 'ADMIN') && (
+                                    editingSaldo === 'mercado_pago_juani' ? (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('mercado_pago_juani')}>✓</button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                            onClick={() => { setEditingSaldo('mercado_pago_juani'); setEditSaldoValue(String(saldoMercadoPagoJuani)) }}>✏️ Editar</button>
+                                    )
+                                )}
+                            </div>
+                            {editingSaldo === 'mercado_pago_juani' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                        onChange={(e) => setEditSaldoValue(e.target.value)}
+                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
+                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
+                                            <option value="ajuste">⚙️ AJUSTE</option>
+                                            <option value="arqueo">📋 ARQUEO</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
+                                        style={{ fontSize: '0.75rem', padding: '4px' }}
+                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#00BFA5', textAlign: 'center' }}>{formatCurrency(saldoMercadoPagoJuani, showMontos)}</div>
                             )}
                         </div>
                     </div>
@@ -700,7 +741,8 @@ export default function CajaPage() {
                                             { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' }, 
                                             { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' }, 
                                             { key: 'local', label: '🏪 Local', color: '#27AE60' },
-                                            { key: 'mercado_pago', label: '💳 M.Pago', color: '#2980B9' }
+                                            { key: 'mercado_pago', label: '💳 MP (Corp)', color: '#2980B9' },
+                                            { key: 'mercado_pago_juani', label: '🔵 MP Juani', color: '#00BFA5' }
                                         ].filter(c => allowedBoxes.includes(c.key)).map((c) => (
                                             <button key={c.key} type="button" className="btn btn-sm"
                                                 onClick={() => setForm({ ...form, cajaOrigen: c.key })}
