@@ -183,6 +183,30 @@ async function main() {
     })
     console.log('✅ Producto "Surtido Clásico" con 3 presentaciones')
 
+    // ---- Producto: Elegidos (Personalizables) ----
+    const ele = await prisma.producto.create({
+        data: {
+            nombre: 'Elegidos',
+            codigoInterno: 'ELE',
+            alias: 'tom, lechu, zyh, zyq, hue, ace, jyq, cho',
+            planchasPorPaquete: 6,
+            paquetesPorRonda: 14,
+            vidaUtilHoras: 48,
+        },
+    })
+
+    await prisma.presentacion.createMany({
+        data: [
+            { productoId: ele.id, cantidad: 48, precioVenta: 25500 },
+            { productoId: ele.id, cantidad: 40, precioVenta: 21500 },
+            { productoId: ele.id, cantidad: 32, precioVenta: 17500 },
+            { productoId: ele.id, cantidad: 24, precioVenta: 13500 },
+            { productoId: ele.id, cantidad: 16, precioVenta: 9500 },
+            { productoId: ele.id, cantidad: 8, precioVenta: 4700 },
+        ],
+    })
+    console.log('✅ Producto "Elegidos" con 6 presentaciones y 8 alias configurados')
+
     console.log('\n🎉 Seed completado!')
     console.log('📧 Login: admin@santacatalina.com / admin123')
     console.log('📧 Login: produccion@santacatalina.com / coord123')

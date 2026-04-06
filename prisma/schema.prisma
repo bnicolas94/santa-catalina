@@ -317,6 +317,7 @@ model Pedido {
   esRetiro        Boolean          @default(false) @map("es_retiro")
   totalUnidades   Int              @default(0) @map("total_unidades")
   totalImporte    Float            @default(0) @map("total_importe")
+  totalPacks      Int              @default(0) @map("total_packs")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   clienteId       String           @map("id_cliente")
@@ -338,6 +339,7 @@ model DetallePedido {
   observaciones          String?
   pedidoId               String       @map("id_pedido")
   presentacionId         String       @map("id_presentacion")
+  nroPack                Int?         @map("nro_pack")
   loteId                 String?      @map("id_lote")
   costoUnitarioHistorico Float?       @map("costo_unitario_historico")
   lote                   Lote?        @relation(fields: [loteId], references: [id])
@@ -530,8 +532,8 @@ model PrestamoEmpleado {
   montoTotal     Float           @map("monto_total")
   cantidadCuotas Int             @map("cantidad_cuotas")
   estado         String          @default("activo")
-  frecuencia     String          @default("SEMANAL") // SEMANAL, MENSUAL
-  modoInicio     String          @default("INMEDIATO") // INMEDIATO, FECHA, SECUENCIAL
+  frecuencia     String          @default("SEMANAL")
+  modoInicio     String          @default("INMEDIATO")
   observaciones  String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -543,17 +545,17 @@ model PrestamoEmpleado {
 }
 
 model CuotaPrestamo {
-  id            String             @id @default(uuid())
-  numeroCuota   Int                @map("numero_cuota")
-  monto         Float
-  estado        String             @default("pendiente")
-  mesAnio       String             @map("mes_anio")
-  fechaVencimiento DateTime         @default(now()) @map("fecha_vencimiento")
-  fechaPago     DateTime?          @map("fecha_pago")
-  prestamoId    String             @map("id_prestamo")
-  liquidacionId String?            @map("id_liquidacion")
-  liquidacion   LiquidacionSueldo? @relation(fields: [liquidacionId], references: [id])
-  prestamo      PrestamoEmpleado   @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  id               String             @id @default(uuid())
+  numeroCuota      Int                @map("numero_cuota")
+  monto            Float
+  estado           String             @default("pendiente")
+  mesAnio          String             @map("mes_anio")
+  fechaVencimiento DateTime           @default(now()) @map("fecha_vencimiento")
+  fechaPago        DateTime?          @map("fecha_pago")
+  prestamoId       String             @map("id_prestamo")
+  liquidacionId    String?            @map("id_liquidacion")
+  liquidacion      LiquidacionSueldo? @relation(fields: [liquidacionId], references: [id])
+  prestamo         PrestamoEmpleado   @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
 
   @@map("cuotas_prestamos")
 }
@@ -645,11 +647,11 @@ model Vehiculo {
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
   asignaciones     AsignacionVehiculo[]    @relation("AsignacionesVehiculo")
+  gastos           GastoOperativo[]
   kilometrajes     KilometrajeVehiculo[]
   mantenimientos   MantenimientoVehiculo[]
   rutas            Ruta[]                  @relation("RutaVehiculo")
   vencimientos     VencimientoVehiculo[]
-  gastos           GastoOperativo[]
 
   @@map("vehiculos")
 }
