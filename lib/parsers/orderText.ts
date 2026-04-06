@@ -13,8 +13,9 @@ export type ParseResult = {
     detalles: Array<{
         presentacionId: string;
         productoId: string;
-        cantidad: number; // Cantidad de paquetes
+        cantidad: number; // Cantidad de paquetes de esa presentación
         observaciones?: string;
+        nroPack?: number;
     }>;
     unmatchedText?: string;
     isFullyMatched: boolean;
@@ -22,9 +23,10 @@ export type ParseResult = {
 
 /**
  * Parsea el texto libre buscando patrones como "24jyq", "48esp", "96jyq", etc.
+ * Implementa la lógica de bultos físicos (Packs).
  * @param text - Texto a parsear
  * @param presentaciones - Lista de todas las presentaciones del sistema (con datos del producto)
- * @returns ParseResult con los IDs matcheados.
+ * @returns ParseResult con los IDs matcheados y numeración de packs.
  */
 export function parseOrderText(
     text: string,
@@ -39,89 +41,117 @@ export function parseOrderText(
         productoId: string;
         cantidad: number;
         observaciones?: string;
+        nroPack?: number;
     }> = [];
-    const unmatchedParts: string[] = [];
-    let isFullyMatched = true;
-
+    
     // Normalizamos el texto: a minusculas y removemos paréntesis
     let cleanText = text.toLowerCase().replace(/[()]/g, ' ');
-
-    // Unimos números seguidos de letras que tengan un espacio en medio para que el regex los agarre
-    // Ej: "48 clasicos" -> "48clasicos"
     cleanText = cleanText.replace(/(\d+)\s+([a-zñáéíóú]+)/g, '$1$2');
     
-    // Separamos por espacios o barras y filtramos palabras de relleno
     const fillerWords = ['elegidos', 'de', 'surtidos', 'variados', 'puntos'];
     const tokens = cleanText.split(/[\s/]+/).filter(t => t && !fillerWords.includes(t));
 
-    // Regex para detectar "[cantidad][codigo]" ej: "24jyq" o "48clasicos"
     const itemRegex = /^(\d+)([a-zñáéíóú]+)$/;
-    // Regex para detectar "[codigo][cantidad]" ej: "jyq24" o "clasicos48"
     const itemRegexReverse = /^([a-zñáéíóú]+)(\d+)$/;
 
     const globalObservaciones: string[] = [];
+    const unmatchedParts: string[] = [];
+    let isFullyMatched = true;
+
+    // Variables para control de packs
+    let nextPackNro = 1;
+    let currentMixedPackNro: number | null = null;
+    let currentMixedPackUnits = 0;
 
     for (const token of tokens) {
         const match = token.match(itemRegex);
         const matchReverse = token.match(itemRegexReverse);
 
         if (match || matchReverse) {
-            const cantidad = match ? parseInt(match[1], 10) : parseInt(matchReverse![2], 10);
-            const aliasOcodigo = match ? match[2] : matchReverse![1];
+            const cantidadTotalToken = match ? parseInt(match[1], 10) : parseInt(matchReverse![2], 10);
+            const aliasOcodigo = (match ? match[2] : matchReverse![1]).toLowerCase();
 
-            // 1. Intentar match por código interno (prioridad máxima)
-            let related = presentaciones.filter(p => p.producto.codigoInterno.toLowerCase() === aliasOcodigo.toLowerCase());
-            
-            // 2. Si no hay match por código, buscar por alias
-            if (related.length === 0) {
-                related = presentaciones.filter(p => {
-                    const aliases = p.producto.alias ? p.producto.alias.split(/[\s,]+/).map(a => a.toLowerCase().trim()) : [];
-                    return aliases.includes(aliasOcodigo.toLowerCase());
-                });
-            }
+            // 1. Buscar todas las presentaciones de cualquier producto que coincida por código o alias.
+            // Esto permite recolectar candidatos de "Elegidos" y productos individuales simultáneamente.
+            const related = presentaciones.filter(p => {
+                const codeMatch = p.producto.codigoInterno.toLowerCase() === aliasOcodigo;
+                const aliases = (p.producto.alias || "").split(/[\s,]+/).map(a => a.toLowerCase().trim());
+                const aliasMatch = aliases.includes(aliasOcodigo);
+                return codeMatch || aliasMatch;
+            });
 
             if (related.length > 0) {
-                // 2. Greedy matching: consumir la cantidad usando las presentaciones más grandes primero
-                const sorted = [...related].sort((a, b) => b.cantidad - a.cantidad);
-                let remaining = cantidad;
-                let foundAny = false;
+                // Ordenar por cantidad descendente para el algoritmo greedy, pero...
+                // Prioridad Crucial: Si dos productos ofrecen el mismo tamaño de pack (ej. J&Q 24 y Elegidos 24)
+                // priorizamos 'Elegidos' (ELE) por requerimiento explícito del usuario para resolver conflictos de alias.
+                const sorted = [...related].sort((a, b) => {
+                    if (b.cantidad !== a.cantidad) {
+                        return b.cantidad - a.cantidad;
+                    }
+                    if (a.producto.codigoInterno === 'ELE') return -1;
+                    if (b.producto.codigoInterno === 'ELE') return 1;
+                    return 0;
+                });
+                let remaining = cantidadTotalToken;
                 const initialDetallesLength = detalles.length;
 
-                for (const pres of sorted) {
-                    if (remaining >= pres.cantidad) {
-                        const numPaquetes = Math.floor(remaining / pres.cantidad);
-                        const isAlias = pres.producto.codigoInterno.toLowerCase() !== aliasOcodigo.toLowerCase();
-                        
-                        detalles.push({
-                            presentacionId: pres.id,
-                            productoId: pres.productoId,
-                            cantidad: numPaquetes,
-                            observaciones: isAlias ? aliasOcodigo.toUpperCase() : ""
-                        });
-                        
-                        remaining -= (numPaquetes * pres.cantidad);
-                        foundAny = true;
+                while (remaining > 0) {
+                    const pres = sorted.find(p => p.cantidad <= remaining);
+                    if (!pres) {
+                        isFullyMatched = false;
+                        unmatchedParts.push(token);
+                        detalles.splice(initialDetallesLength); // Revertir
+                        remaining = 0;
+                        break;
                     }
-                }
 
-                if (remaining > 0) {
-                    // Si sobró algo, no es un match exacto de paquetes armados.
-                    // Descartamos los paquetes parciales de este token.
-                    while (detalles.length > initialDetallesLength) {
-                        detalles.pop();
+                    const isAlias = pres.producto.codigoInterno.toLowerCase() !== aliasOcodigo;
+                    const cod = pres.producto.codigoInterno.toUpperCase();
+                    
+                    let nroPack: number | undefined;
+
+                    // LÓGICA DE PACKS CERRADOS
+                    const isJYQ = cod.includes("JYQ") || aliasOcodigo.includes("jyq");
+                    const isCL = cod.includes("CL") || aliasOcodigo.includes("cl");
+                    const isES = cod.includes("ES") || aliasOcodigo.includes("es");
+
+                    const isClosed48 = pres.cantidad === 48 && (isJYQ || isCL || isES);
+                    const isClosed24JYQ = pres.cantidad === 24 && isJYQ;
+
+                    if (isClosed48 || isClosed24JYQ) {
+                        nroPack = nextPackNro++;
+                    } else if (pres.cantidad % 8 === 0) {
+                        // LÓGICA DE "RARITOS" (Múltiplo de 8)
+                        if (currentMixedPackNro && (currentMixedPackUnits + pres.cantidad <= 48)) {
+                            nroPack = currentMixedPackNro;
+                            currentMixedPackUnits += pres.cantidad;
+                        } else {
+                            currentMixedPackNro = nextPackNro++;
+                            currentMixedPackUnits = pres.cantidad;
+                            nroPack = currentMixedPackNro;
+                        }
+                        
+                        if (currentMixedPackUnits >= 48) {
+                            currentMixedPackNro = null;
+                            currentMixedPackUnits = 0;
+                        }
                     }
-                    isFullyMatched = false;
-                    unmatchedParts.push(token);
-                } else if (!foundAny) {
-                    isFullyMatched = false;
-                    unmatchedParts.push(token);
+
+                    detalles.push({
+                        presentacionId: pres.id,
+                        productoId: pres.productoId,
+                        cantidad: 1, // Desglosamos por unidad de presentación
+                        observaciones: isAlias ? aliasOcodigo.toUpperCase() : "",
+                        nroPack
+                    });
+
+                    remaining -= pres.cantidad;
                 }
             } else {
                 isFullyMatched = false;
                 unmatchedParts.push(token);
             }
         } else {
-            // Tokens que no son [cant][cod], ej: "s/morron", "c/huevo", "bandejas"
             if (token.length > 2 && (token.startsWith('s/') || token.startsWith('c/') || token === 'p/n' || token === 'bandejas')) {
                 globalObservaciones.push(token);
             } else {
@@ -131,7 +161,6 @@ export function parseOrderText(
         }
     }
 
-    // Aplicar observaciones globales a todos los detalles
     if (globalObservaciones.length > 0 && detalles.length > 0) {
         const obs = globalObservaciones.join(" ");
         detalles.forEach(d => {
@@ -142,6 +171,6 @@ export function parseOrderText(
     return {
         detalles,
         isFullyMatched,
-        unmatchedText: isFullyMatched ? undefined : tokens.join(" ")
+        unmatchedText: isFullyMatched ? undefined : unmatchedParts.join(" ")
     };
 }

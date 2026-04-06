@@ -38,23 +38,70 @@ export async function POST(request: Request) {
 
         let totalUnidades = 0
         let totalImporte = 0
-        const detallesCreate = []
+        const detallesBrutos = []
 
         for (const det of detalles) {
             const presentacion = await prisma.presentacion.findUnique({
                 where: { id: det.presentacionId },
+                include: { producto: { select: { codigoInterno: true } } }
             })
             if (!presentacion) continue
             const precio = presentacion.precioVenta
             const cant = parseInt(det.cantidad)
-            totalUnidades += cant * presentacion.cantidad // total sándwiches
+            
+            // Unidades físicas totales
+            totalUnidades += cant * presentacion.cantidad 
             totalImporte += cant * precio
-            detallesCreate.push({
-                presentacionId: det.presentacionId,
-                cantidad: cant,
-                precioUnitario: precio,
-            })
+            
+            // Guardamos para procesar packs después
+            for (let i = 0; i < cant; i++) {
+                detallesBrutos.push({
+                    presentacionId: det.presentacionId,
+                    cantidad: 1,
+                    precioUnitario: precio,
+                    unidadesFisicas: presentacion.cantidad,
+                    codigo: presentacion.producto.codigoInterno.toUpperCase()
+                })
+            }
         }
+
+        // Lógica de asignación de packs (similar al parser)
+        let nextPackNro = 1;
+        let currentMixedPackNro: number | null = null;
+        let currentMixedPackUnits = 0;
+
+        const detallesCreate = detallesBrutos.map(d => {
+            let nroPack: number | undefined;
+            const isClosed48 = d.unidadesFisicas === 48 && (d.codigo.includes("JYQ") || d.codigo.includes("CL") || d.codigo.includes("ES"));
+            const isClosed24JYQ = d.unidadesFisicas === 24 && d.codigo.includes("JYQ");
+
+            if (isClosed48 || isClosed24JYQ) {
+                nroPack = nextPackNro++;
+            } else if (d.unidadesFisicas % 8 === 0) {
+                if (currentMixedPackNro && (currentMixedPackUnits + d.unidadesFisicas <= 48)) {
+                    nroPack = currentMixedPackNro;
+                    currentMixedPackUnits += d.unidadesFisicas;
+                } else {
+                    currentMixedPackNro = nextPackNro++;
+                    currentMixedPackUnits = d.unidadesFisicas;
+                    nroPack = currentMixedPackNro;
+                }
+                if (currentMixedPackUnits >= 48) {
+                    currentMixedPackNro = null;
+                    currentMixedPackUnits = 0;
+                }
+            }
+
+            return {
+                presentacionId: d.presentacionId,
+                cantidad: 1,
+                precioUnitario: d.precioUnitario,
+                nroPack
+            };
+        });
+
+        const uniquePacks = new Set(detallesCreate.map(d => d.nroPack).filter(n => n !== undefined));
+        const totalPacks = uniquePacks.size + detallesCreate.filter(d => d.nroPack === undefined).length;
 
         const pedido = await prisma.pedido.create({
             data: {
@@ -64,6 +111,7 @@ export async function POST(request: Request) {
                 medioPago: medioPago || 'efectivo',
                 totalUnidades,
                 totalImporte,
+                totalPacks,
                 detalles: { create: detallesCreate },
             },
             include: {

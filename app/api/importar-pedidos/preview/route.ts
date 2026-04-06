@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Formato inválido. Se esperaba un array 'rows'." }, { status: 400 });
         }
 
-        // Traer datos maestros para matching
         const [clientesDB, presentacionesDB] = await Promise.all([
             prisma.cliente.findMany({
                 select: { id: true, nombreComercial: true, contactoTelefono: true },
@@ -53,7 +52,8 @@ export async function POST(req: NextRequest) {
                 select: {
                     id: true,
                     cantidad: true,
-                    producto: { select: { codigoInterno: true, alias: true } as any },
+                    productoId: true,
+                    producto: { select: { id: true, codigoInterno: true, alias: true } },
                 },
             }),
         ]);
@@ -87,8 +87,9 @@ export async function POST(req: NextRequest) {
                 errors.push("Baja confianza en coincidencia de cliente. Verificar.");
             }
 
+            // Suavizamos el error de fecha a advertencia (amarillo)
             if (!row.fecha || isNaN(new Date(row.fecha).getTime())) {
-                status = "rojo";
+                status = status === "rojo" ? "rojo" : "amarillo";
                 errors.push("Fecha inválida.");
             }
 

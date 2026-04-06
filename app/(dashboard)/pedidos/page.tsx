@@ -13,11 +13,12 @@ interface DetallePedido {
     id: string; cantidad: number; precioUnitario: number
     observaciones?: string | null
     presentacion: Presentacion
+    nroPack?: number | null
 }
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
     medioPago: string | null; totalUnidades: number; totalImporte: number
-    cliente: Cliente; detalles: DetallePedido[]
+    totalPacks: number; cliente: Cliente; detalles: DetallePedido[]
 }
 interface Producto {
     id: string; nombre: string; codigoInterno: string
@@ -242,7 +243,8 @@ export default function PedidosPage() {
                             <th>Cliente</th>
                             <th>Fecha Pedido</th>
                             <th>Fecha Entrega</th>
-                            <th>Detalle</th>
+                            <th>Detalle (Bultos)</th>
+                            <th>Packs</th>
                             <th>Sándwiches</th>
                             <th>Importe</th>
                             <th>Pago</th>
@@ -267,14 +269,33 @@ export default function PedidosPage() {
                                     <td>{new Date(ped.fechaPedido).toLocaleDateString('es-AR')}</td>
                                     <td>{new Date(ped.fechaEntrega).toLocaleDateString('es-AR')}</td>
                                     <td>
-                                        {ped.detalles.map((d) => (
-                                            <div key={d.id} style={{ fontSize: 'var(--text-xs)' }}>
-                                                <span className="badge badge-neutral" style={{ marginRight: 4, fontSize: '10px' }}>{d.presentacion.producto.codigoInterno}</span>
-                                                x{d.presentacion.cantidad} ×{d.cantidad}
-                                                {d.observaciones && <span style={{ marginLeft: '4px', fontStyle: 'italic', color: 'var(--color-primary)' }}>({d.observaciones.toUpperCase()})</span>}
-                                            </div>
-                                        ))}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            {/* Agrupamos por nroPack para visualización */}
+                                            {Object.entries(
+                                                ped.detalles.reduce((acc, d) => {
+                                                    const key = d.nroPack ? `Pack ${d.nroPack}` : 'Sin Pack';
+                                                    if (!acc[key]) acc[key] = [];
+                                                    acc[key].push(d);
+                                                    return acc;
+                                                }, {} as Record<string, DetallePedido[]>)
+                                            ).map(([packTitle, items]) => (
+                                                <div key={packTitle} style={{ 
+                                                    borderLeft: packTitle === 'Sin Pack' ? '2px solid #eee' : '2px solid var(--color-primary)', 
+                                                    paddingLeft: '6px',
+                                                    marginBottom: '2px'
+                                                }}>
+                                                    {items.map((d) => (
+                                                        <div key={d.id} style={{ fontSize: 'var(--text-xs)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span className="badge badge-neutral" style={{ fontSize: '9px', padding: '1px 4px' }}>{d.presentacion.producto.codigoInterno}</span>
+                                                            <span>x{d.presentacion.cantidad * d.cantidad}</span>
+                                                            {d.observaciones && <span style={{ fontStyle: 'italic', color: 'var(--color-primary)', fontSize: '10px' }}>({d.observaciones.toUpperCase()})</span>}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </td>
+                                    <td style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{ped.totalPacks}</td>
                                     <td style={{ fontWeight: 600 }}>{ped.totalUnidades.toLocaleString()}</td>
                                     <td>${ped.totalImporte.toLocaleString('es-AR')}</td>
                                     <td>

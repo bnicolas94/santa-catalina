@@ -244,14 +244,26 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                 </div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                     <label className="form-label">Email</label>
-                                    <input type="email" name="email" value={formData.email} onChange={handleChange} className="form-input" />
-                                </div>
+                                    <input
+                                    autoComplete="new-email"
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    className="form-input"
+                                    />                                </div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                     <label className="form-label">
                                         {isEdit ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña (opcional para operarios regulares)'}
                                     </label>
-                                    <input type="password" name="password" value={formData.password} onChange={handleChange} className="form-input" />
-                                </div>
+                                    <input
+                                    autoComplete="new-password"
+                                    type="password"
+                                    name="password"
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    className="form-input"
+                                    />                                </div>
                             </div>
                         )}
 

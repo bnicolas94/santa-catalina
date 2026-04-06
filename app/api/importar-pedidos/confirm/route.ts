@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
         // Traer precios de todas las presentaciones para calcular totales
         const todasPresentaciones = await prisma.presentacion.findMany({
-            select: { id: true, precioVenta: true }
+            select: { id: true, precioVenta: true, cantidad: true }
         });
         const precioMap = new Map(todasPresentaciones.map(p => [p.id, p.precioVenta]));
 
@@ -105,29 +105,42 @@ export async function POST(req: NextRequest) {
                         precioUnitario: precioMap.get(d.presentacionId) || 0
                     }));
 
-                    const totalUnidades = detallesConPrecio.reduce((acc, d) => acc + d.cantidad, 0);
+                    const totalUnidades = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * (todasPresentaciones.find(p => p.id === d.presentacionId)?.cantidad || 0)), 0);
                     const totalImporte = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * d.precioUnitario), 0);
+                    
+                    // Cálculo de bultos físicos (Packs)
+                    const packsUnicos = new Set(detallesConPrecio.filter(d => d.nroPack !== undefined).map(d => d.nroPack));
+                    const itemsSinPack = detallesConPrecio.filter(d => d.nroPack === undefined).length;
+                    const totalPacks = packsUnicos.size + itemsSinPack;
 
                     const { original } = row;
 
                     const turnoMap: Record<string, string> = { 'MANANA': 'Mañana', 'SIESTA': 'Siesta', 'TARDE': 'Tarde' }
 
+                    // Aseguramos una fecha válida para evitar que Prisma falle
+                    let fechaFinal = new Date(original.fecha);
+                    if (isNaN(fechaFinal.getTime())) {
+                        fechaFinal = new Date();
+                    }
+
                     await tx.pedido.create({
                         data: {
                             clienteId: finalClientId,
-                            fechaPedido: new Date(original.fecha),
-                            fechaEntrega: new Date(original.fecha),
+                            fechaPedido: fechaFinal,
+                            fechaEntrega: fechaFinal,
                             estado: "confirmado",
                             turno: original.turno ? (turnoMap[original.turno] || original.turno) : null,
                             esRetiro: original.direccion?.toLowerCase().includes("retira") || false,
                             totalUnidades,
                             totalImporte,
+                            totalPacks: totalPacks as any,
                             detalles: {
                                 create: detallesConPrecio.map(d => ({
                                     presentacionId: d.presentacionId,
                                     cantidad: d.cantidad,
                                     precioUnitario: d.precioUnitario,
                                     observaciones: d.observaciones,
+                                    nroPack: d.nroPack,
                                 }))
                             }
                         }
@@ -135,6 +148,7 @@ export async function POST(req: NextRequest) {
                 });
                 createdCount++;
             } catch (rowError: any) {
+                console.error("Error al procesar fila de importación:", rowError);
                 errors.push({
                     rowId: row.rowId,
                     error: rowError.message || "Error al crear el registro",
