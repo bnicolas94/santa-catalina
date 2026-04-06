@@ -13,12 +13,14 @@ export type ParseResult = {
     detalles: Array<{
         presentacionId: string;
         productoId: string;
+        productoNombre?: string;
         cantidad: number; // Cantidad de paquetes de esa presentación
         observaciones?: string;
         nroPack?: number;
     }>;
     unmatchedText?: string;
     isFullyMatched: boolean;
+    esRetiro?: boolean;
 };
 
 /**
@@ -57,6 +59,7 @@ export function parseOrderText(
     const globalObservaciones: string[] = [];
     const unmatchedParts: string[] = [];
     let isFullyMatched = true;
+    let esRetiro = false;
 
     // Variables para control de packs
     let nextPackNro = 1;
@@ -88,8 +91,10 @@ export function parseOrderText(
                     if (b.cantidad !== a.cantidad) {
                         return b.cantidad - a.cantidad;
                     }
-                    if (a.producto.codigoInterno === 'ELE') return -1;
-                    if (b.producto.codigoInterno === 'ELE') return 1;
+                    // Prioridad Crucial: Si dos productos ofrecen el mismo tamaño de pack (ej. J&Q 24 y Elegidos 24)
+                    // preferimos el producto específico (JQ, ESP) y dejamos 'Elegidos' (ELE) al final.
+                    if (a.producto.codigoInterno === 'ELE') return 1;
+                    if (b.producto.codigoInterno === 'ELE') return -1;
                     return 0;
                 });
                 let remaining = cantidadTotalToken;
@@ -154,6 +159,8 @@ export function parseOrderText(
         } else {
             if (token.length > 2 && (token.startsWith('s/') || token.startsWith('c/') || token === 'p/n' || token === 'bandejas')) {
                 globalObservaciones.push(token);
+            } else if (token.includes('retira') || token.includes('retiro')) {
+                esRetiro = true;
             } else {
                 isFullyMatched = false;
                 unmatchedParts.push(token);
@@ -171,6 +178,7 @@ export function parseOrderText(
     return {
         detalles,
         isFullyMatched,
-        unmatchedText: isFullyMatched ? undefined : unmatchedParts.join(" ")
+        unmatchedText: isFullyMatched ? undefined : unmatchedParts.join(" "),
+        esRetiro
     };
 }

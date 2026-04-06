@@ -30,7 +30,7 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { clienteId, fechaEntrega, detalles, medioPago } = body
+        const { clienteId, fechaEntrega, detalles, medioPago, esRetiro } = body
 
         if (!clienteId || !fechaEntrega || !detalles?.length) {
             return NextResponse.json({ error: 'Cliente, fecha de entrega y al menos un producto son requeridos' }, { status: 400 })
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
         let totalUnidades = 0
         let totalImporte = 0
-        const detallesBrutos = []
+        const detallesBrutos: any[] = []
 
         for (const det of detalles) {
             const presentacion = await prisma.presentacion.findUnique({
@@ -101,6 +101,34 @@ export async function POST(request: Request) {
         });
 
         const uniquePacks = new Set(detallesCreate.map(d => d.nroPack).filter(n => n !== undefined));
+        
+        // CALCULO DE DESCUENTO POR EFECTIVO (Pack volume-based)
+        let totalDescuento = 0;
+        if ((medioPago || 'efectivo') === 'efectivo') {
+            // Agrupamos unidades físicas por nroPack
+            const packVolumes: Record<number, number> = {};
+            detallesCreate.forEach(d => {
+                if (d.nroPack !== undefined) {
+                    const vol = detallesBrutos[0].unidadesFisicas; // Aproximación, pero mejor usar d.presentacionId
+                    // Realmente necesitamos las unidades físicas de cada item en el pack
+                }
+            });
+            
+            // Re-calculamos volúmenes de forma precisa
+            const packMap = new Map<number, number>();
+            detallesCreate.forEach((d, idx) => {
+                if (d.nroPack !== undefined) {
+                    const vol = detallesBrutos[idx].unidadesFisicas;
+                    packMap.set(d.nroPack, (packMap.get(d.nroPack) || 0) + vol);
+                }
+            });
+
+            for (const [nPack, totalUnits] of packMap.entries()) {
+                if (totalUnits >= 48) totalDescuento += 2000;
+                else if (totalUnits >= 24) totalDescuento += 1000;
+            }
+        }
+
         const totalPacks = uniquePacks.size + detallesCreate.filter(d => d.nroPack === undefined).length;
 
         const pedido = await prisma.pedido.create({
@@ -109,8 +137,9 @@ export async function POST(request: Request) {
                 fechaPedido: new Date(),
                 fechaEntrega: new Date(fechaEntrega),
                 medioPago: medioPago || 'efectivo',
+                esRetiro: !!esRetiro,
                 totalUnidades,
-                totalImporte,
+                totalImporte: totalImporte - totalDescuento,
                 totalPacks,
                 detalles: { create: detallesCreate },
             },

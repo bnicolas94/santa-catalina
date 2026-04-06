@@ -186,12 +186,58 @@ export default function PedidosPage() {
         setDetalles(updated)
     }
 
-    // Calcular total del pedido en vivo en el modal
-    const totalPedido = detalles.reduce((acc, d) => {
-        if (!d.presentacionId || !d.cantidad) return acc
-        const pres = allPresentaciones.find((p) => p.id === d.presentacionId)
-        return acc + (pres ? pres.precioVenta * parseInt(d.cantidad) : 0)
-    }, 0)
+    // Calcular total del pedido en vivo en el modal (incluyendo descuentos por efectivo)
+    const calculateLiveTotal = () => {
+        let baseTotal = 0;
+        const itemsParaPack: { unidades: number }[] = [];
+
+        detalles.forEach(d => {
+            if (!d.presentacionId || !d.cantidad) return;
+            const pres = allPresentaciones.find(p => p.id === d.presentacionId);
+            if (!pres) return;
+            
+            const cant = parseInt(d.cantidad);
+            baseTotal += pres.precioVenta * cant;
+            
+            // Agregamos a la lista para calcular packs (asumimos que cada línea es un ítem de un bulto)
+            for (let i = 0; i < cant; i++) {
+                itemsParaPack.push({ unidades: pres.cantidad });
+            }
+        });
+
+        if (form.medioPago !== 'efectivo') return baseTotal;
+
+        // Lógica de Descuento por Efectivo:
+        // Agrupamos en bultos teóricos de hasta 48 unidades
+        let totalDescuento = 0;
+        let packsTemp: number[] = [];
+        let currentPackUnits = 0;
+
+        // Ordenamos de mayor a menor para optimizar bultos (similar al parser)
+        const sortedItems = [...itemsParaPack].sort((a, b) => b.unidades - a.unidades);
+
+        sortedItems.forEach(item => {
+            // Un bulto cerrado de 48 o 24 (especial para JYQ) se descuentan directo
+            // Para simplificar en el frontend, acumulamos hasta 48
+            if (currentPackUnits + item.unidades <= 48) {
+                currentPackUnits += item.unidades;
+            } else {
+                // Cerramos el bulto anterior y evaluamos su descuento
+                if (currentPackUnits >= 48) totalDescuento += 2000;
+                else if (currentPackUnits >= 24) totalDescuento += 1000;
+                
+                currentPackUnits = item.unidades;
+            }
+        });
+
+        // El último bulto
+        if (currentPackUnits >= 48) totalDescuento += 2000;
+        else if (currentPackUnits >= 24) totalDescuento += 1000;
+
+        return baseTotal - totalDescuento;
+    };
+
+    const totalPedido = calculateLiveTotal();
 
     const filtered = filterEstado ? pedidos.filter((p) => p.estado === filterEstado) : pedidos
 

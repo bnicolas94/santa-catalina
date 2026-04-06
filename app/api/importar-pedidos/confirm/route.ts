@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
 
-        const { rows }: { rows: PreviewRowResult[] } = await req.json();
+        const { rows, medioPago } = await req.json();
 
         if (!rows || !Array.isArray(rows)) {
             return NextResponse.json({ error: "Formato inválido. Se esperaba un array 'rows'." }, { status: 400 });
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
         // Traer precios de todas las presentaciones para calcular totales
         const todasPresentaciones = await prisma.presentacion.findMany({
-            select: { id: true, precioVenta: true, cantidad: true }
+            select: { id: true, precioVenta: true, cantidad: true, productoId: true }
         });
         const precioMap = new Map(todasPresentaciones.map(p => [p.id, p.precioVenta]));
 
@@ -99,14 +99,60 @@ export async function POST(req: NextRequest) {
                         }
                     }
 
-                    // 2. Calcular Totales y Crear Pedido
-                    const detallesConPrecio = row.orderMatch.detalles.map(d => ({
-                        ...d,
-                        precioUnitario: precioMap.get(d.presentacionId) || 0
-                    }));
+                    // 2. Calcular Totales y Crear Pedido (Con lógica especial para precios de pack/volumen en Elegidos)
+                    const detallesCrudos = row.orderMatch.detalles;
+                    const detallesConPrecio: any[] = [];
+                    
+                    // Agrupamos por nroPack para calcular precios de volumen (especialmente para Elegidos)
+                    const packsMap = new Map<number, { totalCantidad: number, items: any[] }>();
+                    detallesCrudos.forEach((d: any) => {
+                        const nPack = d.nroPack || 0;
+                        if (!packsMap.has(nPack)) packsMap.set(nPack, { totalCantidad: 0, items: [] });
+                        // Usamos todasPresentaciones que ya trajimos anteriormente (fuera del loop o en la tx)
+                        const pData = todasPresentaciones.find(p => p.id === d.presentacionId);
+                        const cantSandwiches = d.cantidad * (pData?.cantidad || 0);
+                        packsMap.get(nPack)!.totalCantidad += cantSandwiches;
+                        packsMap.get(nPack)!.items.push({ ...d, cantSandwiches });
+                    });
+
+                    // 1. Obtener ID real de Elegidos para la lógica de precios
+                    const eleProd = await tx.producto.findFirst({ where: { codigoInterno: 'ELE' } });
+                    const eleId = eleProd?.id;
+                    
+                    let totalDescuentoPorEfectivo = 0;
+
+                    for (const [nPack, data] of packsMap.entries()) {
+                        // Cálculo de descuento por efectivo para este bulto específico (CUMULATIVO)
+                        if ((medioPago || 'efectivo') === 'efectivo') {
+                            if (data.totalCantidad >= 48) totalDescuentoPorEfectivo += 2000;
+                            else if (data.totalCantidad >= 24) totalDescuentoPorEfectivo += 1000;
+                        }
+
+                        for (const item of data.items) {
+                            let precioUnitarioCalculado = precioMap.get(item.presentacionId) || 0;
+                            
+                            // LOGICA ESPECIAL ELEGIDOS
+                            const presActual = todasPresentaciones.find(p => p.id === item.presentacionId);
+                            if (item.productoId === eleId || item.observaciones?.includes('ELE')) {
+                                const presEquivalent = todasPresentaciones.find(p => 
+                                    p.productoId === item.productoId && p.cantidad === data.totalCantidad
+                                );
+                                if (presEquivalent) {
+                                    const cantUnidadesEnPack = data.totalCantidad / (presActual?.cantidad || 8);
+                                    precioUnitarioCalculado = presEquivalent.precioVenta / cantUnidadesEnPack;
+                                }
+                            }
+
+                            detallesConPrecio.push({
+                                ...item,
+                                precioUnitario: precioUnitarioCalculado
+                            });
+                        }
+                    }
 
                     const totalUnidades = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * (todasPresentaciones.find(p => p.id === d.presentacionId)?.cantidad || 0)), 0);
-                    const totalImporte = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * d.precioUnitario), 0);
+                    const totalImporteBruto = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * d.precioUnitario), 0);
+                    const totalImporteNeto = Math.round(totalImporteBruto - totalDescuentoPorEfectivo);
                     
                     // Cálculo de bultos físicos (Packs)
                     const packsUnicos = new Set(detallesConPrecio.filter(d => d.nroPack !== undefined).map(d => d.nroPack));
@@ -114,14 +160,11 @@ export async function POST(req: NextRequest) {
                     const totalPacks = packsUnicos.size + itemsSinPack;
 
                     const { original } = row;
-
                     const turnoMap: Record<string, string> = { 'MANANA': 'Mañana', 'SIESTA': 'Siesta', 'TARDE': 'Tarde' }
 
-                    // Aseguramos una fecha válida para evitar que Prisma falle
+                    // Aseguramos una fecha válida
                     let fechaFinal = new Date(original.fecha);
-                    if (isNaN(fechaFinal.getTime())) {
-                        fechaFinal = new Date();
-                    }
+                    if (isNaN(fechaFinal.getTime())) fechaFinal = new Date();
 
                     await tx.pedido.create({
                         data: {
@@ -129,10 +172,11 @@ export async function POST(req: NextRequest) {
                             fechaPedido: fechaFinal,
                             fechaEntrega: fechaFinal,
                             estado: "confirmado",
+                            medioPago: medioPago || 'efectivo',
                             turno: original.turno ? (turnoMap[original.turno] || original.turno) : null,
-                            esRetiro: original.direccion?.toLowerCase().includes("retira") || false,
+                            esRetiro: row.esRetiro || original.direccion?.toLowerCase().includes("retira") || false,
                             totalUnidades,
-                            totalImporte,
+                            totalImporte: totalImporteNeto, // Redondeamos para evitar decimales de prorrateo
                             totalPacks: totalPacks as any,
                             detalles: {
                                 create: detallesConPrecio.map(d => ({

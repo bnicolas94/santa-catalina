@@ -14,7 +14,7 @@ interface DetallePedido {
 }
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
-    turno?: string | null
+    turno?: string | null; esRetiro?: boolean
     totalUnidades: number; totalImporte: number
     cliente: Cliente; detalles: DetallePedido[]
 }
@@ -102,9 +102,9 @@ export default function PlanificacionRutasPage() {
             const vehData = await vehRes.json()
             setVehiculos(Array.isArray(vehData) ? vehData.filter((v: any) => v.activo) : [])
 
-            // Solo pedidos confirmados
+            // Solo pedidos confirmados y que NO sean retiro
             const disponibles = Array.isArray(pedData)
-                ? pedData.filter((p: Pedido) => p.estado === 'confirmado')
+                ? pedData.filter((p: Pedido) => p.estado === 'confirmado' && !p.esRetiro)
                 : []
             setPedidosDisponibles(disponibles)
 

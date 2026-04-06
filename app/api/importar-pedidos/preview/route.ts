@@ -24,6 +24,7 @@ export interface PreviewRowResult {
     orderMatch: ParseResult;
     status: "verde" | "amarillo" | "rojo";
     errors: string[];
+    esRetiro: boolean;
 }
 
 export async function POST(req: NextRequest) {
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
                     id: true,
                     cantidad: true,
                     productoId: true,
-                    producto: { select: { id: true, codigoInterno: true, alias: true } },
+                    producto: { select: { id: true, codigoInterno: true, alias: true, nombre: true, planchasPorPaquete: true } },
                 },
             }),
         ]);
@@ -97,10 +98,33 @@ export async function POST(req: NextRequest) {
                 rowId: row.rowId,
                 original: row,
                 clientMatch,
-                orderMatch,
+                orderMatch: {
+                    ...orderMatch,
+                    detalles: orderMatch.detalles.map(d => {
+                        const pres = presentacionesDB.find(p => p.id === d.presentacionId);
+                        return { 
+                            ...d, 
+                            productoNombre: pres?.producto.nombre || "Producto" 
+                        };
+                    })
+                },
                 status,
                 errors,
+                esRetiro: !!orderMatch.esRetiro
             };
+        });
+
+        // Calcular total de planchas de Elegidos (ELE)
+        let totalPlanchasElegidos = 0;
+        previewResults.forEach(res => {
+            res.orderMatch.detalles.forEach(det => {
+                const pres = presentacionesDB.find(p => p.id === det.presentacionId);
+                if (pres?.producto.codigoInterno === 'ELE') {
+                    const planchasPorPaquete = pres.producto.planchasPorPaquete || 6;
+                    const unidadesPorPlancha = 48 / planchasPorPaquete; // Asumimos 48 como base de pack
+                    totalPlanchasElegidos += (det.cantidad * pres.cantidad) / unidadesPorPlancha;
+                }
+            });
         });
 
         return NextResponse.json({
@@ -109,6 +133,7 @@ export async function POST(req: NextRequest) {
             verdes: previewResults.filter((r) => r.status === "verde").length,
             amarillos: previewResults.filter((r) => r.status === "amarillo").length,
             rojos: previewResults.filter((r) => r.status === "rojo").length,
+            totalPlanchasElegidos: Math.round(totalPlanchasElegidos * 10) / 10,
             results: previewResults,
         });
 

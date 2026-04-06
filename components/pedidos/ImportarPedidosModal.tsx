@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import * as xlsx from "xlsx";
+import { parseExcelDate, formatAsISODate } from "../../lib/utils/dateParser";
 import { ExcelRow, PreviewRowResult } from "../../app/api/importar-pedidos/preview/route";
 
 interface ImportarPedidosModalProps {
@@ -34,6 +35,7 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
     const [colMapping, setColMapping] = useState<Record<number, string>>({});
     
     const [previewData, setPreviewData] = useState<PreviewRowResult[] | null>(null);
+    const [batchMedioPago, setBatchMedioPago] = useState<'efectivo' | 'transferencia'>('efectivo');
     const [summary, setSummary] = useState({ verdes: 0, amarillos: 0, rojos: 0, totalRows: 0 });
 
     if (!isOpen) return null;
@@ -46,6 +48,7 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
         setRawRows([]);
         setColMapping({});
         setPreviewData(null);
+        setBatchMedioPago('efectivo');
         setError(null);
     };
 
@@ -149,12 +152,8 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
                 const rawFecha = getVal('fecha');
                 const rawTurno = getVal('turno')?.toUpperCase() || "";
                 
-                // Conversión de fecha si viene de Excel (numérico)
-                let finalFecha = rawFecha;
-                if (/^\d{5}$/.test(rawFecha)) { 
-                    const date = new Date((parseInt(rawFecha) - 25569) * 86400 * 1000);
-                    finalFecha = date.toISOString().split("T")[0];
-                }
+                // Conversión de fecha robusta usando utilidad
+                const finalFecha = formatAsISODate(rawFecha);
 
                 return {
                     rowId: index,
@@ -200,7 +199,7 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
             const res = await fetch("/api/importar-pedidos/confirm", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: previewData }),
+                body: JSON.stringify({ rows: previewData, medioPago: batchMedioPago }),
             });
 
             const result = await res.json();
@@ -378,8 +377,8 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
                                                     {row.clientMatch.isNew && <span style={{ display: 'block', fontSize: '9px', color: 'var(--color-warning)' }}>+ Nuevo Cliente</span>}
                                                 </td>
                                                 <td>
-                                                    {row.orderMatch.detalles.map((d, i) => (
-                                                        <div key={i}>{d.cantidad} × {d.observaciones || "Item"}</div>
+                                                    {row.orderMatch.detalles.map((d: any, i: number) => (
+                                                        <div key={i}>{d.cantidad} × {d.productoNombre || d.observaciones || "Item"}</div>
                                                     ))}
                                                     {row.orderMatch.detalles.length === 0 && <span style={{ color: 'var(--color-danger)' }}>Sin productos</span>}
                                                 </td>
@@ -398,7 +397,24 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
                                 </table>
                             </div>
 
-                            <div className="modal-footer" style={{ margin: 'var(--space-2) -var(--space-6) -var(--space-6)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' }}>
+                            {/* Selector de Medio de Pago para el Lote */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-lg)', margin: '0 -var(--space-6) var(--space-4)' }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>💳 Medio de Pago (Total Lote):</label>
+                                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                    <button 
+                                        className={`btn btn-sm ${batchMedioPago === 'efectivo' ? 'btn-success' : 'btn-ghost'}`}
+                                        onClick={() => setBatchMedioPago('efectivo')}
+                                        style={{ fontSize: '11px' }}
+                                    >💵 Efectivo (Con Descuento)</button>
+                                    <button 
+                                        className={`btn btn-sm ${batchMedioPago === 'transferencia' ? 'btn-primary' : 'btn-ghost'}`}
+                                        onClick={() => setBatchMedioPago('transferencia')}
+                                        style={{ fontSize: '11px' }}
+                                    >🏦 Transferencia (Sin Descuento)</button>
+                                </div>
+                            </div>
+
+                            <div className="modal-footer" style={{ margin: '0 -var(--space-6) -var(--space-6)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)' }}>
                                 <button className="btn btn-ghost" onClick={handleClose}>Cancelar</button>
                                 <button 
                                     className="btn btn-primary" 

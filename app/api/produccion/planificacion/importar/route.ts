@@ -85,11 +85,13 @@ export async function POST(req: NextRequest) {
             select: {
                 id: true,
                 cantidad: true,
+                productoId: true,
                 producto: {
                     select: {
                         id: true,
                         codigoInterno: true,
                         alias: true,
+                        planchasPorPaquete: true,
                     }
                 }
             }
@@ -179,6 +181,19 @@ export async function POST(req: NextRequest) {
             })
         }
 
+        // Calcular total de planchas de Elegidos (ELE) para el preview
+        let totalPlanchasElegidos = 0
+        resultados.forEach(r => {
+            r.items.forEach(item => {
+                const pres = presentacionesDB.find(p => p.id === item.presentacionId)
+                if (pres?.producto.codigoInterno === 'ELE') {
+                    const plPorPaq = pres.producto.planchasPorPaquete || 6
+                    const uniPorPlancha = 48 / plPorPaq
+                    totalPlanchasElegidos += (item.cantidadPaquetes / uniPorPlancha)
+                }
+            })
+        })
+
         // Si es solo preview, devolvemos resultados sin guardar
         if (!confirmar) {
             return NextResponse.json({ 
@@ -187,6 +202,7 @@ export async function POST(req: NextRequest) {
                 ok: resultados.filter(r => r.status === 'ok').length,
                 parcial: resultados.filter(r => r.status === 'parcial').length,
                 error: resultados.filter(r => r.status === 'sin_turno' || r.status === 'sin_match').length,
+                totalPlanchasElegidos: Math.round(totalPlanchasElegidos * 10) / 10
             })
         }
 
