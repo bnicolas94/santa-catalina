@@ -128,6 +128,19 @@ export default function PedidosPage() {
         } catch { setError('Error al marcar como abonado') }
     }
 
+    async function toggleMedioPago(pedidoId: string, nuevoMedio: string) {
+        try {
+            await fetch(`/api/pedidos/${pedidoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ medioPago: nuevoMedio }),
+            })
+            setSuccess(`Medio de pago cambiado a ${nuevoMedio === 'efectivo' ? 'Efectivo' : 'Transferencia'}`)
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch { setError('Error al cambiar medio de pago') }
+    }
+
     function startEditPedido(ped: Pedido) {
         setEditingPedido(ped)
         setEditForm({
@@ -382,27 +395,52 @@ export default function PedidosPage() {
                                     <td style={{ fontWeight: 600 }}>{ped.totalUnidades.toLocaleString()}</td>
                                     <td>${ped.totalImporte.toLocaleString('es-AR')}</td>
                                     <td>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <span className="badge" style={{
-                                                backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB15' : '#27AE6015',
-                                                color: ped.medioPago === 'transferencia' ? '#2980B9' : '#27AE60',
-                                                border: `1px solid ${ped.medioPago === 'transferencia' ? '#3498DB40' : '#27AE6040'}`,
-                                                fontSize: '0.7rem',
-                                            }}>
-                                                {ped.medioPago === 'transferencia' ? '🏦 Transf.' : '💵 Efectivo'}
-                                            </span>
-                                            {ped.abonado && (
-                                                <div style={{ marginTop: 'var(--space-1)' }}>
-                                                    <span className="badge badge-success" style={{
-                                                        fontSize: '0.65rem',
-                                                        fontWeight: 800,
-                                                        padding: '2px 10px',
-                                                        boxShadow: '0 2px 4px rgba(39, 174, 96, 0.2)',
-                                                        border: '1px solid #27AE60'
-                                                    }}>
-                                                        ✅ ABONADO
-                                                    </span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            {!ped.abonado ? (
+                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                    <button onClick={() => toggleMedioPago(ped.id, 'efectivo')}
+                                                            title="Cambiar a Efectivo"
+                                                            style={{ 
+                                                                padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                                                                backgroundColor: ped.medioPago === 'efectivo' ? '#27AE60' : '#27AE6020',
+                                                                color: ped.medioPago === 'efectivo' ? '#fff' : '#27AE60',
+                                                                fontSize: '0.65rem', fontWeight: 800, transition: 'all 0.2s'
+                                                            }}>
+                                                        💵 EF
+                                                    </button>
+                                                    <button onClick={() => toggleMedioPago(ped.id, 'transferencia')}
+                                                            title="Cambiar a Transferencia"
+                                                            style={{ 
+                                                                padding: '4px 8px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                                                                backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB' : '#3498DB20',
+                                                                color: ped.medioPago === 'transferencia' ? '#fff' : '#3498DB',
+                                                                fontSize: '0.65rem', fontWeight: 800, transition: 'all 0.2s'
+                                                            }}>
+                                                        🏦 TR
+                                                    </button>
                                                 </div>
+                                            ) : (
+                                                <>
+                                                    <span className="badge" style={{
+                                                        backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB15' : '#27AE6015',
+                                                        color: ped.medioPago === 'transferencia' ? '#2980B9' : '#27AE60',
+                                                        border: `1px solid ${ped.medioPago === 'transferencia' ? '#3498DB40' : '#27AE6040'}`,
+                                                        fontSize: '0.7rem',
+                                                    }}>
+                                                        {ped.medioPago === 'transferencia' ? '🏦 Transf.' : '💵 Efectivo'}
+                                                    </span>
+                                                    <div style={{ marginTop: 'var(--space-1)' }}>
+                                                        <span className="badge badge-success" style={{
+                                                            fontSize: '0.65rem',
+                                                            fontWeight: 800,
+                                                            padding: '2px 10px',
+                                                            boxShadow: '0 2px 4px rgba(39, 174, 96, 0.2)',
+                                                            border: '1px solid #27AE60'
+                                                        }}>
+                                                            ✅ ABONADO
+                                                        </span>
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                     </td>
@@ -422,7 +460,7 @@ export default function PedidosPage() {
                                                     </button>
                                                 )
                                             })}
-                                            {!ped.abonado && ped.medioPago === 'transferencia' && (
+                                            {!ped.abonado && (
                                                 <button className="btn btn-sm" title="Marcar como abonado" 
                                                     style={{ 
                                                         fontSize: '11px', 
@@ -436,8 +474,8 @@ export default function PedidosPage() {
                                                         gap: '4px',
                                                         transition: 'all 0.2s ease-in-out'
                                                     }}
-                                                    onClick={() => marcarAbonado(ped.id)}>
-                                                    💰 Abonar Transf.
+                                                    onClick={() => !ped.abonado && marcarAbonado(ped.id)}>
+                                                    💰 Abonar
                                                 </button>
                                             )}
                                             <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '11px' }}

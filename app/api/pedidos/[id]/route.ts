@@ -20,9 +20,38 @@ export async function PUT(
         const result = await prisma.$transaction(async (tx) => {
             const current = await tx.pedido.findUnique({ 
                 where: { id },
-                select: { id: true, abonado: true, totalImporte: true }
+                include: {
+                    detalles: {
+                        include: { presentacion: { select: { id: true, cantidad: true } } }
+                    }
+                }
             })
             if (!current) throw new Error('Pedido no encontrado')
+
+            // Determinar medioPago para el cálculo (el del body o el actual)
+            const medioParaCalcular = body.medioPago !== undefined ? body.medioPago : current.medioPago
+            
+            // 1. Calcular Total Base (sin descuentos)
+            const baseTotal = current.detalles.reduce((acc, d) => acc + (d.cantidad * d.precioUnitario), 0)
+            
+            // 2. Calcular Descuento si es Efectivo
+            let totalDescuento = 0
+            if (medioParaCalcular === 'efectivo') {
+                const packMap = new Map<number, number>()
+                current.detalles.forEach(d => {
+                    if (d.nroPack !== null) {
+                        const units = d.cantidad * d.presentacion.cantidad
+                        packMap.set(d.nroPack, (packMap.get(d.nroPack) || 0) + units)
+                    }
+                })
+                for (const units of packMap.values()) {
+                    if (units >= 48) totalDescuento += 2000
+                    else if (units >= 24) totalDescuento += 1000
+                }
+            }
+
+            const totalRecalculado = Math.round(baseTotal - totalDescuento)
+            data.totalImporte = totalRecalculado
 
             const pedido = await tx.pedido.update({
                 where: { id },
@@ -39,7 +68,7 @@ export async function PUT(
                 },
             })
 
-            // Si se marca como abonado (y antes no lo estaba), registramos en caja
+            // Si se marca como abonado (y antes no lo estaba), registramos en caja con el total recalculado
             if (data.abonado === true && current.abonado === false) {
                 await tx.movimientoCaja.create({
                     data: {
