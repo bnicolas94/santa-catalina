@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
 
         if (fechaDesde || fechaHasta) {
             where.fechaEntrega = {}
-            if (fechaDesde) where.fechaEntrega.gte = new Date(fechaDesde + 'T00:00:00')
-            if (fechaHasta) where.fechaEntrega.lte = new Date(fechaHasta + 'T23:59:59')
+            if (fechaDesde) where.fechaEntrega.gte = new Date(fechaDesde + 'T00:00:00.000Z')
+            if (fechaHasta) where.fechaEntrega.lte = new Date(fechaHasta + 'T23:59:59.999Z')
         }
 
         if (estado) where.estado = estado
