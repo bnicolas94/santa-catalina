@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // GET /api/logistica/flota/gastos?vehiculoId=...&mes=...&anio=...
 export async function GET(request: Request) {
@@ -85,26 +86,16 @@ export async function POST(request: Request) {
                 }
             })
 
-            // Crear el Movimiento de Caja (Egreso)
-            await tx.movimientoCaja.create({
-                data: {
-                    fecha: gasto.fecha,
-                    tipo: 'egreso', // En minúsculas para coincidir con el resto del sistema
-                    concepto: `Gasto Flota: ${descripcion}`,
-                    monto: numericMonto, // Almacenamos el valor absoluto, el tipo 'egreso' lo identifica
-                    medioPago: 'efectivo', // O el medio que corresponda a la cajaTipo
-                    cajaOrigen: cajaTipo,
-                    descripcion: `Vinculado a vehículo ${vehiculoId}`,
-                    gastoId: gasto.id
-                }
-            })
-
-            // Actualizar Saldo de Caja
-            await tx.saldoCaja.update({
-                where: { tipo: cajaTipo },
-                data: {
-                    saldo: { decrement: numericMonto }
-                }
+            // Crear el Movimiento de Caja (Egreso) y actualizar saldo
+            await CajaService.createMovimientoEnTx(tx, {
+                tipo: 'egreso',
+                concepto: `Gasto Flota: ${descripcion}`,
+                monto: numericMonto,
+                medioPago: 'efectivo',
+                cajaOrigen: cajaTipo,
+                descripcion: `Vinculado a vehículo ${vehiculoId}`,
+                gastoId: gasto.id,
+                fecha: gasto.fecha,
             })
 
             // Actualizar el kilometraje actual del vehículo si se proporcionó uno mayor

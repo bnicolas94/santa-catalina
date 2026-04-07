@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // GET /api/caja/rendiciones — Rendiciones pendientes del día
 export async function GET() {
@@ -73,45 +74,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 })
         }
 
-        const montoReal = parseFloat(montoEntregado)
-        const diferencia = montoReal - parseFloat(montoEsperado)
-
-        const result = await prisma.$transaction(async (tx) => {
-            // 1. Crear la rendición
-            const rendicion = await tx.rendicionChofer.create({
-                data: {
-                    choferId,
-                    montoEsperado: parseFloat(montoEsperado),
-                    montoEntregado: montoReal,
-                    diferencia,
-                    estado: 'controlado',
-                    observaciones: observaciones || null,
-                },
-            })
-
-            // 2. Crear movimiento de caja (ingreso del efectivo)
-            await tx.movimientoCaja.create({
-                data: {
-                    tipo: 'ingreso',
-                    concepto: 'rendicion_chofer',
-                    monto: montoReal,
-                    medioPago: 'efectivo',
-                    cajaOrigen: 'caja_chica', // Por defecto las rendiciones van a caja chica
-                    descripcion: `Rendición chofer - ${diferencia !== 0 ? `Diferencia: $${diferencia.toFixed(2)}` : 'Sin diferencia'}`,
-                    rendicionId: rendicion.id,
-                    fecha: new Date(), // Aseguramos la hora exacta de registro
-                },
-            })
-
-            // 3. Actualizar saldo en Caja Chica
-            await tx.saldoCaja.update({
-                where: { tipo: 'caja_chica' },
-                data: { saldo: { increment: montoReal } }
-            })
-
-
-            return rendicion
-        })
+        const result = await CajaService.confirmarRendicion(
+            choferId,
+            parseFloat(montoEsperado),
+            parseFloat(montoEntregado),
+            observaciones
+        )
 
         return NextResponse.json(result, { status: 201 })
     } catch (error) {

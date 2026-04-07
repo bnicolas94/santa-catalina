@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // PUT /api/movimientos-stock/:id/pago — Marcar compra como pagada y generar asiento de caja
 export async function PUT(
@@ -50,28 +51,17 @@ export async function PUT(
                 }
             })
 
-            // 3. Crear Movimiento de Caja vinculado al gasto
-            const movCaja = await tx.movimientoCaja.create({
-                data: {
-                    tipo: 'egreso',
-                    concepto: 'pago_proveedor',
-                    monto: movimiento.costoTotal || 0,
-                    medioPago: 'efectivo',
-                    cajaOrigen: selectedCaja,
-                    descripcion: gasto.descripcion,
-                    gastoId: gasto.id,
-                    fecha: new Date()
-                }
+            // 3. Crear Movimiento de Caja vinculado al gasto (incluye saldo)
+            const movCaja = await CajaService.createMovimientoEnTx(tx, {
+                tipo: 'egreso',
+                concepto: 'pago_proveedor',
+                monto: movimiento.costoTotal || 0,
+                medioPago: 'efectivo',
+                cajaOrigen: selectedCaja,
+                descripcion: gasto.descripcion,
+                gastoId: gasto.id,
+                fecha: new Date(),
             })
-
-            // 4. Actualizar Saldo de Caja
-            const saldo = await tx.saldoCaja.findUnique({ where: { tipo: selectedCaja } })
-            if (saldo) {
-                await tx.saldoCaja.update({
-                    where: { tipo: selectedCaja },
-                    data: { saldo: { decrement: movimiento.costoTotal || 0 } }
-                })
-            }
 
             // 5. Vincular Gasto y cambiar estado a pagado
             const movActualizado = await tx.movimientoStock.update({

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { CajaService } from '@/lib/services/caja.service';
 
 // Permitir más tiempo de ejecución si Vercel/Railway lo soporta
 export const maxDuration = 60;
@@ -90,30 +91,21 @@ export async function GET(req: Request) {
                     }
                  });
 
-                 // 2. Insertarlo oficialmente en Movimientos de Caja física/virtual
-                 const cajaMp = await tx.movimientoCaja.create({
-                    data: {
-                        fecha: p.date_approved ? new Date(p.date_approved) : new Date(p.date_created),
-                        tipo: "egreso", // Tipo: Egreso
-                        concepto: p.description || `Egreso ${p.operation_type}`,
-                        monto: neto, // Guardamos monto positivo (Caja front lo resta visualmente si es egreso)
-                        medioPago: "mercado_pago",
-                        cajaOrigen: "mercado_pago",
-                        descripcion: `AUTO-RETIRO | ${p.description || p.operation_type} | #${p.id}`,
-                    }
+                 // 2. Insertarlo oficialmente en Movimientos de Caja física/virtual (incluye saldo)
+                 const cajaMp = await CajaService.createMovimientoEnTx(tx, {
+                    tipo: 'egreso',
+                    concepto: p.description || `Egreso ${p.operation_type}`,
+                    monto: neto,
+                    medioPago: 'mercado_pago',
+                    cajaOrigen: 'mercado_pago',
+                    descripcion: `AUTO-RETIRO | ${p.description || p.operation_type} | #${p.id}`,
+                    fecha: p.date_approved ? new Date(p.date_approved) : new Date(p.date_created),
                  });
 
                  // Actualizar la relación 
                  await tx.movimientoMercadoPago.update({
                     where: { id: movimientoMP.id },
                     data: { movimientoCajaId: cajaMp.id }
-                 });
-
-                 // 3. Modificar el Saldo Total de la Caja Virtual "M.Pago"
-                 await tx.saldoCaja.upsert({
-                    where: { tipo: "mercado_pago" },
-                    update: { saldo: { decrement: neto } },
-                    create: { tipo: "mercado_pago", saldo: -neto }
                  });
             });
             addedCount++;

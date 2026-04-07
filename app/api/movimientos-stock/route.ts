@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // GET /api/movimientos-stock
 export async function GET(request: Request) {
@@ -75,32 +76,18 @@ export async function POST(request: Request) {
                     gastoId = gasto.id
                     console.log('Gasto created:', gastoId)
 
-                    const movCaja = await tx.movimientoCaja.create({
-                        data: {
-                            tipo: 'egreso',
-                            concepto: 'pago_proveedor',
-                            monto: costoTotalFloat,
-                            medioPago: 'efectivo',
-                            cajaOrigen: selectedCaja,
-                            descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
-                            gastoId: gastoId,
-                            fecha: parsedFecha
-                        }
+                    const movCaja = await CajaService.createMovimientoEnTx(tx, {
+                        tipo: 'egreso',
+                        concepto: 'pago_proveedor',
+                        monto: costoTotalFloat,
+                        medioPago: 'efectivo',
+                        cajaOrigen: selectedCaja,
+                        descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
+                        gastoId: gastoId,
+                        fecha: parsedFecha,
                     })
                     movimientoCajaId = movCaja.id
-                    console.log('MovimientoCaja created:', movimientoCajaId)
-
-                    // Actualizar SaldoCaja (defensivo)
-                    const saldo = await tx.saldoCaja.findUnique({ where: { tipo: selectedCaja } })
-                    if (saldo) {
-                        await tx.saldoCaja.update({
-                            where: { tipo: selectedCaja },
-                            data: { saldo: { decrement: costoTotalFloat } }
-                        })
-                        console.log('SaldoCaja updated')
-                    } else {
-                        console.warn('SaldoCaja caja_madre NOT FOUND. Skipping balance update.')
-                    }
+                    console.log('MovimientoCaja created via CajaService:', movimientoCajaId)
                 } catch (financialError) {
                     console.error('ERROR in financial steps:', financialError)
                     throw new Error('Error en el proceso financiero (gasto/caja): ' + (financialError instanceof Error ? financialError.message : String(financialError)))

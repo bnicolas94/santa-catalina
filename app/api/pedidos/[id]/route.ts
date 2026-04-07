@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // PUT /api/pedidos/:id — Editar pedido (estado, medioPago, fechaEntrega, abonado, etc.)
 export async function PUT(
@@ -70,23 +71,15 @@ export async function PUT(
 
             // Si se marca como abonado (y antes no lo estaba), registramos en caja con el total recalculado
             if (data.abonado === true && current.abonado === false) {
-                await tx.movimientoCaja.create({
-                    data: {
-                        tipo: 'ingreso',
-                        concepto: 'cobro_pedido',
-                        monto: pedido.totalImporte,
-                        medioPago: 'transferencia',
-                        cajaOrigen: 'mercado_pago_juani',
-                        descripcion: `Pedido abonado (${pedido.cliente.nombreComercial})`,
-                        pedidoId: pedido.id,
-                        fecha: new Date(),
-                    }
-                })
-
-                await tx.saldoCaja.upsert({
-                    where: { tipo: 'mercado_pago_juani' },
-                    create: { tipo: 'mercado_pago_juani', saldo: pedido.totalImporte },
-                    update: { saldo: { increment: pedido.totalImporte } }
+                await CajaService.createMovimientoEnTx(tx, {
+                    tipo: 'ingreso',
+                    concepto: 'cobro_pedido',
+                    monto: pedido.totalImporte,
+                    medioPago: 'transferencia',
+                    cajaOrigen: 'mercado_pago_juani',
+                    descripcion: `Pedido abonado (${pedido.cliente.nombreComercial})`,
+                    pedidoId: pedido.id,
+                    fecha: new Date(),
                 })
             }
 

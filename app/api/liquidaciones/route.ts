@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // Modelo Simplificado de Liquidación
 export async function POST(request: Request) {
@@ -204,21 +205,12 @@ export async function POST(request: Request) {
                 return NextResponse.json({ error: `La caja '${cajaId}' no existe en el sistema.` }, { status: 400 })
             }
 
-            await prisma.movimientoCaja.create({
-                data: {
-                    tipo: 'egreso',
-                    concepto: conceptoFinal,
-                    monto: neto,
-                    cajaOrigen: cajaId,
-                    descripcion: `Liquidación Sueldo: ${empleado.nombre} ${empleado.apellido || ''} - Periodo: ${periodo} (ID: ${liquidacion.id})`,
-                }
-            })
-
-            await prisma.saldoCaja.update({
-                where: { tipo: cajaId },
-                data: {
-                    saldo: { decrement: neto }
-                }
+            await CajaService.createMovimiento({
+                tipo: 'egreso',
+                concepto: conceptoFinal,
+                monto: neto,
+                cajaOrigen: cajaId,
+                descripcion: `Liquidación Sueldo: ${empleado.nombre} ${empleado.apellido || ''} - Periodo: ${periodo} (ID: ${liquidacion.id})`,
             })
         }
 
@@ -295,18 +287,8 @@ export async function DELETE(request: Request) {
             }
         })
 
-        if (movCaja && movCaja.cajaOrigen) {
-            // Devolver dinero al saldo
-            await prisma.saldoCaja.update({
-                where: { tipo: movCaja.cajaOrigen },
-                data: {
-                    saldo: { increment: movCaja.monto }
-                }
-            })
-            // Borrar el movimiento
-            await prisma.movimientoCaja.delete({
-                where: { id: movCaja.id }
-            })
+        if (movCaja) {
+            await CajaService.deleteMovimiento(movCaja.id)
         }
 
         // 3. Borrar la liquidación

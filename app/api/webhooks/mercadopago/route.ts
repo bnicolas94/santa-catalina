@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPayment } from "@/lib/mercadopago";
+import { CajaService } from "@/lib/services/caja.service";
 import crypto from 'crypto';
 
 export async function POST(req: Request) {
@@ -131,34 +132,20 @@ export async function POST(req: Request) {
 
         // Verificamos si ya está entrelazado con MovimientoCaja, si no, lo sumamos al detectar que fue "approved"
         if (paymentInfo.status === "approved" && !movimientoMP.movimientoCajaId) {
-          const cajaMp = await tx.movimientoCaja.create({
-            data: {
-              fecha: paymentInfo.date_approved ? new Date(paymentInfo.date_approved) : new Date(),
-              tipo: "ingreso",
-              concepto: displayDesc,
-              monto: montoNeto, // Impactamos el neto en la caja
-              medioPago: "mercado_pago",
-              cajaOrigen: "mercado_pago",
-              descripcion: `PAGO #${paymentInfo.id} | ${payerName}`,
-            }
+          const cajaMp = await CajaService.createMovimientoEnTx(tx, {
+            tipo: 'ingreso',
+            concepto: displayDesc,
+            monto: montoNeto,
+            medioPago: 'mercado_pago',
+            cajaOrigen: 'mercado_pago',
+            descripcion: `PAGO #${paymentInfo.id} | ${payerName}`,
+            fecha: paymentInfo.date_approved ? new Date(paymentInfo.date_approved) : new Date(),
           });
 
           // Conectamos el registro MP con la Caja
           await tx.movimientoMercadoPago.update({
             where: { id: movimientoMP.id },
             data: { movimientoCajaId: cajaMp.id }
-          });
-
-          // Actualizamos el saldo acumulado en la tabla SaldoCaja
-          await tx.saldoCaja.upsert({
-            where: { tipo: "mercado_pago" },
-            update: {
-              saldo: { increment: montoNeto }
-            },
-            create: {
-              tipo: "mercado_pago",
-              saldo: montoNeto
-            }
           });
           
           console.log(`[MercadoPago Webhook] Pago ${mpIdString} registrado y acreditado en Caja Mercado Pago (${montoNeto}).`);

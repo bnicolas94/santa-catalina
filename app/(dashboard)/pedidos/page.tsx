@@ -324,7 +324,7 @@ export default function PedidosPage() {
                     Todos ({pedidos.length})
                 </button>
                 {ESTADOS_PEDIDO.map((est) => {
-                    const count = pedidos.filter((p) => p.estado === est.value).length
+                    const count = pedidos.filter((p) => p?.estado === est.value).length
                     return (
                         <button key={est.value} className="btn btn-sm" onClick={() => setFilterEstado(filterEstado === est.value ? '' : est.value)}
                             style={{

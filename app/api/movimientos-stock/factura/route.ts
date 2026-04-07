@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 export async function POST(request: Request) {
     try {
@@ -73,26 +74,16 @@ export async function POST(request: Request) {
                 })
                 gastoId = gasto.id
 
-                await tx.movimientoCaja.create({
-                    data: {
-                        tipo: 'egreso',
-                        concepto: 'pago_proveedor',
-                        monto: costoTotalFactura,
-                        medioPago: 'efectivo',
-                        cajaOrigen: selectedCaja,
-                        descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
-                        gastoId: gastoId,
-                        fecha: parsedFecha
-                    }
+                await CajaService.createMovimientoEnTx(tx, {
+                    tipo: 'egreso',
+                    concepto: 'pago_proveedor',
+                    monto: costoTotalFactura,
+                    medioPago: 'efectivo',
+                    cajaOrigen: selectedCaja,
+                    descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
+                    gastoId: gastoId,
+                    fecha: parsedFecha,
                 })
-
-                const saldo = await tx.saldoCaja.findUnique({ where: { tipo: selectedCaja } })
-                if (saldo) {
-                    await tx.saldoCaja.update({
-                        where: { tipo: selectedCaja },
-                        data: { saldo: { decrement: costoTotalFactura } }
-                    })
-                }
             }
 
             // 4. Crear cada MovimientoStock y actualizar Insumo

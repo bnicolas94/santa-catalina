@@ -2,8 +2,33 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { CajaService } from '@/lib/services/caja.service'
 
-// GET /api/caja — Movimientos de caja del día (o fecha especificada)
+// ─── Helpers de Autorización ─────────────────────────────────────────────────
+
+function getAllowedBoxes(userRol: string, ubicacionTipo: string): string[] | undefined {
+    if (userRol === 'ADMIN') return undefined // Sin restricción
+    if (ubicacionTipo === 'LOCAL') return ['local']
+    if (ubicacionTipo === 'FABRICA') return ['caja_madre', 'caja_chica']
+    return []
+}
+
+function validateCajaAccess(userRol: string, ubicacionTipo: string, cajaOrigen: string): string | null {
+    if (userRol?.toUpperCase() === 'ADMIN') return null
+    const cajaLower = cajaOrigen.toLowerCase()
+
+    if (ubicacionTipo === 'LOCAL') {
+        if (cajaLower !== 'local') return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación LOCAL`
+    } else if (ubicacionTipo === 'FABRICA') {
+        if (!['caja_madre', 'caja_chica'].includes(cajaLower)) return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación FABRICA`
+    } else {
+        return 'Tu usuario no tiene una ubicación asignada para operar en caja'
+    }
+    return null
+}
+
+// ─── GET /api/caja ───────────────────────────────────────────────────────────
+
 export async function GET(request: Request) {
     try {
         const session = await getServerSession(authOptions)
@@ -13,28 +38,19 @@ export async function GET(request: Request) {
         if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
             return NextResponse.json({ error: 'No tienes permiso para ver la caja' }, { status: 403 })
         }
+
         const { searchParams } = new URL(request.url)
         const fechaParam = searchParams.get('fecha')
 
-        // Si hay fecha especificada, usamos medianoche local para el rango
-        // Si no hay fecha, usamos el momento actual
         const dateToFilter = fechaParam ? new Date(fechaParam + 'T00:00:00') : new Date()
         const startOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 0, 0, 0, 0)
         const endOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 23, 59, 59, 999)
 
-        // Definir cajas permitidas según ubicación
-        let allowedBoxes: string[] | undefined = undefined
-        if (userRol !== 'ADMIN') {
-            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-            if (ubicacionTipo === 'LOCAL') {
-                allowedBoxes = ['local']
-            } else if (ubicacionTipo === 'FABRICA') {
-                allowedBoxes = ['caja_madre', 'caja_chica']
-            }
-        }
+        const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+        const allowedBoxes = getAllowedBoxes(userRol, ubicacionTipo)
 
         const movimientos = await prisma.movimientoCaja.findMany({
-            where: { 
+            where: {
                 fecha: { gte: startOfDay, lte: endOfDay },
                 ...(allowedBoxes && { cajaOrigen: { in: allowedBoxes } })
             },
@@ -46,7 +62,6 @@ export async function GET(request: Request) {
             },
         })
 
-        // Resumen del día
         let ingresosEfectivo = 0
         let ingresosTransferencia = 0
         let egresosTotal = 0
@@ -75,7 +90,8 @@ export async function GET(request: Request) {
     }
 }
 
-// POST /api/caja — Registrar movimiento manual
+// ─── POST /api/caja ──────────────────────────────────────────────────────────
+
 export async function POST(request: Request) {
     try {
         const session = await getServerSession(authOptions)
@@ -94,27 +110,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Tipo, concepto y monto son requeridos' }, { status: 400 })
         }
 
-        // VALIDACIÓN DE UBICACIÓN
+        // Validación de ubicación
         if (userRol?.toUpperCase() !== 'ADMIN' && cajaOrigen) {
             const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
-            const cajaLower = cajaOrigen.toLowerCase()
-            
-            console.log('[CAJA API] Validando Permisos POST:', { userRol, ubicacionTipo, cajaOrigen: cajaLower })
-            
-            if (ubicacionTipo === 'LOCAL') {
-                if (cajaLower !== 'local') {
-                    return NextResponse.json({ error: `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación LOCAL` }, { status: 403 })
-                }
-            } else if (ubicacionTipo === 'FABRICA') {
-                const allowed = ['caja_madre', 'caja_chica']
-                if (!allowed.includes(cajaLower)) {
-                    return NextResponse.json({ error: `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación FABRICA` }, { status: 403 })
-                }
-            } else {
-                // Si no tiene ubicación definida y no es ADMIN, por seguridad restringimos
-                console.warn('[CAJA API] Usuario sin ubicación definida intentó operar:', { userRol })
-                return NextResponse.json({ error: 'Tu usuario no tiene una ubicación asignada para operar en caja' }, { status: 403 })
-            }
+            const error = validateCajaAccess(userRol, ubicacionTipo, cajaOrigen)
+            if (error) return NextResponse.json({ error }, { status: 403 })
         }
 
         const numericMonto = parseFloat(monto)
@@ -122,78 +122,36 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
         }
 
+        // Rendición de chofer: buscar o crear rendición del día
         let rendicionId = null
-        // Si es rendición de chofer y viene un choferId, buscamos o creamos la rendición de hoy
         if (concepto === 'rendicion_chofer' && choferId) {
             const now = new Date()
             const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
             const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
             let rendicion = await prisma.rendicionChofer.findFirst({
-                where: {
-                    choferId,
-                    fecha: { gte: startOfDay, lte: endOfDay }
-                }
+                where: { choferId, fecha: { gte: startOfDay, lte: endOfDay } }
             })
 
             if (!rendicion) {
                 rendicion = await prisma.rendicionChofer.create({
-                    data: {
-                        choferId,
-                        fecha: now,
-                        montoEsperado: 0, // Se asume 0 si es carga manual inicial o se actualizará luego
-                        estado: 'pendiente'
-                    }
+                    data: { choferId, fecha: now, montoEsperado: 0, estado: 'pendiente' }
                 })
             }
             rendicionId = rendicion.id
         }
 
-        const result = await prisma.$transaction(async (tx) => {
-            const mov = await tx.movimientoCaja.create({
-                data: {
-                    tipo,
-                    concepto,
-                    monto: numericMonto,
-                    medioPago: medioPago || 'efectivo',
-                    cajaOrigen: cajaOrigen || null,
-                    descripcion: descripcion || null,
-                    pedidoId: pedidoId || null,
-                    gastoId: gastoId || null,
-                    rendicionId: rendicionId,
-                    // Lógica de fecha mejorada:
-                    // 1. Si no hay fecha, usamos exactamente 'ahora'
-                    // 2. Si hay fecha string (YYYY-MM-DD):
-                    //    a. Si es HOY (según el servidor), usamos 'ahora' para capturar la hora real de registro.
-                    //    b. Si es otro día, usamos mediodía UTC con 'Z' para evitar desfases por zona horaria del servidor.
-                    fecha: (() => {
-                        if (!fecha) return new Date();
-                        if (typeof fecha === 'string' && fecha.length === 10) {
-                            const todayStr = new Date().toISOString().split('T')[0];
-                            if (fecha === todayStr) return new Date(); // Es hoy, capturar HORA actual
-                            return new Date(fecha + 'T12:00:00Z'); // Es histórico, forzar mediodía UTC
-                        }
-                        return new Date(fecha);
-                    })(),
-                },
-            })
-
-            // Actualizar SaldoCaja si hay caja origen
-            if (cajaOrigen) {
-                if (tipo === 'ingreso') {
-                    await tx.saldoCaja.update({
-                        where: { tipo: cajaOrigen },
-                        data: { saldo: { increment: numericMonto } }
-                    })
-                } else {
-                    await tx.saldoCaja.update({
-                        where: { tipo: cajaOrigen },
-                        data: { saldo: { decrement: numericMonto } }
-                    })
-                }
-            }
-
-            return mov
+        const result = await CajaService.createMovimiento({
+            tipo,
+            concepto,
+            monto: numericMonto,
+            medioPago: medioPago || 'efectivo',
+            cajaOrigen: cajaOrigen || null,
+            descripcion: descripcion || null,
+            pedidoId: pedidoId || null,
+            gastoId: gastoId || null,
+            rendicionId,
+            fecha,
         })
 
         console.log('[CAJA API] Movimiento creado exitosamente:', result.id)
@@ -207,7 +165,8 @@ export async function POST(request: Request) {
     }
 }
 
-// PUT /api/caja — Editar movimiento
+// ─── PUT /api/caja ───────────────────────────────────────────────────────────
+
 export async function PUT(request: Request) {
     try {
         const session = await getServerSession(authOptions)
@@ -223,87 +182,30 @@ export async function PUT(request: Request) {
 
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-        const result = await prisma.$transaction(async (tx) => {
-            const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
-            if (!oldMov) throw new Error('Movimiento no encontrado')
+        // Validar acceso al movimiento existente
+        if (userRol !== 'ADMIN') {
+            const oldMov = await prisma.movimientoCaja.findUnique({ where: { id } })
+            if (!oldMov) return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
 
-            // VALIDACIÓN DE UBICACIÓN (Movimiento Existente)
-            if (userRol !== 'ADMIN' && oldMov.cajaOrigen) {
-                const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-                if (ubicacionTipo === 'LOCAL' && oldMov.cajaOrigen !== 'local') {
-                    throw new Error('No tienes permiso para editar este movimiento')
-                }
-                if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(oldMov.cajaOrigen)) {
-                    throw new Error('No tienes permiso para editar este movimiento')
-                }
-            }
-
-            // VALIDACIÓN DE UBICACIÓN (Nuevos Valores)
-            if (userRol !== 'ADMIN' && cajaOrigen) {
-                const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-                if (ubicacionTipo === 'LOCAL' && cajaOrigen !== 'local') {
-                    throw new Error('No tienes permiso para mover fondos a esta caja')
-                }
-                if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(cajaOrigen)) {
-                    throw new Error('No tienes permiso para mover fondos a esta caja')
-                }
-            }
-
-            // 1. Revertir impacto viejo en saldo
+            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
             if (oldMov.cajaOrigen) {
-                if (oldMov.tipo === 'ingreso') {
-                    await tx.saldoCaja.update({
-                        where: { tipo: oldMov.cajaOrigen },
-                        data: { saldo: { decrement: oldMov.monto } }
-                    })
-                } else {
-                    await tx.saldoCaja.update({
-                        where: { tipo: oldMov.cajaOrigen },
-                        data: { saldo: { increment: oldMov.monto } }
-                    })
-                }
+                const err = validateCajaAccess(userRol, ubicacionTipo, oldMov.cajaOrigen)
+                if (err) return NextResponse.json({ error: 'No tienes permiso para editar este movimiento' }, { status: 403 })
             }
-
-            // 2. Actualizar el movimiento
-            const mov = await tx.movimientoCaja.update({
-                where: { id },
-                data: {
-                    ...(tipo && { tipo }),
-                    ...(concepto && { concepto }),
-                    ...(monto !== undefined && { monto: parseFloat(monto) }),
-                    ...(medioPago && { medioPago }),
-                    ...(cajaOrigen !== undefined && { cajaOrigen: cajaOrigen || null }),
-                    ...(descripcion !== undefined && { descripcion: descripcion || null }),
-                    // Aplicar la misma normalización de fecha al editar
-                    ...(fecha && { 
-                        fecha: (() => {
-                            if (typeof fecha === 'string' && fecha.length === 10) {
-                                const todayStr = new Date().toISOString().split('T')[0];
-                                if (fecha === todayStr) return new Date(); // Si cambian a 'hoy', capturar ahora
-                                return new Date(fecha + 'T12:00:00Z'); // Histórico
-                            }
-                            return new Date(fecha);
-                        })()
-                    }),
-                },
-            })
-
-            // 3. Aplicar nuevo impacto en saldo
-            if (mov.cajaOrigen) {
-                if (mov.tipo === 'ingreso') {
-                    await tx.saldoCaja.update({
-                        where: { tipo: mov.cajaOrigen },
-                        data: { saldo: { increment: mov.monto } }
-                    })
-                } else {
-                    await tx.saldoCaja.update({
-                        where: { tipo: mov.cajaOrigen },
-                        data: { saldo: { decrement: mov.monto } }
-                    })
-                }
+            if (cajaOrigen) {
+                const err = validateCajaAccess(userRol, ubicacionTipo, cajaOrigen)
+                if (err) return NextResponse.json({ error: 'No tienes permiso para mover fondos a esta caja' }, { status: 403 })
             }
+        }
 
-            return mov
+        const result = await CajaService.updateMovimiento(id, {
+            tipo,
+            concepto,
+            monto: monto !== undefined ? parseFloat(monto) : undefined,
+            medioPago,
+            cajaOrigen,
+            descripcion,
+            fecha,
         })
 
         return NextResponse.json(result)
@@ -313,7 +215,8 @@ export async function PUT(request: Request) {
     }
 }
 
-// DELETE /api/caja — Eliminar movimiento
+// ─── DELETE /api/caja ────────────────────────────────────────────────────────
+
 export async function DELETE(request: Request) {
     try {
         const session = await getServerSession(authOptions)
@@ -328,38 +231,17 @@ export async function DELETE(request: Request) {
         const id = searchParams.get('id')
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-        await prisma.$transaction(async (tx) => {
-            const mov = await tx.movimientoCaja.findUnique({ where: { id } })
-            if (!mov) return
-
-            // VALIDACIÓN DE UBICACIÓN
-            if (userRol !== 'ADMIN' && mov.cajaOrigen) {
+        // Validar acceso
+        if (userRol !== 'ADMIN') {
+            const mov = await prisma.movimientoCaja.findUnique({ where: { id } })
+            if (mov?.cajaOrigen) {
                 const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-                if (ubicacionTipo === 'LOCAL' && mov.cajaOrigen !== 'local') {
-                    throw new Error('No tienes permiso para eliminar este movimiento')
-                }
-                if (ubicacionTipo === 'FABRICA' && !['caja_madre', 'caja_chica'].includes(mov.cajaOrigen)) {
-                    throw new Error('No tienes permiso para eliminar este movimiento')
-                }
+                const err = validateCajaAccess(userRol, ubicacionTipo, mov.cajaOrigen)
+                if (err) return NextResponse.json({ error: 'No tienes permiso para eliminar este movimiento' }, { status: 403 })
             }
+        }
 
-            // Revertir impacto en saldo
-            if (mov.cajaOrigen) {
-                if (mov.tipo === 'ingreso') {
-                    await tx.saldoCaja.update({
-                        where: { tipo: mov.cajaOrigen },
-                        data: { saldo: { decrement: mov.monto } }
-                    })
-                } else {
-                    await tx.saldoCaja.update({
-                        where: { tipo: mov.cajaOrigen },
-                        data: { saldo: { increment: mov.monto } }
-                    })
-                }
-            }
-
-            await tx.movimientoCaja.delete({ where: { id } })
-        })
+        await CajaService.deleteMovimiento(id)
 
         return NextResponse.json({ ok: true })
     } catch (error) {
