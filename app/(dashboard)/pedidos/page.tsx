@@ -54,21 +54,69 @@ export default function PedidosPage() {
     const [showImportModal, setShowImportModal] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
 
-    useEffect(() => { fetchData() }, [])
+    // Paginación y Filtros
+    const [currentPage, setCurrentPage] = useState(1)
+    const [totalPages, setTotalPages] = useState(1)
+    const [totalRecords, setTotalRecords] = useState(0)
+    const [fechaDesde, setFechaDesde] = useState('')
+    const [fechaHasta, setFechaHasta] = useState('')
+    const ITEMS_PER_PAGE = 20
 
-    async function fetchData() {
+    // Stats de proyección
+    const [stats, setStats] = useState({ totalPedidos: 0, totalImporte: 0, totalUnidades: 0, totalPacks: 0 })
+
+    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, fechaDesde, fechaHasta])
+    useEffect(() => { fetchCatalogos() }, [])
+
+    // Debounce para búsqueda
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setCurrentPage(1)
+            fetchPedidos()
+        }, 400)
+        return () => clearTimeout(timer)
+    }, [searchTerm])
+
+    async function fetchCatalogos() {
         try {
-            const [pedRes, cliRes, prodRes] = await Promise.all([
-                fetch('/api/pedidos'), fetch('/api/clientes'), fetch('/api/productos'),
+            const [cliRes, prodRes] = await Promise.all([
+                fetch('/api/clientes'), fetch('/api/productos'),
             ])
-            const pedData = await pedRes.json()
             const cliData = await cliRes.json()
             const prodData = await prodRes.json()
-            setPedidos(Array.isArray(pedData) ? pedData : [])
             setClientes(Array.isArray(cliData) ? cliData : [])
             setProductos(Array.isArray(prodData) ? prodData : [])
-        } catch { setError('Error al cargar datos') } finally { setLoading(false) }
+        } catch { setError('Error al cargar catálogos') }
     }
+
+    async function fetchPedidos() {
+        try {
+            setLoading(true)
+            const params = new URLSearchParams()
+            params.set('page', String(currentPage))
+            params.set('limit', String(ITEMS_PER_PAGE))
+            if (filterEstado) params.set('estado', filterEstado)
+            if (fechaDesde) params.set('fechaDesde', fechaDesde)
+            if (fechaHasta) params.set('fechaHasta', fechaHasta)
+            if (searchTerm) params.set('search', searchTerm)
+
+            const res = await fetch(`/api/pedidos?${params.toString()}`)
+            const data = await res.json()
+
+            if (data.pedidos) {
+                setPedidos(data.pedidos)
+                setTotalPages(data.pagination.pages)
+                setTotalRecords(data.pagination.total)
+                setStats(data.stats)
+            } else {
+                // Fallback por si la API responde en formato viejo
+                setPedidos(Array.isArray(data) ? data : [])
+            }
+        } catch { setError('Error al cargar pedidos') } finally { setLoading(false) }
+    }
+
+    async function fetchData() { await fetchPedidos() }
+
 
     // Flatten all presentations for selection
     const allPresentaciones = productos.flatMap((p) =>
@@ -282,24 +330,17 @@ export default function PedidosPage() {
 
     const totalPedido = calculateLiveTotal();
 
-    const filtered = pedidos.filter((p) => {
-        if (!p || !p.cliente) return false;
-        const matchesEstado = filterEstado ? p.estado === filterEstado : true;
-        const matchesSearch = searchTerm 
-            ? p.cliente.nombreComercial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              p.detalles?.some(d => d.presentacion?.producto?.codigoInterno?.toLowerCase().includes(searchTerm.toLowerCase()))
-            : true;
-        return matchesEstado && matchesSearch;
-    });
+    // Ya no filtramos localmente, la API nos devuelve solo lo que necesitamos
+    const filtered = pedidos;
 
-    if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando pedidos...</p></div>
+    if (loading && pedidos.length === 0) return <div className="empty-state"><div className="spinner" /><p>Cargando pedidos...</p></div>
 
     return (
         <div>
             <div className="page-header">
                 <h1>📋 Pedidos</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    {pedidos.length > 0 && (
+                    {totalRecords > 0 && (
                         <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={handleLimpiarPedidos}>🧹 Limpiar</button>
                     )}
                     <button className="btn btn-ghost" onClick={() => setShowImportModal(true)}>📂 Importar Excel</button>
@@ -310,42 +351,87 @@ export default function PedidosPage() {
                 </div>
             </div>
 
-            <div style={{ marginBottom: 'var(--space-4)' }}>
-                <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+            {/* --- CUADRO DE PROYECCIÓN DE INGRESOS --- */}
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)',
+                marginBottom: 'var(--space-6)', padding: 'var(--space-4)',
+                background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
+                borderRadius: 'var(--radius-xl)', border: '1px solid #667eea25',
+            }}>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Pedidos</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#667eea', fontFamily: 'var(--font-heading)' }}>{stats.totalPedidos}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Ingresos Proyectados</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#27AE60', fontFamily: 'var(--font-heading)' }}>${stats.totalImporte.toLocaleString('es-AR')}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Sándwiches</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#E67E22', fontFamily: 'var(--font-heading)' }}>{stats.totalUnidades.toLocaleString('es-AR')}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Bultos</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#9B59B6', fontFamily: 'var(--font-heading)' }}>{stats.totalPacks.toLocaleString('es-AR')}</div>
+                </div>
+            </div>
+
+            {/* --- BARRA FILTROS: Búsqueda + Fecha --- */}
+            <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ position: 'relative', flex: '1 1 250px', maxWidth: '350px' }}>
                     <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>🔍</span>
                     <input 
                         type="text" 
-                        placeholder="Buscar por cliente o código de producto..." 
+                        placeholder="Buscar por cliente..." 
                         className="form-input" 
                         style={{ paddingLeft: '36px' }}
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1) }}
                     />
                 </div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-500)' }}>📅 Desde:</label>
+                    <input type="date" className="form-input" style={{ width: 'auto', padding: '6px 10px', fontSize: '13px' }}
+                        value={fechaDesde}
+                        onChange={(e) => { setFechaDesde(e.target.value); setCurrentPage(1) }}
+                        onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                    />
+                </div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-gray-500)' }}>📅 Hasta:</label>
+                    <input type="date" className="form-input" style={{ width: 'auto', padding: '6px 10px', fontSize: '13px' }}
+                        value={fechaHasta}
+                        onChange={(e) => { setFechaHasta(e.target.value); setCurrentPage(1) }}
+                        onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                    />
+                </div>
+                {(fechaDesde || fechaHasta) && (
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px' }} onClick={() => { setFechaDesde(''); setFechaHasta(''); setCurrentPage(1) }}>
+                        ✕ Limpiar fecha
+                    </button>
+                )}
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}
             {error && <div className="toast toast-error">{error}</div>}
 
-            {/* Filtros */}
+            {/* Filtros de Estado */}
             <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-                <button className={`btn btn-sm ${filterEstado === '' ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setFilterEstado('')}>
-                    Todos ({pedidos.length})
+                <button className={`btn btn-sm ${filterEstado === '' ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => { setFilterEstado(''); setCurrentPage(1) }}>
+                    Todos ({totalRecords})
                 </button>
-                {ESTADOS_PEDIDO.map((est) => {
-                    const count = pedidos.filter((p) => p?.estado === est.value).length
-                    return (
-                        <button key={est.value} className="btn btn-sm" onClick={() => setFilterEstado(filterEstado === est.value ? '' : est.value)}
-                            style={{
-                                backgroundColor: filterEstado === est.value ? est.color : `${est.color}18`,
-                                color: filterEstado === est.value ? '#fff' : est.color,
-                                border: `2px solid ${est.color}`, fontWeight: 600,
-                            }}>
-                            {est.emoji} {est.label} ({count})
-                        </button>
-                    )
-                })}
+                {ESTADOS_PEDIDO.map((est) => (
+                    <button key={est.value} className="btn btn-sm" onClick={() => { setFilterEstado(filterEstado === est.value ? '' : est.value); setCurrentPage(1) }}
+                        style={{
+                            backgroundColor: filterEstado === est.value ? est.color : `${est.color}18`,
+                            color: filterEstado === est.value ? '#fff' : est.color,
+                            border: `2px solid ${est.color}`, fontWeight: 600,
+                        }}>
+                        {est.emoji} {est.label}
+                    </button>
+                ))}
             </div>
+
 
             <div className="table-container">
                 <table className="table">
@@ -505,6 +591,58 @@ export default function PedidosPage() {
                     </tbody>
                 </table>
             </div>
+
+            {/* --- PAGINACIÓN --- */}
+            {totalPages > 1 && (
+                <div style={{
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-3)',
+                    marginTop: 'var(--space-4)', marginBottom: 'var(--space-4)', padding: 'var(--space-3)',
+                }}>
+                    <button 
+                        className="btn btn-ghost btn-sm" 
+                        disabled={currentPage <= 1}
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        style={{ fontWeight: 600 }}
+                    >
+                        ← Anterior
+                    </button>
+                    
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                            let pageNum: number
+                            if (totalPages <= 7) {
+                                pageNum = i + 1
+                            } else if (currentPage <= 4) {
+                                pageNum = i + 1
+                            } else if (currentPage >= totalPages - 3) {
+                                pageNum = totalPages - 6 + i
+                            } else {
+                                pageNum = currentPage - 3 + i
+                            }
+                            return (
+                                <button key={pageNum} className={`btn btn-sm ${currentPage === pageNum ? 'btn-primary' : 'btn-ghost'}`}
+                                    style={{ minWidth: '36px', fontWeight: currentPage === pageNum ? 700 : 400 }}
+                                    onClick={() => setCurrentPage(pageNum)}>
+                                    {pageNum}
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    <button 
+                        className="btn btn-ghost btn-sm" 
+                        disabled={currentPage >= totalPages}
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        style={{ fontWeight: 600 }}
+                    >
+                        Siguiente →
+                    </button>
+                    
+                    <span style={{ fontSize: '12px', color: 'var(--color-gray-500)' }}>
+                        {totalRecords} registros
+                    </span>
+                </div>
+            )}
 
             {/* Modal Nuevo Pedido */}
             {showModal && (

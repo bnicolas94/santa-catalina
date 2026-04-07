@@ -1,25 +1,77 @@
 import { prisma } from '@/lib/prisma'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 
-// GET /api/pedidos
-export async function GET() {
+// GET /api/pedidos — Paginado, filtrable por fecha/estado/búsqueda
+export async function GET(request: NextRequest) {
     try {
-        const pedidos = await prisma.pedido.findMany({
-            orderBy: { fechaPedido: 'desc' },
-            include: {
-                cliente: { select: { id: true, nombreComercial: true, zona: true, latitud: true, longitud: true, direccion: true } },
-                detalles: {
-                    include: {
-                        presentacion: {
-                            include: {
-                                producto: { select: { id: true, nombre: true, codigoInterno: true } },
+        const { searchParams } = new URL(request.url)
+        const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+        const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')))
+        const fechaDesde = searchParams.get('fechaDesde')
+        const fechaHasta = searchParams.get('fechaHasta')
+        const estado = searchParams.get('estado')
+        const search = searchParams.get('search')
+
+        // Construir filtros dinámicos
+        const where: any = {}
+
+        if (fechaDesde || fechaHasta) {
+            where.fechaEntrega = {}
+            if (fechaDesde) where.fechaEntrega.gte = new Date(fechaDesde + 'T00:00:00')
+            if (fechaHasta) where.fechaEntrega.lte = new Date(fechaHasta + 'T23:59:59')
+        }
+
+        if (estado) where.estado = estado
+
+        if (search) {
+            where.cliente = {
+                nombreComercial: { contains: search, mode: 'insensitive' }
+            }
+        }
+
+        // Consultas en paralelo: pedidos paginados + total + stats
+        const [pedidos, total, stats] = await Promise.all([
+            prisma.pedido.findMany({
+                where,
+                orderBy: { fechaEntrega: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+                include: {
+                    cliente: { select: { id: true, nombreComercial: true, zona: true, latitud: true, longitud: true, direccion: true } },
+                    detalles: {
+                        include: {
+                            presentacion: {
+                                include: {
+                                    producto: { select: { id: true, nombre: true, codigoInterno: true } },
+                                },
                             },
                         },
                     },
                 },
+            }),
+            prisma.pedido.count({ where }),
+            prisma.pedido.aggregate({
+                where,
+                _sum: { totalImporte: true, totalUnidades: true, totalPacks: true },
+                _count: true,
+            }),
+        ])
+
+        return NextResponse.json({
+            pedidos,
+            pagination: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit),
+            },
+            stats: {
+                totalPedidos: stats._count,
+                totalImporte: stats._sum.totalImporte || 0,
+                totalUnidades: stats._sum.totalUnidades || 0,
+                totalPacks: stats._sum.totalPacks || 0,
             },
         })
-        return NextResponse.json(pedidos)
     } catch (error) {
         console.error('Error fetching pedidos:', error)
         return NextResponse.json({ error: 'Error al obtener pedidos' }, { status: 500 })
