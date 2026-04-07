@@ -274,10 +274,11 @@ export default function PedidosPage() {
     const totalPedido = calculateLiveTotal();
 
     const filtered = pedidos.filter((p) => {
+        if (!p || !p.cliente) return false;
         const matchesEstado = filterEstado ? p.estado === filterEstado : true;
         const matchesSearch = searchTerm 
-            ? p.cliente.nombreComercial.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              p.detalles.some(d => d.presentacion.producto.codigoInterno.toLowerCase().includes(searchTerm.toLowerCase()))
+            ? p.cliente.nombreComercial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              p.detalles?.some(d => d.presentacion?.producto?.codigoInterno?.toLowerCase().includes(searchTerm.toLowerCase()))
             : true;
         return matchesEstado && matchesSearch;
     });
