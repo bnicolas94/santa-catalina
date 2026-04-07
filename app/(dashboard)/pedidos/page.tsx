@@ -119,7 +119,7 @@ export default function PedidosPage() {
             const res = await fetch(`/api/pedidos/${pedidoId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ abonado: true }),
+                body: JSON.stringify({ abonado: true, medioPago: 'transferencia' }),
             })
             if (!res.ok) throw new Error()
             setSuccess('Pedido marcado como abonado')
