@@ -39,6 +39,8 @@ export default function ProductosPage() {
     const [showPresModal, setShowPresModal] = useState(false)
     const [presProducto, setPresProducto] = useState<Producto | null>(null)
     const [presForm, setPresForm] = useState({ cantidad: '', precioVenta: '' })
+    const [editingPresId, setEditingPresId] = useState<string | null>(null)
+    const [editPresForm, setEditPresForm] = useState({ cantidad: '', precioVenta: '' })
     const [form, setForm] = useState({
         nombre: '', codigoInterno: '', vidaUtilHoras: '48', tempConservacionMax: '4',
         planchasPorPaquete: '6', paquetesPorRonda: '14', alias: '',
@@ -131,6 +133,24 @@ export default function ProductosPage() {
             const res = await fetch(`/api/presentaciones/${presId}`, { method: 'DELETE' })
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Presentación eliminada')
+            fetchProductos()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+    }
+
+    async function updatePresentacion(presId: string) {
+        try {
+            const res = await fetch(`/api/presentaciones/${presId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cantidad: parseInt(editPresForm.cantidad),
+                    precioVenta: parseFloat(editPresForm.precioVenta),
+                }),
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess('Presentación actualizada')
+            setEditingPresId(null)
             fetchProductos()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -279,19 +299,56 @@ export default function ProductosPage() {
                             {productos.find(p => p.id === presProducto.id)?.presentaciones.map((pres) => (
                                 <div key={pres.id} style={{
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)',
+                                    padding: 'var(--space-3)', backgroundColor: editingPresId === pres.id ? 'var(--color-gray-100)' : 'var(--color-gray-50)',
                                     borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-2)',
+                                    border: editingPresId === pres.id ? '2px solid var(--color-primary)' : '1px solid transparent',
+                                    transition: 'all 0.2s ease',
                                 }}>
-                                    <div>
-                                        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)' }}>x{pres.cantidad}</span>
-                                        <span style={{ marginLeft: 'var(--space-3)', color: 'var(--color-gray-600)' }}>
-                                            ${pres.precioVenta.toLocaleString('es-AR')}
-                                        </span>
-                                        <span style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>
-                                            (${(pres.precioVenta / pres.cantidad).toFixed(0)}/u)
-                                        </span>
-                                    </div>
-                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => deletePresentacion(pres.id)}>Eliminar</button>
+                                    {editingPresId === pres.id ? (
+                                        /* Modo edición */
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1 }}>
+                                                <div>
+                                                    <label style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Cantidad</label>
+                                                    <input type="number" className="form-input" style={{ height: '32px', fontSize: 'var(--text-sm)' }}
+                                                        value={editPresForm.cantidad}
+                                                        onChange={(e) => setEditPresForm({ ...editPresForm, cantidad: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Precio ($)</label>
+                                                    <input type="number" step="0.01" className="form-input" style={{ height: '32px', fontSize: 'var(--text-sm)' }}
+                                                        value={editPresForm.precioVenta}
+                                                        onChange={(e) => setEditPresForm({ ...editPresForm, precioVenta: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0, alignSelf: 'flex-end' }}>
+                                                <button className="btn btn-primary btn-sm" onClick={() => updatePresentacion(pres.id)}>Guardar</button>
+                                                <button className="btn btn-ghost btn-sm" onClick={() => setEditingPresId(null)}>Cancelar</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Modo visualización */
+                                        <>
+                                            <div>
+                                                <span style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-lg)' }}>x{pres.cantidad}</span>
+                                                <span style={{ marginLeft: 'var(--space-3)', color: 'var(--color-gray-600)' }}>
+                                                    ${pres.precioVenta.toLocaleString('es-AR')}
+                                                </span>
+                                                <span style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>
+                                                    (${(pres.precioVenta / pres.cantidad).toFixed(0)}/u)
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-primary)' }} onClick={() => {
+                                                    setEditingPresId(pres.id)
+                                                    setEditPresForm({ cantidad: String(pres.cantidad), precioVenta: String(pres.precioVenta) })
+                                                }}>Editar</button>
+                                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => deletePresentacion(pres.id)}>Eliminar</button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             ))}
 
