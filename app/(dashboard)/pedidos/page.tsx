@@ -102,13 +102,15 @@ export default function PedidosPage() {
 
     async function cambiarEstado(pedidoId: string, nuevoEstado: string) {
         try {
-            await fetch(`/api/pedidos/${pedidoId}`, {
+            const res = await fetch(`/api/pedidos/${pedidoId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ estado: nuevoEstado }),
             })
+            if (!res.ok) throw new Error()
+            const data = await res.json()
+            setPedidos(prev => prev.map(p => p.id === pedidoId ? data.pedido : p))
             setSuccess('Estado actualizado')
-            fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al actualizar estado') }
     }
@@ -122,21 +124,24 @@ export default function PedidosPage() {
                 body: JSON.stringify({ abonado: true, medioPago: 'transferencia' }),
             })
             if (!res.ok) throw new Error()
+            const data = await res.json()
+            setPedidos(prev => prev.map(p => p.id === pedidoId ? data.pedido : p))
             setSuccess('Pedido marcado como abonado')
-            fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al marcar como abonado') }
     }
 
     async function toggleMedioPago(pedidoId: string, nuevoMedio: string) {
         try {
-            await fetch(`/api/pedidos/${pedidoId}`, {
+            const res = await fetch(`/api/pedidos/${pedidoId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ medioPago: nuevoMedio }),
             })
+            if (!res.ok) throw new Error()
+            const data = await res.json()
+            setPedidos(prev => prev.map(p => p.id === pedidoId ? data.pedido : p))
             setSuccess(`Medio de pago cambiado a ${nuevoMedio === 'efectivo' ? 'Efectivo' : 'Transferencia'}`)
-            fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al cambiar medio de pago') }
     }
