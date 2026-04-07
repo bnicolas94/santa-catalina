@@ -109,7 +109,9 @@ export default function PedidosPage() {
             })
             if (!res.ok) throw new Error()
             const data = await res.json()
-            setPedidos(prev => prev.map(p => p.id === pedidoId ? data.pedido : p))
+            if (data.pedido) {
+                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data.pedido : p))
+            }
             setSuccess('Estado actualizado')
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al actualizar estado') }
@@ -125,7 +127,9 @@ export default function PedidosPage() {
             })
             if (!res.ok) throw new Error()
             const data = await res.json()
-            setPedidos(prev => prev.map(p => p.id === pedidoId ? data.pedido : p))
+            if (data.pedido) {
+                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data.pedido : p))
+            }
             setSuccess('Pedido marcado como abonado')
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al marcar como abonado') }
@@ -140,7 +144,9 @@ export default function PedidosPage() {
             })
             if (!res.ok) throw new Error()
             const data = await res.json()
-            setPedidos(prev => prev.map(p => p.id === pedidoId ? data.pedido : p))
+            if (data.pedido) {
+                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data.pedido : p))
+            }
             setSuccess(`Medio de pago cambiado a ${nuevoMedio === 'efectivo' ? 'Efectivo' : 'Transferencia'}`)
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al cambiar medio de pago') }
