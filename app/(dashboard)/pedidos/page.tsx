@@ -381,6 +381,7 @@ export default function PedidosPage() {
                                     <td style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{ped.totalPacks}</td>
                                     <td style={{ fontWeight: 600 }}>{ped.totalUnidades.toLocaleString()}</td>
                                     <td>${ped.totalImporte.toLocaleString('es-AR')}</td>
+                                    <td>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             <span className="badge" style={{
                                                 backgroundColor: ped.medioPago === 'transferencia' ? '#3498DB15' : '#27AE6015',
@@ -391,17 +392,20 @@ export default function PedidosPage() {
                                                 {ped.medioPago === 'transferencia' ? '🏦 Transf.' : '💵 Efectivo'}
                                             </span>
                                             {ped.abonado && (
-                                                <span className="badge" style={{
-                                                    backgroundColor: '#27AE6020',
-                                                    color: '#27AE60',
-                                                    border: '1px solid #27AE6040',
-                                                    fontSize: '0.65rem',
-                                                    fontWeight: 800
-                                                }}>
-                                                    ✅ ABONADO
-                                                </span>
+                                                <div style={{ marginTop: 'var(--space-1)' }}>
+                                                    <span className="badge badge-success" style={{
+                                                        fontSize: '0.65rem',
+                                                        fontWeight: 800,
+                                                        padding: '2px 10px',
+                                                        boxShadow: '0 2px 4px rgba(39, 174, 96, 0.2)',
+                                                        border: '1px solid #27AE60'
+                                                    }}>
+                                                        ✅ ABONADO
+                                                    </span>
+                                                </div>
                                             )}
                                         </div>
+                                    </td>
                                     <td>
                                         <span className="badge" style={{ backgroundColor: `${est.color}20`, color: est.color, border: `1px solid ${est.color}40` }}>
                                             {est.emoji} {est.label}
@@ -419,9 +423,21 @@ export default function PedidosPage() {
                                                 )
                                             })}
                                             {!ped.abonado && ped.medioPago === 'transferencia' && (
-                                                <button className="btn btn-ghost btn-sm" title="Marcar como abonado" style={{ fontSize: '11px', color: '#27AE60' }}
+                                                <button className="btn btn-sm" title="Marcar como abonado" 
+                                                    style={{ 
+                                                        fontSize: '11px', 
+                                                        backgroundColor: '#27AE6015',
+                                                        color: '#27AE60',
+                                                        border: '1.5px solid #27AE60',
+                                                        fontWeight: 700,
+                                                        padding: '4px 8px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        transition: 'all 0.2s ease-in-out'
+                                                    }}
                                                     onClick={() => marcarAbonado(ped.id)}>
-                                                    💰 Abonar
+                                                    💰 Abonar Transf.
                                                 </button>
                                             )}
                                             <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '11px' }}
