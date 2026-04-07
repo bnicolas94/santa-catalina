@@ -866,12 +866,14 @@ export default function ProduccionPage() {
                                             }
                                         })
 
-                                        // ALFABÉTICO POR CÓDIGO INTERNO
-                                        const items = Object.entries(consolidado).sort(([keyA], [keyB]) => {
-                                            const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
-                                            const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
-                                            return codeA.localeCompare(codeB)
-                                        })
+                                        // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos del flujo estándar)
+                                        const items = Object.entries(consolidado)
+                                            .filter(([key]) => planning?.infoProductos?.[key]?.codigoInterno !== 'ELE')
+                                            .sort(([keyA], [keyB]) => {
+                                                const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
+                                                const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
+                                                return codeA.localeCompare(codeB)
+                                            })
 
                                         if (items.length === 0) return (
                                             <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--color-gray-400)', padding: 'var(--space-4)' }}>No hay requerimientos cargados para hoy</td></tr>
@@ -991,12 +993,14 @@ export default function ProduccionPage() {
                                         const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
                                         const manualesTurno = planning?.manualesDetalle?.[activeTurno] || {}
 
-                                        // ALFABÉTICO POR CÓDIGO INTERNO
-                                        const items = Object.entries(necesidadesTurno).sort(([keyA], [keyB]) => {
-                                            const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
-                                            const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
-                                            return codeA.localeCompare(codeB)
-                                        })
+                                        // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos del flujo estándar)
+                                        const items = Object.entries(necesidadesTurno)
+                                            .filter(([key]) => planning?.infoProductos?.[key]?.codigoInterno !== 'ELE')
+                                            .sort(([keyA], [keyB]) => {
+                                                const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
+                                                const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
+                                                return codeA.localeCompare(codeB)
+                                            })
 
                                         if (items.length === 0) return (
                                             <tr>
@@ -1155,7 +1159,9 @@ export default function ProduccionPage() {
                                                         }}
                                                     >
                                                         <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
-                                                        {productos.flatMap(p =>
+                                                        {productos
+                                                            .filter(p => p.codigoInterno !== 'ELE')
+                                                            .flatMap(p =>
                                                             (p.presentaciones || []).map((pr: any) => {
                                                                 const key = `${p.id}_${pr.id}`
                                                                 if (planning.necesidades[activeTurno]?.[key]) return null
