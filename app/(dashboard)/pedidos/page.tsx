@@ -109,8 +109,8 @@ export default function PedidosPage() {
             })
             if (!res.ok) throw new Error()
             const data = await res.json()
-            if (data.pedido) {
-                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data.pedido : p))
+            if (data && data.id) {
+                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data : p))
             }
             setSuccess('Estado actualizado')
             setTimeout(() => setSuccess(''), 3000)
@@ -127,8 +127,8 @@ export default function PedidosPage() {
             })
             if (!res.ok) throw new Error()
             const data = await res.json()
-            if (data.pedido) {
-                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data.pedido : p))
+            if (data && data.id) {
+                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data : p))
             }
             setSuccess('Pedido marcado como abonado')
             setTimeout(() => setSuccess(''), 3000)
@@ -144,8 +144,8 @@ export default function PedidosPage() {
             })
             if (!res.ok) throw new Error()
             const data = await res.json()
-            if (data.pedido) {
-                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data.pedido : p))
+            if (data && data.id) {
+                setPedidos(prev => prev.map(p => (p && p.id === pedidoId) ? data : p))
             }
             setSuccess(`Medio de pago cambiado a ${nuevoMedio === 'efectivo' ? 'Efectivo' : 'Transferencia'}`)
             setTimeout(() => setSuccess(''), 3000)
@@ -172,10 +172,13 @@ export default function PedidosPage() {
                 body: JSON.stringify(editForm),
             })
             if (!res.ok) throw new Error()
+            const data = await res.json()
             setSuccess('Pedido actualizado')
             setShowEditModal(false)
+            if (data && data.id) {
+                setPedidos(prev => prev.map(p => (p && p.id === editingPedido.id) ? data : p))
+            }
             setEditingPedido(null)
-            fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch { setError('Error al editar pedido') }
     }
@@ -472,7 +475,7 @@ export default function PedidosPage() {
                                                     </button>
                                                 )
                                             })}
-                                            {!ped.abonado && (
+                                            {!ped.abonado && ped.medioPago === 'transferencia' && (
                                                 <button className="btn btn-sm" title="Marcar como abonado" 
                                                     style={{ 
                                                         fontSize: '11px', 
