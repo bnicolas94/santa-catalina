@@ -89,6 +89,21 @@ export default function CajaPage() {
     const [toastNotif, setToastNotif] = useState<{ message: string, amount: number, id: string } | null>(null)
     const movimientosRef = useRef<MovCaja[]>([])
 
+    const getBoxLabel = (id: string | null) => {
+        if (!id) return '-';
+        const labels: Record<string, string> = {
+            'caja_madre': '🔒 Caja Fuerte Oficina',
+            'local': '🔒 Caja Fuerte Local',
+            'caja_chica': '💼 Caja Chica',
+            'mercado_pago': '💳 Mercado Pago',
+            'mercado_pago_juani': '🔵 MP Juani',
+            'caja_fuerte_local': '🔒 Caja Fuerte Local',
+            'caja_fuerte_oficina': '🔒 Caja Fuerte Oficina'
+        };
+        return labels[id] || id.replace(/_/g, ' ').toUpperCase();
+    };
+
+
     const checkLiveMP = async () => {
         setLoadingMP(true)
         setShowMPModal(true)
@@ -444,7 +459,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #8E44AD' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔒 Caja Fuerte Oficina</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('caja_madre')}</span>
                                 {(userRol === 'ADMIN') && (
                                     editingSaldo === 'caja_madre' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -484,7 +499,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #E67E22' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E67E22', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💼 Caja Chica</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E67E22', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('caja_chica')}</span>
                                 {(userRol === 'ADMIN') && (
                                     editingSaldo === 'caja_chica' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -524,7 +539,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #27AE60' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔒 Caja Fuerte Local</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('local')}</span>
                                 {(userRol === 'ADMIN' || ubicacionTipo === 'LOCAL') && (
                                     editingSaldo === 'local' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -564,7 +579,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #2980B9' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2980B9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>💳 M.Pago</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2980B9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('mercado_pago')}</span>
                                 {(userRol === 'ADMIN') && (
                                     editingSaldo === 'mercado_pago' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -607,7 +622,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #00BFA5' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#00BFA5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔵 MP Juani</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#00BFA5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('mercado_pago_juani')}</span>
                                 {(userRol === 'ADMIN') && (
                                     editingSaldo === 'mercado_pago_juani' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -748,7 +763,7 @@ export default function CajaPage() {
                                 </td>
                                 <td>
                                     <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                                        {m.cajaOrigen === 'caja_madre' ? '🏦 Madre' : m.cajaOrigen === 'caja_chica' ? '💼 Chica' : m.cajaOrigen === 'local' ? '🏪 Local' : '—'}
+                                        {getBoxLabel(m.cajaOrigen)}
                                     </span>
                                 </td>
                                 <td>
@@ -819,17 +834,19 @@ export default function CajaPage() {
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                        {[
-                                            { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' }, 
-                                            { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' }, 
-                                            { key: 'local', label: '🏪 Local', color: '#27AE60' },
-                                            { key: 'mercado_pago', label: '💳 MP (Corp)', color: '#2980B9' },
-                                            { key: 'mercado_pago_juani', label: '🔵 MP Juani', color: '#00BFA5' }
-                                        ].filter(c => allowedBoxes.includes(c.key)).map((c) => (
-                                            <button key={c.key} type="button" className="btn btn-sm"
-                                                onClick={() => setForm({ ...form, cajaOrigen: c.key })}
-                                                style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
-                                                {c.label}
+                                        {allowedBoxes.map((boxKey) => (
+                                            <button key={boxKey} type="button" className="btn btn-sm"
+                                                onClick={() => setForm({ ...form, cajaOrigen: boxKey })}
+                                                style={{ 
+                                                    flex: 1, 
+                                                    backgroundColor: form.cajaOrigen === boxKey ? 'var(--color-primary)' : 'var(--color-primary-10)', 
+                                                    color: form.cajaOrigen === boxKey ? '#fff' : 'var(--color-primary)', 
+                                                    border: '2px solid var(--color-primary)', 
+                                                    fontWeight: 600, 
+                                                    fontSize: '0.8rem',
+                                                    padding: 'var(--space-2)'
+                                                }}>
+                                                {getBoxLabel(boxKey)}
                                             </button>
                                         ))}
                                     </div>
@@ -1054,19 +1071,17 @@ export default function CajaPage() {
                                     <div className="form-group">
                                         <label className="form-label">Desde</label>
                                         <select className="form-select" value={transfForm.origen} onChange={(e) => setTransfForm({ ...transfForm, origen: e.target.value })}>
-                                            {allowedBoxes.includes('caja_madre') && <option value="caja_madre">🏦 Madre</option>}
-                                            {allowedBoxes.includes('caja_chica') && <option value="caja_chica">💼 Chica</option>}
-                                            {allowedBoxes.includes('local') && <option value="local">🏪 Local</option>}
-                                            {allowedBoxes.includes('mercado_pago') && <option value="mercado_pago">💳 Mercado Pago</option>}
+                                            {allowedBoxes.map(box => (
+                                                <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Hacia</label>
                                         <select className="form-select" value={transfForm.destino} onChange={(e) => setTransfForm({ ...transfForm, destino: e.target.value })}>
-                                            {allowedBoxes.includes('caja_madre') && <option value="caja_madre">🏦 Madre</option>}
-                                            {allowedBoxes.includes('caja_chica') && <option value="caja_chica">💼 Chica</option>}
-                                            {allowedBoxes.includes('local') && <option value="local">🏪 Local</option>}
-                                            {allowedBoxes.includes('mercado_pago') && <option value="mercado_pago">💳 Mercado Pago</option>}
+                                            {allowedBoxes.map(box => (
+                                                <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
@@ -1166,11 +1181,7 @@ export default function CajaPage() {
                         <form onSubmit={handleDeposit}>
                             <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
                                 <p style={{ color: 'var(--color-gray-600)', marginBottom: '1rem' }}>
-                                    Confirmar depósito diario de {ubicacionTipo} hacia {
-                                        depositConfig?.cajaDepositoId === 'local' ? 'Caja Fuerte Local' : 
-                                        depositConfig?.cajaDepositoId === 'caja_madre' ? 'Caja Fuerte Oficina' : 
-                                        depositConfig?.cajaDepositoId.replace(/_/g, ' ')
-                                    }
+                                    Confirmar depósito diario de {ubicacionTipo} hacia {getBoxLabel(depositConfig?.cajaDepositoId)}
                                 </p>
                                 <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe a Depositar</label>
                                 <div style={{ position: 'relative', marginTop: '0.5rem' }}>
@@ -1217,14 +1228,11 @@ export default function CajaPage() {
                                                 value={allConfigs[tipo]?.cajaDepositoId}
                                                 onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
                                             >
-                                                {allowedBoxes.map(box => {
-                                                    let label = box.replace(/_/g, ' ');
-                                                    if (box === 'local') label = 'Caja Fuerte Local';
-                                                    if (box === 'caja_madre') label = 'Caja Fuerte Oficina';
-                                                    return <option key={box} value={box}>{label}</option>
-                                                })}
-                                                <option value="caja_fuerte_local">Caja Fuerte Local (Nuevo ID)</option>
-                                                <option value="caja_fuerte_oficina">Caja Fuerte Oficina (Nuevo ID)</option>
+                                                {allowedBoxes.map(box => (
+                                                    <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                                ))}
+                                                <option value="caja_fuerte_local">🔒 Caja Fuerte Local (v2)</option>
+                                                <option value="caja_fuerte_oficina">🔒 Caja Fuerte Oficina (v2)</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
