@@ -3,6 +3,7 @@
 
 import React from 'react'
 import { PlanningData } from '../types'
+import { useProduccion } from '../ProduccionContext'
 
 interface ProductionPlanningProps {
     planning: PlanningData | null
@@ -15,6 +16,9 @@ interface ProductionPlanningProps {
     onImportExcel: () => void
     onSaveManual: (pid: string, presid: string | null, val: string, turno: string) => void
     filterFecha: string
+    onDescontarClick: () => void
+    onRevertDescuentoClick: () => void
+    isAdmin: boolean
 }
 
 export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
@@ -27,8 +31,12 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
     onClearPlan,
     onImportExcel,
     onSaveManual,
-    filterFecha
+    filterFecha,
+    onDescontarClick,
+    onRevertDescuentoClick,
+    isAdmin
 }) => {
+    const { productos } = useProduccion()
     if (!planning) return null
 
     const isDiscounted = activeTurno !== 'Totales' && !!planning?.descuentosRealizados?.includes(activeTurno)
@@ -217,6 +225,70 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
                                 </tr>
                             )
                         })}
+                        {/* Fila Descontar y Agregar Producto Extra */}
+                        {activeTurno !== 'Totales' && filterDestino !== 'LOCAL' && items.length > 0 && (
+                            <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
+                                <td colSpan={isDiscounted ? 2 : 2}>
+                                    {!isDiscounted ? (
+                                        <select
+                                            className="form-select"
+                                            style={{ height: '32px', fontSize: '12px' }}
+                                            onChange={(e) => {
+                                                const val = e.target.value
+                                                if (val) {
+                                                    const [pid, presid] = val.split('_')
+                                                    onSaveManual(pid, presid || null, '1', activeTurno)
+                                                }
+                                                e.target.value = ''
+                                            }}
+                                        >
+                                            <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
+                                            {productos
+                                                .filter(p => p.codigoInterno !== 'ELE')
+                                                .flatMap(p =>
+                                                    (p.presentaciones || []).map((pr: any) => {
+                                                        const key = `${p.id}_${pr.id}`
+                                                        if (planning?.necesidades[activeTurno]?.[key]) return null
+                                                        return (
+                                                            <option key={key} value={key}>
+                                                                [{p.codigoInterno}] {p.nombre} (x{pr.cantidad})
+                                                            </option>
+                                                        )
+                                                    })
+                                                )}
+                                        </select>
+                                    ) : (
+                                        <div style={{ padding: '8px', fontSize: '12px', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
+                                            Este turno ya fue procesado y su stock descontado.
+                                        </div>
+                                    )}
+                                </td>
+                                <td colSpan={isDiscounted ? 2 : 7} style={{ textAlign: 'right', verticalAlign: 'middle', paddingRight: 'var(--space-4)' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                        <button
+                                            className={`btn btn-sm ${isDiscounted ? 'btn-ghost' : 'btn-primary'}`}
+                                            disabled={isDiscounted || !planning?.necesidades[activeTurno]}
+                                            onClick={onDescontarClick}
+                                            style={{ gap: 'var(--space-2)' }}
+                                        >
+                                            {isDiscounted
+                                                ? '✅ Stock Descontado'
+                                                : `📦 Descontar Stock: Turno ${activeTurno}`
+                                            }
+                                        </button>
+                                        {isDiscounted && isAdmin && (
+                                            <button
+                                                className="btn btn-sm btn-error btn-outline"
+                                                onClick={onRevertDescuentoClick}
+                                                style={{ fontSize: '11px', height: '32px' }}
+                                            >
+                                                Revertir
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>

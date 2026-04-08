@@ -2,7 +2,7 @@
 'use client'
 
 import React, { createContext, useContext, useState } from 'react'
-import { Producto, Ubicacion, Coordinador, Lote, PlanningData } from './types'
+import { Producto, Ubicacion, Coordinador, Lote, PlanningData, StockProd } from './types'
 
 interface ProduccionContextType {
     filterFecha: string
@@ -12,6 +12,7 @@ interface ProduccionContextType {
     coordinadores: Coordinador[]
     lotes: Lote[]
     planning: PlanningData | null
+    stockProductos: StockProd[]
     loading: boolean
     mutate: () => void
     

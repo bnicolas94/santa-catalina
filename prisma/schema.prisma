@@ -317,13 +317,13 @@ model Pedido {
   esRetiro        Boolean          @default(false) @map("es_retiro")
   totalUnidades   Int              @default(0) @map("total_unidades")
   totalImporte    Float            @default(0) @map("total_importe")
-  totalPacks      Int              @default(0) @map("total_packs")
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   clienteId       String           @map("id_cliente")
-  abonado         Boolean          @default(false)
   turno           String?
   ubicacionId     String?          @map("id_ubicacion")
+  totalPacks      Int              @default(0) @map("total_packs")
+  abonado         Boolean          @default(false)
   detalles        DetallePedido[]
   entregas        Entrega[]
   movimientosCaja MovimientoCaja[]
@@ -340,9 +340,9 @@ model DetallePedido {
   observaciones          String?
   pedidoId               String       @map("id_pedido")
   presentacionId         String       @map("id_presentacion")
-  nroPack                Int?         @map("nro_pack")
   loteId                 String?      @map("id_lote")
   costoUnitarioHistorico Float?       @map("costo_unitario_historico")
+  nroPack                Int?         @map("nro_pack")
   lote                   Lote?        @relation(fields: [loteId], references: [id])
   pedido                 Pedido       @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   presentacion           Presentacion @relation(fields: [presentacionId], references: [id])
