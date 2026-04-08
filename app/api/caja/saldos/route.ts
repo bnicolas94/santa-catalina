@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth'
 export async function GET() {
     try {
         // Crear registros si no existen (upsert)
-        const [cajaMadre, cajaChica, local, mercadoPago, mercadoPagoJuani] = await Promise.all([
+        const [cajaMadre, cajaChica, local, cajaChicaLocal, mercadoPago, mercadoPagoJuani] = await Promise.all([
             prisma.saldoCaja.upsert({
                 where: { tipo: 'caja_madre' },
                 create: { tipo: 'caja_madre', saldo: 0 },
@@ -24,6 +24,11 @@ export async function GET() {
                 update: {},
             }),
             prisma.saldoCaja.upsert({
+                where: { tipo: 'caja_chica_local' },
+                create: { tipo: 'caja_chica_local', saldo: 0 },
+                update: {},
+            }),
+            prisma.saldoCaja.upsert({
                 where: { tipo: 'mercado_pago' },
                 create: { tipo: 'mercado_pago', saldo: 0 },
                 update: {},
@@ -35,7 +40,7 @@ export async function GET() {
             }),
         ])
 
-        return NextResponse.json({ cajaMadre, cajaChica, local, mercadoPago, mercadoPagoJuani })
+        return NextResponse.json({ cajaMadre, cajaChica, local, cajaChicaLocal, mercadoPago, mercadoPagoJuani })
     } catch (error) {
         console.error('Error obteniendo saldos:', error)
         return NextResponse.json({ error: 'Error al obtener saldos' }, { status: 500 })
@@ -60,7 +65,7 @@ export async function PUT(request: NextRequest) {
             const cajaLower = tipo?.toLowerCase()
 
             if (ubicacionTipo === 'LOCAL') {
-                if (cajaLower !== 'local') {
+                if (cajaLower !== 'local' && cajaLower !== 'caja_chica_local') {
                     return NextResponse.json({ error: `No tienes permiso para ajustar la caja '${tipo}' desde ubicación LOCAL` }, { status: 403 })
                 }
             } else if (ubicacionTipo === 'FABRICA') {
@@ -77,7 +82,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Tipo y saldo son requeridos' }, { status: 400 })
         }
 
-        if (!['caja_madre', 'caja_chica', 'local', 'mercado_pago', 'mercado_pago_juani'].includes(tipo)) {
+        if (!['caja_madre', 'caja_chica', 'caja_chica_local', 'local', 'mercado_pago', 'mercado_pago_juani'].includes(tipo)) {
             return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
         }
 

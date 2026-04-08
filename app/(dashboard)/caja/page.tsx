@@ -71,6 +71,7 @@ export default function CajaPage() {
     const saldoMadre = saldosData.cajaMadre?.saldo ?? 0
     const saldoChica = saldosData.cajaChica?.saldo ?? 0
     const saldoLocal = saldosData.local?.saldo ?? 0
+    const saldoChicaLocal = saldosData.cajaChicaLocal?.saldo ?? 0
     const saldoMercadoPago = saldosData.mercadoPago?.saldo ?? 0
     const saldoMercadoPagoJuani = saldosData.mercadoPagoJuani?.saldo ?? 0
 
@@ -95,11 +96,10 @@ export default function CajaPage() {
         const labels: Record<string, string> = {
             'caja_madre': '🔒 Caja Fuerte Oficina',
             'local': '🔒 Caja Fuerte Local',
-            'caja_chica': '💼 Caja Chica',
+            'caja_chica': '💼 Caja Chica (Fábrica)',
+            'caja_chica_local': '💼 Caja Chica Local',
             'mercado_pago': '💳 Mercado Pago',
             'mercado_pago_juani': '🔵 MP Juani',
-            'caja_fuerte_local': '🔒 Caja Fuerte Local',
-            'caja_fuerte_oficina': '🔒 Caja Fuerte Oficina'
         };
         return labels[id] || id.replace(/_/g, ' ').toUpperCase();
     };
@@ -138,8 +138,8 @@ export default function CajaPage() {
     const [allConfigs, setAllConfigs] = useState<any>(null)
 
     const allowedBoxes = userRol === 'ADMIN' 
-        ? ['caja_madre', 'caja_chica', 'local', 'mercado_pago', 'mercado_pago_juani'] 
-        : (ubicacionTipo === 'LOCAL' ? ['local'] : ['caja_madre', 'caja_chica'])
+        ? ['caja_madre', 'local', 'caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani'] 
+        : (ubicacionTipo === 'LOCAL' ? ['local', 'caja_chica_local'] : ['caja_madre', 'caja_chica'])
 
     useEffect(() => {
         // Reset default form boxes if restricted
@@ -426,7 +426,12 @@ export default function CajaPage() {
                             ⚙️
                         </button>
                     )}
-                    <button className="btn btn-primary" onClick={() => { setEditingMov(null); setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] }); setShowModal(true) }}>+ Registrar Movimiento</button>
+                    <button className="btn btn-primary" onClick={() => { 
+                        setEditingMov(null); 
+                        const defaultBox = ubicacionTipo === 'LOCAL' ? 'caja_chica_local' : 'caja_chica';
+                        setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: defaultBox, choferId: '', fecha: new Date().toISOString().split('T')[0] }); 
+                        setShowModal(true) 
+                    }}>+ Registrar Movimiento</button>
 
                 </div>
             </div>
@@ -448,10 +453,10 @@ export default function CajaPage() {
                             💰 Dinero Disponible Global (Todas las Cajas)
                         </div>
                         <div style={{ fontSize: '3rem', fontWeight: 800, color: '#10b981', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoMercadoPago + saldoMercadoPagoJuani, showMontos)}
+                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoChicaLocal + saldoMercadoPago + saldoMercadoPagoJuani, showMontos)}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
-                            Suma de Madre + Chica + Local + MP + MP Juani
+                            Suma de Madre + Chica Fabrica + Local + Chica Local + MP + MP Juani
                         </div>
                     </div>
                 </div>
@@ -539,7 +544,7 @@ export default function CajaPage() {
                         </div>
                     </div>
                 )}
-                {/* Local */}
+                {/* Local Fuerte */}
                 {allowedBoxes.includes('local') && (
                     <div className="card" style={{ borderTop: '3px solid #27AE60' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
@@ -575,6 +580,46 @@ export default function CajaPage() {
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#27AE60', textAlign: 'center' }}>{formatCurrency(saldoLocal, showMontos)}</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+                {/* Caja Chica Local */}
+                {allowedBoxes.includes('caja_chica_local') && (
+                    <div className="card" style={{ borderTop: '3px solid #F39C12' }}>
+                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('caja_chica_local')}</span>
+                                {(userRol === 'ADMIN' || ubicacionTipo === 'LOCAL') && (
+                                    editingSaldo === 'caja_chica_local' ? (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
+                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_chica_local')}>✓</button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
+                                            onClick={() => { setEditingSaldo('caja_chica_local'); setEditSaldoValue(String(saldoChicaLocal)) }}>✏️ Editar</button>
+                                    )
+                                )}
+                            </div>
+                            {editingSaldo === 'caja_chica_local' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
+                                        onChange={(e) => setEditSaldoValue(e.target.value)}
+                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
+                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
+                                            <option value="ajuste">⚙️ AJUSTE</option>
+                                            <option value="arqueo">📋 ARQUEO</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
+                                        style={{ fontSize: '0.75rem', padding: '4px' }}
+                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#F39C12', textAlign: 'center' }}>{formatCurrency(saldoChicaLocal, showMontos)}</div>
                             )}
                         </div>
                     </div>
@@ -838,22 +883,31 @@ export default function CajaPage() {
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
-                                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                        {allowedBoxes.map((boxKey) => (
-                                            <button key={boxKey} type="button" className="btn btn-sm"
-                                                onClick={() => setForm({ ...form, cajaOrigen: boxKey })}
-                                                style={{ 
-                                                    flex: 1, 
-                                                    backgroundColor: form.cajaOrigen === boxKey ? 'var(--color-primary)' : 'var(--color-primary-10)', 
-                                                    color: form.cajaOrigen === boxKey ? '#fff' : 'var(--color-primary)', 
-                                                    border: '2px solid var(--color-primary)', 
-                                                    fontWeight: 600, 
-                                                    fontSize: '0.8rem',
-                                                    padding: 'var(--space-2)'
-                                                }}>
-                                                {getBoxLabel(boxKey)}
-                                            </button>
-                                        ))}
+                                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                        {allowedBoxes.filter(bk => bk !== 'caja_madre' && bk !== 'local').map((boxKey) => {
+                                            const boxColors: Record<string, string> = {
+                                                'caja_chica': '#E67E22',
+                                                'caja_chica_local': '#F39C12',
+                                                'mercado_pago': '#2980B9',
+                                                'mercado_pago_juani': '#00BFA5'
+                                            };
+                                            const color = boxColors[boxKey] || 'var(--color-primary)';
+                                            return (
+                                                <button key={boxKey} type="button" className="btn btn-sm"
+                                                    onClick={() => setForm({ ...form, cajaOrigen: boxKey })}
+                                                    style={{ 
+                                                        flex: '1 1 120px', 
+                                                        backgroundColor: form.cajaOrigen === boxKey ? color : `${color}18`, 
+                                                        color: form.cajaOrigen === boxKey ? '#fff' : color, 
+                                                        border: `2px solid ${color}`, 
+                                                        fontWeight: 600, 
+                                                        fontSize: '0.8rem',
+                                                        padding: 'var(--space-2)'
+                                                    }}>
+                                                    {getBoxLabel(boxKey)}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                                 <div className="form-group">
