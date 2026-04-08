@@ -146,8 +146,10 @@ export default function CajaPage() {
 
     useEffect(() => {
         fetchData()
-        fetchDepositConfig()
-    }, [fechaFiltro])
+        if (userRol) {
+            fetchDepositConfig()
+        }
+    }, [fechaFiltro, userRol, ubicacionTipo])
 
     const fetchDepositConfig = async () => {
         try {
@@ -155,7 +157,9 @@ export default function CajaPage() {
             const data = await res.json()
             if (userRol === 'ADMIN') {
                 setAllConfigs(data)
-                setDepositConfig(data[ubicacionTipo || 'LOCAL'])
+                // Usar la ubicación del admin si existe en la config, de lo contrario usar LOCAL como fallback seguro
+                const safeTarget = (ubicacionTipo && data[ubicacionTipo]) ? ubicacionTipo : 'LOCAL'
+                setDepositConfig(data[safeTarget])
             } else {
                 setDepositConfig(data)
             }
