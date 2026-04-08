@@ -181,15 +181,15 @@ export async function POST(req: NextRequest) {
             })
         }
 
-        // Calcular total de planchas de Elegidos (ELE) para el preview
-        let totalPlanchasElegidos = 0
+        // Calcular total de planchas de productos bajo demanda (ELE y PRE) para el preview
+        let totalPlanchasBajoDemanda = 0
         resultados.forEach(r => {
             r.items.forEach(item => {
                 const pres = presentacionesDB.find(p => p.id === item.presentacionId)
-                if (pres?.producto.codigoInterno === 'ELE') {
+                if (pres && (pres.producto.codigoInterno === 'ELE' || pres.producto.codigoInterno === 'PRE')) {
                     const plPorPaq = pres.producto.planchasPorPaquete || 6
                     const uniPorPlancha = 48 / plPorPaq
-                    totalPlanchasElegidos += (item.cantidadPaquetes / uniPorPlancha)
+                    totalPlanchasBajoDemanda += (item.cantidadPaquetes / uniPorPlancha)
                 }
             })
         })
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
                 ok: resultados.filter(r => r.status === 'ok').length,
                 parcial: resultados.filter(r => r.status === 'parcial').length,
                 error: resultados.filter(r => r.status === 'sin_turno' || r.status === 'sin_match').length,
-                totalPlanchasElegidos: Math.round(totalPlanchasElegidos * 10) / 10
+                totalPlanchasBajoDemanda: Math.round(totalPlanchasBajoDemanda * 10) / 10
             })
         }
 

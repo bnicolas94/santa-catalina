@@ -75,8 +75,9 @@ export async function POST(request: Request) {
         rutas.forEach(ruta => {
             ruta.entregas.forEach(ent => {
                 ent.pedido.detalles.forEach(det => {
-                    // OMITIR ELEGIDOS: Son personalizados y no tienen stock físico real
-                    if (det.presentacion.producto.codigoInterno === 'ELE') return
+                    // OMITIR ELEGIDOS Y PREMIUM: Son bajo demanda y no tienen stock físico real
+                    const code = det.presentacion.producto.codigoInterno
+                    if (code === 'ELE' || code === 'PRE') return
 
                     const key = det.presentacionId
                     if (!consolidadoUnidades[key]) {
@@ -95,8 +96,9 @@ export async function POST(request: Request) {
         manuales.forEach(m => {
             if (!m.presentacionId || !m.presentacion) return 
             
-            // OMITIR ELEGIDOS: Son personalizados y no tienen stock físico real
-            if (m.presentacion.producto.codigoInterno === 'ELE') return
+            // OMITIR ELEGIDOS Y PREMIUM: Son bajo demanda y no tienen stock físico real
+            const code = m.presentacion.producto.codigoInterno
+            if (code === 'ELE' || code === 'PRE') return
 
             const key = m.presentacionId
             if (!consolidadoUnidades[key]) {

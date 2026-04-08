@@ -165,7 +165,7 @@ export default function ProduccionPage() {
     const [importRawRows, setImportRawRows] = useState<any[]>([])
     const [importPreview, setImportPreview] = useState<any[]>([])
     const [importSummary, setImportSummary] = useState({ ok: 0, parcial: 0, error: 0 })
-    const [importTotalPlanchasElegidos, setImportTotalPlanchasElegidos] = useState(0)
+    const [importTotalPlanchasBajoDemanda, setImportTotalPlanchasBajoDemanda] = useState(0)
     const [importLoading, setImportLoading] = useState(false)
     const [showDiscountModal, setShowDiscountModal] = useState(false)
     const [isDiscounting, setIsDiscounting] = useState(false)
@@ -668,7 +668,7 @@ export default function ProduccionPage() {
             if (!res.ok) throw new Error(data.error)
             setImportPreview(data.resultados)
             setImportSummary({ ok: data.ok, parcial: data.parcial, error: data.error })
-            setImportTotalPlanchasElegidos(data.totalPlanchasElegidos || 0)
+            setImportTotalPlanchasBajoDemanda(data.totalPlanchasBajoDemanda || 0)
             setImportStep('preview')
         } catch (err: any) {
             setError(err.message)
@@ -866,9 +866,12 @@ export default function ProduccionPage() {
                                             }
                                         })
 
-                                        // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos del flujo estándar)
+                                        // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos y Premium del flujo estándar)
                                         const items = Object.entries(consolidado)
-                                            .filter(([key]) => planning?.infoProductos?.[key]?.codigoInterno !== 'ELE')
+                                            .filter(([key]) => {
+                                                const code = planning?.infoProductos?.[key]?.codigoInterno
+                                                return code !== 'ELE' && code !== 'PRE'
+                                            })
                                             .sort(([keyA], [keyB]) => {
                                                 const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
                                                 const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
@@ -993,9 +996,12 @@ export default function ProduccionPage() {
                                         const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
                                         const manualesTurno = planning?.manualesDetalle?.[activeTurno] || {}
 
-                                        // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos del flujo estándar)
+                                        // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos y Premium del flujo estándar)
                                         const items = Object.entries(necesidadesTurno)
-                                            .filter(([key]) => planning?.infoProductos?.[key]?.codigoInterno !== 'ELE')
+                                            .filter(([key]) => {
+                                                const code = planning?.infoProductos?.[key]?.codigoInterno
+                                                return code !== 'ELE' && code !== 'PRE'
+                                            })
                                             .sort(([keyA], [keyB]) => {
                                                 const codeA = planning?.infoProductos?.[keyA]?.codigoInterno || ''
                                                 const codeB = planning?.infoProductos?.[keyB]?.codigoInterno || ''
@@ -1160,7 +1166,7 @@ export default function ProduccionPage() {
                                                     >
                                                         <option value="">+ Agregar producto extra al turno {activeTurno}...</option>
                                                         {productos
-                                                            .filter(p => p.codigoInterno !== 'ELE')
+                                                            .filter(p => p.codigoInterno !== 'ELE' && p.codigoInterno !== 'PRE')
                                                             .flatMap(p =>
                                                             (p.presentaciones || []).map((pr: any) => {
                                                                 const key = `${p.id}_${pr.id}`
@@ -1236,7 +1242,7 @@ export default function ProduccionPage() {
                     ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
                             {stockProductos
-                                .filter(sp => sp.codigoInterno !== 'ELE')
+                                .filter(sp => sp.codigoInterno !== 'ELE' && sp.codigoInterno !== 'PRE')
                                 .sort((a, b) => {
                                     const codeOrder: Record<string, number> = { 'JQ': 1, 'CLA': 2, 'ESP': 3 }
                                     const orderA = codeOrder[a.codigoInterno] || 99
@@ -2212,12 +2218,12 @@ export default function ProduccionPage() {
                                     <span className="badge" style={{ background: '#2ECC71', color: '#fff' }}>✅ {importSummary.ok} OK</span>
                                     <span className="badge" style={{ background: '#F39C12', color: '#fff' }}>⚠ {importSummary.parcial} Parciales</span>
                                     <span className="badge" style={{ background: '#E74C3C', color: '#fff' }}>✕ {importSummary.error} Errores</span>
-                                    {importTotalPlanchasElegidos > 0 && (
+                                    {importTotalPlanchasBajoDemanda > 0 && (
                                         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--color-primary-50)', padding: '4px 12px', borderRadius: '20px', border: '1px solid var(--color-primary-200)' }}>
                                             <span style={{ fontSize: '18px' }}>✨</span>
                                             <div style={{ lineHeight: 1 }}>
-                                                <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary)' }}>{importTotalPlanchasElegidos} Planchas</div>
-                                                <div style={{ fontSize: '9px', color: 'var(--color-primary-600)', textTransform: 'uppercase', fontWeight: 600 }}>Elegidos (Personalizados)</div>
+                                                <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--color-primary)' }}>{importTotalPlanchasBajoDemanda} Planchas</div>
+                                                <div style={{ fontSize: '9px', color: 'var(--color-primary-600)', textTransform: 'uppercase', fontWeight: 600 }}>Elegidos / Premium</div>
                                             </div>
                                         </div>
                                     )}
@@ -2323,7 +2329,7 @@ export default function ProduccionPage() {
                                     <tbody>
                                         {Object.entries((planning?.necesidades?.[activeTurno] || {}) as Record<string, number>).map(([key, units]) => {
                                             const prod = planning?.infoProductos?.[key]
-                                            if (!prod || !prod.presentacion || units <= 0 || prod.codigoInterno === 'ELE') return null
+                                            if (!prod || !prod.presentacion || units <= 0 || prod.codigoInterno === 'ELE' || prod.codigoInterno === 'PRE') return null
                                             const packetsToSubtract = Math.ceil(units / prod.presentacion.cantidad)
                                             return (
                                                 <tr key={key}>
