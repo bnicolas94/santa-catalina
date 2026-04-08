@@ -58,8 +58,9 @@ export default function PedidosPage() {
     const [currentPage, setCurrentPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [totalRecords, setTotalRecords] = useState(0)
-    const [fechaDesde, setFechaDesde] = useState('')
-    const [fechaHasta, setFechaHasta] = useState('')
+    const today = new Date().toISOString().split('T')[0]
+    const [fechaDesde, setFechaDesde] = useState(today)
+    const [fechaHasta, setFechaHasta] = useState(today)
     const ITEMS_PER_PAGE = 20
 
     // Stats de proyección
@@ -244,22 +245,42 @@ export default function PedidosPage() {
 
     async function handleLimpiarPedidos() {
         if (filtered.length === 0) return;
-        const confirmMsg = filterEstado 
-            ? `¿Estás seguro de que deseas eliminar los ${filtered.length} pedidos filtrados ("${getEstadoInfo(filterEstado).label}")?`
-            : `¿Estás seguro de que deseas eliminar TODOS los pedidos (${pedidos.length})?`;
+        const fechaLabel = fechaDesde === fechaHasta && fechaDesde
+            ? new Date(fechaDesde + 'T12:00:00').toLocaleDateString('es-AR')
+            : fechaDesde && fechaHasta
+                ? `${new Date(fechaDesde + 'T12:00:00').toLocaleDateString('es-AR')} al ${new Date(fechaHasta + 'T12:00:00').toLocaleDateString('es-AR')}`
+                : 'visibles';
+        const confirmMsg = `¿Eliminar los ${totalRecords} pedidos del ${fechaLabel}${filterEstado ? ` (${getEstadoInfo(filterEstado).label})` : ''}?`;
         
         if (!confirm(confirmMsg)) return;
 
         try {
             setLoading(true);
+            // Eliminamos solo los pedidos de la vista actual (filtrados por fecha/estado)
             const ids = filtered.map(p => p.id);
+            
+            // Si hay más páginas, hay que traer TODOS los ids del filtro actual
+            let allIds = ids;
+            if (totalRecords > filtered.length) {
+                const params = new URLSearchParams()
+                params.set('page', '1')
+                params.set('limit', String(totalRecords))
+                if (filterEstado) params.set('estado', filterEstado)
+                if (fechaDesde) params.set('fechaDesde', fechaDesde)
+                if (fechaHasta) params.set('fechaHasta', fechaHasta)
+                if (searchTerm) params.set('search', searchTerm)
+                const allRes = await fetch(`/api/pedidos?${params.toString()}`)
+                const allData = await allRes.json()
+                allIds = allData.pedidos?.map((p: any) => p.id) || ids
+            }
+
             const res = await fetch('/api/pedidos', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids }),
+                body: JSON.stringify({ ids: allIds }),
             });
             if (!res.ok) throw new Error();
-            setSuccess(`${ids.length} pedidos eliminados`);
+            setSuccess(`${allIds.length} pedidos eliminados`);
             fetchData();
             setTimeout(() => setSuccess(''), 3000);
         } catch { 
