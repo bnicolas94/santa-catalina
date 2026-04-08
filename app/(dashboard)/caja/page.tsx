@@ -87,6 +87,7 @@ export default function CajaPage() {
     const [editMotivo, setEditMotivo] = useState('ajuste')
     const [editDescripcion, setEditDescripcion] = useState('')
     const [toastNotif, setToastNotif] = useState<{ message: string, amount: number, id: string } | null>(null)
+    const [selectedDepositTarget, setSelectedDepositTarget] = useState('')
     const movimientosRef = useRef<MovCaja[]>([])
 
     const getBoxLabel = (id: string | null) => {
@@ -340,7 +341,7 @@ export default function CajaPage() {
                     concepto: depositConfig.conceptoDeposito,
                     monto: parseFloat(depositAmount),
                     medioPago: 'efectivo',
-                    cajaOrigen: depositConfig.cajaDepositoId,
+                    cajaOrigen: userRol === 'ADMIN' ? selectedDepositTarget : depositConfig.cajaDepositoId,
                     descripcion: `Depósito rápido desde ${ubicacionTipo}`,
                     fecha: new Date().toISOString().split('T')[0]
                 }),
@@ -412,7 +413,11 @@ export default function CajaPage() {
                     {depositConfig?.habilitarDeposito && (
                         <button className="btn btn-accent" 
                             style={{ backgroundColor: '#27AE60', color: 'white', border: 'none' }}
-                            onClick={() => { setDepositAmount(''); setShowDepositModal(true) }}>
+                            onClick={() => { 
+                                setDepositAmount(''); 
+                                setSelectedDepositTarget(depositConfig?.cajaDepositoId || 'local');
+                                setShowDepositModal(true) 
+                            }}>
                             💰 Depositar
                         </button>
                     )}
@@ -1179,24 +1184,43 @@ export default function CajaPage() {
                             <button className="btn-close" onClick={() => setShowDepositModal(false)}>✕</button>
                         </div>
                         <form onSubmit={handleDeposit}>
-                            <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-                                <p style={{ color: 'var(--color-gray-600)', marginBottom: '1rem' }}>
-                                    Confirmar depósito diario de {ubicacionTipo} hacia {getBoxLabel(depositConfig?.cajaDepositoId)}
-                                </p>
-                                <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe a Depositar</label>
-                                <div style={{ position: 'relative', marginTop: '0.5rem' }}>
-                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', fontSize: '1.2rem' }}>$</span>
-                                    <input 
-                                        type="number" 
-                                        step="0.01" 
-                                        className="form-input" 
-                                        style={{ paddingLeft: '30px', fontSize: '1.5rem', textAlign: 'center', height: '60px' }}
-                                        value={depositAmount}
-                                        onChange={(e) => setDepositAmount(e.target.value)}
-                                        placeholder="0.00"
-                                        autoFocus
-                                        required 
-                                    />
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                {userRol === 'ADMIN' ? (
+                                    <div className="form-group" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                                        <label className="form-label" style={{ fontWeight: 600 }}>Caja Destino (Solo Admin)</label>
+                                        <select 
+                                            className="form-input" 
+                                            value={selectedDepositTarget}
+                                            onChange={(e) => setSelectedDepositTarget(e.target.value)}
+                                            style={{ backgroundColor: '#f9f9f9', fontWeight: 600 }}
+                                        >
+                                            {allowedBoxes.map(box => (
+                                                <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <p style={{ color: 'var(--color-gray-600)', marginBottom: '1.5rem', textAlign: 'center' }}>
+                                        Confirmar depósito diario de {ubicacionTipo} hacia {getBoxLabel(depositConfig?.cajaDepositoId)}
+                                    </p>
+                                )}
+                                
+                                <div style={{ textAlign: 'center' }}>
+                                    <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe a Depositar</label>
+                                    <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+                                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', fontSize: '1.2rem' }}>$</span>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            className="form-input" 
+                                            style={{ paddingLeft: '30px', fontSize: '1.5rem', textAlign: 'center', height: '60px' }}
+                                            value={depositAmount}
+                                            onChange={(e) => setDepositAmount(e.target.value)}
+                                            placeholder="0.00"
+                                            autoFocus
+                                            required 
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div className="form-actions">
@@ -1211,53 +1235,58 @@ export default function CajaPage() {
             {/* MODAL CONFIGURACION DEPOSITOS (ADMIN) */}
             {showAdminConfig && userRol === 'ADMIN' && allConfigs && (
                 <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }}>
-                    <div className="modal-content" style={{ maxWidth: '600px', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
-                        <div className="modal-header">
-                            <h2>⚙️ Configuración de Depósitos Rápidos</h2>
+                    <div className="modal-content" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
+                        <div className="modal-header" style={{ marginBottom: '2rem' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-gray-800)' }}>⚙️ Configuración de Depósitos Rápidos</h2>
                             <button className="btn-close" onClick={() => setShowAdminConfig(false)}>✕</button>
                         </div>
                         <form onSubmit={handleSaveAdminConfig}>
-                            {['LOCAL', 'FABRICA'].map(tipo => (
-                                <div key={tipo} style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid var(--color-gray-200)', borderRadius: '8px' }}>
-                                    <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Configuración para {tipo}</h3>
-                                    <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
-                                        <div className="form-group">
-                                            <label className="form-label">Caja Destino</label>
-                                            <select 
-                                                className="form-input"
-                                                value={allConfigs[tipo]?.cajaDepositoId}
-                                                onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
-                                            >
-                                                {allowedBoxes.map(box => (
-                                                    <option key={box} value={box}>{getBoxLabel(box)}</option>
-                                                ))}
-                                                <option value="caja_fuerte_local">🔒 Caja Fuerte Local (v2)</option>
-                                                <option value="caja_fuerte_oficina">🔒 Caja Fuerte Oficina (v2)</option>
-                                            </select>
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="form-label">Concepto por Defecto</label>
-                                            <input 
-                                                type="text" 
-                                                className="form-input"
-                                                value={allConfigs[tipo]?.conceptoDeposito}
-                                                onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], conceptoDeposito: e.target.value }})}
-                                            />
-                                        </div>
-                                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={allConfigs[tipo]?.habilitarDeposito}
-                                                onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], habilitarDeposito: e.target.checked }})}
-                                            />
-                                            <label className="form-label" style={{ marginBottom: 0 }}>Habilitar botón "Depositar"</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+                                {['LOCAL', 'FABRICA'].map(tipo => (
+                                    <div key={tipo} style={{ padding: '1.5rem', border: '1px solid var(--color-gray-200)', borderRadius: '12px', backgroundColor: 'var(--color-gray-50)' }}>
+                                        <h3 style={{ marginBottom: '1.5rem', color: 'var(--color-primary)', borderBottom: '2px solid var(--color-primary-10)', paddingBottom: '0.5rem' }}>
+                                            Configuración para {tipo}
+                                        </h3>
+                                        <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
+                                            <div className="form-group">
+                                                <label className="form-label">Caja Destino</label>
+                                                <select 
+                                                    className="form-input"
+                                                    value={allConfigs[tipo]?.cajaDepositoId}
+                                                    onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
+                                                >
+                                                    {allowedBoxes.map(box => (
+                                                        <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                                    ))}
+                                                    <option value="caja_fuerte_local">🔒 Caja Fuerte Local (v2)</option>
+                                                    <option value="caja_fuerte_oficina">🔒 Caja Fuerte Oficina (v2)</option>
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="form-label">Concepto por Defecto</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="form-input"
+                                                    value={allConfigs[tipo]?.conceptoDeposito}
+                                                    onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], conceptoDeposito: e.target.value }})}
+                                                />
+                                            </div>
+                                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '1rem', padding: '0.5rem', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid var(--color-gray-200)' }}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={allConfigs[tipo]?.habilitarDeposito}
+                                                    onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], habilitarDeposito: e.target.checked }})}
+                                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                />
+                                                <label className="form-label" style={{ marginBottom: 0, cursor: 'pointer', fontWeight: 500 }}>Habilitar botón "Depositar"</label>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-                            <div className="form-actions">
+                                ))}
+                            </div>
+                            <div className="form-actions" style={{ justifyContent: 'flex-end', gap: '1rem' }}>
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowAdminConfig(false)}>Cerrar</button>
-                                <button type="submit" className="btn btn-primary">Guardar Configuración</button>
+                                <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem' }}>Guardar Cambios</button>
                             </div>
                         </form>
                     </div>
