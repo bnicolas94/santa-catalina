@@ -1,0 +1,12 @@
+{
+  "LOCAL": {
+    "cajaDepositoId": "caja_fuerte_local",
+    "conceptoDeposito": "Depósito en Caja Fuerte Local",
+    "habilitarDeposito": true
+  },
+  "FABRICA": {
+    "cajaDepositoId": "caja_fuerte_oficina",
+    "conceptoDeposito": "Depósito en Caja Fuerte Oficina",
+    "habilitarDeposito": true
+  }
+}

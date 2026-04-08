@@ -115,6 +115,11 @@ export default function CajaPage() {
     const [showConceptosModal, setShowConceptosModal] = useState(false)
     const [nuevoConcepto, setNuevoConcepto] = useState('')
     const [editingMov, setEditingMov] = useState<MovCaja | null>(null)
+    const [showDepositModal, setShowDepositModal] = useState(false)
+    const [depositAmount, setDepositAmount] = useState('')
+    const [depositConfig, setDepositConfig] = useState<any>(null)
+    const [showAdminConfig, setShowAdminConfig] = useState(false)
+    const [allConfigs, setAllConfigs] = useState<any>(null)
 
     const allowedBoxes = userRol === 'ADMIN' 
         ? ['caja_madre', 'caja_chica', 'local', 'mercado_pago', 'mercado_pago_juani'] 
@@ -138,6 +143,26 @@ export default function CajaPage() {
             Notification.requestPermission();
         }
     }, [])
+
+    useEffect(() => {
+        fetchData()
+        fetchDepositConfig()
+    }, [fechaFiltro])
+
+    const fetchDepositConfig = async () => {
+        try {
+            const res = await fetch('/api/caja/config-deposito')
+            const data = await res.json()
+            if (userRol === 'ADMIN') {
+                setAllConfigs(data)
+                setDepositConfig(data[ubicacionTipo || 'LOCAL'])
+            } else {
+                setDepositConfig(data)
+            }
+        } catch (err) {
+            console.error('Error fetching deposit config:', err)
+        }
+    }
 
     useEffect(() => {
         if (!swrData?.cajaData?.movimientos) return
@@ -283,6 +308,47 @@ export default function CajaPage() {
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
     }
+    async function handleDeposit(e: React.FormEvent) {
+        e.preventDefault()
+        if (!depositAmount || !depositConfig) return
+        setError('')
+        try {
+            const res = await fetch('/api/caja', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipo: 'ingreso',
+                    concepto: depositConfig.conceptoDeposito,
+                    monto: parseFloat(depositAmount),
+                    medioPago: 'efectivo',
+                    cajaOrigen: depositConfig.cajaDepositoId,
+                    descripcion: `Depósito rápido desde ${ubicacionTipo}`,
+                    fecha: new Date().toISOString().split('T')[0]
+                }),
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess('Depósito registrado con éxito')
+            setShowDepositModal(false)
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error al depositar') }
+    }
+
+    async function handleSaveAdminConfig(e: React.FormEvent) {
+        e.preventDefault()
+        try {
+            const res = await fetch('/api/caja/config-deposito', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(allConfigs),
+            })
+            if (!res.ok) throw new Error()
+            setSuccess('Configuración guardada')
+            setShowAdminConfig(false)
+            fetchDepositConfig()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch { setError('Error al guardar configuración') }
+    }
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando caja...</p></div>
 
@@ -324,6 +390,18 @@ export default function CajaPage() {
                         {showMontos ? '👁️' : '🙈'}
                     </button>
                     <button className="btn btn-secondary" onClick={() => setShowTransferModal(true)}>⇄ Transferir</button>
+                    {depositConfig?.habilitarDeposito && (
+                        <button className="btn btn-accent" 
+                            style={{ backgroundColor: '#27AE60', color: 'white', border: 'none' }}
+                            onClick={() => { setDepositAmount(''); setShowDepositModal(true) }}>
+                            💰 Depositar
+                        </button>
+                    )}
+                    {userRol === 'ADMIN' && (
+                        <button className="btn btn-ghost btn-icon" onClick={() => setShowAdminConfig(true)} title="Configurar Depósitos">
+                            ⚙️
+                        </button>
+                    )}
                     <button className="btn btn-primary" onClick={() => { setEditingMov(null); setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] }); setShowModal(true) }}>+ Registrar Movimiento</button>
 
                 </div>
@@ -1070,6 +1148,97 @@ export default function CajaPage() {
                             <button type="button" className="btn btn-ghost" onClick={() => setShowMPModal(false)}>Cerrar</button>
                             <button type="button" className="btn btn-primary" onClick={checkLiveMP} disabled={loadingMP}>Actualizar Lista MP</button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* MODAL DE DEPOSITO RÁPIDO */}
+            {showDepositModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '400px' }}>
+                        <div className="modal-header">
+                            <h2>💰 Registrar Depósito</h2>
+                            <button className="btn-close" onClick={() => setShowDepositModal(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleDeposit}>
+                            <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+                                <p style={{ color: 'var(--color-gray-600)', marginBottom: '1rem' }}>
+                                    Confirmar depósito diario de {ubicacionTipo} hacia {depositConfig?.cajaDepositoId.replace(/_/g, ' ')}
+                                </p>
+                                <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe a Depositar</label>
+                                <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', fontSize: '1.2rem' }}>$</span>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        className="form-input" 
+                                        style={{ paddingLeft: '30px', fontSize: '1.5rem', textAlign: 'center', height: '60px' }}
+                                        value={depositAmount}
+                                        onChange={(e) => setDepositAmount(e.target.value)}
+                                        placeholder="0.00"
+                                        autoFocus
+                                        required 
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-actions">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowDepositModal(false)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#27AE60' }}>Confirmar Depósito</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL CONFIGURACION DEPOSITOS (ADMIN) */}
+            {showAdminConfig && userRol === 'ADMIN' && allConfigs && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '600px' }}>
+                        <div className="modal-header">
+                            <h2>⚙️ Configuración de Depósitos Rápidos</h2>
+                            <button className="btn-close" onClick={() => setShowAdminConfig(false)}>✕</button>
+                        </div>
+                        <form onSubmit={handleSaveAdminConfig}>
+                            {['LOCAL', 'FABRICA'].map(tipo => (
+                                <div key={tipo} style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid var(--color-gray-200)', borderRadius: '8px' }}>
+                                    <h3 style={{ marginBottom: '1rem', color: 'var(--color-primary)' }}>Configuración para {tipo}</h3>
+                                    <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
+                                        <div className="form-group">
+                                            <label className="form-label">Caja Destino</label>
+                                            <select 
+                                                className="form-input"
+                                                value={allConfigs[tipo]?.cajaDepositoId}
+                                                onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
+                                            >
+                                                {allowedBoxes.map(box => <option key={box} value={box}>{box.replace(/_/g, ' ')}</option>)}
+                                                <option value="caja_fuerte_local">Caja Fuerte Local</option>
+                                                <option value="caja_fuerte_oficina">Caja Fuerte Oficina</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Concepto por Defecto</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-input"
+                                                value={allConfigs[tipo]?.conceptoDeposito}
+                                                onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], conceptoDeposito: e.target.value }})}
+                                            />
+                                        </div>
+                                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={allConfigs[tipo]?.habilitarDeposito}
+                                                onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], habilitarDeposito: e.target.checked }})}
+                                            />
+                                            <label className="form-label" style={{ marginBottom: 0 }}>Habilitar botón "Depositar"</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="form-actions">
+                                <button type="button" className="btn btn-ghost" onClick={() => setShowAdminConfig(false)}>Cerrar</button>
+                                <button type="submit" className="btn btn-primary">Guardar Configuración</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
