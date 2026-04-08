@@ -440,7 +440,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #8E44AD' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏦 Caja Madre</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔒 Caja Fuerte Oficina</span>
                                 {(userRol === 'ADMIN') && (
                                     editingSaldo === 'caja_madre' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -520,7 +520,7 @@ export default function CajaPage() {
                     <div className="card" style={{ borderTop: '3px solid #27AE60' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏪 Local</span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔒 Caja Fuerte Local</span>
                                 {(userRol === 'ADMIN' || ubicacionTipo === 'LOCAL') && (
                                     editingSaldo === 'local' ? (
                                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -1162,7 +1162,11 @@ export default function CajaPage() {
                         <form onSubmit={handleDeposit}>
                             <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
                                 <p style={{ color: 'var(--color-gray-600)', marginBottom: '1rem' }}>
-                                    Confirmar depósito diario de {ubicacionTipo} hacia {depositConfig?.cajaDepositoId.replace(/_/g, ' ')}
+                                    Confirmar depósito diario de {ubicacionTipo} hacia {
+                                        depositConfig?.cajaDepositoId === 'local' ? 'Caja Fuerte Local' : 
+                                        depositConfig?.cajaDepositoId === 'caja_madre' ? 'Caja Fuerte Oficina' : 
+                                        depositConfig?.cajaDepositoId.replace(/_/g, ' ')
+                                    }
                                 </p>
                                 <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe a Depositar</label>
                                 <div style={{ position: 'relative', marginTop: '0.5rem' }}>
@@ -1209,9 +1213,14 @@ export default function CajaPage() {
                                                 value={allConfigs[tipo]?.cajaDepositoId}
                                                 onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
                                             >
-                                                {allowedBoxes.map(box => <option key={box} value={box}>{box.replace(/_/g, ' ')}</option>)}
-                                                <option value="caja_fuerte_local">Caja Fuerte Local</option>
-                                                <option value="caja_fuerte_oficina">Caja Fuerte Oficina</option>
+                                                {allowedBoxes.map(box => {
+                                                    let label = box.replace(/_/g, ' ');
+                                                    if (box === 'local') label = 'Caja Fuerte Local';
+                                                    if (box === 'caja_madre') label = 'Caja Fuerte Oficina';
+                                                    return <option key={box} value={box}>{label}</option>
+                                                })}
+                                                <option value="caja_fuerte_local">Caja Fuerte Local (Nuevo ID)</option>
+                                                <option value="caja_fuerte_oficina">Caja Fuerte Oficina (Nuevo ID)</option>
                                             </select>
                                         </div>
                                         <div className="form-group">
