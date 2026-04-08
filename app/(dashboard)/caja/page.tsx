@@ -1153,8 +1153,8 @@ export default function CajaPage() {
             )}
             {/* MODAL DE DEPOSITO RÁPIDO */}
             {showDepositModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content" style={{ maxWidth: '400px' }}>
+                <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }}>
+                    <div className="modal-content" style={{ maxWidth: '400px', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
                         <div className="modal-header">
                             <h2>💰 Registrar Depósito</h2>
                             <button className="btn-close" onClick={() => setShowDepositModal(false)}>✕</button>
@@ -1191,8 +1191,8 @@ export default function CajaPage() {
 
             {/* MODAL CONFIGURACION DEPOSITOS (ADMIN) */}
             {showAdminConfig && userRol === 'ADMIN' && allConfigs && (
-                <div className="modal-overlay">
-                    <div className="modal-content" style={{ maxWidth: '600px' }}>
+                <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }}>
+                    <div className="modal-content" style={{ maxWidth: '600px', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
                         <div className="modal-header">
                             <h2>⚙️ Configuración de Depósitos Rápidos</h2>
                             <button className="btn-close" onClick={() => setShowAdminConfig(false)}>✕</button>
