@@ -84,18 +84,30 @@ export default function PlanificacionRutasPage() {
     async function fetchData() {
         try {
             const params = filterFecha ? `?fecha=${filterFecha}` : ''
+            
+            // Pedidos: Filtramos por la fecha seleccionada y aumentamos el límite para logística
+            const pedParams = new URLSearchParams()
+            if (filterFecha) {
+                pedParams.set('fechaDesde', filterFecha)
+                pedParams.set('fechaHasta', filterFecha)
+            }
+            pedParams.set('limit', '500') // Suficiente para ver todos los pedidos del día
+
             const [pedRes, empRes, rutaRes, ubiRes, planRes] = await Promise.all([
-                fetch('/api/pedidos'),
+                fetch(`/api/pedidos?${pedParams.toString()}`),
                 fetch('/api/empleados'),
                 fetch(`/api/rutas${params}`),
                 fetch('/api/ubicaciones'),
                 fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`)
             ])
-            const pedData = await pedRes.json()
+            const pedResponse = await pedRes.json()
             const empData = await empRes.json()
             const rutaData = await rutaRes.json()
             const ubiData = await ubiRes.json()
             const planData = await planRes.json()
+            
+            // Manejar respuesta paginada o array directo
+            const pedData = pedResponse.pedidos || (Array.isArray(pedResponse) ? pedResponse : [])
             
             // Fetch vehicles
             const vehRes = await fetch('/api/flota/vehiculos')
@@ -541,8 +553,13 @@ export default function PlanificacionRutasPage() {
                                     {/* Pedidos selection */}
                                     <div>
                                         {(() => {
-                                            // Filtrar pedidos por turno seleccionado
+                                            // Filtrar pedidos por fecha y turno seleccionado
                                             const pedidosFiltrados = pedidosDisponibles.filter(p => {
+                                                // 1. Filtrar por fecha del formulario
+                                                const pFecha = new Date(p.fechaEntrega).toISOString().split('T')[0]
+                                                if (pFecha !== formRuta.fecha) return false
+
+                                                // 2. Filtrar por turno
                                                 if (!formRuta.turno) return true
                                                 if (!p.turno) return true // mostrar sin turno siempre
                                                 return p.turno === formRuta.turno
