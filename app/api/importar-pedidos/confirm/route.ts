@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
                     const { original } = row;
                     const turnoMap: Record<string, string> = { 'MANANA': 'Mañana', 'SIESTA': 'Siesta', 'TARDE': 'Tarde' }
 
-                    // Aseguramos una fecha válida
-                    let fechaFinal = new Date(original.fecha);
+                    // Aseguramos una fecha válida (mediodía UTC para evitar desfase de timezone)
+                    let fechaFinal = new Date(original.fecha + 'T12:00:00.000Z');
                     if (isNaN(fechaFinal.getTime())) fechaFinal = new Date();
 
                     await tx.pedido.create({
