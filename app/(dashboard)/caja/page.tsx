@@ -1162,8 +1162,8 @@ export default function CajaPage() {
 
             {/* Modal MP en Vivo */}
             {showMPModal && (
-                <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }} onClick={(e) => { if (e.target === e.currentTarget) setShowMPModal(false) }}>
-                    <div className="modal-content" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
+                <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={(e) => { if (e.target === e.currentTarget) setShowMPModal(false) }}>
+                    <div className="modal" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem' }}>
                         <h2 style={{ color: 'var(--color-text)' }}>Conexión en Vivo: Últimos 15 Pagos MP</h2>
                         <p style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginBottom: '1.5rem' }}>
                             Estos datos vienen <strong>directamente de la API de Mercado Pago</strong>, sin pasar por la base de datos local. Sirve para corroborar que tu cuenta está recibiendo fondos de manera efectiva.
@@ -1231,11 +1231,11 @@ export default function CajaPage() {
             )}
             {/* MODAL DE DEPOSITO RÁPIDO */}
             {showDepositModal && (
-                <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }}>
-                    <div className="modal-content" style={{ maxWidth: '400px', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
+                <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={() => setShowDepositModal(false)}>
+                    <div className="modal" style={{ maxWidth: '400px', backgroundColor: '#ffffff', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>💰 Registrar Depósito</h2>
-                            <button className="btn-close" onClick={() => setShowDepositModal(false)}>✕</button>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowDepositModal(false)}>✕</button>
                         </div>
                         <form onSubmit={handleDeposit}>
                             <div style={{ marginBottom: '1.5rem' }}>
@@ -1288,11 +1288,11 @@ export default function CajaPage() {
 
             {/* MODAL CONFIGURACION DEPOSITOS (ADMIN) */}
             {showAdminConfig && userRol === 'ADMIN' && allConfigs && (
-                <div className="modal-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 }}>
-                    <div className="modal-content" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem', borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.2)' }}>
+                <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={() => setShowAdminConfig(false)}>
+                    <div className="modal" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header" style={{ marginBottom: '2rem' }}>
                             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-gray-800)' }}>⚙️ Configuración de Depósitos Rápidos</h2>
-                            <button className="btn-close" onClick={() => setShowAdminConfig(false)}>✕</button>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setShowAdminConfig(false)}>✕</button>
                         </div>
                         <form onSubmit={handleSaveAdminConfig}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>

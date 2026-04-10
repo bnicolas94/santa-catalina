@@ -1553,7 +1553,7 @@ export default function ProduccionPage() {
                                     <label className="form-label">Producto</label>
                                     <select className="form-select" value={form.productoId} onChange={handleProductoChange} required>
                                         <option value="">Seleccionar producto...</option>
-                                        {productos.map((p) => (
+                                        {productos.filter(p => !['ELE', 'PRE'].includes(p.codigoInterno)).map((p) => (
                                             <option key={p.id} value={p.id}>
                                                 [{p.codigoInterno}] {p.nombre} — {p.paquetesPorRonda} paq/ronda, {p.planchasPorPaquete} pl/paq
                                             </option>
