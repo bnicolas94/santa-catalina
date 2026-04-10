@@ -137,9 +137,11 @@ export default function CostosPage() {
                             <option value="2024">2024</option>
                             <option value="2025">2025</option>
                             <option value="2026">2026</option>
+                            <option value="2027">2027</option>
+                            <option value="2028">2028</option>
                         </select>
                     </div>
-                    <button className="btn btn-outline" onClick={() => setShowCatModal(true)}>+ Categoría</button>
+                    <a href="/costos/categorias" className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center' }}>⚙️ Categorías</a>
                     <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Registrar Gasto</button>
                 </div>
             </div>

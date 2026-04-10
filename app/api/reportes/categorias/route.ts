@@ -8,6 +8,7 @@ import { revalidateTag } from 'next/cache'
 export async function GET() {
     try {
         const categorias = await prisma.categoriaGasto.findMany({
+            where: { activo: true },
             orderBy: { nombre: 'asc' }
         })
         return NextResponse.json(categorias)

@@ -401,6 +401,7 @@ model CategoriaGasto {
   descripcion String?
   color       String?
   esOperativo Boolean          @default(true) @map("es_operativo")
+  activo      Boolean          @default(true)
   gastos      GastoOperativo[]
 
   @@map("categorias_gasto")

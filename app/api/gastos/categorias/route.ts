@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 export async function GET() {
     try {
         const categorias = await prisma.categoriaGasto.findMany({
+            where: { activo: true },
             orderBy: { nombre: 'asc' },
         })
         return NextResponse.json(categorias)
