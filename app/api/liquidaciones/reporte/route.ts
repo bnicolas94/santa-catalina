@@ -34,16 +34,23 @@ export async function GET(request: Request) {
         // Map the data for easier consumption in the frontend
         const reporte = liquidaciones.map(liq => {
             const totalEgresos = liq.descuentosPrestamos
-            // Bruto ahora es el sueldo base sin extras (así se diferencia en el reporte)
             const soloSueldoBase = liq.sueldoProporcional + liq.montoHorasNormales + liq.montoHorasFeriado
             
             return {
                 id: liq.id,
                 empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
+                empleadoDatos: {
+                    nombre: liq.empleado.nombre,
+                    apellido: liq.empleado.apellido,
+                    dni: liq.empleado.dni
+                },
                 periodo: liq.periodo,
                 fechaGeneracion: liq.fechaGeneracion,
                 horasExtras: liq.horasExtras + liq.ajusteHorasExtras,
                 montoHorasExtras: liq.montoHorasExtras,
+                sueldoProporcional: liq.sueldoProporcional,
+                montoHorasNormales: liq.montoHorasNormales,
+                montoHorasFeriado: liq.montoHorasFeriado,
                 totalBruto: soloSueldoBase,
                 descuentos: totalEgresos,
                 totalNeto: liq.totalNeto
