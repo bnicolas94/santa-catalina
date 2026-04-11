@@ -135,18 +135,22 @@ export default function EmpleadosPage() {
                 const marcasPorDia: Record<string, string[]> = {}
 
                 lines.forEach(line => {
-                    const columns = line.split('\t').map(c => c.trim()).filter(c => c !== '')
+                    // Soporta Tabs (\t) o 2+ espacios como separadores de columna
+                    const columns = line.split(/\t|\s{2,}/).map(c => c.trim()).filter(c => c !== '')
                     if (columns.length >= 4) {
+                        // EnNo es la 3era columna (index 2)
                         const rawCode = columns[2]
                         if (rawCode && /^\d+$/.test(rawCode)) {
                             const cleanCode = parseInt(rawCode, 10).toString()
-                            const dateCol = columns.find(c => c.includes('/') || c.match(/^\d{4}-\d{2}-\d{2}/))
-                            if (dateCol) {
-                                const dateTimeStr = dateCol.replace(/\s+/g, ' ')
-                                const [fecha] = dateTimeStr.split(' ')
-                                const key = `${cleanCode}_${fecha}`
+                            // Buscamos algo que parezca YYYY/MM/DD o YYYY-MM-DD
+                            const dateMatch = line.match(/(\d{4}[\/-]\d{2}[\/-]\d{2})\s+(\d{2}:\d{2}:\d{2})/)
+                            
+                            if (dateMatch) {
+                                const [_, fechaStr, horaStr] = dateMatch
+                                const normalizedDate = fechaStr.replace(/\//g, '-')
+                                const key = `${cleanCode}_${normalizedDate}`
                                 if (!marcasPorDia[key]) marcasPorDia[key] = []
-                                marcasPorDia[key].push(dateTimeStr)
+                                marcasPorDia[key].push(`${normalizedDate} ${horaStr}`)
                             }
                         }
                     }
@@ -157,10 +161,14 @@ export default function EmpleadosPage() {
                     marcas.sort()
                     marcas.forEach((m, idx) => {
                         const tipo = idx % 2 === 0 ? 'entrada' : 'salida'
+                        // Asegurar formato ISO para que el backend no tenga dudas
+                        const [f, h] = m.split(' ')
+                        const isoStr = new Date(`${f}T${h}`).toISOString()
+                        
                         registrosExtraidos.push({
                             idTemp: Math.random().toString(36).substr(2, 9),
                             codigoBiometrico: codigo,
-                            fechaHora: new Date(m.replace(/\//g, '-')).toISOString(),
+                            fechaHora: isoStr,
                             tipo,
                             originalStr: m
                         })
