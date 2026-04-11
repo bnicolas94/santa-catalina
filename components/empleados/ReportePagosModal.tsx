@@ -78,6 +78,89 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
     const totalGeneral = datos.reduce((acc, curr) => acc + curr.totalNeto, 0)
 
+    const handlePrint = () => {
+        const dImp = new Date()
+        const fDesdeStr = fechaDesde.split('-').reverse().join('/')
+        const fHastaStr = fechaHasta.split('-').reverse().join('/')
+
+        const html = `
+            <html>
+            <head>
+                <title>Reporte de Pagos</title>
+                <style>
+                    @page { size: A4 portrait; margin: 15mm; }
+                    body { font-family: Arial, sans-serif; line-height: 1.4; color: #000; font-size: 11pt; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+                    .title { font-size: 16pt; font-weight: bold; margin-bottom: 5px; }
+                    .subtitle { font-size: 12pt; color: #444; }
+                    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+                    th { background-color: #f5f5f5; font-weight: bold; }
+                    .number { text-align: right; }
+                    .total-row { font-weight: bold; background-color: #eaeaea; }
+                    .total-box { border: 2px solid #000; padding: 15px; width: 300px; margin-left: auto; text-align: right; font-size: 14pt; background-color: #f9f9f9; }
+                    @media print { 
+                        .no-print { display: none; } 
+                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="title">REPORTE DE PAGOS (LIQUIDACIONES)</div>
+                    <div class="subtitle">Período de emisión: ${fDesdeStr} al ${fHastaStr}</div>
+                    <div style="font-size: 9pt; margin-top: 5px;">Generado el ${dImp.toLocaleString('es-AR')}</div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Empleado</th>
+                            <th>Período Disp.</th>
+                            <th class="number">Hs. Ext.</th>
+                            <th class="number">Monto Ext. ($)</th>
+                            <th class="number">Bruto ($)</th>
+                            <th class="number">Descuentos ($)</th>
+                            <th class="number">Neto a Pagar ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${datos.length > 0 ? datos.map((row, i) => `
+                            <tr>
+                                <td>${i + 1}</td>
+                                <td>${row.empleado}</td>
+                                <td>${row.periodo}</td>
+                                <td class="number">${row.horasExtras}</td>
+                                <td class="number">${row.montoHorasExtras.toLocaleString('es-AR')}</td>
+                                <td class="number">${row.totalBruto.toLocaleString('es-AR')}</td>
+                                <td class="number">${row.descuentos.toLocaleString('es-AR')}</td>
+                                <td class="number"><strong>${row.totalNeto.toLocaleString('es-AR')}</strong></td>
+                            </tr>
+                        `).join('') : '<tr><td colspan="8" style="text-align: center;">No hay recibos emitidos en este rango de fechas.</td></tr>'}
+                    </tbody>
+                </table>
+
+                <div class="total-box">
+                    EFECTIVO TOTAL A SEPARAR:<br/>
+                    <strong style="font-size: 18pt;">$${totalGeneral.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                </div>
+
+                <script>
+                    window.onload = () => {
+                        window.print();
+                    }
+                </script>
+            </body>
+            </html>
+        `
+        const win = window.open('', '_blank')
+        if (win) {
+            win.document.write(html)
+            win.document.close()
+        }
+    }
+
     const handlePrintReceipts = () => {
         if (selectedIds.size === 0) return
 
