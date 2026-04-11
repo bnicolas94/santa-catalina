@@ -41,15 +41,27 @@ export async function POST(request: Request) {
             }
 
             try {
-                await prisma.fichadaEmpleado.create({
-                    data: {
+                // Verificar si ya existe un registro idéntico para evitar duplicados
+                const fecha = new Date(reg.fechaHora)
+                const existe = await prisma.fichadaEmpleado.findFirst({
+                    where: {
                         empleadoId,
-                        fechaHora: new Date(reg.fechaHora),
-                        tipo: reg.tipo.toLowerCase(),
-                        origen: 'importado'
+                        fechaHora: fecha,
+                        tipo: reg.tipo.toLowerCase()
                     }
                 })
-                importados++
+
+                if (!existe) {
+                    await prisma.fichadaEmpleado.create({
+                        data: {
+                            empleadoId,
+                            fechaHora: fecha,
+                            tipo: reg.tipo.toLowerCase(),
+                            origen: 'importado'
+                        }
+                    })
+                    importados++
+                }
             } catch (err: any) {
                 errores.push(`Error al insertar registro para empleado ${empleadoId}: ${err.message}`)
             }
