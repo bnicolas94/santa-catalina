@@ -1,7 +1,7 @@
 "use client"
 
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
-import { useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 interface ReportePagosModalProps {
     onClose: () => void
