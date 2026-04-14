@@ -29,11 +29,22 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // Sorting dinámico
+        const sortField = searchParams.get('sortField')
+        const sortDir = (searchParams.get('sortDir') || 'asc') as 'asc' | 'desc'
+        
+        let orderBy: any = { fechaEntrega: 'desc' } // Default
+        if (sortField === 'cliente') orderBy = { cliente: { nombreComercial: sortDir } }
+        else if (sortField === 'fechaEntrega') orderBy = { fechaEntrega: sortDir }
+        else if (sortField === 'totalUnidades') orderBy = { totalUnidades: sortDir }
+        else if (sortField === 'totalImporte') orderBy = { totalImporte: sortDir }
+        else if (sortField === 'turno') orderBy = { turno: sortDir }
+
         // Consultas en paralelo: pedidos paginados + total + stats
         const [pedidos, total, stats] = await Promise.all([
             prisma.pedido.findMany({
                 where,
-                orderBy: { fechaEntrega: 'desc' },
+                orderBy,
                 skip: (page - 1) * limit,
                 take: limit,
                 include: {

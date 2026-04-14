@@ -19,7 +19,11 @@ interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
     medioPago: string | null; totalUnidades: number; totalImporte: number
     totalPacks: number; cliente: Cliente; detalles: DetallePedido[]; abonado: boolean
+    turno: string | null
 }
+
+type SortField = 'cliente' | 'fechaEntrega' | 'totalUnidades' | 'totalImporte' | 'turno'
+type SortDir = 'asc' | 'desc'
 interface Producto {
     id: string; nombre: string; codigoInterno: string
     presentaciones: { id: string; cantidad: number; precioVenta: number }[]
@@ -66,7 +70,11 @@ export default function PedidosPage() {
     // Stats de proyección
     const [stats, setStats] = useState({ totalPedidos: 0, totalImporte: 0, totalUnidades: 0, totalPacks: 0 })
 
-    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, fechaDesde, fechaHasta])
+    // Sorting
+    const [sortField, setSortField] = useState<SortField | ''>('')
+    const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, fechaDesde, fechaHasta, sortField, sortDir])
     useEffect(() => { fetchCatalogos() }, [])
 
     // Debounce para búsqueda
@@ -100,6 +108,7 @@ export default function PedidosPage() {
             if (fechaDesde) params.set('fechaDesde', fechaDesde)
             if (fechaHasta) params.set('fechaHasta', fechaHasta)
             if (searchTerm) params.set('search', searchTerm)
+            if (sortField) { params.set('sortField', sortField); params.set('sortDir', sortDir) }
 
             const res = await fetch(`/api/pedidos?${params.toString()}`)
             const data = await res.json()
@@ -117,6 +126,21 @@ export default function PedidosPage() {
     }
 
     async function fetchData() { await fetchPedidos() }
+
+    function toggleSort(field: SortField) {
+        if (sortField === field) {
+            setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+        } else {
+            setSortField(field)
+            setSortDir('asc')
+        }
+        setCurrentPage(1)
+    }
+
+    function SortIcon({ field }: { field: SortField }) {
+        if (sortField !== field) return <span style={{ opacity: 0.3, marginLeft: '4px' }}>⇅</span>
+        return <span style={{ marginLeft: '4px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+    }
 
 
     // Flatten all presentations for selection
@@ -458,13 +482,14 @@ export default function PedidosPage() {
                 <table className="table">
                     <thead>
                         <tr>
-                            <th>Cliente</th>
+                            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('cliente')}>Cliente <SortIcon field="cliente" /></th>
                             <th>Fecha Pedido</th>
-                            <th>Fecha Entrega</th>
+                            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('fechaEntrega')}>Fecha Entrega <SortIcon field="fechaEntrega" /></th>
+                            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('turno')}>Turno <SortIcon field="turno" /></th>
                             <th>Detalle (Bultos)</th>
                             <th>Packs</th>
-                            <th>Sándwiches</th>
-                            <th>Importe</th>
+                            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('totalUnidades')}>Sándwiches <SortIcon field="totalUnidades" /></th>
+                            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort('totalImporte')}>Importe <SortIcon field="totalImporte" /></th>
                             <th>Pago</th>
                             <th>Estado</th>
                             <th>Acciones</th>
@@ -472,7 +497,7 @@ export default function PedidosPage() {
                     </thead>
                     <tbody>
                         {filtered.length === 0 ? (
-                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>No hay pedidos</td></tr>
+                            <tr><td colSpan={11} style={{ textAlign: 'center', padding: '2rem' }}>No hay pedidos</td></tr>
                         ) : filtered.map((ped) => {
                             const est = getEstadoInfo(ped.estado)
                             const nextStates: Record<string, string[]> = {
@@ -486,6 +511,18 @@ export default function PedidosPage() {
                                     <td style={{ fontWeight: 600 }}>{ped.cliente.nombreComercial}</td>
                                     <td>{new Date(ped.fechaPedido).toLocaleDateString('es-AR')}</td>
                                     <td>{new Date(ped.fechaEntrega).toLocaleDateString('es-AR')}</td>
+                                    <td>
+                                        {ped.turno ? (
+                                            <span className="badge" style={{
+                                                backgroundColor: ped.turno === 'Mañana' ? '#E67E2220' : ped.turno === 'Siesta' ? '#F1C40F20' : '#9B59B620',
+                                                color: ped.turno === 'Mañana' ? '#E67E22' : ped.turno === 'Siesta' ? '#F1C40F' : '#9B59B6',
+                                                border: `1px solid ${ped.turno === 'Mañana' ? '#E67E2240' : ped.turno === 'Siesta' ? '#F1C40F40' : '#9B59B640'}`,
+                                                fontSize: '0.7rem', fontWeight: 700,
+                                            }}>
+                                                {ped.turno === 'Mañana' ? '🌅' : ped.turno === 'Siesta' ? '☀️' : '🌆'} {ped.turno}
+                                            </span>
+                                        ) : <span style={{ color: 'var(--color-gray-400)', fontSize: '11px' }}>—</span>}
+                                    </td>
                                     <td>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             {/* Agrupamos por nroPack para visualización */}
