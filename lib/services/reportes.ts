@@ -298,11 +298,63 @@ export const getReporteDetalle = async (
         if (ubicacionId) where.ubicacionId = ubicacionId
         if (categoriaId) where.categoriaId = categoriaId
 
-        return await prisma.gastoOperativo.findMany({
+        // Fetch standard gastos
+        const baseGastos = await prisma.gastoOperativo.findMany({
             where,
             include: { categoria: true },
             orderBy: { fecha: 'desc' }
         })
+
+        // Category IDs for integration
+        const ID_SUELDOS = 'f607144e-1b33-40a2-9388-755f4129188d'
+        const ID_MANTENIMIENTO = 'd20ac4cc-76ed-4c74-828e-9d1656ae1c92'
+
+        let manualEntries: any[] = baseGastos
+
+        // Integrate Payroll (Liquidaciones)
+        if (!categoriaId || categoriaId === ID_SUELDOS) {
+            const liqs = await prisma.liquidacionSueldo.findMany({
+                where: {
+                    fechaGeneracion: { gte: startOfMonth, lte: endOfMonth },
+                    estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
+                },
+                include: { empleado: true },
+                orderBy: { fechaGeneracion: 'desc' }
+            })
+            
+            const liqMapped = liqs.map(l => ({
+                id: l.id,
+                fecha: l.fechaGeneracion,
+                descripcion: `Liquidación: ${l.periodo} - ${l.empleado.nombre} ${l.empleado.apellido}`,
+                monto: l.totalNeto,
+                categoria: { nombre: 'Sueldos' },
+                esModuloExterno: true
+            }))
+            manualEntries = [...manualEntries, ...liqMapped]
+        }
+
+        // Integrate Maintenance (Mantenimientos Flota)
+        if (!categoriaId || categoriaId === ID_MANTENIMIENTO) {
+            const mants = await prisma.mantenimientoVehiculo.findMany({
+                where: {
+                    fecha: { gte: startOfMonth, lte: endOfMonth }
+                },
+                include: { vehiculo: true },
+                orderBy: { fecha: 'desc' }
+            })
+
+            const mantsMapped = mants.map(m => ({
+                id: m.id,
+                fecha: m.fecha,
+                descripcion: `Mant.: ${m.tipo} - ${m.vehiculo.patente} (${m.taller || 'S/T'})`,
+                monto: m.costo,
+                categoria: { nombre: 'Mantenimiento' },
+                esModuloExterno: true
+            }))
+            manualEntries = [...manualEntries, ...mantsMapped]
+        }
+
+        return manualEntries.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
     }
 
     if (tipo === 'lotes') {

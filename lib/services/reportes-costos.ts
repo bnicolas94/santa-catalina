@@ -7,7 +7,8 @@ import { prisma } from '@/lib/prisma'
 export async function getCostosReport(
     desdeIso: string,
     hastaIso: string,
-    ubicacionId?: string
+    ubicacionId?: string,
+    incluirTodo = false
 ) {
     const startOfCurrent = new Date(desdeIso)
     const endOfCurrent = new Date(hastaIso)
@@ -51,34 +52,84 @@ export async function getCostosReport(
     const costoInsumosActual = comprasActual._sum.costoTotal || 0
     const costoInsumosAnterior = comprasAnterior._sum.costoTotal || 0
 
-    // ── 2. Gastos operativos por categoría ──
-    const gastos = await prisma.gastoOperativo.findMany({
-        where: {
-            fecha: { gte: startOfCurrent, lte: endOfCurrent },
-            ...(ubicacionId ? { ubicacionId } : {})
-        },
-        include: { categoria: true }
-    })
+    // ── 2. Gastos operativos, Sueldos y Mantenimientos ──
+    const [gastos, liqs, mants, gastosAnterior, liqsAnterior, mantsAnterior] = await Promise.all([
+        // Gastos operativos actuales
+        prisma.gastoOperativo.findMany({
+            where: {
+                fecha: { gte: startOfCurrent, lte: endOfCurrent },
+                ...(ubicacionId ? { ubicacionId } : {})
+            },
+            include: { categoria: true }
+        }),
+        // Liquidaciones actuales
+        prisma.liquidacionSueldo.findMany({
+            where: {
+                fechaGeneracion: { gte: startOfCurrent, lte: endOfCurrent },
+                estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
+            }
+        }),
+        // Mantenimientos actuales
+        prisma.mantenimientoVehiculo.findMany({
+            where: {
+                fecha: { gte: startOfCurrent, lte: endOfCurrent }
+            }
+        }),
+        // Totales periodo anterior
+        prisma.gastoOperativo.aggregate({
+            where: {
+                fecha: { gte: startAnterior, lte: endAnterior },
+                ...(ubicacionId ? { ubicacionId } : {})
+            },
+            _sum: { monto: true }
+        }),
+        prisma.liquidacionSueldo.aggregate({
+            where: {
+                fechaGeneracion: { gte: startAnterior, lte: endAnterior },
+                estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
+            },
+            _sum: { totalNeto: true }
+        }),
+        prisma.mantenimientoVehiculo.aggregate({
+            where: {
+                fecha: { gte: startAnterior, lte: endAnterior }
+            },
+            _sum: { costo: true }
+        })
+    ])
 
-    let gastosTotalActual = 0
+    const gastosTotalActualBase = gastos.reduce((acc, g) => acc + g.monto, 0)
+    const liqsTotalActual = liqs.reduce((acc, l) => acc + l.totalNeto, 0)
+    const mantsTotalActual = mants.reduce((acc, m) => acc + m.costo, 0)
+    const gastosTotalActual = gastosTotalActualBase + liqsTotalActual + mantsTotalActual
+
+    const gastosTotalAnterior = (gastosAnterior._sum.monto || 0) + (liqsAnterior._sum.totalNeto || 0) + (mantsAnterior._sum.costo || 0)
+
     const gastosPorCategoria: Record<string, { nombre: string; monto: number; count: number }> = {}
 
+    // Procesar gastos operativos manuales
     for (const g of gastos) {
-        gastosTotalActual += g.monto
         const cat = (g.categoria as any)?.nombre || 'Sin categoría'
         if (!gastosPorCategoria[cat]) gastosPorCategoria[cat] = { nombre: cat, monto: 0, count: 0 }
         gastosPorCategoria[cat].monto += g.monto
         gastosPorCategoria[cat].count++
     }
 
-    const gastosAnterior = await prisma.gastoOperativo.aggregate({
-        where: {
-            fecha: { gte: startAnterior, lte: endAnterior },
-            ...(ubicacionId ? { ubicacionId } : {})
-        },
-        _sum: { monto: true }
-    })
-    const gastosTotalAnterior = gastosAnterior._sum.monto || 0
+    // Integrar Liquidaciones en categoría Sueldos
+    if (liqsTotalActual > 0) {
+        const catSueldos = 'Sueldos'
+        if (!gastosPorCategoria[catSueldos]) gastosPorCategoria[catSueldos] = { nombre: catSueldos, monto: 0, count: 0 }
+        gastosPorCategoria[catSueldos].monto += liqsTotalActual
+        gastosPorCategoria[catSueldos].count += liqs.length
+    }
+
+    // Integrar Mantenimientos en categoría Mantenimiento
+    if (mantsTotalActual > 0) {
+        const catMant = 'Mantenimiento'
+        if (!gastosPorCategoria[catMant]) gastosPorCategoria[catMant] = { nombre: catMant, monto: 0, count: 0 }
+        gastosPorCategoria[catMant].monto += mantsTotalActual
+        gastosPorCategoria[catMant].count += mants.length
+    }
 
     // ── 3. Costo unitario por producto (basado en fichas técnicas) ──
     const productos = await prisma.producto.findMany({
@@ -146,7 +197,7 @@ export async function getCostosReport(
         const s = new Date(y, mAjustado - 1, 1)
         const e = new Date(y, mAjustado, 0, 23, 59, 59, 999)
 
-        const [compras, gast] = await Promise.all([
+        const [compras, gast, liqsM, mantsM] = await Promise.all([
             prisma.movimientoStock.aggregate({
                 where: { tipo: 'entrada', fecha: { gte: s, lte: e }, ...whereUbi },
                 _sum: { costoTotal: true }
@@ -154,15 +205,25 @@ export async function getCostosReport(
             prisma.gastoOperativo.aggregate({
                 where: { fecha: { gte: s, lte: e }, ...(ubicacionId ? { ubicacionId } : {}) },
                 _sum: { monto: true }
+            }),
+            prisma.liquidacionSueldo.aggregate({
+                where: { fechaGeneracion: { gte: s, lte: e }, estado: 'pagado' },
+                _sum: { totalNeto: true }
+            }),
+            prisma.mantenimientoVehiculo.aggregate({
+                where: { fecha: { gte: s, lte: e } },
+                _sum: { costo: true }
             })
         ])
 
         const mesNombre = new Date(y, mAjustado - 1, 1).toLocaleDateString('es-AR', { month: 'short' })
+        const mGastos = (gast._sum.monto || 0) + (liqsM._sum.totalNeto || 0) + (mantsM._sum.costo || 0)
+
         evolucion.push({
             label: mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1),
             insumos: compras._sum.costoTotal || 0,
-            gastos: gast._sum.monto || 0,
-            total: (compras._sum.costoTotal || 0) + (gast._sum.monto || 0)
+            gastos: mGastos,
+            total: (compras._sum.costoTotal || 0) + mGastos
         })
     }
 

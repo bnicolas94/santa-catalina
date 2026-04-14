@@ -23,8 +23,9 @@ export async function GET(request: Request) {
         }
 
         const ubicacionId = searchParams.get('ubicacionId') || undefined
+        const todos = searchParams.get('todos') === 'true'
 
-        const data = await getCostosReport(desdeIso, hastaIso, ubicacionId)
+        const data = await getCostosReport(desdeIso, hastaIso, ubicacionId, todos)
 
         return NextResponse.json(data)
     } catch (error) {
