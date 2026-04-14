@@ -44,8 +44,12 @@ export function getDateRange(
         }
         case 'semana': {
             const offset = opciones.semanaOffset ?? 0
-            const ref = new Date(now)
-            ref.setDate(ref.getDate() + (offset * 7))
+            const ref = opciones.fecha ? new Date(opciones.fecha + 'T00:00:00') : new Date(now)
+            
+            if (offset !== 0) {
+                ref.setDate(ref.getDate() + (offset * 7))
+            }
+            
             const dayOfWeek = ref.getDay()
             const monday = new Date(ref)
             monday.setDate(ref.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
