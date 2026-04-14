@@ -115,16 +115,22 @@ export async function getVentasReport(
         for (const det of ped.detalles) {
             const prod = det.presentacion.producto
             const presId = det.presentacion.id
-            if (!porProducto[presId]) {
-                porProducto[presId] = {
-                    nombre: `${prod.nombre} x${det.presentacion.cantidad}`,
+            
+            // Determinar si agrupamos por presentación o por producto
+            // Premium y Elegidos se agrupan por producto (ignoran presentación)
+            const esAgrupado = ['PRE', 'ELE'].includes(prod.codigoInterno)
+            const groupKey = esAgrupado ? prod.id : presId
+            
+            if (!porProducto[groupKey]) {
+                porProducto[groupKey] = {
+                    nombre: esAgrupado ? prod.nombre : `${prod.nombre} x${det.presentacion.cantidad}`,
                     codigo: prod.codigoInterno,
                     cantidad: 0, importe: 0, pedidos: 0
                 }
             }
-            porProducto[presId].cantidad += det.cantidad * det.presentacion.cantidad
-            porProducto[presId].importe += det.cantidad * det.precioUnitario
-            porProducto[presId].pedidos++
+            porProducto[groupKey].cantidad += det.cantidad * det.presentacion.cantidad
+            porProducto[groupKey].importe += det.cantidad * det.precioUnitario
+            porProducto[groupKey].pedidos++
 
             // También sumar a la cantidad del cliente
             porCliente[cId].cantidad += det.cantidad * det.presentacion.cantidad
