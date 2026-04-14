@@ -903,7 +903,8 @@ export default function ProduccionPage() {
                                                     
                                                     // --- CORRECCIÓN EN TOTALES ---
                                                     // 1. Pendientes de días anteriores
-                                                    const pendAnteriores = planning?.pendientesAnteriores?.[key] || 0
+                                                    const pendAnterioresInfo = planning?.pendientesAnteriores?.[key]
+                                                    const pendAnteriores = pendAnterioresInfo?.total || 0
                                                     
                                                     // 2. Solo lo que Falta descontar de HOY
                                                     let pendHoy = 0
@@ -960,8 +961,15 @@ export default function ProduccionPage() {
                                                             <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
                                                                 {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
                                                             </td>
-                                                            <td style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px' }}>
-                                                                {prevUnits > 0 ? `${(prevUnits / presSize).toFixed(1).replace('.0', '')} paq` : '—'}
+                                                            <td 
+                                                                style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
+                                                                title={pendAnterioresInfo?.detalles?.length ? `Detalle de Pendientes:\n${pendAnterioresInfo.detalles.map((d: any) => `• ${formatDateOnly(d.fecha)} (${d.turno}): ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
+                                                            >
+                                                                {prevUnits > 0 ? (
+                                                                    <span style={{ borderBottom: pendAnteriores > 0 ? '1px dotted var(--color-gray-300)' : 'none' }}>
+                                                                        {(prevUnits / presSize).toFixed(1).replace('.0', '')} paq
+                                                                    </span>
+                                                                ) : '—'}
                                                             </td>
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (
@@ -1046,7 +1054,8 @@ export default function ProduccionPage() {
                                             
                                             // --- CÁLCULO ACUMULATIVO ---
                                             // 1. Pendientes de días anteriores
-                                            const pendAnteriores = planning?.pendientesAnteriores?.[key] || 0
+                                            const pendAnterioresInfo = planning?.pendientesAnteriores?.[key]
+                                            const pendAnteriores = pendAnterioresInfo?.total || 0
                                             
                                             // 2. Pendientes de turnos anteriores del MISMO día
                                             let pendTurnosPrevios = 0
@@ -1106,8 +1115,15 @@ export default function ProduccionPage() {
                                                             <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
                                                                 {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
                                                             </td>
-                                                            <td style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px' }}>
-                                                                {prevUnits > 0 ? `${(prevUnits / presSize).toFixed(1).replace('.0', '')} paq` : '—'}
+                                                            <td 
+                                                                style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
+                                                                title={pendAnterioresInfo?.detalles?.length ? `Detalle de Pendientes:\n${pendAnterioresInfo.detalles.map((d: any) => `• ${formatDateOnly(d.fecha)} (${d.turno}): ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
+                                                            >
+                                                                {prevUnits > 0 ? (
+                                                                    <span style={{ borderBottom: pendAnteriores > 0 ? '1px dotted var(--color-gray-300)' : 'none' }}>
+                                                                        {(prevUnits / presSize).toFixed(1).replace('.0', '')} paq
+                                                                    </span>
+                                                                ) : '—'}
                                                             </td>
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (

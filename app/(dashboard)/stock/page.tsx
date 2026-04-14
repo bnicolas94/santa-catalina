@@ -788,13 +788,17 @@ function StockContent() {
                                         <input className="form-input" value={facturaForm.numeroFactura} onChange={(e) => setFacturaForm({ ...facturaForm, numeroFactura: e.target.value })} placeholder="Opcional" />
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Estado de Pago</label>
                                         <select className="form-select" value={facturaForm.estadoPago} onChange={(e) => setFacturaForm({ ...facturaForm, estadoPago: e.target.value })}>
                                             <option value="pagado">✅ Pagado (Contado)</option>
                                             <option value="pendiente">⏳ Pendiente (Cta. Cte.)</option>
                                         </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Fecha del Movimiento</label>
+                                        <input type="date" className="form-input" value={facturaForm.fechaMovimiento} onChange={(e) => setFacturaForm({ ...facturaForm, fechaMovimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
                                     {facturaForm.estadoPago === 'pagado' && (
                                         <div className="form-group">

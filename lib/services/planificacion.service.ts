@@ -248,7 +248,23 @@ export class PlanificacionService {
             }
         })
 
-        const pendientesAnteriores: Record<string, number> = {}
+        const pendientesAnteriores: Record<string, { total: number, detalles: { fecha: string, turno: string, cantidad: number }[] }> = {}
+
+        const registerPendiente = (keyProd: string, fecha: Date, turno: string, cantidad: number) => {
+            if (!pendientesAnteriores[keyProd]) {
+                pendientesAnteriores[keyProd] = { total: 0, detalles: [] }
+            }
+            pendientesAnteriores[keyProd].total += cantidad
+            
+            // Buscar si ya existe la misma fecha/turno para agrupar
+            const fechaStr = fecha.toISOString().split('T')[0]
+            const existing = pendientesAnteriores[keyProd].detalles.find(d => d.fecha === fechaStr && d.turno === turno)
+            if (existing) {
+                existing.cantidad += cantidad
+            } else {
+                pendientesAnteriores[keyProd].detalles.push({ fecha: fechaStr, turno, cantidad })
+            }
+        }
 
         // Procesar manuales pendientes
         manualesPendientes.forEach(m => {
@@ -257,7 +273,7 @@ export class PlanificacionService {
 
             // @ts-ignore
             const keyProd = m.presentacionId ? `${m.productoId}_${m.presentacionId}` : `${m.productoId}_null`
-            pendientesAnteriores[keyProd] = (pendientesAnteriores[keyProd] || 0) + m.cantidad
+            registerPendiente(keyProd, m.fecha, m.turno, m.cantidad)
             
             // Asegurar que infoProductos tenga la info si no estaba hoy
             if (m.producto) registerInfo(m.producto, m.presentacion)
@@ -274,7 +290,7 @@ export class PlanificacionService {
                     const pres = detalle.presentacion
                     const keyProd = registerInfo(prod, pres)
                     const cantTotal = detalle.cantidad * pres.cantidad
-                    pendientesAnteriores[keyProd] = (pendientesAnteriores[keyProd] || 0) + cantTotal
+                    registerPendiente(keyProd, ruta.fecha, ruta.turno || 'Sin Turno', cantTotal)
                 })
             })
         })
