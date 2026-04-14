@@ -114,16 +114,17 @@ export async function getVentasReport(
         // Por producto (detalles)
         for (const det of ped.detalles) {
             const prod = det.presentacion.producto
-            if (!porProducto[prod.id]) {
-                porProducto[prod.id] = {
-                    nombre: prod.nombre,
+            const presId = det.presentacion.id
+            if (!porProducto[presId]) {
+                porProducto[presId] = {
+                    nombre: `${prod.nombre} x${det.presentacion.cantidad}`,
                     codigo: prod.codigoInterno,
                     cantidad: 0, importe: 0, pedidos: 0
                 }
             }
-            porProducto[prod.id].cantidad += det.cantidad * det.presentacion.cantidad
-            porProducto[prod.id].importe += det.cantidad * det.precioUnitario
-            porProducto[prod.id].pedidos++
+            porProducto[presId].cantidad += det.cantidad * det.presentacion.cantidad
+            porProducto[presId].importe += det.cantidad * det.precioUnitario
+            porProducto[presId].pedidos++
 
             // También sumar a la cantidad del cliente
             porCliente[cId].cantidad += det.cantidad * det.presentacion.cantidad
