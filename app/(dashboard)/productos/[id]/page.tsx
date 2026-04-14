@@ -14,6 +14,7 @@ interface FichaTecnica {
     id: string
     cantidadPorUnidad: number
     unidadMedida: string
+    merma: number
     insumo: Insumo
 }
 
@@ -46,6 +47,7 @@ export default function ProductoDetallePage() {
         insumoId: '',
         cantidadPorUnidad: '',
         unidadMedida: 'kg',
+        merma: '0',
     })
     const [success, setSuccess] = useState('')
     const [error, setError] = useState('')
@@ -75,6 +77,10 @@ export default function ProductoDetallePage() {
         e.preventDefault()
         setError('')
 
+        const mainPres = producto?.presentaciones?.[0];
+        const unidadesBa = mainPres?.cantidad || 48;
+        const cantidadUnitaria = parseFloat(fichaForm.cantidadPorUnidad) / unidadesBa;
+
         try {
             const res = await fetch('/api/fichas-tecnicas', {
                 method: 'POST',
@@ -82,6 +88,7 @@ export default function ProductoDetallePage() {
                 body: JSON.stringify({
                     productoId: params.id,
                     ...fichaForm,
+                    cantidadPorUnidad: cantidadUnitaria,
                 }),
             })
 
@@ -92,7 +99,7 @@ export default function ProductoDetallePage() {
 
             setSuccess('Insumo agregado a la receta')
             setShowAddInsumo(false)
-            setFichaForm({ insumoId: '', cantidadPorUnidad: '', unidadMedida: 'kg' })
+            setFichaForm({ insumoId: '', cantidadPorUnidad: '', unidadMedida: 'kg', merma: '0' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
@@ -132,16 +139,24 @@ export default function ProductoDetallePage() {
     }
 
     const cdi = producto.fichasTecnicas.reduce(
-        (acc, f) => acc + f.cantidadPorUnidad * f.insumo.precioUnitario,
+        (acc, f) => {
+            const mermaFactor = f.merma ? (f.merma / 100) : 0;
+            const cantidadReal = f.cantidadPorUnidad / (1 - mermaFactor);
+            return acc + (cantidadReal * f.insumo.precioUnitario);
+        },
         0
     )
 
-    // Usamos la primera presentación para el cálculo del margen (referencia)
+    // Usamos la primera presentación como base para calcular el lote (usualmente 48 uds)
     const mainPres = producto.presentaciones?.[0];
-    const precioReferencia = mainPres ? mainPres.precioVenta : 0;
+    const unidadesBase = mainPres?.cantidad || 48;
 
-    const margen = precioReferencia > 0
-        ? ((precioReferencia - cdi) / precioReferencia * 100).toFixed(1)
+    const cdiLote = cdi * unidadesBase;
+    const precioReferencia = mainPres ? mainPres.precioVenta : 0;
+    const precioPorUnidad = (precioReferencia > 0 && mainPres && mainPres.cantidad > 0) ? (precioReferencia / mainPres.cantidad) : 0;
+
+    const margen = precioPorUnidad > 0
+        ? ((precioPorUnidad - cdi) / precioPorUnidad * 100).toFixed(1)
         : '—'
 
     // Insumos que ya están en la ficha
@@ -189,7 +204,10 @@ export default function ProductoDetallePage() {
                     <div className="card-body" style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>CDI (Costo Insumos)</div>
                         <div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: cdi > 0 ? 'var(--color-primary)' : 'var(--color-gray-400)' }}>
-                            {cdi > 0 ? `$${cdi.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                            {cdiLote > 0 ? `$${cdiLote.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>
+                            ${cdi.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por sándwich
                         </div>
                     </div>
                 </div>
@@ -224,8 +242,10 @@ export default function ProductoDetallePage() {
                         <thead>
                             <tr>
                                 <th>Insumo</th>
-                                <th>Cantidad por unidad</th>
-                                <th>Costo por unidad</th>
+                                <th>Cant. (x {unidadesBase} uds)</th>
+                                <th>Merma</th>
+                                <th>Costo (x {unidadesBase})</th>
+                                <th>Costo Unitario</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -242,10 +262,20 @@ export default function ProductoDetallePage() {
                                         <tr key={f.id}>
                                             <td style={{ fontWeight: 600 }}>{f.insumo.nombre}</td>
                                             <td>
-                                                {f.cantidadPorUnidad} {f.unidadMedida}
+                                                {(f.cantidadPorUnidad * unidadesBase).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {f.unidadMedida}
                                             </td>
                                             <td>
-                                                ${(f.cantidadPorUnidad * f.insumo.precioUnitario).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                                {f.merma ? `${f.merma}%` : '0%'}
+                                            </td>
+                                            <td>
+                                                ${(
+                                                    ((f.cantidadPorUnidad * unidadesBase) / (1 - (f.merma ? (f.merma / 100) : 0))) * f.insumo.precioUnitario
+                                                ).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td>
+                                                ${(
+                                                    (f.cantidadPorUnidad / (1 - (f.merma ? (f.merma / 100) : 0))) * f.insumo.precioUnitario
+                                                ).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                                             </td>
                                             <td>
                                                 <button
@@ -261,6 +291,8 @@ export default function ProductoDetallePage() {
                                     <tr style={{ fontWeight: 700, backgroundColor: 'var(--color-gray-50)' }}>
                                         <td>TOTAL CDI</td>
                                         <td></td>
+                                        <td></td>
+                                        <td>${cdiLote.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                                         <td>${cdi.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                                         <td></td>
                                     </tr>
@@ -304,9 +336,9 @@ export default function ProductoDetallePage() {
                                         ))}
                                     </select>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
-                                        <label className="form-label">Cantidad por sándwich</label>
+                                        <label className="form-label">Cant. Neta (para {producto?.presentaciones?.[0]?.cantidad || 48} uds)*</label>
                                         <input
                                             type="number"
                                             step="0.001"
@@ -314,7 +346,18 @@ export default function ProductoDetallePage() {
                                             value={fichaForm.cantidadPorUnidad}
                                             onChange={(e) => setFichaForm({ ...fichaForm, cantidadPorUnidad: e.target.value })}
                                             required
-                                            placeholder="0.035"
+                                            placeholder="Ej: 1.68"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">% Merma</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            className="form-input"
+                                            value={fichaForm.merma}
+                                            onChange={(e) => setFichaForm({ ...fichaForm, merma: e.target.value })}
+                                            placeholder="0"
                                         />
                                     </div>
                                     <div className="form-group">

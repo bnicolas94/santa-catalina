@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { productoId, insumoId, cantidadPorUnidad, unidadMedida } = body
+        const { productoId, insumoId, cantidadPorUnidad, unidadMedida, merma } = body
 
         if (!productoId || !insumoId || !cantidadPorUnidad || !unidadMedida) {
             return NextResponse.json(
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
                 insumoId,
                 cantidadPorUnidad: parseFloat(cantidadPorUnidad),
                 unidadMedida,
+                merma: merma ? parseFloat(merma) : 0,
             },
             include: { insumo: true },
         })

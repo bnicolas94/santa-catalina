@@ -148,6 +148,7 @@ model FichaTecnica {
   id                String   @id @default(uuid())
   cantidadPorUnidad Float    @map("cantidad_por_unidad")
   unidadMedida      String   @map("unidad_medida")
+  merma             Float    @default(0)
   productoId        String   @map("id_producto")
   insumoId          String   @map("id_insumo")
   insumo            Insumo   @relation(fields: [insumoId], references: [id])
