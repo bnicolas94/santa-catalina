@@ -9,16 +9,17 @@ interface DrillDownModalProps {
     hastaIso: string
     ubicacionId?: string
     categoriaId?: string
+    incluirTodo?: boolean
     onClose: () => void
 }
 
-export default function DrillDownModal({ tipo, label, desdeIso, hastaIso, ubicacionId, categoriaId, onClose }: DrillDownModalProps) {
+export default function DrillDownModal({ tipo, label, desdeIso, hastaIso, ubicacionId, categoriaId, incluirTodo = false, onClose }: DrillDownModalProps) {
     const [data, setData] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         fetchDetalle()
-    }, [tipo, desdeIso, hastaIso, ubicacionId, categoriaId])
+    }, [tipo, desdeIso, hastaIso, ubicacionId, categoriaId, incluirTodo])
 
     async function fetchDetalle() {
         setLoading(true)
@@ -28,7 +29,8 @@ export default function DrillDownModal({ tipo, label, desdeIso, hastaIso, ubicac
                 desde: desdeIso,
                 hasta: hastaIso,
                 ...(ubicacionId && { ubicacionId }),
-                ...(categoriaId && { categoriaId })
+                ...(categoriaId && { categoriaId }),
+                ...(incluirTodo && { todos: 'true' })
             })
             const res = await fetch(`/api/reportes/detalle?${params.toString()}`)
             const json = await res.json()

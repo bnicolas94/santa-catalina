@@ -10,9 +10,10 @@ import { formatCurrency, formatPercent, formatNumber, formatDelta } from '../uti
 interface Props {
     rango: RangoFechas
     ubicacionId: string
+    incluirTodo?: boolean
 }
 
-export default function DesperdicioSection({ rango, ubicacionId }: Props) {
+export default function DesperdicioSection({ rango, ubicacionId, incluirTodo = false }: Props) {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
@@ -20,7 +21,12 @@ export default function DesperdicioSection({ rango, ubicacionId }: Props) {
         async function fetchData() {
             setLoading(true)
             try {
-                const params = new URLSearchParams({ desde: rango.desde.toISOString(), hasta: rango.hasta.toISOString(), ...(ubicacionId && { ubicacionId }) })
+                const params = new URLSearchParams({ 
+                    desde: rango.desde.toISOString(), 
+                    hasta: rango.hasta.toISOString(), 
+                    ...(ubicacionId && { ubicacionId }),
+                    ...(incluirTodo && { todos: 'true' })
+                })
                 const res = await fetch(`/api/reportes/desperdicio?${params}`)
                 if (res.ok) setData(await res.json())
             } catch (err) {
@@ -30,7 +36,7 @@ export default function DesperdicioSection({ rango, ubicacionId }: Props) {
             }
         }
         fetchData()
-    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId])
+    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId, incluirTodo])
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando desperdicio...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles.</p></div>

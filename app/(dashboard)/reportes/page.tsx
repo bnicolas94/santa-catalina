@@ -329,19 +329,19 @@ export default function ReportesPage() {
                     )}
 
                     {activeSection === 'ventas' && (
-                        <VentasSection rango={rangoFechas} ubicacionId={ubicacionId} />
+                        <VentasSection rango={rangoFechas} ubicacionId={ubicacionId} incluirTodo={incluirTodosLosEstados} />
                     )}
 
                     {activeSection === 'costos' && (
-                        <CostosSection rango={rangoFechas} ubicacionId={ubicacionId} />
+                        <CostosSection rango={rangoFechas} ubicacionId={ubicacionId} incluirTodo={incluirTodosLosEstados} />
                     )}
 
                     {activeSection === 'desperdicio' && (
-                        <DesperdicioSection rango={rangoFechas} ubicacionId={ubicacionId} />
+                        <DesperdicioSection rango={rangoFechas} ubicacionId={ubicacionId} incluirTodo={incluirTodosLosEstados} />
                     )}
 
                     {activeSection === 'performance' && (
-                        <PerformanceSection rango={rangoFechas} ubicacionId={ubicacionId} />
+                        <PerformanceSection rango={rangoFechas} ubicacionId={ubicacionId} incluirTodo={incluirTodosLosEstados} />
                     )}
                 </>
             )}
@@ -361,6 +361,7 @@ export default function ReportesPage() {
             {drillDown && (
                 <DrillDownModal
                     {...drillDown} desdeIso={rangoFechas.desde.toISOString()} hastaIso={rangoFechas.hasta.toISOString()} ubicacionId={ubicacionId}
+                    incluirTodo={incluirTodosLosEstados}
                     onClose={() => setDrillDown(null)}
                 />
             )}
