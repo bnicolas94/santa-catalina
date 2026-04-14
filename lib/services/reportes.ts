@@ -80,12 +80,12 @@ export const updateCategoriaOperativa = async (id: string, esOperativo: boolean)
  */
 
 export const getRentabilidadReport = unstable_cache(
-    async (desdeIso: string, hastaIso: string, ubicacionId?: string) => {
+    async (desdeIso: string, hastaIso: string, ubicacionId?: string, incluirTodo = false) => {
         const startOfMonth = new Date(desdeIso)
         const endOfMonth = new Date(hastaIso)
 
         const wherePedido: any = {
-            estado: 'entregado',
+            estado: incluirTodo ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] } : 'entregado',
             fechaEntrega: { gte: startOfMonth, lte: endOfMonth }
         }
         if (ubicacionId) wherePedido.ubicacionId = ubicacionId
@@ -271,14 +271,15 @@ export const getReporteDetalle = async (
     desdeIso: string,
     hastaIso: string,
     ubicacionId?: string,
-    categoriaId?: string
+    categoriaId?: string,
+    incluirTodo = false
 ) => {
     const startOfMonth = new Date(desdeIso)
     const endOfMonth = new Date(hastaIso)
 
     if (tipo === 'pedidos') {
         const where: any = {
-            estado: 'entregado',
+            estado: incluirTodo ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] } : 'entregado',
             fechaEntrega: { gte: startOfMonth, lte: endOfMonth }
         }
         if (ubicacionId) where.ubicacionId = ubicacionId

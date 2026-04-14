@@ -30,7 +30,8 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Parámetros faltantes' }, { status: 400 })
         }
 
-        const data = await getReporteDetalle(tipo, desdeIso, hastaIso, ubicacionId, categoriaId)
+        const todos = searchParams.get('todos') === 'true'
+        const data = await getReporteDetalle(tipo, desdeIso, hastaIso, ubicacionId, categoriaId, todos)
         return NextResponse.json(data)
 
     } catch (error) {

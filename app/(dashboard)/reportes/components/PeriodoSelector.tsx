@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { MESES, GranularidadTemporal, RangoFechas, getDateRange } from '../utils/dateUtils'
 
+const InclusionToggleBorder = (active: boolean) => active ? '1px solid var(--color-warning)' : '1px solid var(--color-gray-200)'
+
 export type SeccionReporte = 'dashboard' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance'
 
 interface Ubicacion {
@@ -23,6 +25,8 @@ interface PeriodoSelectorProps {
     onRangoChange: (rango: RangoFechas) => void
     onUbicacionChange: (id: string) => void
     onSectionChange: (section: SeccionReporte) => void
+    incluirTodo: boolean
+    onIncluirTodoChange: (val: boolean) => void
     onRefresh: () => void
     onExport: () => void
     onOpenSettings: () => void
@@ -49,6 +53,8 @@ export default function PeriodoSelector({
     onRangoChange,
     onUbicacionChange,
     onSectionChange,
+    incluirTodo,
+    onIncluirTodoChange,
     onRefresh,
     onExport,
     onOpenSettings
@@ -212,12 +218,58 @@ export default function PeriodoSelector({
                 </div>
             </div>
 
+            {/* Sub-header row: Info and Simulation Mode */}
+            <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                marginBottom: 'var(--space-4)',
+                gap: 'var(--space-4)',
+                flexWrap: 'wrap'
+            }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)', fontStyle: 'italic' }}>
+                    Mostrando datos para: <strong>{rango.label}</strong>
+                </div>
+
+                <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 'var(--space-2)',
+                    padding: 'var(--space-1) var(--space-3)',
+                    backgroundColor: incluirTodo ? 'var(--color-warning-light)' : 'var(--color-gray-50)',
+                    borderRadius: 'var(--radius-full)',
+                    border: InclusionToggleBorder(incluirTodo),
+                    transition: 'all var(--transition-fast)'
+                }}>
+                    <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 'var(--space-2)', 
+                        cursor: 'pointer',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 600,
+                        color: incluirTodo ? 'var(--color-warning-dark)' : 'var(--color-gray-600)',
+                        margin: 0,
+                        userSelect: 'none'
+                    }} title="Incluye pedidos pendientes/confirmados como si estuvieran entregados para análisis pre-operativo">
+                        <input 
+                            type="checkbox" 
+                            checked={incluirTodo}
+                            onChange={e => onIncluirTodoChange(e.target.checked)}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        🚀 MODO PRE-OPERATIVO
+                    </label>
+                </div>
+            </div>
+
             <div style={{
                 display: 'flex',
                 gap: 'var(--space-1)',
                 overflowX: 'auto',
                 paddingBottom: 'var(--space-2)',
-                borderBottom: '2px solid var(--color-gray-200)'
+                borderBottom: '2px solid var(--color-gray-200)',
+                marginBottom: 'var(--space-4)'
             }}>
                 {SECCIONES.map(sec => {
                     const isActive = activeSection === sec.key

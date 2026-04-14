@@ -24,7 +24,8 @@ export async function GET(request: Request) {
 
         const ubicacionId = searchParams.get('ubicacionId') || undefined
 
-        const alertas = await detectarDesvios(desdeIso, hastaIso, ubicacionId)
+        const todos = searchParams.get('todos') === 'true'
+        const alertas = await detectarDesvios(desdeIso, hastaIso, ubicacionId, todos)
 
         return NextResponse.json(alertas)
     } catch (error) {

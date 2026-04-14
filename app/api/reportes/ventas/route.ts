@@ -24,7 +24,8 @@ export async function GET(request: Request) {
 
         const ubicacionId = searchParams.get('ubicacionId') || undefined
 
-        const data = await getVentasReport(desdeIso, hastaIso, ubicacionId)
+        const todos = searchParams.get('todos') === 'true'
+        const data = await getVentasReport(desdeIso, hastaIso, ubicacionId, todos)
 
         return NextResponse.json(data)
     } catch (error) {

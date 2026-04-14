@@ -8,7 +8,8 @@ import type { Alerta } from '@/app/(dashboard)/reportes/components/AlertBanner'
 export async function detectarDesvios(
     desdeIso: string,
     hastaIso: string,
-    ubicacionId?: string
+    ubicacionId?: string,
+    incluirTodo = false
 ): Promise<Alerta[]> {
     const alertas: Alerta[] = []
 
@@ -80,7 +81,7 @@ export async function detectarDesvios(
         const [ingresosActual, ingresosHistoricos] = await Promise.all([
             prisma.pedido.aggregate({
                 where: {
-                    estado: 'entregado',
+                    estado: incluirTodo ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] } : 'entregado',
                     fechaEntrega: { gte: startActual, lte: endActual },
                     ...(ubicacionId ? { ubicacionId } : {})
                 },
@@ -89,7 +90,7 @@ export async function detectarDesvios(
             }),
             prisma.pedido.aggregate({
                 where: {
-                    estado: 'entregado',
+                    estado: incluirTodo ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] } : 'entregado',
                     fechaEntrega: { gte: start3Periodos, lte: end3Periodos },
                     ...(ubicacionId ? { ubicacionId } : {})
                 },

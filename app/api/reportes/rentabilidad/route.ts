@@ -30,7 +30,8 @@ export async function GET(request: Request) {
             hastaIso = new Date(anio, mes, 0, 23, 59, 59, 999).toISOString()
         }
 
-        const data = await getRentabilidadReport(desdeIso, hastaIso, ubicacionId)
+        const todos = searchParams.get('todos') === 'true'
+        const data = await getRentabilidadReport(desdeIso, hastaIso, ubicacionId, todos)
 
         return NextResponse.json(data)
 

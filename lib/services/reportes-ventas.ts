@@ -7,7 +7,8 @@ import { prisma } from '@/lib/prisma'
 export async function getVentasReport(
     desdeIso: string,
     hastaIso: string,
-    ubicacionId?: string
+    ubicacionId?: string,
+    incluirTodo = false
 ) {
     const startOfCurrent = new Date(desdeIso)
     const endOfCurrent = new Date(hastaIso)
@@ -25,13 +26,13 @@ export async function getVentasReport(
     startAnterior.setHours(0, 0, 0, 0)
 
     const whereBase: any = {
-        estado: 'entregado',
+        estado: incluirTodo ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] } : 'entregado',
         fechaEntrega: { gte: startOfCurrent, lte: endOfCurrent }
     }
     if (ubicacionId) whereBase.ubicacionId = ubicacionId
 
     const whereAnterior: any = {
-        estado: 'entregado',
+        estado: incluirTodo ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] } : 'entregado',
         fechaEntrega: { gte: startAnterior, lte: endAnterior }
     }
     if (ubicacionId) whereAnterior.ubicacionId = ubicacionId

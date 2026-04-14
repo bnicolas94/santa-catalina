@@ -99,6 +99,7 @@ export default function ReportesPage() {
     const [granularidad, setGranularidad] = useState<GranularidadTemporal>('mes')
     const [rangoFechas, setRangoFechas] = useState<RangoFechas>(() => getDateRange('mes'))
     const [ubicacionId, setUbicacionId] = useState('')
+    const [incluirTodosLosEstados, setIncluirTodosLosEstados] = useState(false)
 
     const [drillDown, setDrillDown] = useState<{
         tipo: 'pedidos' | 'gastos' | 'lotes',
@@ -116,7 +117,7 @@ export default function ReportesPage() {
     useEffect(() => {
         fetchData()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rangoFechas.desde.toISOString(), rangoFechas.hasta.toISOString(), ubicacionId, activeSection])
+    }, [rangoFechas.desde.toISOString(), rangoFechas.hasta.toISOString(), ubicacionId, activeSection, incluirTodosLosEstados])
 
     // --- Data fetching ---
     async function fetchMetadata() {
@@ -135,6 +136,7 @@ export default function ReportesPage() {
             if (res.ok) {
                 const json = await res.json()
                 setUserPrefs(json)
+                if (json.incluirTodo !== undefined) setIncluirTodosLosEstados(json.incluirTodo)
             }
         } catch (err) {
             console.error('Error fetching prefs:', err)
@@ -196,7 +198,8 @@ export default function ReportesPage() {
                 desde: rangoFechas.desde.toISOString(),
                 hasta: rangoFechas.hasta.toISOString(),
                 ...(ubicacionId && { ubicacionId }),
-                ...(refresh && { refresh: 'true' })
+                ...(refresh && { refresh: 'true' }),
+                ...(incluirTodosLosEstados && { todos: 'true' })
             })
 
             // Dashboard needs both datasets; other sections need specific ones
@@ -247,7 +250,8 @@ export default function ReportesPage() {
         const params = new URLSearchParams({ 
             desde: rangoFechas.desde.toISOString(), 
             hasta: rangoFechas.hasta.toISOString(), 
-            ...(ubicacionId && { ubicacionId }) 
+            ...(ubicacionId && { ubicacionId }),
+            ...(incluirTodosLosEstados && { todos: 'true' })
         })
         const mesTag = String(rangoFechas.desde.getMonth() + 1)
         const anioTag = String(rangoFechas.desde.getFullYear())
@@ -290,6 +294,11 @@ export default function ReportesPage() {
                 granularidad={granularidad} rango={rangoFechas} ubicacionId={ubicacionId}
                 activeSection={activeSection} loading={loading}
                 ubicaciones={metadata.ubicaciones} anios={metadata.years}
+                incluirTodo={incluirTodosLosEstados}
+                onIncluirTodoChange={(val: boolean) => {
+                    setIncluirTodosLosEstados(val)
+                    handleUpdatePrefs({ ...userPrefs, incluirTodo: val })
+                }}
                 onGranularidadChange={setGranularidad} onRangoChange={setRangoFechas}
                 onUbicacionChange={setUbicacionId} onSectionChange={setActiveSection}
                 onRefresh={() => fetchData(true)} onExport={handleExport}
