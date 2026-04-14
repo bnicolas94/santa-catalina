@@ -25,7 +25,7 @@ function StockContent() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] as any[] })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', ubicacionId: '', observaciones: '', items: [] as any[] })
     const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -39,7 +39,7 @@ function StockContent() {
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
-        ubicacionId: '', cajaOrigen: 'caja_madre',
+        ubicacionId: '', cajaOrigen: 'caja_chica',
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -79,7 +79,9 @@ function StockContent() {
             
             if (cajasData && !cajasData.error) {
                 // Convertir el objeto de cajas en un array para el select
-                const list = Object.values(cajasData).filter((c: any) => c && c.tipo)
+                const list = Object.values(cajasData).filter((c: any) => 
+                    c && c.tipo && c.tipo !== 'caja_madre' && c.tipo !== 'local'
+                )
                 setCajas(list)
             }
         } catch { setError('Error al cargar datos') } finally { setLoading(false) }
@@ -114,7 +116,7 @@ function StockContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_madre' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_chica' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -153,7 +155,7 @@ function StockContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Factura registrada correctamente')
             setShowFacturaModal(false)
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: '', observaciones: '', items: [] })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', ubicacionId: '', observaciones: '', items: [] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -183,17 +185,24 @@ function StockContent() {
     }
 
     async function handlePago(id: string) {
-        const opciones = '1 = 🏦 Caja Madre\n2 = 💼 Caja Chica\n3 = 🏪 Local'
-        const resp = prompt(`¿De qué caja sale el pago?\n\n${opciones}\n\nIngresá 1, 2 o 3:`, '1')
+        if (cajas.length === 0) return setError('No hay cajas disponibles para realizar el pago')
+        
+        const opcionesStr = cajas.map((c, i) => `${i + 1} = ${c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`).join('\n')
+        const resp = prompt(`¿De qué caja sale el pago?\n\n${opcionesStr}\n\nIngresá el número:`, '1')
         if (!resp) return
-        const cajaMap: Record<string, string> = { '1': 'caja_madre', '2': 'caja_chica', '3': 'local' }
-        const cajaOrigen = cajaMap[resp.trim()] || 'caja_madre'
-        if (!confirm(`¿Marcar compra como pagada desde ${cajaOrigen === 'caja_madre' ? '🏦 Caja Madre' : cajaOrigen === 'caja_chica' ? '💼 Caja Chica' : '🏪 Local'}?`)) return
+        
+        const idx = parseInt(resp.trim()) - 1
+        if (isNaN(idx) || idx < 0 || idx >= cajas.length) return setError('Opción inválida')
+        
+        const selectedBox = cajas[idx]
+        const label = selectedBox.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+        
+        if (!confirm(`¿Marcar compra como pagada desde ${label}?`)) return
         try {
             const res = await fetch(`/api/movimientos-stock/${id}/pago`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cajaOrigen })
+                body: JSON.stringify({ cajaOrigen: selectedBox.tipo })
             })
             if (!res.ok) {
                 const data = await res.json()
