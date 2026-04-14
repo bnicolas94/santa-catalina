@@ -3,18 +3,24 @@
 import { useState, useEffect } from 'react'
 import {
     Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-    Title, Tooltip, Legend, ArcElement
+    LineElement, PointElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-import ProduccionReport from './ProduccionReport'
-import KpiCard from './components/KpiCard'
-import PeriodoSelector from './components/PeriodoSelector'
+
+import PeriodoSelector, { type SeccionReporte } from './components/PeriodoSelector'
 import DrillDownModal from './components/DrillDownModal'
 import ReportSettingsModal from './components/ReportSettingsModal'
+
+import DashboardSection from './sections/DashboardSection'
+import ProduccionSection from './sections/ProduccionSection'
+import VentasSection from './sections/VentasSection'
+import CostosSection from './sections/CostosSection'
+import DesperdicioSection from './sections/DesperdicioSection'
+import PerformanceSection from './sections/PerformanceSection'
+
 import { exportReportToExcel } from './utils/exportUtils'
 import { useSession } from 'next-auth/react'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, ArcElement, Filler)
 
 // --- Interfaces ---
 interface RentabilidadData {
@@ -63,7 +69,8 @@ export default function ReportesPage() {
     const { data: session } = useSession()
     const isAdmin = (session?.user as any)?.rol === 'ADMIN'
 
-    const [activeTab, setActiveTab] = useState<'economico' | 'produccion'>('economico')
+    // --- State ---
+    const [activeSection, setActiveSection] = useState<SeccionReporte>('dashboard')
     const [rentabilidadData, setRentabilidadData] = useState<RentabilidadData | null>(null)
     const [produccionData, setProduccionData] = useState<ProduccionData | null>(null)
     const [metadata, setMetadata] = useState<Metadata>({ ubicaciones: [], years: [], categoriasGasto: [] })
@@ -98,6 +105,7 @@ export default function ReportesPage() {
         categoriaId?: string
     } | null>(null)
 
+    // --- Effects ---
     useEffect(() => {
         fetchMetadata()
         fetchPrefs()
@@ -106,8 +114,9 @@ export default function ReportesPage() {
 
     useEffect(() => {
         fetchData()
-    }, [mes, anio, ubicacionId, activeTab])
+    }, [mes, anio, ubicacionId, activeSection])
 
+    // --- Data fetching ---
     async function fetchMetadata() {
         try {
             const res = await fetch('/api/reportes/metadata')
@@ -190,141 +199,140 @@ export default function ReportesPage() {
                 ...(ubicacionId && { ubicacionId }),
                 ...(refresh && { refresh: 'true' })
             })
-            
-            const url = activeTab === 'economico' 
-                ? `/api/reportes/rentabilidad?${params}`
-                : `/api/reportes/produccion?${params}`
-            
-            const res = await fetch(url)
-            if (res.status === 403) {
-                setError('No tienes permisos para ver este reporte.')
-                return
-            }
-            if (!res.ok) throw new Error('Error al obtener datos')
 
-            const json = await res.json()
-            if (activeTab === 'economico') setRentabilidadData(json)
-            else setProduccionData(json)
-        } catch (err) {
-            console.error('Error fetching reporte:', err)
-            setError('Ocurrió un error al cargar el reporte.')
+            // Dashboard needs both datasets; other sections need specific ones
+            const needsRentabilidad = activeSection === 'dashboard' || activeSection === 'costos'
+            const needsProduccion = activeSection === 'dashboard' || activeSection === 'produccion' || activeSection === 'desperdicio'
+
+            const promises: Promise<any>[] = []
+
+            if (needsRentabilidad) {
+                promises.push(
+                    fetch(`/api/reportes/rentabilidad?${params}`).then(async res => {
+                        if (res.status === 403) throw new Error('forbidden')
+                        if (!res.ok) throw new Error('Error al obtener rentabilidad')
+                        return { tipo: 'rentabilidad', data: await res.json() }
+                    })
+                )
+            }
+
+            if (needsProduccion) {
+                promises.push(
+                    fetch(`/api/reportes/produccion?${params}`).then(async res => {
+                        if (res.status === 403) throw new Error('forbidden')
+                        if (!res.ok) throw new Error('Error al obtener producción')
+                        return { tipo: 'produccion', data: await res.json() }
+                    })
+                )
+            }
+
+            const results = await Promise.all(promises)
+
+            for (const result of results) {
+                if (result.tipo === 'rentabilidad') setRentabilidadData(result.data)
+                if (result.tipo === 'produccion') setProduccionData(result.data)
+            }
+        } catch (err: any) {
+            if (err?.message === 'forbidden') {
+                setError('No tienes permisos para ver este reporte.')
+            } else {
+                console.error('Error fetching reporte:', err)
+                setError('Ocurrió un error al cargar el reporte.')
+            }
         } finally {
             setLoading(false)
         }
     }
 
-    const handleExport = () => {
-        const reportData = activeTab === 'economico' ? rentabilidadData : produccionData
-        if (!reportData) return
-        exportReportToExcel(reportData, activeTab, mes, anio)
+    const handleExport = async () => {
+        const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+
+        if (activeSection === 'produccion' && produccionData) {
+            exportReportToExcel(produccionData, 'produccion', mes, anio)
+        } else if (activeSection === 'dashboard' && rentabilidadData) {
+            exportReportToExcel(rentabilidadData, 'economico', mes, anio)
+        } else if (activeSection === 'ventas') {
+            try {
+                const res = await fetch(`/api/reportes/ventas?${params}`)
+                if (res.ok) exportReportToExcel(await res.json(), 'ventas', mes, anio)
+            } catch (err) { console.error('Error exporting ventas:', err) }
+        } else if (activeSection === 'costos') {
+            try {
+                const res = await fetch(`/api/reportes/costos?${params}`)
+                if (res.ok) exportReportToExcel(await res.json(), 'costos', mes, anio)
+            } catch (err) { console.error('Error exporting costos:', err) }
+        } else if (activeSection === 'desperdicio') {
+            try {
+                const res = await fetch(`/api/reportes/desperdicio?${params}`)
+                if (res.ok) exportReportToExcel(await res.json(), 'desperdicio', mes, anio)
+            } catch (err) { console.error('Error exporting desperdicio:', err) }
+        } else if (activeSection === 'performance') {
+            try {
+                const res = await fetch(`/api/reportes/performance?${params}`)
+                if (res.ok) exportReportToExcel(await res.json(), 'performance', mes, anio)
+            } catch (err) { console.error('Error exporting performance:', err) }
+        }
     }
 
-    // --- Economico Charts ---
-    const barData = rentabilidadData ? {
-        labels: [`${mes}/${anio}`],
-        datasets: [
-            { label: 'Facturación', data: [rentabilidadData.ingresosTotales], backgroundColor: '#3498DB' },
-            { label: 'CMV', data: [rentabilidadData.costoMercaderiaVendida], backgroundColor: '#F39C12' },
-            { label: 'Gastos', data: [rentabilidadData.totalGastos], backgroundColor: '#E74C3C' },
-            { 
-                label: 'EBITDA', 
-                data: [rentabilidadData.rentabilidadNeta], 
-                backgroundColor: rentabilidadData.rentabilidadNeta >= 0 ? '#2ECC71' : '#E74C3C' 
-            }
-        ],
-    } : null
+    const handleDrillDown = (tipo: string, label: string) => {
+        setDrillDown({ tipo: tipo as 'pedidos' | 'gastos' | 'lotes', label })
+    }
 
-    const catKeys = rentabilidadData ? Object.keys(rentabilidadData.gastosPorCategoria) : []
-    const pieData = rentabilidadData ? {
-        labels: catKeys.length > 0 ? catKeys : ['Sin Gastos'],
-        datasets: [{
-            data: catKeys.length > 0 ? Object.values(rentabilidadData.gastosPorCategoria) : [1],
-            backgroundColor: catKeys.length > 0
-                ? catKeys.map((_, i) => ['#E74C3C', '#9B59B6', '#34495E', '#F1C40F', '#1ABC9C', '#E67E22'][i % 6])
-                : ['#ddd'],
-            borderWidth: 0,
-        }]
-    } : null
-
+    // --- Render ---
     return (
         <div className="fade-in">
-            <PeriodoSelector 
+            <PeriodoSelector
                 mes={mes} anio={anio} ubicacionId={ubicacionId}
-                activeTab={activeTab} loading={loading}
+                activeSection={activeSection} loading={loading}
                 ubicaciones={metadata.ubicaciones} anios={metadata.years}
                 onMesChange={setMes} onAnioChange={setAnio}
-                onUbicacionChange={setUbicacionId} onTabChange={setActiveTab}
+                onUbicacionChange={setUbicacionId} onSectionChange={setActiveSection}
                 onRefresh={() => fetchData(true)} onExport={handleExport}
+                onOpenSettings={() => setIsSettingsOpen(true)}
             />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--space-4)' }}>
-                <button 
-                    className="btn btn-outline" 
-                    onClick={() => setIsSettingsOpen(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
-                >
-                    <span>⚙️</span> Configurar Variables
-                </button>
-            </div>
 
             {error ? (
                 <div className="empty-state"><p style={{ color: 'var(--color-danger)' }}>{error}</p></div>
-            ) : loading && !rentabilidadData && !produccionData ? (
-                <div className="empty-state"><div className="spinner" /><p>Generando reporte...</p></div>
             ) : (
                 <>
-                    {activeTab === 'economico' && rentabilidadData && (
-                        <div className="fade-in">
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                                {userPrefs.showIngresos && (
-                                    <div onClick={() => setDrillDown({ tipo: 'pedidos', label: 'Ingresos Brutos' })} style={{ cursor: 'pointer' }}>
-                                        <KpiCard label="Ingresos Brutos" value={`$${rentabilidadData.ingresosTotales.toLocaleString('es-AR')}`} color="var(--color-primary)" />
-                                    </div>
-                                )}
-                                {userPrefs.showMargen && (
-                                    <KpiCard label="Margen Contribución" value={`$${rentabilidadData.margenBruto.toLocaleString('es-AR')}`} color="var(--color-secondary)" />
-                                )}
-                                {userPrefs.showGastos && (
-                                    <div onClick={() => setDrillDown({ tipo: 'gastos', label: 'Gastos Operativos' })} style={{ cursor: 'pointer' }}>
-                                        <KpiCard label="Gastos Operativos" value={`$${rentabilidadData.totalGastos.toLocaleString('es-AR')}`} color="var(--color-danger)" />
-                                    </div>
-                                )}
-                                {userPrefs.showMargen && (
-                                    <KpiCard label="Margen EBITDA" value={`${rentabilidadData.margenEbitda.toFixed(2)}%`} color={rentabilidadData.margenEbitda >= 15 ? 'var(--color-success)' : 'var(--color-warning)'} />
-                                )}
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
-                                <div className="card" style={{ padding: 'var(--space-6)' }}>
-                                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)' }}>Cascada de Resultados</h3>
-                                    <div style={{ height: '300px' }}>
-                                        {barData && <Bar data={barData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }} />}
-                                    </div>
-                                </div>
-                                <div className="card" style={{ padding: 'var(--space-6)' }}>
-                                    <h3 style={{ fontSize: 'var(--text-md)', color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', textAlign: 'center' }}>Distribución de Gastos</h3>
-                                    <div style={{ height: '240px', position: 'relative' }}>
-                                        {pieData && <Doughnut data={pieData} options={{ maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } } }} />}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    {activeSection === 'dashboard' && (
+                        <DashboardSection
+                            mes={mes} anio={anio} ubicacionId={ubicacionId}
+                            rentabilidadData={rentabilidadData}
+                            produccionData={produccionData}
+                            loading={loading}
+                            onDrillDown={handleDrillDown}
+                        />
                     )}
 
-                    {activeTab === 'produccion' && userPrefs.showProduccion && (
-                        <div onClick={() => setDrillDown({ tipo: 'lotes', label: 'Detalle de Lotes' })} style={{ cursor: 'pointer' }}>
-                            <ProduccionReport data={produccionData} loading={loading && !produccionData} userPrefs={userPrefs} />
-                        </div>
+                    {activeSection === 'produccion' && (
+                        <ProduccionSection
+                            data={produccionData}
+                            loading={loading}
+                            userPrefs={userPrefs}
+                            onDrillDown={handleDrillDown}
+                        />
                     )}
-                    {activeTab === 'produccion' && !userPrefs.showProduccion && (
-                        <div className="empty-state">
-                            <p>El reporte de producción está oculto según tus preferencias.</p>
-                        </div>
+
+                    {activeSection === 'ventas' && (
+                        <VentasSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                    )}
+
+                    {activeSection === 'costos' && (
+                        <CostosSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                    )}
+
+                    {activeSection === 'desperdicio' && (
+                        <DesperdicioSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                    )}
+
+                    {activeSection === 'performance' && (
+                        <PerformanceSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
                     )}
                 </>
             )}
 
-            <ReportSettingsModal 
+            <ReportSettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
                 userPrefs={userPrefs}
@@ -337,9 +345,9 @@ export default function ReportesPage() {
             />
 
             {drillDown && (
-                <DrillDownModal 
+                <DrillDownModal
                     {...drillDown} mes={mes} anio={anio} ubicacionId={ubicacionId}
-                    onClose={() => setDrillDown(null)} 
+                    onClose={() => setDrillDown(null)}
                 />
             )}
         </div>
