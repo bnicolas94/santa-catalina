@@ -6,22 +6,30 @@ import { getGlobalConfig } from './reportes'
  * Analiza: merma en producción, rechazos en entrega, ranking de productos, costo del desperdicio.
  */
 export async function getDesperdicioReport(
-    mes: number,
-    anio: number,
+    desdeIso: string,
+    hastaIso: string,
     ubicacionId?: string
 ) {
-    const startOfMonth = new Date(anio, mes - 1, 1)
-    const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    const startOfCurrent = new Date(desdeIso)
+    const endOfCurrent = new Date(hastaIso)
 
-    const startAnterior = new Date(anio, mes - 2, 1)
-    const endAnterior = new Date(anio, mes - 1, 0, 23, 59, 59, 999)
+    const diffMs = endOfCurrent.getTime() - startOfCurrent.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+    const endAnterior = new Date(startOfCurrent)
+    endAnterior.setDate(endAnterior.getDate() - 1)
+    endAnterior.setHours(23, 59, 59, 999)
+
+    const startAnterior = new Date(endAnterior)
+    startAnterior.setDate(startAnterior.getDate() - diffDays + 1)
+    startAnterior.setHours(0, 0, 0, 0)
 
     const whereUbi = ubicacionId ? { ubicacionId } : {}
 
     // ── 1. Rechazos en producción (Lotes) ──
     const lotesActual = await prisma.lote.findMany({
         where: {
-            fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
+            fechaProduccion: { gte: startOfCurrent, lte: endOfCurrent },
             estado: { not: 'en_produccion' },
             ...whereUbi
         },
@@ -109,7 +117,7 @@ export async function getDesperdicioReport(
     // ── 2. Rechazos en entregas ──
     const entregas = await prisma.entrega.findMany({
         where: {
-            createdAt: { gte: startOfMonth, lte: endOfMonth },
+            createdAt: { gte: startOfCurrent, lte: endOfCurrent },
             unidadesRechazadas: { gt: 0 }
         },
         select: {
@@ -135,10 +143,10 @@ export async function getDesperdicioReport(
     // ── 3. Tendencia semanal de merma ──
     const tendencia = []
     for (let i = 3; i >= 0; i--) {
-        const start = new Date(endOfMonth)
+        const start = new Date(endOfCurrent)
         start.setDate(start.getDate() - (i * 7 + 6))
         start.setHours(0, 0, 0, 0)
-        const end = new Date(endOfMonth)
+        const end = new Date(endOfCurrent)
         end.setDate(end.getDate() - (i * 7))
         end.setHours(23, 59, 59, 999)
 
@@ -159,7 +167,7 @@ export async function getDesperdicioReport(
     }
 
     return {
-        mes, anio,
+        desde: desdeIso, hasta: hastaIso,
         kpis: {
             totalRechazadosProduccion,
             totalRechazadosEntrega,

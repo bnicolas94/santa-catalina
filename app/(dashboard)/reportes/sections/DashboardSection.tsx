@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import AlertBanner from '../components/AlertBanner'
@@ -8,8 +9,7 @@ import type { Alerta } from '../components/AlertBanner'
 import { formatCurrency, formatPercent, formatNumber } from '../utils/formatters'
 
 interface DashboardSectionProps {
-    mes: string
-    anio: string
+    rango: RangoFechas
     ubicacionId: string
     rentabilidadData: any
     produccionData: any
@@ -17,8 +17,7 @@ interface DashboardSectionProps {
     onDrillDown: (tipo: string, label: string) => void
 }
 
-export default function DashboardSection({
-    mes, anio, ubicacionId,
+export default function DashboardSection({ rango, ubicacionId,
     rentabilidadData, produccionData,
     loading,
     onDrillDown
@@ -29,7 +28,7 @@ export default function DashboardSection({
     useEffect(() => {
         async function fetchAlertas() {
             try {
-                const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+                const params = new URLSearchParams({ desde: rango.desde.toISOString(), hasta: rango.hasta.toISOString(), ...(ubicacionId && { ubicacionId }) })
                 const res = await fetch(`/api/reportes/alertas?${params}`)
                 if (res.ok) {
                     const data = await res.json()
@@ -40,7 +39,7 @@ export default function DashboardSection({
             }
         }
         fetchAlertas()
-    }, [mes, anio, ubicacionId])
+    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId])
 
     if (loading && !rentabilidadData && !produccionData) {
         return <div className="empty-state"><div className="spinner" /><p>Cargando dashboard...</p></div>
@@ -128,7 +127,7 @@ export default function DashboardSection({
                     <div className="card" style={{ padding: 'var(--space-6)' }}>
                         <TrendChart
                             title="Cascada de Resultados"
-                            labels={[`${mes}/${anio}`]}
+                            labels={[rango.label]}
                             datasets={[
                                 { label: 'Facturación', data: [r.ingresosTotales], color: '#3498DB' },
                                 { label: 'CMV', data: [r.costoMercaderiaVendida], color: '#F39C12' },

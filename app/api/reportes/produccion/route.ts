@@ -12,20 +12,24 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url)
-        const mesParam = searchParams.get('mes')
-        const anioParam = searchParams.get('anio')
         const ubicacionId = searchParams.get('ubicacionId') || undefined
         const refresh = searchParams.get('refresh') === 'true'
 
         if (refresh) {
             revalidateTag('reportes', 'default')
         }
-
         const date = new Date()
-        const anio = anioParam ? parseInt(anioParam) : date.getFullYear()
-        const mes = mesParam ? parseInt(mesParam) : date.getMonth() + 1
+        let desdeIso = searchParams.get('desde')
+        let hastaIso = searchParams.get('hasta')
 
-        const data = await getProduccionReport(mes, anio, ubicacionId)
+        if (!desdeIso || !hastaIso) {
+            const mes = parseInt(searchParams.get('mes') || String(date.getMonth() + 1))
+            const anio = parseInt(searchParams.get('anio') || String(date.getFullYear()))
+            desdeIso = new Date(anio, mes - 1, 1).toISOString()
+            hastaIso = new Date(anio, mes, 0, 23, 59, 59, 999).toISOString()
+        }
+
+        const data = await getProduccionReport(desdeIso, hastaIso, ubicacionId)
 
         return NextResponse.json(data)
 

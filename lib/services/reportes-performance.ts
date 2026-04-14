@@ -5,19 +5,19 @@ import { prisma } from '@/lib/prisma'
  * Analiza: producción por coordinador, cumplimiento de entregas, eficiencia logística.
  */
 export async function getPerformanceReport(
-    mes: number,
-    anio: number,
+    desdeIso: string,
+    hastaIso: string,
     ubicacionId?: string
 ) {
-    const startOfMonth = new Date(anio, mes - 1, 1)
-    const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    const startOfCurrent = new Date(desdeIso)
+    const endOfCurrent = new Date(hastaIso)
 
     const whereUbi = ubicacionId ? { ubicacionId } : {}
 
     // ── 1. Producción por coordinador ──
     const lotes = await prisma.lote.findMany({
         where: {
-            fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
+            fechaProduccion: { gte: startOfCurrent, lte: endOfCurrent },
             estado: { not: 'en_produccion' },
             ...whereUbi
         },
@@ -56,7 +56,7 @@ export async function getPerformanceReport(
     // ── 2. Cumplimiento de entregas ──
     const rutas = await prisma.ruta.findMany({
         where: {
-            fecha: { gte: startOfMonth, lte: endOfMonth },
+            fecha: { gte: startOfCurrent, lte: endOfCurrent },
             ...(ubicacionId ? { ubicacionOrigenId: ubicacionId } : {})
         },
         include: {
@@ -117,7 +117,7 @@ export async function getPerformanceReport(
     // ── 3. Producción por turno (desde AsignacionOperario) ──
     const asignaciones = await prisma.asignacionOperario.findMany({
         where: {
-            fecha: { gte: startOfMonth, lte: endOfMonth },
+            fecha: { gte: startOfCurrent, lte: endOfCurrent },
             ...whereUbi
         },
         select: { turno: true, fecha: true }
@@ -144,7 +144,7 @@ export async function getPerformanceReport(
         .map(d => ({ dia: d, ...porDiaSemana[d] }))
 
     return {
-        mes, anio,
+        desde: desdeIso, hasta: hastaIso,
         kpis: {
             totalLotes: lotes.length,
             totalPaquetes: lotes.reduce((s, l) => s + l.unidadesProducidas, 0),

@@ -1,18 +1,18 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import DataTable from '../components/DataTable'
 import { formatNumber, formatPercent, formatDecimal } from '../utils/formatters'
 
 interface Props {
-    mes: string
-    anio: string
+    rango: RangoFechas
     ubicacionId: string
 }
 
-export default function PerformanceSection({ mes, anio, ubicacionId }: Props) {
+export default function PerformanceSection({ rango, ubicacionId }: Props) {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
@@ -20,7 +20,7 @@ export default function PerformanceSection({ mes, anio, ubicacionId }: Props) {
         async function fetchData() {
             setLoading(true)
             try {
-                const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+                const params = new URLSearchParams({ desde: rango.desde.toISOString(), hasta: rango.hasta.toISOString(), ...(ubicacionId && { ubicacionId }) })
                 const res = await fetch(`/api/reportes/performance?${params}`)
                 if (res.ok) setData(await res.json())
             } catch (err) {
@@ -30,7 +30,7 @@ export default function PerformanceSection({ mes, anio, ubicacionId }: Props) {
             }
         }
         fetchData()
-    }, [mes, anio, ubicacionId])
+    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId])
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando performance...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles.</p></div>
@@ -163,7 +163,7 @@ export default function PerformanceSection({ mes, anio, ubicacionId }: Props) {
                         data={data.rankingCoordinadores}
                         showTotals={true}
                         totalColumns={['lotes', 'paquetes', 'rechazados']}
-                        exportFilename={`Performance_Coordinadores_${mes}_${anio}`}
+                        exportFilename={`Performance_Coordinadores_${rango.label.replace(/\s+/g, "_")}`}
                         maxHeight="350px"
                     />
                 </div>
@@ -182,7 +182,7 @@ export default function PerformanceSection({ mes, anio, ubicacionId }: Props) {
                         data={data.rankingChoferes}
                         showTotals={true}
                         totalColumns={['rutas', 'entregas', 'km']}
-                        exportFilename={`Performance_Choferes_${mes}_${anio}`}
+                        exportFilename={`Performance_Choferes_${rango.label.replace(/\s+/g, "_")}`}
                         maxHeight="350px"
                     />
                 </div>

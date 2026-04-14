@@ -1,7 +1,7 @@
 'use client'
 
-import React from 'react'
-import { MESES } from '../utils/dateUtils'
+import React, { useState, useEffect } from 'react'
+import { MESES, GranularidadTemporal, RangoFechas, getDateRange } from '../utils/dateUtils'
 
 export type SeccionReporte = 'dashboard' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance'
 
@@ -12,15 +12,15 @@ interface Ubicacion {
 }
 
 interface PeriodoSelectorProps {
-    mes: string
-    anio: string
+    granularidad: GranularidadTemporal
+    rango: RangoFechas
     ubicacionId: string
     activeSection: SeccionReporte
     loading: boolean
     ubicaciones: Ubicacion[]
     anios: string[]
-    onMesChange: (mes: string) => void
-    onAnioChange: (anio: string) => void
+    onGranularidadChange: (gran: GranularidadTemporal) => void
+    onRangoChange: (rango: RangoFechas) => void
     onUbicacionChange: (id: string) => void
     onSectionChange: (section: SeccionReporte) => void
     onRefresh: () => void
@@ -38,24 +38,48 @@ const SECCIONES: { key: SeccionReporte; label: string; icon: string }[] = [
 ]
 
 export default function PeriodoSelector({
-    mes,
-    anio,
+    granularidad,
+    rango,
     ubicacionId,
     activeSection,
     loading,
     ubicaciones,
     anios,
-    onMesChange,
-    onAnioChange,
+    onGranularidadChange,
+    onRangoChange,
     onUbicacionChange,
     onSectionChange,
     onRefresh,
     onExport,
     onOpenSettings
 }: PeriodoSelectorProps) {
+
+    // Helper states for individual selectors
+    const [mesTemp, setMesTemp] = useState(rango.desde.getMonth() + 1)
+    const [anioTemp, setAnioTemp] = useState(rango.desde.getFullYear())
+    const [fechaDia, setFechaDia] = useState(rango.desde.toISOString().slice(0,10))
+    const [fechaSemana, setFechaSemana] = useState(rango.desde.toISOString().slice(0,10))
+    const [customDesde, setCustomDesde] = useState(rango.desde.toISOString().slice(0,10))
+    const [customHasta, setCustomHasta] = useState(rango.hasta.toISOString().slice(0,10))
+
+    // Automatically recalculate Rango when temps change
+    useEffect(() => {
+        if (granularidad === 'mes') {
+            onRangoChange(getDateRange('mes', { mes: mesTemp, anio: anioTemp }))
+        } else if (granularidad === 'dia') {
+            onRangoChange(getDateRange('dia', { fecha: fechaDia }))
+        } else if (granularidad === 'semana') {
+            onRangoChange(getDateRange('semana', { fecha: fechaSemana })) // Re-using fecha as reference for week
+        } else if (granularidad === 'rango') {
+            if (customDesde && customHasta) {
+                onRangoChange(getDateRange('rango', { rangoDesde: customDesde, rangoHasta: customHasta }))
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mesTemp, anioTemp, fechaDia, fechaSemana, customDesde, customHasta])
+
     return (
         <div style={{ marginBottom: 'var(--space-6)' }}>
-            {/* Header row: Title + Filters */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -71,7 +95,7 @@ export default function PeriodoSelector({
                         className="form-select"
                         value={ubicacionId}
                         onChange={e => onUbicacionChange(e.target.value)}
-                        style={{ width: 150 }}
+                        style={{ width: 140 }}
                         disabled={loading}
                     >
                         <option value="">Todas las Sedes</option>
@@ -80,23 +104,82 @@ export default function PeriodoSelector({
 
                     <select
                         className="form-select"
-                        value={mes}
-                        onChange={e => onMesChange(e.target.value)}
-                        style={{ width: 130 }}
+                        value={granularidad}
+                        onChange={e => onGranularidadChange(e.target.value as GranularidadTemporal)}
+                        style={{ width: 110 }}
                         disabled={loading}
                     >
-                        {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        <option value="dia">Por Día</option>
+                        <option value="semana">Por Semana</option>
+                        <option value="mes">Por Mes</option>
+                        <option value="rango">Rango</option>
                     </select>
 
-                    <select
-                        className="form-select"
-                        value={anio}
-                        onChange={e => onAnioChange(e.target.value)}
-                        style={{ width: 85 }}
-                        disabled={loading}
-                    >
-                        {anios.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                    {granularidad === 'mes' && (
+                        <>
+                            <select
+                                className="form-select"
+                                value={mesTemp}
+                                onChange={e => setMesTemp(Number(e.target.value))}
+                                style={{ width: 110 }}
+                                disabled={loading}
+                            >
+                                {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </select>
+                            <select
+                                className="form-select"
+                                value={anioTemp}
+                                onChange={e => setAnioTemp(Number(e.target.value))}
+                                style={{ width: 85 }}
+                                disabled={loading}
+                            >
+                                {anios.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                        </>
+                    )}
+
+                    {granularidad === 'dia' && (
+                        <input 
+                            type="date"
+                            className="form-input"
+                            value={fechaDia}
+                            onChange={e => setFechaDia(e.target.value)}
+                            disabled={loading}
+                            max={new Date().toISOString().slice(0,10)}
+                        />
+                    )}
+
+                    {granularidad === 'semana' && (
+                        <input 
+                            type="date"
+                            className="form-input"
+                            value={fechaSemana}
+                            onChange={e => setFechaSemana(e.target.value)}
+                            disabled={loading}
+                            title="Selecciona cualquier día de la semana deseada"
+                            max={new Date().toISOString().slice(0,10)}
+                        />
+                    )}
+
+                    {granularidad === 'rango' && (
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                            <input 
+                                type="date"
+                                className="form-input"
+                                value={customDesde}
+                                onChange={e => setCustomDesde(e.target.value)}
+                                disabled={loading}
+                            />
+                            <span>a</span>
+                            <input 
+                                type="date"
+                                className="form-input"
+                                value={customHasta}
+                                onChange={e => setCustomHasta(e.target.value)}
+                                disabled={loading}
+                            />
+                        </div>
+                    )}
 
                     <button
                         className="btn btn-ghost btn-sm"
@@ -129,7 +212,6 @@ export default function PeriodoSelector({
                 </div>
             </div>
 
-            {/* Section tabs */}
             <div style={{
                 display: 'flex',
                 gap: 'var(--space-1)',
@@ -164,6 +246,11 @@ export default function PeriodoSelector({
                         </button>
                     )
                 })}
+            </div>
+            
+            {/* Range Label Feedback */}
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
+                Mostrando datos para: <strong>{rango.label}</strong>
             </div>
         </div>
     )

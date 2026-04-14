@@ -1,18 +1,18 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import DataTable from '../components/DataTable'
 import { formatCurrency, formatPercent, formatNumber, formatDelta } from '../utils/formatters'
 
 interface Props {
-    mes: string
-    anio: string
+    rango: RangoFechas
     ubicacionId: string
 }
 
-export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
+export default function DesperdicioSection({ rango, ubicacionId }: Props) {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
@@ -20,7 +20,7 @@ export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
         async function fetchData() {
             setLoading(true)
             try {
-                const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+                const params = new URLSearchParams({ desde: rango.desde.toISOString(), hasta: rango.hasta.toISOString(), ...(ubicacionId && { ubicacionId }) })
                 const res = await fetch(`/api/reportes/desperdicio?${params}`)
                 if (res.ok) setData(await res.json())
             } catch (err) {
@@ -30,7 +30,7 @@ export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
             }
         }
         fetchData()
-    }, [mes, anio, ubicacionId])
+    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId])
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando desperdicio...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles.</p></div>
@@ -79,7 +79,7 @@ export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
                     icon="📉"
                     color={k.mermaActual > 5 ? 'var(--color-danger)' : k.mermaActual > 2 ? 'var(--color-warning)' : 'var(--color-success)'}
                     delta={deltaMerma}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Rechazos Producción"
@@ -163,7 +163,7 @@ export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
                             data={data.rankingProductos}
                             showTotals={true}
                             totalColumns={['producidos', 'rechazados', 'costoDesperdicio']}
-                            exportFilename={`Desperdicio_Productos_${mes}_${anio}`}
+                            exportFilename={`Desperdicio_Productos_${rango.label.replace(/\s+/g, "_")}`}
                         />
                     </div>
                 )}
@@ -183,7 +183,7 @@ export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
                             data={data.rechazosEntrega}
                             showTotals={true}
                             totalColumns={['unidades']}
-                            exportFilename={`Desperdicio_Entregas_${mes}_${anio}`}
+                            exportFilename={`Desperdicio_Entregas_${rango.label.replace(/\s+/g, "_")}`}
                         />
                     </div>
                 )}
@@ -192,7 +192,7 @@ export default function DesperdicioSection({ mes, anio, ubicacionId }: Props) {
                     <div className="card" style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
                         <div style={{ fontSize: '48px', marginBottom: 'var(--space-4)' }}>✅</div>
                         <p style={{ color: 'var(--color-success)', fontSize: 'var(--text-lg)', fontWeight: 600 }}>
-                            Sin rechazos registrados este mes
+                            Sin rechazos registrados este período
                         </p>
                         <p style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-sm)' }}>
                             No se detectaron rechazos en producción ni en entregas.

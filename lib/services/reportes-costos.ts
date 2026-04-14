@@ -5,16 +5,24 @@ import { prisma } from '@/lib/prisma'
  * Analiza: costo por producto, margen bruto, evolución de precios de insumos, gastos operativos.
  */
 export async function getCostosReport(
-    mes: number,
-    anio: number,
+    desdeIso: string,
+    hastaIso: string,
     ubicacionId?: string
 ) {
-    const startOfMonth = new Date(anio, mes - 1, 1)
-    const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    const startOfCurrent = new Date(desdeIso)
+    const endOfCurrent = new Date(hastaIso)
 
     // Período anterior
-    const startAnterior = new Date(anio, mes - 2, 1)
-    const endAnterior = new Date(anio, mes - 1, 0, 23, 59, 59, 999)
+    const diffMs = endOfCurrent.getTime() - startOfCurrent.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+    const endAnterior = new Date(startOfCurrent)
+    endAnterior.setDate(endAnterior.getDate() - 1)
+    endAnterior.setHours(23, 59, 59, 999)
+
+    const startAnterior = new Date(endAnterior)
+    startAnterior.setDate(startAnterior.getDate() - diffDays + 1)
+    startAnterior.setHours(0, 0, 0, 0)
 
     const whereUbi = ubicacionId ? { ubicacionId } : {}
 
@@ -23,7 +31,7 @@ export async function getCostosReport(
         prisma.movimientoStock.aggregate({
             where: {
                 tipo: 'entrada',
-                fecha: { gte: startOfMonth, lte: endOfMonth },
+                fecha: { gte: startOfCurrent, lte: endOfCurrent },
                 ...whereUbi
             },
             _sum: { costoTotal: true },
@@ -46,7 +54,7 @@ export async function getCostosReport(
     // ── 2. Gastos operativos por categoría ──
     const gastos = await prisma.gastoOperativo.findMany({
         where: {
-            fecha: { gte: startOfMonth, lte: endOfMonth },
+            fecha: { gte: startOfCurrent, lte: endOfCurrent },
             ...(ubicacionId ? { ubicacionId } : {})
         },
         include: { categoria: true }
@@ -124,13 +132,16 @@ export async function getCostosReport(
         }
     }).sort((a, b) => a.margenPct - b.margenPct) // Peor margen primero
 
-    // ── 4. Evolución de costos (últimos 6 meses) ──
+    // ── 4. Evolución de costos (últimos 6 meses desde fecha fin) ──
+    const mesReferencia = endOfCurrent.getMonth() + 1
+    const anioReferencia = endOfCurrent.getFullYear()
+
     const evolucion = []
     for (let i = 5; i >= 0; i--) {
-        const m = mes - i
-        let y = anio
+        const m = mesReferencia - i
+        let y = anioReferencia
         let mAjustado = m
-        if (m <= 0) { mAjustado = m + 12; y = anio - 1 }
+        if (m <= 0) { mAjustado = m + 12; y = anioReferencia - 1 }
 
         const s = new Date(y, mAjustado - 1, 1)
         const e = new Date(y, mAjustado, 0, 23, 59, 59, 999)
@@ -160,7 +171,7 @@ export async function getCostosReport(
         by: ['insumoId'],
         where: {
             tipo: 'entrada',
-            fecha: { gte: startOfMonth, lte: endOfMonth },
+            fecha: { gte: startOfCurrent, lte: endOfCurrent },
             ...whereUbi
         },
         _sum: { costoTotal: true, cantidad: true },
@@ -187,7 +198,7 @@ export async function getCostosReport(
     })
 
     return {
-        mes, anio,
+        desde: desdeIso, hasta: hastaIso,
         kpis: {
             costoInsumosActual,
             costoInsumosAnterior,

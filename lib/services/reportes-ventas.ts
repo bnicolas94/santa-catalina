@@ -5,20 +5,28 @@ import { prisma } from '@/lib/prisma'
  * Analiza facturación, volumen, ticket promedio, top productos y top clientes.
  */
 export async function getVentasReport(
-    mes: number,
-    anio: number,
+    desdeIso: string,
+    hastaIso: string,
     ubicacionId?: string
 ) {
-    const startOfMonth = new Date(anio, mes - 1, 1)
-    const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    const startOfCurrent = new Date(desdeIso)
+    const endOfCurrent = new Date(hastaIso)
 
     // Período anterior para comparativa
-    const startAnterior = new Date(anio, mes - 2, 1)
-    const endAnterior = new Date(anio, mes - 1, 0, 23, 59, 59, 999)
+    const diffMs = endOfCurrent.getTime() - startOfCurrent.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+
+    const endAnterior = new Date(startOfCurrent)
+    endAnterior.setDate(endAnterior.getDate() - 1)
+    endAnterior.setHours(23, 59, 59, 999)
+
+    const startAnterior = new Date(endAnterior)
+    startAnterior.setDate(startAnterior.getDate() - diffDays + 1)
+    startAnterior.setHours(0, 0, 0, 0)
 
     const whereBase: any = {
         estado: 'entregado',
-        fechaEntrega: { gte: startOfMonth, lte: endOfMonth }
+        fechaEntrega: { gte: startOfCurrent, lte: endOfCurrent }
     }
     if (ubicacionId) whereBase.ubicacionId = ubicacionId
 
@@ -165,7 +173,7 @@ export async function getVentasReport(
         }))
 
     return {
-        mes, anio,
+        desde: desdeIso, hasta: hastaIso,
         kpis: {
             facturacionTotal,
             unidadesTotales,

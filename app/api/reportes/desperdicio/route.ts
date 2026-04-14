@@ -12,11 +12,19 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url)
         const date = new Date()
-        const mes = parseInt(searchParams.get('mes') || String(date.getMonth() + 1))
-        const anio = parseInt(searchParams.get('anio') || String(date.getFullYear()))
+        let desdeIso = searchParams.get('desde')
+        let hastaIso = searchParams.get('hasta')
+
+        if (!desdeIso || !hastaIso) {
+            const mes = parseInt(searchParams.get('mes') || String(date.getMonth() + 1))
+            const anio = parseInt(searchParams.get('anio') || String(date.getFullYear()))
+            desdeIso = new Date(anio, mes - 1, 1).toISOString()
+            hastaIso = new Date(anio, mes, 0, 23, 59, 59, 999).toISOString()
+        }
+
         const ubicacionId = searchParams.get('ubicacionId') || undefined
 
-        const data = await getDesperdicioReport(mes, anio, ubicacionId)
+        const data = await getDesperdicioReport(desdeIso, hastaIso, ubicacionId)
 
         return NextResponse.json(data)
     } catch (error) {

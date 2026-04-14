@@ -80,9 +80,9 @@ export const updateCategoriaOperativa = async (id: string, esOperativo: boolean)
  */
 
 export const getRentabilidadReport = unstable_cache(
-    async (mes: number, anio: number, ubicacionId?: string) => {
-        const startOfMonth = new Date(anio, mes - 1, 1)
-        const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    async (desdeIso: string, hastaIso: string, ubicacionId?: string) => {
+        const startOfMonth = new Date(desdeIso)
+        const endOfMonth = new Date(hastaIso)
 
         const wherePedido: any = {
             estado: 'entregado',
@@ -150,8 +150,8 @@ export const getRentabilidadReport = unstable_cache(
         }
 
         return {
-            mes,
-            anio,
+            desde: desdeIso,
+            hasta: hastaIso,
             ubicacionId,
             ingresosTotales,
             costoMercaderiaVendida,
@@ -167,9 +167,9 @@ export const getRentabilidadReport = unstable_cache(
 )
 
 export const getProduccionReport = unstable_cache(
-    async (mes: number, anio: number, ubicacionId?: string) => {
-        const startOfMonth = new Date(anio, mes - 1, 1)
-        const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    async (desdeIso: string, hastaIso: string, ubicacionId?: string) => {
+        const startOfMonth = new Date(desdeIso)
+        const endOfMonth = new Date(hastaIso)
 
         const whereLote: any = {
             fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
@@ -254,8 +254,8 @@ export const getProduccionReport = unstable_cache(
         }
 
         return {
-            mes,
-            anio,
+            desde: desdeIso,
+            hasta: hastaIso,
             ubicacionId,
             globales: statsGlobales,
             desglose: Object.values(porProducto).sort((a: any, b: any) => b.paquetes - a.paquetes),
@@ -268,13 +268,13 @@ export const getProduccionReport = unstable_cache(
 
 export const getReporteDetalle = async (
     tipo: 'pedidos' | 'gastos' | 'lotes',
-    mes: number,
-    anio: number,
+    desdeIso: string,
+    hastaIso: string,
     ubicacionId?: string,
     categoriaId?: string
 ) => {
-    const startOfMonth = new Date(anio, mes - 1, 1)
-    const endOfMonth = new Date(anio, mes, 0, 23, 59, 59, 999)
+    const startOfMonth = new Date(desdeIso)
+    const endOfMonth = new Date(hastaIso)
 
     if (tipo === 'pedidos') {
         const where: any = {

@@ -1,18 +1,18 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import DataTable from '../components/DataTable'
 import { formatCurrency, formatPercent, formatNumber, formatDelta, formatCurrencyDecimals } from '../utils/formatters'
 
 interface Props {
-    mes: string
-    anio: string
+    rango: RangoFechas
     ubicacionId: string
 }
 
-export default function CostosSection({ mes, anio, ubicacionId }: Props) {
+export default function CostosSection({ rango, ubicacionId }: Props) {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
@@ -20,7 +20,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
         async function fetchData() {
             setLoading(true)
             try {
-                const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+                const params = new URLSearchParams({ desde: rango.desde.toISOString(), hasta: rango.hasta.toISOString(), ...(ubicacionId && { ubicacionId }) })
                 const res = await fetch(`/api/reportes/costos?${params}`)
                 if (res.ok) setData(await res.json())
             } catch (err) {
@@ -30,7 +30,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
             }
         }
         fetchData()
-    }, [mes, anio, ubicacionId])
+    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId])
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando costos...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles.</p></div>
@@ -87,7 +87,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                     icon="💸"
                     color="var(--color-danger)"
                     delta={deltaCostoTotal}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Compra Insumos"
@@ -95,7 +95,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                     icon="📦"
                     color="var(--color-warning)"
                     delta={deltaInsumos}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Gastos Operativos"
@@ -103,7 +103,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                     icon="🏭"
                     color="var(--color-info)"
                     delta={deltaGastos}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Margen Prom. Productos"
@@ -124,7 +124,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                 {data.evolucion.length > 0 && (
                     <div className="card" style={{ padding: 'var(--space-6)' }}>
                         <TrendChart
-                            title="Evolución de Costos (6 meses)"
+                            title="Evolución de Costos (6 periodos)"
                             type="bar"
                             stacked={true}
                             labels={data.evolucion.map((e: any) => e.label)}
@@ -168,7 +168,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                     <DataTable
                         columns={productoColumns}
                         data={data.costoPorProducto}
-                        exportFilename={`Costos_Margen_${mes}_${anio}`}
+                        exportFilename={`Costos_Margen_${rango.label.replace(/\s+/g, "_")}`}
                         maxHeight="400px"
                     />
                 </div>
@@ -193,7 +193,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                             data={data.rankingInsumos}
                             showTotals={true}
                             totalColumns={['costoTotal']}
-                            exportFilename={`Costos_Insumos_${mes}_${anio}`}
+                            exportFilename={`Costos_Insumos_${rango.label.replace(/\s+/g, "_")}`}
                             maxHeight="300px"
                         />
                     </div>
@@ -212,7 +212,7 @@ export default function CostosSection({ mes, anio, ubicacionId }: Props) {
                             data={data.gastosPorCategoria}
                             showTotals={true}
                             totalColumns={['monto', 'count']}
-                            exportFilename={`Costos_Gastos_${mes}_${anio}`}
+                            exportFilename={`Costos_Gastos_${rango.label.replace(/\s+/g, "_")}`}
                             maxHeight="300px"
                         />
                     </div>

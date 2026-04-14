@@ -19,13 +19,14 @@ import PerformanceSection from './sections/PerformanceSection'
 
 import { exportReportToExcel } from './utils/exportUtils'
 import { useSession } from 'next-auth/react'
+import { GranularidadTemporal, RangoFechas, getDateRange } from './utils/dateUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, ArcElement, Filler)
 
 // --- Interfaces ---
 interface RentabilidadData {
-    mes: number
-    anio: number
+    desde: string
+    hasta: string
     ingresosTotales: number
     costoMercaderiaVendida: number
     margenBruto: number
@@ -36,8 +37,8 @@ interface RentabilidadData {
 }
 
 interface ProduccionData {
-    mes: number
-    anio: number
+    desde: string
+    hasta: string
     globales: {
         totalPaquetes: number
         totalPlanchas: number
@@ -95,8 +96,8 @@ export default function ReportesPage() {
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
-    const [mes, setMes] = useState(String(new Date().getMonth() + 1))
-    const [anio, setAnio] = useState(String(new Date().getFullYear()))
+    const [granularidad, setGranularidad] = useState<GranularidadTemporal>('mes')
+    const [rangoFechas, setRangoFechas] = useState<RangoFechas>(() => getDateRange('mes'))
     const [ubicacionId, setUbicacionId] = useState('')
 
     const [drillDown, setDrillDown] = useState<{
@@ -114,7 +115,8 @@ export default function ReportesPage() {
 
     useEffect(() => {
         fetchData()
-    }, [mes, anio, ubicacionId, activeSection])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rangoFechas.desde.toISOString(), rangoFechas.hasta.toISOString(), ubicacionId, activeSection])
 
     // --- Data fetching ---
     async function fetchMetadata() {
@@ -122,9 +124,6 @@ export default function ReportesPage() {
             const res = await fetch('/api/reportes/metadata')
             const json = await res.json()
             setMetadata(json)
-            if (json.years.length > 0 && !json.years.includes(anio)) {
-                setAnio(json.years[json.years.length - 1])
-            }
         } catch (err) {
             console.error('Error fetching metadata:', err)
         }
@@ -194,8 +193,8 @@ export default function ReportesPage() {
         setError(null)
         try {
             const params = new URLSearchParams({
-                mes,
-                anio,
+                desde: rangoFechas.desde.toISOString(),
+                hasta: rangoFechas.hasta.toISOString(),
                 ...(ubicacionId && { ubicacionId }),
                 ...(refresh && { refresh: 'true' })
             })
@@ -245,31 +244,37 @@ export default function ReportesPage() {
     }
 
     const handleExport = async () => {
-        const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+        const params = new URLSearchParams({ 
+            desde: rangoFechas.desde.toISOString(), 
+            hasta: rangoFechas.hasta.toISOString(), 
+            ...(ubicacionId && { ubicacionId }) 
+        })
+        const mesTag = String(rangoFechas.desde.getMonth() + 1)
+        const anioTag = String(rangoFechas.desde.getFullYear())
 
         if (activeSection === 'produccion' && produccionData) {
-            exportReportToExcel(produccionData, 'produccion', mes, anio)
+            exportReportToExcel(produccionData, 'produccion', mesTag, anioTag)
         } else if (activeSection === 'dashboard' && rentabilidadData) {
-            exportReportToExcel(rentabilidadData, 'economico', mes, anio)
+            exportReportToExcel(rentabilidadData, 'economico', mesTag, anioTag)
         } else if (activeSection === 'ventas') {
             try {
                 const res = await fetch(`/api/reportes/ventas?${params}`)
-                if (res.ok) exportReportToExcel(await res.json(), 'ventas', mes, anio)
+                if (res.ok) exportReportToExcel(await res.json(), 'ventas', mesTag, anioTag)
             } catch (err) { console.error('Error exporting ventas:', err) }
         } else if (activeSection === 'costos') {
             try {
                 const res = await fetch(`/api/reportes/costos?${params}`)
-                if (res.ok) exportReportToExcel(await res.json(), 'costos', mes, anio)
+                if (res.ok) exportReportToExcel(await res.json(), 'costos', mesTag, anioTag)
             } catch (err) { console.error('Error exporting costos:', err) }
         } else if (activeSection === 'desperdicio') {
             try {
                 const res = await fetch(`/api/reportes/desperdicio?${params}`)
-                if (res.ok) exportReportToExcel(await res.json(), 'desperdicio', mes, anio)
+                if (res.ok) exportReportToExcel(await res.json(), 'desperdicio', mesTag, anioTag)
             } catch (err) { console.error('Error exporting desperdicio:', err) }
         } else if (activeSection === 'performance') {
             try {
                 const res = await fetch(`/api/reportes/performance?${params}`)
-                if (res.ok) exportReportToExcel(await res.json(), 'performance', mes, anio)
+                if (res.ok) exportReportToExcel(await res.json(), 'performance', mesTag, anioTag)
             } catch (err) { console.error('Error exporting performance:', err) }
         }
     }
@@ -282,10 +287,10 @@ export default function ReportesPage() {
     return (
         <div className="fade-in">
             <PeriodoSelector
-                mes={mes} anio={anio} ubicacionId={ubicacionId}
+                granularidad={granularidad} rango={rangoFechas} ubicacionId={ubicacionId}
                 activeSection={activeSection} loading={loading}
                 ubicaciones={metadata.ubicaciones} anios={metadata.years}
-                onMesChange={setMes} onAnioChange={setAnio}
+                onGranularidadChange={setGranularidad} onRangoChange={setRangoFechas}
                 onUbicacionChange={setUbicacionId} onSectionChange={setActiveSection}
                 onRefresh={() => fetchData(true)} onExport={handleExport}
                 onOpenSettings={() => setIsSettingsOpen(true)}
@@ -297,7 +302,7 @@ export default function ReportesPage() {
                 <>
                     {activeSection === 'dashboard' && (
                         <DashboardSection
-                            mes={mes} anio={anio} ubicacionId={ubicacionId}
+                            rango={rangoFechas} ubicacionId={ubicacionId}
                             rentabilidadData={rentabilidadData}
                             produccionData={produccionData}
                             loading={loading}
@@ -315,19 +320,19 @@ export default function ReportesPage() {
                     )}
 
                     {activeSection === 'ventas' && (
-                        <VentasSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                        <VentasSection rango={rangoFechas} ubicacionId={ubicacionId} />
                     )}
 
                     {activeSection === 'costos' && (
-                        <CostosSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                        <CostosSection rango={rangoFechas} ubicacionId={ubicacionId} />
                     )}
 
                     {activeSection === 'desperdicio' && (
-                        <DesperdicioSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                        <DesperdicioSection rango={rangoFechas} ubicacionId={ubicacionId} />
                     )}
 
                     {activeSection === 'performance' && (
-                        <PerformanceSection mes={mes} anio={anio} ubicacionId={ubicacionId} />
+                        <PerformanceSection rango={rangoFechas} ubicacionId={ubicacionId} />
                     )}
                 </>
             )}
@@ -346,7 +351,7 @@ export default function ReportesPage() {
 
             {drillDown && (
                 <DrillDownModal
-                    {...drillDown} mes={mes} anio={anio} ubicacionId={ubicacionId}
+                    {...drillDown} desdeIso={rangoFechas.desde.toISOString()} hastaIso={rangoFechas.hasta.toISOString()} ubicacionId={ubicacionId}
                     onClose={() => setDrillDown(null)}
                 />
             )}

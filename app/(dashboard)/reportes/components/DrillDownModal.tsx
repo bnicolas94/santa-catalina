@@ -5,28 +5,28 @@ import React, { useEffect, useState } from 'react'
 interface DrillDownModalProps {
     tipo: 'pedidos' | 'gastos' | 'lotes'
     label: string
-    mes: string
-    anio: string
+    desdeIso: string
+    hastaIso: string
     ubicacionId?: string
     categoriaId?: string
     onClose: () => void
 }
 
-export default function DrillDownModal({ tipo, label, mes, anio, ubicacionId, categoriaId, onClose }: DrillDownModalProps) {
+export default function DrillDownModal({ tipo, label, desdeIso, hastaIso, ubicacionId, categoriaId, onClose }: DrillDownModalProps) {
     const [data, setData] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         fetchDetalle()
-    }, [tipo, mes, anio, ubicacionId, categoriaId])
+    }, [tipo, desdeIso, hastaIso, ubicacionId, categoriaId])
 
     async function fetchDetalle() {
         setLoading(true)
         try {
             const params = new URLSearchParams({
                 tipo,
-                mes,
-                anio,
+                desde: desdeIso,
+                hasta: hastaIso,
                 ...(ubicacionId && { ubicacionId }),
                 ...(categoriaId && { categoriaId })
             })

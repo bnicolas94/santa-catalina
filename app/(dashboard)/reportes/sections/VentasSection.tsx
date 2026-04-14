@@ -1,18 +1,18 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import DataTable from '../components/DataTable'
 import { formatCurrency, formatPercent, formatNumber, formatDelta } from '../utils/formatters'
 
 interface Props {
-    mes: string
-    anio: string
+    rango: RangoFechas
     ubicacionId: string
 }
 
-export default function VentasSection({ mes, anio, ubicacionId }: Props) {
+export default function VentasSection({ rango, ubicacionId }: Props) {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
 
@@ -20,7 +20,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
         async function fetchData() {
             setLoading(true)
             try {
-                const params = new URLSearchParams({ mes, anio, ...(ubicacionId && { ubicacionId }) })
+                const params = new URLSearchParams({ desde: rango.desde.toISOString(), hasta: rango.hasta.toISOString(), ...(ubicacionId && { ubicacionId }) })
                 const res = await fetch(`/api/reportes/ventas?${params}`)
                 if (res.ok) setData(await res.json())
             } catch (err) {
@@ -30,7 +30,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
             }
         }
         fetchData()
-    }, [mes, anio, ubicacionId])
+    }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId])
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando ventas...</p></div>
     if (!data) return <div className="empty-state"><p>No hay datos disponibles.</p></div>
@@ -74,7 +74,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
                     icon="💰"
                     color="var(--color-info)"
                     delta={deltaFacturacion}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Pedidos Entregados"
@@ -82,7 +82,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
                     icon="📋"
                     color="var(--color-primary)"
                     delta={deltaPedidos}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Unidades Vendidas"
@@ -90,7 +90,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
                     icon="📦"
                     color="var(--color-success)"
                     delta={deltaUnidades}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
                 <KpiCardEnhanced
                     label="Ticket Promedio"
@@ -98,7 +98,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
                     icon="🎫"
                     color="var(--color-warning)"
                     delta={deltaTicket}
-                    previousLabel="mes ant."
+                    previousLabel="período ant."
                 />
             </div>
 
@@ -167,7 +167,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
                         data={data.rankingProductos}
                         showTotals={true}
                         totalColumns={['cantidad', 'importe']}
-                        exportFilename={`Ventas_Productos_${mes}_${anio}`}
+                        exportFilename={`Ventas_Productos_${rango.label.replace(/\s+/g, "_")}`}
                         maxHeight="350px"
                     />
                 </div>
@@ -188,7 +188,7 @@ export default function VentasSection({ mes, anio, ubicacionId }: Props) {
                         data={data.rankingClientes}
                         showTotals={true}
                         totalColumns={['pedidos', 'importe']}
-                        exportFilename={`Ventas_Clientes_${mes}_${anio}`}
+                        exportFilename={`Ventas_Clientes_${rango.label.replace(/\s+/g, "_")}`}
                         maxHeight="350px"
                     />
                 </div>
