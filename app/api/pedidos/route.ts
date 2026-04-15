@@ -99,46 +99,43 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Cliente, fecha de entrega y al menos un producto son requeridos' }, { status: 400 })
         }
 
-        let totalUnidades = 0
-        let totalImporte = 0
-        const detallesBrutos: any[] = []
+        const todasPresentaciones = await prisma.presentacion.findMany({
+            select: { id: true, precioVenta: true, cantidad: true, productoId: true }
+        });
+        const precioMap = new Map(todasPresentaciones.map(p => [p.id, p.precioVenta]));
+
+        let totalUnidadesFisicas = 0;
+        const detallesBrutos: any[] = [];
 
         for (const det of detalles) {
-            const presentacion = await prisma.presentacion.findUnique({
-                where: { id: det.presentacionId },
-                include: { producto: { select: { codigoInterno: true } } }
-            })
-            if (!presentacion) continue
-            const precio = presentacion.precioVenta
-            const cant = parseInt(det.cantidad)
+            const pActual = todasPresentaciones.find(p => p.id === det.presentacionId);
+            if (!pActual) continue;
             
-            // Unidades físicas totales
-            totalUnidades += cant * presentacion.cantidad 
-            totalImporte += cant * precio
+            const cantComprada = parseInt(det.cantidad);
+            totalUnidadesFisicas += cantComprada * pActual.cantidad;
             
-            // Guardamos para procesar packs después
-            for (let i = 0; i < cant; i++) {
+            for (let i = 0; i < cantComprada; i++) {
                 detallesBrutos.push({
                     presentacionId: det.presentacionId,
-                    cantidad: 1,
-                    precioUnitario: precio,
-                    unidadesFisicas: presentacion.cantidad,
-                    codigo: presentacion.producto.codigoInterno.toUpperCase()
-                })
+                    productoId: pActual.productoId,
+                    unidadesFisicas: pActual.cantidad,
+                    precioBase: pActual.precioVenta,
+                    observaciones: det.observaciones || null
+                });
             }
         }
 
-        // Lógica de asignación de packs (similar al parser)
+        // 2. Asignación de Packs (Lógica de agrupamiento)
         let nextPackNro = 1;
         let currentMixedPackNro: number | null = null;
         let currentMixedPackUnits = 0;
 
-        const detallesCreate = detallesBrutos.map(d => {
+        const detallesConPack = detallesBrutos.map(d => {
             let nroPack: number | undefined;
-            const isClosed48 = d.unidadesFisicas === 48 && (d.codigo.includes("JYQ") || d.codigo.includes("CL") || d.codigo.includes("ES"));
-            const isClosed24JYQ = d.unidadesFisicas === 24 && d.codigo.includes("JYQ");
-
-            if (isClosed48 || isClosed24JYQ) {
+            // Los x48 y x24 de JYQ suelen ser bultos cerrados
+            const isClosed48 = d.unidadesFisicas === 48;
+            
+            if (isClosed48) {
                 nroPack = nextPackNro++;
             } else if (d.unidadesFisicas % 8 === 0) {
                 if (currentMixedPackNro && (currentMixedPackUnits + d.unidadesFisicas <= 48)) {
@@ -154,45 +151,63 @@ export async function POST(request: Request) {
                     currentMixedPackUnits = 0;
                 }
             }
+            return { ...d, nroPack };
+        });
 
+        // 3. RECÁLCULO DE PRECIOS POR COMBO (Lógica espejo de la importación)
+        const packStats = new Map<number, Map<string, number>>();
+        detallesConPack.forEach(d => {
+            if (d.nroPack) {
+                if (!packStats.has(d.nroPack)) packStats.set(d.nroPack, new Map());
+                const prodMap = packStats.get(d.nroPack)!;
+                prodMap.set(d.productoId, (prodMap.get(d.productoId) || 0) + d.unidadesFisicas);
+            }
+        });
+
+        // Agrupamos volúmenes totales por pack para el descuento de efectivo
+        const totalUnitsByPack = new Map<number, number>();
+        detallesConPack.forEach(d => {
+            if (d.nroPack) {
+                totalUnitsByPack.set(d.nroPack, (totalUnitsByPack.get(d.nroPack) || 0) + d.unidadesFisicas);
+            }
+        });
+
+        let totalImporteBruto = 0;
+        const detallesFinales = detallesConPack.map(d => {
+            let precioFinal = d.precioBase;
+            if (d.nroPack) {
+                const totalProductoEnPack = packStats.get(d.nroPack)?.get(d.productoId) || 0;
+                if (totalProductoEnPack > d.unidadesFisicas) {
+                    const presEquivalent = todasPresentaciones.find(p => 
+                        p.productoId === d.productoId && p.cantidad === totalProductoEnPack
+                    );
+                    if (presEquivalent) {
+                        precioFinal = (presEquivalent.precioVenta / presEquivalent.cantidad) * d.unidadesFisicas;
+                    }
+                }
+            }
+            totalImporteBruto += precioFinal;
             return {
                 presentacionId: d.presentacionId,
                 cantidad: 1,
-                precioUnitario: d.precioUnitario,
-                nroPack
+                precioUnitario: Math.round(precioFinal),
+                nroPack: d.nroPack,
+                observaciones: d.observaciones
             };
         });
 
-        const uniquePacks = new Set(detallesCreate.map(d => d.nroPack).filter(n => n !== undefined));
-        
-        // CALCULO DE DESCUENTO POR EFECTIVO (Pack volume-based)
-        let totalDescuento = 0;
-        if ((medioPago || 'efectivo') === 'efectivo') {
-            // Agrupamos unidades físicas por nroPack
-            const packVolumes: Record<number, number> = {};
-            detallesCreate.forEach(d => {
-                if (d.nroPack !== undefined) {
-                    const vol = detallesBrutos[0].unidadesFisicas; // Aproximación, pero mejor usar d.presentacionId
-                    // Realmente necesitamos las unidades físicas de cada item en el pack
-                }
-            });
-            
-            // Re-calculamos volúmenes de forma precisa
-            const packMap = new Map<number, number>();
-            detallesCreate.forEach((d, idx) => {
-                if (d.nroPack !== undefined) {
-                    const vol = detallesBrutos[idx].unidadesFisicas;
-                    packMap.set(d.nroPack, (packMap.get(d.nroPack) || 0) + vol);
-                }
-            });
+        const uniquePacksCount = new Set(detallesFinales.map(d => d.nroPack).filter(n => n !== undefined)).size;
+        const itemsSinPack = detallesFinales.filter(d => d.nroPack === undefined).length;
+        const totalPacks = uniquePacksCount + itemsSinPack;
 
-            for (const [nPack, totalUnits] of packMap.entries()) {
-                if (totalUnits >= 48) totalDescuento += 2000;
-                else if (totalUnits >= 24) totalDescuento += 1000;
+        // 4. CALCULO DE DESCUENTO POR EFECTIVO
+        let totalDescuentoEfectivo = 0;
+        if ((medioPago || 'efectivo') === 'efectivo') {
+            for (const units of totalUnitsByPack.values()) {
+                if (units >= 48) totalDescuentoEfectivo += 2000;
+                else if (units >= 24) totalDescuentoEfectivo += 1000;
             }
         }
-
-        const totalPacks = uniquePacks.size + detallesCreate.filter(d => d.nroPack === undefined).length;
 
         const pedido = await prisma.pedido.create({
             data: {
@@ -201,10 +216,18 @@ export async function POST(request: Request) {
                 fechaEntrega: new Date(fechaEntrega),
                 medioPago: medioPago || 'efectivo',
                 esRetiro: !!esRetiro,
-                totalUnidades,
-                totalImporte: totalImporte - totalDescuento,
+                totalUnidades: totalUnidadesFisicas,
+                totalImporte: Math.round(totalImporteBruto - totalDescuentoEfectivo),
                 totalPacks,
-                detalles: { create: detallesCreate },
+                detalles: { 
+                    create: detallesFinales.map(d => ({
+                        presentacionId: d.presentacionId,
+                        cantidad: d.cantidad,
+                        precioUnitario: d.precioUnitario,
+                        nroPack: d.nroPack,
+                        observaciones: d.observaciones
+                    }))
+                },
             },
             include: {
                 cliente: { select: { id: true, nombreComercial: true } },

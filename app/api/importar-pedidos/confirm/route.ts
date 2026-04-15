@@ -133,15 +133,34 @@ export async function POST(req: NextRequest) {
                     const detallesConPrecio: any[] = [];
                     
                     // Agrupamos por nroPack para calcular precios de volumen (especialmente para Elegidos)
-                    const packsMap = new Map<number, { totalCantidad: number, items: any[] }>();
+                    const packsMap = new Map<number, { 
+                        totalCantidadPack: number, 
+                        items: any[],
+                        totalesPorProducto: Map<string, number>
+                    }>();
+
                     detallesCrudos.forEach((d: any) => {
                         const nPack = d.nroPack || 0;
-                        if (!packsMap.has(nPack)) packsMap.set(nPack, { totalCantidad: 0, items: [] });
-                        // Usamos todasPresentaciones que ya trajimos anteriormente (fuera del loop o en la tx)
+                        if (!packsMap.has(nPack)) {
+                            packsMap.set(nPack, { 
+                                totalCantidadPack: 0, 
+                                items: [],
+                                totalesPorProducto: new Map()
+                            });
+                        }
+                        
                         const pData = todasPresentaciones.find(p => p.id === d.presentacionId);
                         const cantSandwiches = d.cantidad * (pData?.cantidad || 0);
-                        packsMap.get(nPack)!.totalCantidad += cantSandwiches;
-                        packsMap.get(nPack)!.items.push({ ...d, cantSandwiches });
+                        const prodId = pData?.productoId || 'unknown';
+
+                        const packInfo = packsMap.get(nPack)!;
+                        packInfo.totalCantidadPack += cantSandwiches;
+                        
+                        // Acumulamos cantidad por producto dentro del pack
+                        const actualProdTotal = packInfo.totalesPorProducto.get(prodId) || 0;
+                        packInfo.totalesPorProducto.set(prodId, actualProdTotal + cantSandwiches);
+                        
+                        packInfo.items.push({ ...d, cantSandwiches, productoId: prodId });
                     });
 
                     // 1. Obtener ID real de Elegidos para la lógica de precios
@@ -151,24 +170,31 @@ export async function POST(req: NextRequest) {
                     let totalDescuentoPorEfectivo = 0;
 
                     for (const [nPack, data] of packsMap.entries()) {
-                        // Cálculo de descuento por efectivo para este bulto específico (CUMULATIVO)
+                        // 1. Cálculo de descuento por efectivo para este bulto específico (BASADO EN TOTAL DEL BULTO: 48 o 24)
                         if ((medioPago || 'efectivo') === 'efectivo') {
-                            if (data.totalCantidad >= 48) totalDescuentoPorEfectivo += 2000;
-                            else if (data.totalCantidad >= 24) totalDescuentoPorEfectivo += 1000;
+                            if (data.totalCantidadPack >= 48) totalDescuentoPorEfectivo += 2000;
+                            else if (data.totalCantidadPack >= 24) totalDescuentoPorEfectivo += 1000;
                         }
 
+                        // 2. Cálculo de precios unitarios (BASADO EN TOTAL POR PRODUCTO EN EL BULTO)
                         for (const item of data.items) {
                             let precioUnitarioCalculado = precioMap.get(item.presentacionId) || 0;
                             
-                            // LOGICA ESPECIAL ELEGIDOS
+                            // LOGICA DE COMBOS: Si hay varias filas del mismo producto, buscamos el precio de volumen acumulado
+                            const totalDelProductoEnPack = data.totalesPorProducto.get(item.productoId) || 0;
                             const presActual = todasPresentaciones.find(p => p.id === item.presentacionId);
-                            if (item.productoId === eleId || item.observaciones?.includes('ELE')) {
+
+                            // Aplicamos lógica de combo si es Elegido o si el total acumulado es mayor a la presentación actual
+                            if (item.productoId === eleId || item.observaciones?.includes('ELE') || totalDelProductoEnPack > (presActual?.cantidad || 0)) {
                                 const presEquivalent = todasPresentaciones.find(p => 
-                                    p.productoId === item.productoId && p.cantidad === data.totalCantidad
+                                    p.productoId === item.productoId && p.cantidad === totalDelProductoEnPack
                                 );
                                 if (presEquivalent) {
-                                    const cantUnidadesEnPack = data.totalCantidad / (presActual?.cantidad || 8);
-                                    precioUnitarioCalculado = presEquivalent.precioVenta / cantUnidadesEnPack;
+                                    // Calculamos el proporcional (PrecioCombo / CantidadDeUnidadesDelCombo) * CantidadDeLaPresentacionActual
+                                    // Pero como item.cantidad es "packs" (usualmente 1 en el Excel), solo necesitamos el unitario prorrateado
+                                    // El unitario del combo es (p.precioVenta / p.cantidad) * presActual.cantidad
+                                    const unitarioCombo = (presEquivalent.precioVenta / presEquivalent.cantidad) * (presActual?.cantidad || 8);
+                                    precioUnitarioCalculado = unitarioCombo;
                                 }
                             }
 
