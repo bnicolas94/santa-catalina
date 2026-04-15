@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import useSWR from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 
 interface Cliente { id: string; nombreComercial: string; direccion: string; zona: string; latitud?: number; longitud?: number }
 interface Pedido { 
@@ -27,12 +27,36 @@ export default function RepartosPage() {
     const { data: session } = useSession()
     const userId = (session?.user as { id?: string })?.id
 
+    const { mutate } = useSWRConfig()
+
     const today = new Date().toISOString().split('T')[0]
+    const cacheKey = userId ? `/api/rutas?choferId=${userId}&fecha=${today}` : null
     const { data: rutasData, error: swrError, isLoading } = useSWR<Ruta[]>(
-        userId ? `/api/rutas?choferId=${userId}&fecha=${today}` : null,
+        cacheKey,
         fetcher,
-        { refreshInterval: 15000 } // Refresco cada 15 segundos
+        { refreshInterval: 30000 } // Aumentamos el polling ya que tenemos SSE
     )
+
+    // Real-time updates via SSE
+    useEffect(() => {
+        const eventSource = new EventSource('/api/realtime/events');
+        
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'ORDER_UPDATED') {
+                    console.log('Real-time update received:', data);
+                    mutate(cacheKey);
+                }
+            } catch (e) {
+                console.error('Error parsing SSE message', e);
+            }
+        };
+
+        return () => {
+            eventSource.close();
+        };
+    }, [cacheKey, mutate]);
 
     const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null)
     const [formEntrega, setFormEntrega] = useState({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })

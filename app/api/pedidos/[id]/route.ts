@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { CajaService } from '@/lib/services/caja.service'
+import { eventBus } from '@/lib/events'
 
 // PUT /api/pedidos/:id — Editar pedido (estado, medioPago, fechaEntrega, abonado, etc.)
 export async function PUT(
@@ -85,6 +86,8 @@ export async function PUT(
 
             return pedido
         })
+
+        eventBus.emit('order-updated', { pedidoId: id, status: result.estado })
 
         return NextResponse.json(result)
     } catch (error: any) {

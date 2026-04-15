@@ -142,6 +142,27 @@ export default function PedidosPage() {
         return <span style={{ marginLeft: '4px' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
     }
 
+    // Real-time updates via SSE
+    useEffect(() => {
+        const eventSource = new EventSource('/api/realtime/events');
+        
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'ORDER_UPDATED') {
+                    console.log('Admin: Real-time update received');
+                    fetchPedidos();
+                }
+            } catch (e) {
+                // Ignore parse errors from heartbeat
+            }
+        };
+
+        return () => {
+            eventSource.close();
+        };
+    }, [fetchPedidos]);
+
 
     // Flatten all presentations for selection
     const allPresentaciones = productos.flatMap((p) =>
