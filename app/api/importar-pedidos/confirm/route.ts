@@ -43,22 +43,37 @@ export async function POST(req: NextRequest) {
             const cid = row.clientMatch.clienteId;
             if (fStr && cid) {
                 if (!limpiezas.has(fStr)) {
-                    limpiezas.set(fStr, { 
-                        fecha: new Date(fStr + 'T12:00:00.000Z'), 
-                        clientes: new Set() 
-                    });
+                    // Intentamos parsear la fecha de forma robusta
+                    let fechaObj: Date;
+                    if (fStr.includes('/')) {
+                        const [d, m, y] = fStr.split('/');
+                        fechaObj = new Date(Date.UTC(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0));
+                    } else {
+                        fechaObj = new Date(fStr + 'T12:00:00.000Z');
+                    }
+
+                    if (!isNaN(fechaObj.getTime())) {
+                        limpiezas.set(fStr, { 
+                            fecha: fechaObj, 
+                            clientes: new Set() 
+                        });
+                    }
                 }
-                limpiezas.get(fStr)!.clientes.add(cid);
+                const currentLimpieza = limpiezas.get(fStr);
+                if (currentLimpieza && cid) {
+                    currentLimpieza.clientes.add(cid);
+                }
             }
         });
 
         // Ejecutamos las limpiezas
         for (const [_, data] of limpiezas) {
-            if (data.clientes.size > 0) {
+            const validCids = Array.from(data.clientes).filter(id => !!id);
+            if (validCids.length > 0) {
                 await prisma.pedido.deleteMany({
                     where: {
                         fechaEntrega: data.fecha,
-                        clienteId: { in: Array.from(data.clientes) }
+                        clienteId: { in: validCids }
                     }
                 });
             }
@@ -189,12 +204,12 @@ export async function POST(req: NextRequest) {
                                 const presEquivalent = todasPresentaciones.find(p => 
                                     p.productoId === item.productoId && p.cantidad === totalDelProductoEnPack
                                 );
-                                if (presEquivalent) {
+                                if (presEquivalent && presEquivalent.cantidad > 0) {
                                     // Calculamos el proporcional (PrecioCombo / CantidadDeUnidadesDelCombo) * CantidadDeLaPresentacionActual
-                                    // Pero como item.cantidad es "packs" (usualmente 1 en el Excel), solo necesitamos el unitario prorrateado
-                                    // El unitario del combo es (p.precioVenta / p.cantidad) * presActual.cantidad
                                     const unitarioCombo = (presEquivalent.precioVenta / presEquivalent.cantidad) * (presActual?.cantidad || 8);
-                                    precioUnitarioCalculado = unitarioCombo;
+                                    if (!isNaN(unitarioCombo)) {
+                                        precioUnitarioCalculado = unitarioCombo;
+                                    }
                                 }
                             }
 
@@ -205,7 +220,10 @@ export async function POST(req: NextRequest) {
                         }
                     }
 
-                    const totalUnidades = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * (todasPresentaciones.find(p => p.id === d.presentacionId)?.cantidad || 0)), 0);
+                    const totalUnidades = detallesConPrecio.reduce((acc, d) => {
+                        const cantSub = (todasPresentaciones.find(p => p.id === d.presentacionId)?.cantidad || 0);
+                        return acc + (d.cantidad * cantSub);
+                    }, 0);
                     const totalImporteBruto = detallesConPrecio.reduce((acc, d) => acc + (d.cantidad * d.precioUnitario), 0);
                     const totalImporteNeto = Math.round(totalImporteBruto - totalDescuentoPorEfectivo);
                     
@@ -237,9 +255,9 @@ export async function POST(req: NextRequest) {
                                 create: detallesConPrecio.map(d => ({
                                     presentacionId: d.presentacionId,
                                     cantidad: d.cantidad,
-                                    precioUnitario: d.precioUnitario,
+                                    precioUnitario: Math.round(d.precioUnitario || 0),
                                     observaciones: d.observaciones,
-                                    nroPack: d.nroPack,
+                                    nroPack: d.nroPack ? parseInt(d.nroPack.toString()) : null,
                                 }))
                             }
                         }
