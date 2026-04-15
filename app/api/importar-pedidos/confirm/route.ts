@@ -35,8 +35,37 @@ export async function POST(req: NextRequest) {
         });
         const precioMap = new Map(todasPresentaciones.map(p => [p.id, p.precioVenta]));
 
+        // --- LÓGICA ANTI-DUPLICADOS (Borrón y cuenta nueva por Cliente/Fecha) ---
+        // Identificamos qué clientes y fechas estamos importando para limpiar lo previo
+        const limpiezas = new Map<string, { fecha: Date, clientes: Set<string> }>();
+        validRows.forEach(row => {
+            const fStr = row.original.fecha; // Usamos el string original para agrupar
+            const cid = row.clientMatch.clienteId;
+            if (fStr && cid) {
+                if (!limpiezas.has(fStr)) {
+                    limpiezas.set(fStr, { 
+                        fecha: new Date(fStr + 'T12:00:00.000Z'), 
+                        clientes: new Set() 
+                    });
+                }
+                limpiezas.get(fStr)!.clientes.add(cid);
+            }
+        });
+
+        // Ejecutamos las limpiezas
+        for (const [_, data] of limpiezas) {
+            if (data.clientes.size > 0) {
+                await prisma.pedido.deleteMany({
+                    where: {
+                        fechaEntrega: data.fecha,
+                        clienteId: { in: Array.from(data.clientes) }
+                    }
+                });
+            }
+        }
+        // -----------------------------------------------------------------------
+
         // En Prisma SQLite, la forma más limpia es hacer operaciones batch o secuencias
-        // En PostgreSQL podríamos usar un gran transaction, pero con transacciones grandes SQLite bloquea
         for (const row of validRows) {
             try {
                 await prisma.$transaction(async (tx) => {
