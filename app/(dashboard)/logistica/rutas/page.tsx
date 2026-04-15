@@ -78,6 +78,7 @@ export default function PlanificacionRutasPage() {
     // Auto-assign preview
     const [routePreview, setRoutePreview] = useState<RoutePlan[] | null>(null)
     const [previewStats, setPreviewStats] = useState<{ conCoords: number; sinCoords: number } | null>(null)
+    const [transferMenu, setTransferMenu] = useState<{ routeIdx: number; pedIdx: number; isSinCoords: boolean } | null>(null)
 
     useEffect(() => { fetchData() }, [filterFecha])
 
@@ -186,6 +187,31 @@ export default function PlanificacionRutasPage() {
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Error al optimizar')
         } finally { setIsOptimizing(false) }
+    }
+
+    const handleTransferPedido = (fromRouteIdx: number, pedIdx: number, isSinCoords: boolean, toRouteIdx: number) => {
+        if (!routePreview) return
+        const updated = [...routePreview]
+        const fromRoute = { ...updated[fromRouteIdx] }
+        const toRoute = { ...updated[toRouteIdx] }
+
+        let pedido: any
+        if (isSinCoords) {
+            const items = [...fromRoute.sinCoordenadas]
+            pedido = items.splice(pedIdx, 1)[0]
+            fromRoute.sinCoordenadas = items
+            toRoute.sinCoordenadas = [...toRoute.sinCoordenadas, pedido]
+        } else {
+            const items = [...fromRoute.pedidos]
+            pedido = items.splice(pedIdx, 1)[0]
+            fromRoute.pedidos = items
+            toRoute.pedidos = [...toRoute.pedidos, pedido]
+        }
+
+        updated[fromRouteIdx] = fromRoute
+        updated[toRouteIdx] = toRoute
+        setRoutePreview(updated)
+        setTransferMenu(null)
     }
 
     // Auto-assign: Confirm
@@ -689,7 +715,28 @@ export default function PlanificacionRutasPage() {
                                                                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{p.clienteNombre} 📍</div>
                                                                 <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>{p.direccion || 'Sin dirección'}</div>
                                                             </div>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', position: 'relative' }}>
+                                                                <button type="button" 
+                                                                    title="Transferir a otro chofer"
+                                                                    style={{ width: 22, height: 22, border: '1px solid var(--color-primary)', borderRadius: 4,
+                                                                        background: transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && !transferMenu?.isSinCoords ? 'var(--color-primary)' : 'white', 
+                                                                        cursor: 'pointer', color: transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && !transferMenu?.isSinCoords ? 'white' : 'var(--color-primary)',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', padding: 0 }}
+                                                                    onClick={() => setTransferMenu(transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && !transferMenu.isSinCoords ? null : { routeIdx: idx, pedIdx: i, isSinCoords: false })}>
+                                                                    ⇄
+                                                                </button>
+                                                                {transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && !transferMenu.isSinCoords && (
+                                                                    <div className="card shadow-lg" style={{ position: 'absolute', right: '28px', top: 0, zIndex: 100, width: '150px', padding: 'var(--space-1)', border: '1px solid var(--color-gray-200)' }}>
+                                                                        <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--color-gray-400)', padding: '4px 8px', textTransform: 'uppercase' }}>Mover a:</div>
+                                                                        {routePreview!.map((destPlan, destIdx) => destIdx !== idx && (
+                                                                            <button key={destIdx} className="btn btn-ghost btn-sm" 
+                                                                                style={{ width: '100%', textAlign: 'left', fontSize: '11px', padding: '6px 8px', justifyContent: 'flex-start' }}
+                                                                                onClick={() => handleTransferPedido(idx, i, false, destIdx)}>
+                                                                                🚛 {destPlan.choferNombre}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
                                                                 <button type="button" disabled={i === 0}
                                                                     style={{ width: 22, height: 22, border: '1px solid var(--color-gray-300)', borderRadius: 4,
                                                                         background: 'white', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1,
@@ -729,7 +776,28 @@ export default function PlanificacionRutasPage() {
                                                                 <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{p.clienteNombre} ❓</div>
                                                                 <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>{p.direccion}</div>
                                                             </div>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', position: 'relative' }}>
+                                                                <button type="button" 
+                                                                    title="Transferir a otro chofer"
+                                                                    style={{ width: 22, height: 22, border: '1px solid #F39C12', borderRadius: 4,
+                                                                        background: transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && transferMenu?.isSinCoords ? '#F39C12' : 'white', 
+                                                                        cursor: 'pointer', color: transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && transferMenu?.isSinCoords ? 'white' : '#F39C12',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', padding: 0 }}
+                                                                    onClick={() => setTransferMenu(transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && transferMenu.isSinCoords ? null : { routeIdx: idx, pedIdx: i, isSinCoords: true })}>
+                                                                    ⇄
+                                                                </button>
+                                                                {transferMenu?.routeIdx === idx && transferMenu?.pedIdx === i && transferMenu.isSinCoords && (
+                                                                    <div className="card shadow-lg" style={{ position: 'absolute', right: '28px', top: 0, zIndex: 100, width: '150px', padding: 'var(--space-1)', border: '1px solid var(--color-gray-200)' }}>
+                                                                        <div style={{ fontSize: '9px', fontWeight: 700, color: 'var(--color-gray-400)', padding: '4px 8px', textTransform: 'uppercase' }}>Mover a:</div>
+                                                                        {routePreview!.map((destPlan, destIdx) => destIdx !== idx && (
+                                                                            <button key={destIdx} className="btn btn-ghost btn-sm" 
+                                                                                style={{ width: '100%', textAlign: 'left', fontSize: '11px', padding: '6px 8px', justifyContent: 'flex-start' }}
+                                                                                onClick={() => handleTransferPedido(idx, i, true, destIdx)}>
+                                                                                🚛 {destPlan.choferNombre}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
                                                                 <button type="button" disabled={i === 0}
                                                                     style={{ width: 22, height: 22, border: '1px solid var(--color-gray-300)', borderRadius: 4,
                                                                         background: 'white', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1,
