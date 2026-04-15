@@ -27,6 +27,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       where: { id: params.id },
       data: {
         patente: data.patente?.toUpperCase(),
+        alias: data.alias,
         marca: data.marca,
         modelo: data.modelo,
         anio: data.anio ? parseInt(data.anio) : undefined,

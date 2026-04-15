@@ -9,6 +9,7 @@ interface Vehiculo {
     patente: string
     marca: string
     modelo: string
+    alias?: string
     estado: string // disponible, mantenimiento, inactivo
 }
 
@@ -27,7 +28,7 @@ interface Asignacion {
     kmInicio?: number
     novedades?: string
     empleado: { nombre: string; apellido: string }
-    vehiculo: { patente: string; marca: string; modelo: string }
+    vehiculo: { patente: string; marca: string; modelo: string; alias?: string }
 }
 
 export default function AsignacionFlotaPage() {
@@ -174,7 +175,12 @@ export default function AsignacionFlotaPage() {
                                         <tr key={asig.id}>
                                             <td style={{ fontWeight: 600 }}>{asig.empleado.nombre} {asig.empleado.apellido}</td>
                                             <td>
-                                                <div style={{ fontWeight: 'bold', fontSize: 'var(--text-sm)' }}>{asig.vehiculo.patente}</div>
+                                                <div style={{ fontWeight: 'bold', fontSize: 'var(--text-sm)' }}>
+                                                    {asig.vehiculo.alias ? `${asig.vehiculo.alias} ` : ''}
+                                                    <span style={{ fontSize: asig.vehiculo.alias ? '0.85em' : '1em', color: asig.vehiculo.alias ? 'var(--color-gray-500)' : 'inherit' }}>
+                                                        {asig.vehiculo.alias ? `(${asig.vehiculo.patente})` : asig.vehiculo.patente}
+                                                    </span>
+                                                </div>
                                                 <div style={{ fontSize: '11px', color: 'var(--color-gray-500)' }}>{asig.vehiculo.marca} {asig.vehiculo.modelo}</div>
                                             </td>
                                             <td>
@@ -215,7 +221,7 @@ export default function AsignacionFlotaPage() {
                             <select className="form-select" value={selectedVehiculo} onChange={e => setSelectedVehiculo(e.target.value)}>
                                 <option value="">Seleccionar vehículo...</option>
                                 {availableVehiculos.map(v => (
-                                    <option key={v.id} value={v.id}>{v.patente} - {v.marca}</option>
+                                    <option key={v.id} value={v.id}>{v.alias ? `${v.alias} (${v.patente})` : `${v.patente} - ${v.marca}`}</option>
                                 ))}
                             </select>
                             {availableVehiculos.length === 0 && (

@@ -665,7 +665,7 @@ export default function PlanificacionRutasPage() {
                                                             >
                                                                 <option value="">Seleccionar Vehículo...</option>
                                                                 {vehiculos.map(v => (
-                                                                    <option key={v.id} value={v.id}>{v.patente} ({v.marca})</option>
+                                                                    <option key={v.id} value={v.id}>{v.alias ? `${v.alias} (${v.patente})` : `${v.patente} (${v.marca})`}</option>
                                                                 ))}
                                                             </select>
                                                             <a href={mapsUrl} target="_blank" rel="noreferrer"

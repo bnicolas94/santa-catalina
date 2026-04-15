@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 interface Vehiculo {
     id: string
     patente: string
+    alias?: string
     marca: string
     modelo: string
 }
@@ -139,7 +140,7 @@ export default function GastosFlotaPage() {
                             <select className="form-select" value={selectedVehiculo} onChange={e => setSelectedVehiculo(e.target.value)} required>
                                 <option value="">Seleccionar vehículo...</option>
                                 {vehiculos.map(v => (
-                                    <option key={v.id} value={v.id}>{v.patente} - {v.marca} {v.modelo}</option>
+                                    <option key={v.id} value={v.id}>{v.alias ? `${v.alias} (${v.patente})` : `${v.patente} - ${v.marca} ${v.modelo}`}</option>
                                 ))}
                             </select>
                         </div>

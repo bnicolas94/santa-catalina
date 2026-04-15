@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     const vehiculo = await prisma.vehiculo.create({
       data: {
         patente: data.patente.toUpperCase(),
+        alias: data.alias || null,
         marca: data.marca,
         modelo: data.modelo,
         anio: parseInt(data.anio),

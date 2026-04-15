@@ -5,6 +5,7 @@ export function VehiculoDialog({ vehiculo, onSave, onClose }: { vehiculo?: any, 
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     patente: vehiculo?.patente || '',
+    alias: vehiculo?.alias || '',
     marca: vehiculo?.marca || '',
     modelo: vehiculo?.modelo || '',
     anio: vehiculo?.anio || new Date().getFullYear(),
@@ -32,9 +33,15 @@ export function VehiculoDialog({ vehiculo, onSave, onClose }: { vehiculo?: any, 
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div className="form-group">
-              <label className="form-label">Patente</label>
-              <input required name="patente" value={formData.patente} onChange={handleChange} className="form-input" style={{ textTransform: 'uppercase' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+              <div className="form-group">
+                <label className="form-label">Patente</label>
+                <input required name="patente" value={formData.patente} onChange={handleChange} className="form-input" style={{ textTransform: 'uppercase' }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Alias (Ej: Kangoo Blanca)</label>
+                <input name="alias" value={formData.alias} onChange={handleChange} className="form-input" placeholder="Opcional" />
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
               <div className="form-group">

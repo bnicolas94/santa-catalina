@@ -31,7 +31,8 @@ export default function VehiculosPage() {
   const filtered = Array.isArray(vehiculos) ? vehiculos.filter(v => 
     v.patente?.toLowerCase().includes(search.toLowerCase()) ||
     v.marca?.toLowerCase().includes(search.toLowerCase()) ||
-    v.modelo?.toLowerCase().includes(search.toLowerCase())
+    v.modelo?.toLowerCase().includes(search.toLowerCase()) ||
+    v.alias?.toLowerCase().includes(search.toLowerCase())
   ) : []
 
   const getAlertasVehiculo = (v: any) => {
@@ -120,7 +121,12 @@ export default function VehiculosPage() {
             <tbody>
               {filtered.map(v => (
                 <tr key={v.id}>
-                  <td style={{ fontWeight: 'bold' }}>{v.patente}</td>
+                  <td style={{ fontWeight: 'bold' }}>
+                    {v.alias ? `${v.alias} ` : ''}
+                    <span style={{ fontSize: v.alias ? '0.85em' : '1em', color: v.alias ? 'var(--color-gray-500)' : 'inherit' }}>
+                      {v.alias ? `(${v.patente})` : v.patente}
+                    </span>
+                  </td>
                   <td>{v.marca} {v.modelo} ({v.anio})</td>
                   <td>{v.kmActual.toLocaleString()} km</td>
                   <td>

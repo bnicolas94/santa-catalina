@@ -642,6 +642,7 @@ model Vehiculo {
   marca            String
   modelo           String
   anio             Int
+  alias            String?
   kmActual         Int                     @default(0) @map("km_actual")
   kmProximoService Int?                    @map("km_proximo_service")
   avisoKmsAntes    Int                     @default(2000) @map("aviso_kms_antes")
