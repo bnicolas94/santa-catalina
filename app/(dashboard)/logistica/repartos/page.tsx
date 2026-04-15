@@ -8,7 +8,11 @@ interface Cliente { id: string; nombreComercial: string; direccion: string; zona
 interface Pedido { 
     id: string; totalUnidades: number; totalImporte: number; estado: string; 
     medioPago: string | null; abonado: boolean;
-    detalles: { cantidad: number; presentacion: { cantidad: number; producto: { codigoInterno: string } } }[] 
+    detalles: { 
+        cantidad: number; 
+        observaciones: string | null;
+        presentacion: { cantidad: number; producto: { codigoInterno: string } } 
+    }[] 
 }
 interface Entrega {
     id: string; horaEntrega: string | null; tempEntrega: number | null
@@ -187,8 +191,11 @@ export default function RepartosPage() {
                                             {entrega.pedido.detalles.map((d, idx) => {
                                                 const pres = d.presentacion
                                                 return (
-                                                    <div key={idx} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
-                                                        - {d.cantidad} un. de x{pres?.cantidad ?? '?'} {pres?.producto?.codigoInterno ?? ''}
+                                                    <div key={idx} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span>- {d.cantidad} un. de x{pres?.cantidad ?? '?'} {pres?.producto?.codigoInterno ?? ''}</span>
+                                                        {d.observaciones && (
+                                                            <span style={{ fontStyle: 'italic', color: 'var(--color-primary)', fontWeight: 600 }}>({d.observaciones.toUpperCase()})</span>
+                                                        )}
                                                     </div>
                                                 )
                                             })}
