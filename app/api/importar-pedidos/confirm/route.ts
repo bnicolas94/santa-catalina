@@ -70,12 +70,27 @@ export async function POST(req: NextRequest) {
         for (const [_, data] of limpiezas) {
             const validCids = Array.from(data.clientes).filter(id => !!id);
             if (validCids.length > 0) {
-                await prisma.pedido.deleteMany({
+                // Primero buscamos los IDs de los pedidos que vamos a borrar para limpiar sus relaciones manuales
+                const pedidosExistentes = await prisma.pedido.findMany({
                     where: {
                         fechaEntrega: data.fecha,
                         clienteId: { in: validCids }
-                    }
+                    },
+                    select: { id: true }
                 });
+
+                const idsABorrar = pedidosExistentes.map(p => p.id);
+
+                if (idsABorrar.length > 0) {
+                    await prisma.$transaction([
+                        // Borramos entregas asociadas (que no tienen onDelete: Cascade)
+                        prisma.entrega.deleteMany({ where: { pedidoId: { in: idsABorrar } } }),
+                        // Borramos movimientos de caja asociados
+                        prisma.movimientoCaja.deleteMany({ where: { pedidoId: { in: idsABorrar } } }),
+                        // Los DetallesPedido se borran solos por el Cascade en el esquema
+                        prisma.pedido.deleteMany({ where: { id: { in: idsABorrar } } })
+                    ]);
+                }
             }
         }
         // -----------------------------------------------------------------------
