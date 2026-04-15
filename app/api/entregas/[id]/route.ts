@@ -33,7 +33,9 @@ export async function PUT(
                 where: { id },
                 data: {
                     horaEntrega: new Date(),
-                    tempEntrega: body.tempEntrega !== undefined ? parseFloat(body.tempEntrega) : null,
+                    tempEntrega: (body.tempEntrega !== undefined && body.tempEntrega !== null && body.tempEntrega !== '') 
+                        ? parseFloat(body.tempEntrega) 
+                        : null,
                     unidadesRechazadas: body.unidadesRechazadas !== undefined ? parseInt(body.unidadesRechazadas) : 0,
                     motivoRechazo: body.motivoRechazo || null,
                     observaciones: body.observaciones || null,

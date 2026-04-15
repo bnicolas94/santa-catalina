@@ -50,7 +50,10 @@ export default function RepartosPage() {
             const res = await fetch(`/api/entregas/${selectedEntrega.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formEntrega),
+                body: JSON.stringify({
+                    ...formEntrega,
+                    tempEntrega: formEntrega.tempEntrega === '' ? null : formEntrega.tempEntrega
+                }),
             })
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Entrega registrada correctamente')
@@ -254,7 +257,7 @@ export default function RepartosPage() {
                                         style={{ fontSize: '18px', padding: 'var(--space-3)' }}
                                         value={formEntrega.tempEntrega}
                                         onChange={e => setFormEntrega({ ...formEntrega, tempEntrega: e.target.value })}
-                                        placeholder="Ej: 4.5" required
+                                        placeholder="Ej: 4.5"
                                     />
                                 </div>
                                 <div className="form-group">
