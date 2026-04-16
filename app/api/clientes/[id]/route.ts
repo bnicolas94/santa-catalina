@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { geocodeAddress } from '@/lib/services/geocoding'
 
 // PUT /api/clientes/:id
 export async function PUT(
@@ -25,21 +26,15 @@ export async function PUT(
             : undefined
 
         // Auto-geocode if address changed
+        // Auto-geocode if address changed
         let latitud: number | undefined
         let longitud: number | undefined
-        if (direccionComputed && process.env.GOOGLE_MAPS_API_KEY) {
-            try {
-                // Determine the locality to help geocoding (use body.localidad, or existing, or default)
-                // Use the string components explicitly to bypass formatting errors
-                const queryAddress = [calleFormatted, body.numero, body.localidad || 'Buenos Aires'].filter(Boolean).join(', ')
-                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(queryAddress)}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=ar`
-                const geoRes = await fetch(geoUrl)
-                const geoData = await geoRes.json()
-                if (geoData.status === 'OK' && geoData.results?.length) {
-                    latitud = geoData.results[0].geometry.location.lat
-                    longitud = geoData.results[0].geometry.location.lng
-                }
-            } catch (e) { console.error('Geocode failed on update:', e) }
+        if (direccionComputed) {
+            const geocode = await geocodeAddress(calleFormatted || null, body.numero || null, body.localidad || null)
+            if (geocode) {
+                latitud = geocode.lat
+                longitud = geocode.lng
+            }
         }
 
         const cliente = await prisma.cliente.update({
@@ -77,6 +72,12 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params
+        
+        const historicos = await prisma.pedido.count({ where: { clienteId: id } })
+        if (historicos > 0) {
+            return NextResponse.json({ error: 'No se puede eliminar un cliente con historial de pedidos. Intente desactivarlo.' }, { status: 400 })
+        }
+        
         await prisma.cliente.delete({ where: { id } })
         return NextResponse.json({ success: true })
     } catch (error) {

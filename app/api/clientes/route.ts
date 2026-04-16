@@ -79,33 +79,20 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: 'Se requiere un array de IDs' }, { status: 400 })
         }
 
-        // Ejecutar borrado en transacción para asegurar consistencia
-        // Borramos en orden de dependencias
-        await prisma.$transaction(async (tx) => {
-            // 1. Movimientos de Caja asociados a pedidos de estos clientes
-            await tx.movimientoCaja.deleteMany({
-                where: { pedido: { clienteId: { in: ids } } }
-            })
+        // Protección estricta contra borrado de históricos
+        const historicos = await prisma.pedido.count({
+            where: { clienteId: { in: ids } }
+        })
 
-            // 2. Entregas de estos clientes
-            await tx.entrega.deleteMany({
-                where: { clienteId: { in: ids } }
-            })
+        if (historicos > 0) {
+            return NextResponse.json({ 
+                error: 'Seguridad: No se pueden eliminar clientes con historial de pedidos.' 
+            }, { status: 400 })
+        }
 
-            // 3. Detalles de Pedido de estos clientes
-            await tx.detallePedido.deleteMany({
-                where: { pedido: { clienteId: { in: ids } } }
-            })
-
-            // 4. Pedidos de estos clientes
-            await tx.pedido.deleteMany({
-                where: { clienteId: { in: ids } }
-            })
-
-            // 5. Finalmente, los Clientes
-            await tx.cliente.deleteMany({
-                where: { id: { in: ids } }
-            })
+        // Si no tienen historial, podemos borrarlos de forma segura
+        await prisma.cliente.deleteMany({
+            where: { id: { in: ids } }
         })
 
         return NextResponse.json({ success: true, count: ids.length })

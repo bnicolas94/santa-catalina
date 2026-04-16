@@ -32,6 +32,7 @@ export default function ClientesPage() {
     const [showModal, setShowModal] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [filterZona, setFilterZona] = useState('')
+    const [searchTerm, setSearchTerm] = useState('')
     const [form, setForm] = useState({
         nombreComercial: '', contactoNombre: '', contactoTelefono: '',
         calle: '', numero: '', localidad: '', zona: '', segmento: '',
@@ -119,7 +120,16 @@ export default function ClientesPage() {
         }
     }
 
-    const filtered = filterZona ? clientes.filter((c) => c.zona === filterZona) : clientes
+    const filtered = clientes.filter((c) => {
+        const matchesZona = filterZona ? c.zona === filterZona : true;
+        const search = searchTerm.toLowerCase();
+        const matchesSearch = search 
+            ? c.nombreComercial.toLowerCase().includes(search) || 
+              (c.direccion?.toLowerCase() || '').includes(search) ||
+              (c.contactoNombre?.toLowerCase() || '').includes(search)
+            : true;
+        return matchesZona && matchesSearch;
+    });
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando clientes...</p></div>
 
@@ -140,19 +150,31 @@ export default function ClientesPage() {
             {success && <div className="toast toast-success">{success}</div>}
             {error && <div className="toast toast-error">{error}</div>}
 
-            {/* Filtro por zona */}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-                <button className={`btn btn-sm ${filterZona === '' ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setFilterZona('')}>
-                    Todos ({clientes.length})
-                </button>
-                {ZONAS.map((z) => {
-                    const count = clientes.filter((c) => c.zona === z).length
-                    return (
-                        <button key={z} className={`btn btn-sm ${filterZona === z ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setFilterZona(filterZona === z ? '' : z)}>
-                            Zona {z} ({count})
-                        </button>
-                    )
-                })}
+            {/* Filtros */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    <input 
+                        type="search" 
+                        className="form-input" 
+                        placeholder="Buscar por nombre, dirección o contacto..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{ maxWidth: '400px', flex: 1 }}
+                    />
+                </div>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                    <button className={`btn btn-sm ${filterZona === '' ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setFilterZona('')}>
+                        Todos ({clientes.length})
+                    </button>
+                    {ZONAS.map((z) => {
+                        const count = clientes.filter((c) => c.zona === z).length
+                        return (
+                            <button key={z} className={`btn btn-sm ${filterZona === z ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setFilterZona(filterZona === z ? '' : z)}>
+                                Zona {z} ({count})
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
 
             <div className="table-container">

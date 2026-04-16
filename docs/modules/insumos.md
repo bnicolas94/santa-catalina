@@ -1,87 +1,111 @@
-# Módulo: Insumos
+# 📦 Módulo: Insumos e Inventario
 
-## 1. 📌 Descripción general
+El módulo de **Insumos** es el núcleo de la gestión de materias primas y suministros del sistema Santa Catalina. Su propósito principal es garantizar la disponibilidad de materiales necesarios para la producción, permitiendo un seguimiento exhaustivo del stock, los costos y las reposiciones.
 
-El módulo de **Insumos** es el componente principal encargado de administrar las materias primas y todos los consumibles base necesarios para la producción y la operación.
+## 📌 Descripción general
 
-Su principal responsabilidad es centralizar el inventario base, gestionar las alertas de stock mediante niveles mínimos de reposición, tipificar los insumos dentro de **Familias**, y manejar factores de conversión o unidades secundarias necesarias para las posteriores *Fichas Técnicas* de los productos. 
-
-Resuelve el problema del descontrol en el stock de materia prima garantizando una rápida visualización de estados críticos y agilizando la trazabilidad hacia los proveedores.
-
----
-
-## 2. 🧩 Componentes principales
-
-* **`app/(dashboard)/insumos/page.tsx`**: Intefaz de usuario (UI). Es un componente principal (más de 650 líneas) que de manera centralizada gestiona:
-  * Tabla de listado e indicadores semáforo.
-  * Lógica de filtrado dual (por estado de urgencia del stock y por familia).
-  * Modal principal de creación/edición de Insumos.
-  * Modal secundario de creación/edición de Familias de Insumos.
-* **`app/api/insumos/route.ts` & `[id]/route.ts`**: Endpoints backend. Contienen la lógica para operaciones CRUD (Get, Post, Put, Delete) sobre el modelo de bases de datos `Insumo`.
-* **`app/api/familias-insumo/route.ts` & `[id]/route.ts`**: Endpoints backend. Proveen funciones similares pero enfocadas el objeto categorizador `FamiliaInsumo`.
+Este módulo resuelve la problemática de control de inventario en una planta de producción alimenticia. Permite:
+*   Digitalizar el stock de materias primas (fiambres, quesos, pan, descartables).
+*   Automatizar el descuento de stock al registrar la producción.
+*   Centralizar la carga de facturas de proveedores, vinculando el ingreso de mercadería con el flujo de caja.
+*   Alertar mediante un sistema de "semáforo" cuándo es necesario reponer un insumo según su consumo y stock mínimo.
 
 ---
 
-## 3. 🔄 Flujo de funcionamiento
+## 🧩 Componentes principales
 
-1. **Lectura y carga inicial**: Al ingresar a la ruta `/insumos`, interactuando vía `useEffect`, se dispara carga concurrente (`Promise.all`) hacia los endpoints de insumos, familias y proveedores.
-2. **Visualización y filtros**: El frontend se renderiza con un "tablero" provisto de botones indicadores (Todos, Bajo mínimo, Precaución, OK) calculados al vuelo cruzando `stockActual` contra `stockMinimo`.
-3. **Guardado (Flujo de entrada)**: Al crear o editar, el formulario normaliza los campos de entrada, detectando posibles errores sintácticos de numéricos (cambiando `,` por `.`), y envía un bloque `JSON` que el endpoint de la API recibe, limpia validando sus tipos, e inserta a la base de datos a través de *Prisma*.
-4. **Interacción con Familias**: Desde un botón global se accede al CRUD independiente de `Familias`. Cualquier cambio en este catálogo afectará directamente los `<select>` disponibles y el filtrado del lado del cliente.
+### Frontend (Vistas)
+*   [insumos/page.tsx](file:///c:/Users/sandw/Documents/santa-catalina/app/(dashboard)/insumos/page.tsx): Interfaz principal de inventario. Muestra el estado del stock, filtros por familia/estado y gestión CRUD de insumos y sus categorías (familias).
+*   [stock/page.tsx](file:///c:/Users/sandw/Documents/santa-catalina/app/(dashboard)/stock/page.tsx): Interfaz para la gestión de movimientos de stock y registro masivo de facturas de proveedores.
 
----
-
-## 4. 🔌 Interfaces y dependencias
-
-**Tipos de dependencias:**
-* **Qué otros módulos usa**: 
-  * `Proveedores`: Un insumo opcionalmente puede registrar el ID de su proveedor de cabecera. Es una dependencia de lectura (carga los catálogos en el `select`).
-* **Qué módulos lo usan a él (Dependencia fuerte)**:
-  * `Fichas Técnicas`: Modulo core productivo. Relaciona Productos finalizados con sus ingredientes (`Insumos`) para controlar la receta, trazando cantidades y porcentajes de mermas.
-  * `StockInsumo` / `MovimientoStock`: Relación con el sistema de trazabilidad histórico e inventarios seccionados.
+### Backend (APIs)
+*   [/api/insumos/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/insumos/route.ts): Endpoints para listar y crear insumos.
+*   [/api/movimientos-stock/factura/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/movimientos-stock/factura/route.ts): Lógica crítica para la carga masiva de ítems de una factura. Maneja transacciones de base de datos para asegurar integridad entre stock y caja.
+*   [/api/lotes/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/lotes/route.ts): Contiene el trigger de consumo. Al crear un lote de producción, este archivo consulta la "Ficha Técnica" y descuenta proporcionalmente los insumos usados.
 
 ---
 
-## 5. 🗄️ Interacción con la base de datos
+## 🔄 Flujo de funcionamiento
 
-Las operaciones viajan por **Prisma** a una base PostgreSQL:
+### 1. Entrada de Mercadería (Carga de Factura)
+1.  El usuario selecciona un proveedor y carga los ítems recibidos.
+2.  El sistema permite definir si el costo cargado actualiza el precio unitario del insumo.
+3.  **Transacción**: 
+    *   Se crean registros en `MovimientoStock` (tipo: 'entrada').
+    *   Se actualizan los balances en `Insumo` y `StockInsumo` (por ubicación).
+    *   Si el pago es "pagado", se crea automáticamente un `GastoOperativo` y un movimiento de egreso en la caja seleccionada.
 
-* **Tablas involucradas directamente**: `insumos`, `familias_insumo`, `stock_insumos`, `movimientos_stock`, `fichas_tecnicas`.
-* **SELECT**: Emite consultas a `insumo.findMany()` haciendo join a `proveedor`, `familia`, y `stocks` (con ubicación).
-* **INSERT** (*POST*): Creaciones estándar. Soporta conexiones anidadas vía `{ connect: { id } }` a `proveedorId` y `familiaId`.
-* **UPDATE** (*PUT*): Actualizaciones parciales de campos. Desconecta explícitamente las relaciones usando `{ disconnect: true }` si los ForeignKey ingresan vacíos.
-* **DELETE**: 
-  * Para *FamiliaInsumo*, implementa un `updateMany` que establece a `null` todos los Insumos enlazados, logrando borrar la familia de manera segura.
-  * Para *Insumo*, implementa **simulación manual de Cascade Delete**.
+### 2. Consumo por Producción
+1.  Se registra un nuevo `Lote` de producción (ej: 100 packs de Jamón y Queso).
+2.  El sistema busca la `FichaTecnica` del producto.
+3.  Calcula el consumo total: `cantidadPorUnidad * unidadesProducidas`.
+4.  Genera un `MovimientoStock` (tipo: 'salida') y descuenta del stock actual.
 
----
-
-## 6. ⚠️ Consideraciones importantes
-
-* **Normalización Front-End**: Como el usuario puede ingresar decimales de manera local (con comas en lugar de puntos), el componente de react ataja esos datos en la funcion `handleSubmit` transformando y sanitizando el input antes de lanzar el payload JSON.
-* **Cálculos al Vuelo**: La propiedad de *Semaforo* (OK, Precaución, Bajo Mínimo) no se persiste en base de datos; su computo se hace en caliente desde el frontend cada vez mediante la función helper `getSemaforoEstado(stockActual, stockMinimo)`. 
-* **Ausencia de ON DELETE CASCADE**: Por deficiencias de definición en el `schema.prisma`, Prisma fallaba con error 500 al intentar eliminar insumos referidos. El código de la API hoy *borra manualmente* dependencias antes del insumo.
-
----
-
-## 7. 🧪 Casos de prueba sugeridos
-
-* **Casos normales**: Crear con éxito un insumo utilizando todos los campos (Ej.: Unidad `Kilos`, Unidad secundaria `Barra`, Factor de conversión `5`); Cambiar su categoría (Familia).
-* **Casos borde**: Completar `stockMinimo` en 0 o números negativos y verificar como el sistema grafica los indicadores; Comprobar entrada decimal con coma ("10,50") o puntos.
-* **Casos de error**: Intentar utilizar un string como ID en el delete; intentar borrar Familias de Insumos desde la base de datos para intentar causar inconsistencias forzadas en los filtrados en vista.
+### 3. Monitoreo y Reposición
+*   El sistema calcula el estado basándose en `stockActual` vs `stockMinimo`.
+*   **Rojo (Bajo mínimo)**: stock < stockMinimo.
+*   **Amarillo (Precaución)**: stock < stockMinimo * 2.
+*   **Verde (OK)**: stock >= stockMinimo * 2.
 
 ---
 
-## 8. 🚀 Posibles mejoras
+## 🔌 Interfaces y dependencias
 
-* **Refactors sugeridos**: Trozar `C:\Users\sandw\Documents\santa-catalina\app\(dashboard)\insumos\page.tsx`. Tiene más de 650 líneas en los que se encuentra un dashboard, la tabla en si misma, las ventanas para cargar cosas y otra ventana para las familias. Separarlo en `ListaInsumos`, `ModalInsumo`, y `ModalFamilia`.
-* **Mejoras de rendimiento**: Si el listado crece considerablemente (a más de 500 o 1000 items), el filter renderizado del lado del cliente puede empezar a caer en lentitud de render. Considerar una estructura de filtrado/paginación directa del backend.
-* **Seguridad de validación de datos**: Implementar esquemas de `Zod` dentro las APIs (`POST/PUT`) para una validación estricta, en reemplazo de los chequeos sencillos por descarte.
+*   **Producción (Lotes)**: Dependencia crítica. Insumos no sabría cuánto descontar sin los lotes.
+*   **Configuración (Ficha Técnica)**: Es el puente que define la relación entre Insumos y Productos.
+*   **Caja (Finanzas)**: El registro de compras impacta directamente en el saldo de la "Caja Madre" o cajas locales.
+*   **Proveedores**: Vinculación para trazabilidad de compras y precios.
 
 ---
 
-## 🧠 Notas para futuras IAs o desarrolladores
+## 🗄️ Interacción con la base de datos
 
-* ⚠️ **RIESGO CRÍTICO EN DELETE**: Eliminar un Insumo duro activa código explícito en el endpoint que ejecuta un `deleteMany` de todas sus `fichas_tecnicas`, `movimientos_stock` y `stock_insumos` subyacentes asociadas. **Cuidado con las eliminaciones, ya que borran recetas (Fichas Técnicas) de manera colateral y registros de históricos de cajas/stock.** En eventuales mejoras se recomienda MUY FUERTEMENTE migrar todo el sistema a "Hard-delete false / Soft-Delete (`activo = false`)" y advertir a un operario en caso que haya productos dependiendo de ese insumo.
-* **Manipulación conjunta UI**: Al intervenir el `.tsx` tené en cuenta que todas las vistas flotantes (Modales) comparten contexto directo (estado) en la misma vista, es fácil romper los handler para modificar un elemento si los tocás.
-* **Control de unidades de medida**: Presta atención a cómo viajan los strings entre `unidad_secundaria` y `factor_conversion`. Algunas partes del sistema pueden esperar conversiones explícitas de números flotantes.
+### Tablas involucradas
+*   `insumos`: Almacena el stock maestro y configuraciones.
+*   `movimientos_stock`: Log histórico de entradas y salidas.
+*   `stock_insumos`: Stock desagregado por ubicación física (ej: Fábrica vs. Depósito).
+*   `familias_insumo`: Categorización lógica y visual (colores).
+*   `fichas_tecnicas`: Definición de recetas/escandallos.
+
+### Operaciones críticas
+*   **Updates Atómicos**: Uso de `increment` y `decrement` de Prisma para evitar condiciones de carrera en el stock.
+*   **Transactions**: El proceso de factura usa `$transaction` para asegurar que el ingreso de mercadería y el egreso de dinero ocurran ambos o ninguno.
+
+---
+
+## ⚠️ Consideraciones importantes
+
+*   **Unidades Secundarias**: Algunos insumos se compran en una unidad (ej: Barras) pero se consumen en otra (ej: Kg). El sistema usa un `factorConversion` para manejar estos casos. Si el peso es variable, el factor se deja vacío y se carga manualmente.
+*   **Validaciones**: Se debe normalizar el uso de comas y puntos en los campos numéricos del frontend antes de enviar a la API.
+*   **Punto de Falla**: Si se elimina un insumo que forma parte de una `FichaTecnica`, la producción de ese producto fallará si no se maneja la nulidad. (Actualmente se previene vía integridad referencial o lógica de negocio).
+
+---
+
+## 🧪 Casos de prueba sugeridos
+
+1.  **Carga de Factura**: Verificar que el stock total del insumo aumente exactamente lo cargado y que, si se marcó como pagado, el saldo de caja disminuya en igual medida.
+2.  **Producción Parcial**: Generar un lote y validar que los insumos con Ficha Técnica se descuenten correctamente. Insumos sin ficha técnica no deben verse afectados.
+3.  **Stock Negativo**: Validar el comportamiento cuando el consumo supera el stock disponible (el sistema actualmente permite stock negativo pero alerta en rojo).
+4.  **Costo de Insumo**: Verificar que al marcar "Actualizar costo" en una factura, el `precioUnitario` del maestro de insumos cambie.
+
+---
+
+## 🚀 Posibles mejoras
+
+*   **Costo Promedio Ponderado (PPP)**: Actualmente, la actualización del costo en la factura pisa el valor anterior. Sería ideal implementar un cálculo de costo promedio basado en el stock remanente y el nuevo ingreso.
+*   **Alertas Push/Email**: Notificar automáticamente al encargado de compras cuando un insumo entre en estado crítico (Rojo).
+*   **Toma de Inventario**: Crear un módulo de "Ajuste de Stock" para auditorías físicas (diferencias entre stock sistema vs físico).
+*   **Historial de Precios**: Mantener una tabla de histórico para ver la evolución del costo de cada insumo en el tiempo.
+
+---
+
+### 🧠 Notas para futuras IAs o desarrolladores
+
+> [!IMPORTANT]
+> **Integridad de Fichas Técnicas**: Antes de modificar la estructura de la tabla `Insumo` o cambiar las `unidadMedida`, revisar el impacto en `FichaTecnica`. Un cambio de unidad sin recalcular las fichas romperá la lógica de costos y descuentos de producción.
+
+> [!WARNING]
+> **Lógica de Facturación**: El archivo `api/movimientos-stock/factura/route.ts` es extremadamente denso. Controla tanto el stock como la caja. Cualquier cambio aquí debe ser testeado exhaustivamente para no generar descuadres financieros.
+
+*   **Riesgo Oculto**: El descuento de stock en los lotes se hace mediante un `createMany` y `update` manual. Si la ficha técnica es muy grande, asegurar que la transacción no exceda el tiempo de timeout.
+*   **Cosas que NO deberían romperse**: El flujo de `upsert` en `StockInsumo` (stock por ubicación) es vital para la multi-sede. No remover la restricción de unicidad `insumoId_ubicacionId`.
