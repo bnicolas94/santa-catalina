@@ -125,13 +125,27 @@ function StockContent() {
     const addItemToFactura = () => {
         if (!isManualInsumo && !tempItem.insumoId) return setError('Seleccione un insumo')
         if (isManualInsumo && !tempItem.insumoNombre) return setError('Ingrese el nombre del insumo')
-        if (tempItem.useBultos && (!tempItem.bultos || !tempItem.unidadesPorBulto)) return setError('Ingrese bultos y unidades')
-        if (!tempItem.useBultos && !tempItem.cantidad) return setError('Ingrese cantidad')
+        
+        let finalCantidad = tempItem.cantidad;
+        if (tempItem.useBultos) {
+            if (!tempItem.bultos || !tempItem.unidadesPorBulto) return setError('Ingrese bultos y unidades')
+            finalCantidad = String(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto))
+        } else if (!tempItem.cantidad) {
+            return setError('Ingrese cantidad')
+        }
 
-        const computedCantidad = tempItem.useBultos ? String(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto)) : tempItem.cantidad
+        const insData = insumos.find(i => i.id === tempItem.insumoId)
+        const itemToAdd = { 
+            ...tempItem, 
+            cantidad: finalCantidad,
+            insumoNombre: isManualInsumo ? tempItem.insumoNombre : insData?.nombre,
+            unidadMedida: insData?.unidadMedida || 'u',
+            unidadSecundaria: insData?.unidadSecundaria
+        }
 
-        setFacturaForm({ ...facturaForm, items: [...facturaForm.items, { ...tempItem, cantidad: computedCantidad }] })
+        setFacturaForm({ ...facturaForm, items: [...facturaForm.items, itemToAdd] })
         setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+        setIsManualInsumo(false)
     }
 
     const removeFacturaItem = (index: number) => {
@@ -837,8 +851,8 @@ function StockContent() {
                                 {/* Seleccion de Insumos */}
                                 <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-2)' }}>🛒 Agregar Insumos al carro</h3>
                                 <div style={{ padding: 'var(--space-3)', backgroundColor: '#F8F9F9', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7E9', marginBottom: 'var(--space-4)' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 'var(--space-3)' }}>
-                                        <div className="form-group">
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                                 <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Insumo</label>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -860,7 +874,11 @@ function StockContent() {
                                             {isManualInsumo ? (
                                                 <input className="form-input" placeholder="Nombre (Ej: Escoba)" value={tempItem.insumoNombre || ''} onChange={(e) => setTempItem({ ...tempItem, insumoNombre: e.target.value })} />
                                             ) : (
-                                                <select className="form-select" value={tempItem.insumoId} onChange={(e) => setTempItem({ ...tempItem, insumoId: e.target.value })}>
+                                                <select className="form-select" value={tempItem.insumoId} onChange={(e) => {
+                                                    const id = e.target.value;
+                                                    const ins = insumos.find(i => i.id === id);
+                                                    setTempItem({ ...tempItem, insumoId: id, useBultos: false, bultos: '', unidadesPorBulto: '', cantidad: '', cantidadSecundaria: '' });
+                                                }}>
                                                     <option value="">Seleccionar insumo...</option>
                                                     {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
                                                         <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
@@ -868,17 +886,86 @@ function StockContent() {
                                                 </select>
                                             )}
                                         </div>
-                                        <div className="form-group">
-                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Cantidad (Total {tempItem.insumoId ? insumos.find(i=>i.id === tempItem.insumoId)?.unidadMedida : ''})</label>
-                                            <input type="number" step="0.001" className="form-input" value={tempItem.cantidad} onChange={(e) => setTempItem({ ...tempItem, cantidad: e.target.value })} placeholder="Ej: 15.5" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Costo Total Ítem ($)</label>
+
+                                        {tempItem.useBultos ? (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Bultos</label>
+                                                    <input type="number" step="0.01" className="form-input" value={tempItem.bultos} onChange={(e) => setTempItem({ ...tempItem, bultos: e.target.value })} placeholder="Ej: 10" />
+                                                </div>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Cant. x Bulto</label>
+                                                    <input type="number" step="0.01" className="form-input" value={tempItem.unidadesPorBulto} onChange={(e) => setTempItem({ ...tempItem, unidadesPorBulto: e.target.value })} placeholder="Ej: 12" />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'grid', gridTemplateColumns: tempItem.insumoId && insumos.find(i => i.id === tempItem.insumoId)?.unidadSecundaria ? '1fr 1fr' : '1fr', gap: 'var(--space-2)' }}>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>
+                                                        Cant. ({!isManualInsumo && tempItem.insumoId ? insumos.find(i => i.id === tempItem.insumoId)?.unidadMedida : 'unid'})
+                                                    </label>
+                                                    <input 
+                                                        type="number" 
+                                                        step="0.001" 
+                                                        className="form-input" 
+                                                        value={tempItem.cantidad} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const ins = insumos.find(i => i.id === tempItem.insumoId);
+                                                            let secVal = tempItem.cantidadSecundaria;
+                                                            if (ins?.factorConversion && val) {
+                                                                secVal = String(parseFloat(val) / ins.factorConversion);
+                                                            }
+                                                            setTempItem({ ...tempItem, cantidad: val, cantidadSecundaria: secVal });
+                                                        }} 
+                                                        placeholder="0" 
+                                                    />
+                                                </div>
+                                                {!isManualInsumo && tempItem.insumoId && insumos.find(i => i.id === tempItem.insumoId)?.unidadSecundaria && (
+                                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                                        <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>En {insumos.find(i => i.id === tempItem.insumoId)?.unidadSecundaria}</label>
+                                                        <input 
+                                                            type="number" 
+                                                            step="0.001" 
+                                                            className="form-input" 
+                                                            value={tempItem.cantidadSecundaria} 
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                const ins = insumos.find(i => i.id === tempItem.insumoId);
+                                                                let primVal = tempItem.cantidad;
+                                                                if (ins?.factorConversion && val) {
+                                                                    primVal = String(parseFloat(val) * ins.factorConversion);
+                                                                }
+                                                                setTempItem({ ...tempItem, cantidadSecundaria: val, cantidad: primVal });
+                                                            }} 
+                                                            placeholder="0" 
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Costo Total ($)</label>
                                             <input type="number" step="0.01" className="form-input" value={tempItem.costoTotal} onChange={(e) => setTempItem({ ...tempItem, costoTotal: e.target.value })} placeholder="Ej: 5000" />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>
-                                        <button type="button" className="btn btn-sm btn-ghost" onClick={addItemToFactura} style={{ border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}>+ Agregar a Factura</button>
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
+                                        <div style={{ display: 'flex', gap: '15px' }}>
+                                            {!isManualInsumo && (
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
+                                                    <input type="checkbox" checked={tempItem.useBultos} onChange={(e) => setTempItem({ ...tempItem, useBultos: e.target.checked })} />
+                                                    Ingresar en bultos (Maples, Cajas, Packs)
+                                                </label>
+                                            )}
+                                            {tempItem.useBultos && tempItem.bultos && tempItem.unidadesPorBulto && (
+                                                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-primary)' }}>
+                                                    Total calculado: {(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto)).toLocaleString('es-AR')} {insumos.find(i => i.id === tempItem.insumoId)?.unidadMedida}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <button type="button" className="btn btn-sm btn-ghost" onClick={addItemToFactura} style={{ border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '4px 12px' }}>+ Agregar a Factura</button>
                                     </div>
                                 </div>
 
@@ -899,11 +986,27 @@ function StockContent() {
                                                 const insData = insumos.find(i => i.id === it.insumoId)
                                                 return (
                                                     <tr key={idx}>
-                                                        <td>{it.insumoNombre || insData?.nombre} <br/> <span style={{fontSize:'0.7rem', color:'#666'}}>Vto: {it.fechaVencimiento || '—'}</span></td>
-                                                        <td>{it.cantidad} {insData?.unidadMedida || 'u'}</td>
-                                                        <td>${parseFloat(it.costoTotal || '0').toLocaleString('es-AR')}</td>
-                                                        <td>{it.costoTotal && it.cantidad ? `$${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toFixed(2)} / ${insData?.unidadMedida || 'u'}` : '—'}</td>
-                                                        <td><button type="button" className="btn btn-icon" onClick={() => removeFacturaItem(idx)}>✕</button></td>
+                                                        <td>
+                                                            <div style={{ fontWeight: 600 }}>{it.insumoNombre || insData?.nombre}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)' }}>Vto: {it.fechaVencimiento || '—'}</div>
+                                                        </td>
+                                                        <td>
+                                                            <div>{it.cantidad} {it.unidadMedida}</div>
+                                                            {it.cantidadSecundaria && (
+                                                                <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
+                                                                    ({it.cantidadSecundaria} {it.unidadSecundaria})
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td>${parseFloat(it.costoTotal || '0').toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                                        <td>
+                                                            {it.costoTotal && it.cantidad ? (
+                                                                <div style={{ fontSize: '0.8rem' }}>
+                                                                    ${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {it.unidadMedida}
+                                                                </div>
+                                                            ) : '—'}
+                                                        </td>
+                                                        <td><button type="button" className="btn btn-icon btn-ghost" onClick={() => removeFacturaItem(idx)} style={{ color: 'var(--color-danger)' }}>✕</button></td>
                                                     </tr>
                                                 )
                                             })}
