@@ -29,6 +29,12 @@ export default function ProduccionPageV2() {
     }
 
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
+
+    const handleAddDays = (days: number) => {
+        const d = new Date((filterFecha || getLocalDateString()) + 'T12:00:00')
+        d.setDate(d.getDate() + days)
+        setFilterFecha(getLocalDateString(d))
+    }
     const [filterEstado, setFilterEstado] = useState('')
     const [activeTurno, setActiveTurno] = useState('Mañana')
     const [filterDestino, setFilterDestino] = useState<'TODOS' | 'FABRICA' | 'LOCAL'>('TODOS')
@@ -141,7 +147,11 @@ export default function ProduccionPageV2() {
                         <span className={styles.subtitle}>Gestión modular de lotes, planificación y stock de fábrica</span>
                     </div>
                     <div className={styles.controls}>
-                        <input type="date" className="form-input" value={filterFecha} onChange={(e) => setFilterFecha(e.target.value)} style={{ width: '160px' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                            <button className="btn btn-ghost" onClick={() => handleAddDays(-1)} style={{ padding: '0 8px', backgroundColor: 'var(--color-gray-100)' }} title="Día anterior">◀</button>
+                            <input type="date" className="form-input" value={filterFecha} onChange={(e) => setFilterFecha(e.target.value)} style={{ width: '150px' }} />
+                            <button className="btn btn-ghost" onClick={() => handleAddDays(1)} style={{ padding: '0 8px', backgroundColor: 'var(--color-gray-100)' }} title="Día siguiente">▶</button>
+                        </div>
                         <button className="btn btn-ghost" onClick={() => setShowTransferModal(true)}>🚚 Traslado</button>
                         <button className="btn btn-ghost" onClick={() => setShowMermaModal(true)}>⚠️ Merma</button>
                         <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Nuevo Lote</button>

@@ -84,6 +84,12 @@ export default function ProduccionPage() {
     const [loteSeleccionado, setLoteSeleccionado] = useState<Lote | null>(null)
     const [filterEstado, setFilterEstado] = useState('')
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
+
+    const handleAddDays = (days: number) => {
+        const d = new Date((filterFecha || getLocalDateString()) + 'T12:00:00')
+        d.setDate(d.getDate() + days)
+        setFilterFecha(getLocalDateString(d))
+    }
     const { data: session } = useSession()
 
     const { data: swrData, isLoading: loading, mutate } = useProduccionData(filterFecha || getLocalDateString())
@@ -711,14 +717,18 @@ export default function ProduccionPage() {
             <div className="page-header">
                 <h1>🏭 Producción — Lotes</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', width: '100%', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                    <input
-                        type="date"
-                        className="form-input"
-                        value={filterFecha}
-                        onChange={(e) => setFilterFecha(e.target.value)}
-                        title="Filtrar por fecha"
-                        style={{ height: '38px', width: 'auto', flex: '1', minWidth: '130px' }}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: '1', minWidth: '200px' }}>
+                        <button className="btn btn-ghost" onClick={() => handleAddDays(-1)} style={{ padding: '0 12px', height: '38px', backgroundColor: 'var(--color-gray-100)' }} title="Día anterior">◀</button>
+                        <input
+                            type="date"
+                            className="form-input"
+                            value={filterFecha}
+                            onChange={(e) => setFilterFecha(e.target.value)}
+                            title="Filtrar por fecha"
+                            style={{ height: '38px', width: '100%' }}
+                        />
+                        <button className="btn btn-ghost" onClick={() => handleAddDays(1)} style={{ padding: '0 12px', height: '38px', backgroundColor: 'var(--color-gray-100)' }} title="Día siguiente">▶</button>
+                    </div>
                     {filterFecha && (
                         <button className="btn btn-ghost" onClick={() => setFilterFecha('')} title="Ver todas las fechas" style={{ padding: '0 8px', fontSize: '1.2rem' }}>
                             ✕
