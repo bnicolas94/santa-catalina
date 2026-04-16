@@ -136,10 +136,34 @@ export default function CajaPage() {
     const [depositConfig, setDepositConfig] = useState<any>(null)
     const [showAdminConfig, setShowAdminConfig] = useState(false)
     const [allConfigs, setAllConfigs] = useState<any>(null)
+    const [filtroTexto, setFiltroTexto] = useState('')
+    const [filtroCaja, setFiltroCaja] = useState('todas')
+    const [filtroTipo, setFiltroTipo] = useState('todos')
 
     const allowedBoxes = userRol === 'ADMIN' 
         ? ['caja_madre', 'local', 'caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani'] 
         : (ubicacionTipo === 'LOCAL' ? ['local', 'caja_chica_local'] : ['caja_madre', 'caja_chica'])
+
+    const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
+        // Filtro por Tipo
+        if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;
+
+        // Filtro por Caja
+        if (filtroCaja !== 'todas' && m.cajaOrigen !== filtroCaja) return false;
+
+        // Filtro por Texto (Concepto, Descripción, Chofer, Pedido)
+        if (filtroTexto.trim() !== '') {
+            const search = filtroTexto.toLowerCase();
+            const conceptoStr = (conceptos.find(c => c.clave === m.concepto)?.nombre || m.concepto || '').toLowerCase();
+            const descStr = (m.descripcion || '').toLowerCase();
+            const choferStr = (m.rendicion?.chofer?.nombre || '').toLowerCase();
+            const pedidoStr = (m.pedido?.cliente?.nombreComercial || '').toLowerCase();
+
+            return conceptoStr.includes(search) || descStr.includes(search) || choferStr.includes(search) || pedidoStr.includes(search);
+        }
+
+        return true;
+    });
 
     useEffect(() => {
         // Reset default form boxes if restricted
@@ -770,6 +794,60 @@ export default function CajaPage() {
                 </div>
             </div>
 
+            {/* ═══ Barra de Filtros ═══ */}
+            <div className="card" style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ flex: '1 1 300px', position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>🔍</span>
+                        <input 
+                            type="text" 
+                            className="form-input" 
+                            placeholder="Buscar por concepto, descripción, chofer..." 
+                            value={filtroTexto}
+                            onChange={(e) => setFiltroTexto(e.target.value)}
+                            style={{ paddingLeft: '35px', width: '100%', fontSize: '0.9rem' }}
+                        />
+                    </div>
+                    <div style={{ flex: '0 0 200px' }}>
+                        <select 
+                            className="form-select" 
+                            value={filtroCaja}
+                            onChange={(e) => setFiltroCaja(e.target.value)}
+                            style={{ fontSize: '0.9rem' }}
+                        >
+                            <option value="todas">🏦 Todas las Cajas</option>
+                            {allowedBoxes.map(box => (
+                                <option key={box} value={box}>{getBoxLabel(box)}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div style={{ flex: '0 0 160px' }}>
+                        <select 
+                            className="form-select" 
+                            value={filtroTipo}
+                            onChange={(e) => setFiltroTipo(e.target.value)}
+                            style={{ fontSize: '0.9rem' }}
+                        >
+                            <option value="todos">🎭 Todos los Tipos</option>
+                            <option value="ingreso">⬆️ Ingresos</option>
+                            <option value="egreso">⬇️ Egresos</option>
+                        </select>
+                    </div>
+                    {(filtroTexto || filtroCaja !== 'todas' || filtroTipo !== 'todos') && (
+                        <button 
+                            className="btn btn-ghost btn-sm" 
+                            onClick={() => { setFiltroTexto(''); setFiltroCaja('todas'); setFiltroTipo('todos'); }}
+                            style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 600 }}
+                        >
+                            🧹 Limpiar Filtros
+                        </button>
+                    )}
+                    <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>
+                        {movimientosFiltrados.length} resultados
+                    </div>
+                </div>
+            </div>
+
             {/* ═══ Tabla de Movimientos ═══ */}
             <div className="table-container">
                 <table className="table">
@@ -786,9 +864,9 @@ export default function CajaPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {movimientos.length === 0 ? (
-                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>Sin movimientos para esta fecha</td></tr>
-                        ) : movimientos.map((m: MovCaja) => (
+                        {movimientosFiltrados.length === 0 ? (
+                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>No se encontraron movimientos con estos filtros</td></tr>
+                        ) : movimientosFiltrados.map((m: MovCaja) => (
                             <tr key={m.id}>
                                 <td>
                                     <span className="badge" style={{
