@@ -50,22 +50,32 @@ export async function DELETE(request: Request) {
         const startOfDay = new Date(`${fechaStr}T00:00:00.000Z`)
         const endOfDay = new Date(`${fechaStr}T23:59:59.999Z`)
 
-        // PREVENCIÓN: No permitir borrar si ya hubo algún descuento ese día
+        // PREVENCIÓN: No permitir borrar los turnos que ya fueron procesados y descontados
         // @ts-ignore
-        const yaDescontados = await prisma.planificacionDescuento.findFirst({
-            where: { fecha: startOfDay }
+        const yaDescontados = await prisma.planificacionDescuento.findMany({
+            where: { fecha: startOfDay },
+            select: { turno: true }
         })
-        if (yaDescontados) {
-            return NextResponse.json({ 
-                error: 'No se puede limpiar la planificación: Ya existen turnos procesados y descontados para este día.' 
-            }, { status: 400 })
+
+        const turnosDescontados = yaDescontados.map((d: any) => d.turno)
+
+        let message = 'Planificación eliminada'
+        if (turnosDescontados.length > 0) {
+            message = `Planificación eliminada parcial (se conservaron los turnos ya descontados: ${turnosDescontados.join(', ')})`
+            
+            await prisma.requerimientoProduccion.deleteMany({
+                where: { 
+                    fecha: { gte: startOfDay, lte: endOfDay },
+                    turno: { notIn: turnosDescontados }
+                }
+            })
+        } else {
+            await prisma.requerimientoProduccion.deleteMany({
+                where: { fecha: { gte: startOfDay, lte: endOfDay } }
+            })
         }
 
-        await prisma.requerimientoProduccion.deleteMany({
-            where: { fecha: { gte: startOfDay, lte: endOfDay } }
-        })
-
-        return NextResponse.json({ success: true, message: 'Planificación eliminada' })
+        return NextResponse.json({ success: true, message })
 
     } catch (error) {
         console.error('Error al borrar planificación:', error)
