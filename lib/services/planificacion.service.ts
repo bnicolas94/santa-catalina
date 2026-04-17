@@ -176,17 +176,31 @@ export class PlanificacionService {
             enProduccion[l.productoId] = (enProduccion[l.productoId] || 0) + (l.unidadesProducidas * size)
         })
 
-        const shipmentCounts: Record<string, number> = {}
+        const shipmentCounts: Record<string, number> = {
+            'Mañana': 0,
+            'Siesta': 0,
+            'Tarde': 0,
+            'Por Asignar': 0,
+            'Totales': 0
+        }
         const shipmentsSet: Record<string, Set<string>> = {}
 
         // 1. Contar envíos de Rutas
         rutas.forEach(ruta => {
             const turno = ruta.turno || 'Sin Turno'
-            if (!shipmentCounts[turno]) shipmentCounts[turno] = 0
+            if (shipmentCounts[turno] === undefined) shipmentCounts[turno] = 0
             shipmentCounts[turno] += ruta.entregas.length
         })
 
-        // 2. Contar envíos de Requerimientos Manuales/Importados (usando shipmentId único)
+        // 2. Contar envíos de Pedidos Sin Ruta (NUEVO: para que aparezcan en los badges del dashboard)
+        pedidosSinRuta.forEach(pedido => {
+            const turnoPedido = pedido.turno || 'Por Asignar'
+            const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
+            if (shipmentCounts[turnoFinal] === undefined) shipmentCounts[turnoFinal] = 0
+            shipmentCounts[turnoFinal] += 1
+        })
+
+        // 3. Contar envíos de Requerimientos Manuales/Importados (usando shipmentId único)
         manuales.forEach(m => {
             if (m.destino === 'LOCAL') return // No es un envío de reparto
             const turno = m.turno
@@ -203,8 +217,14 @@ export class PlanificacionService {
 
         // Sumar conteos de manuales al total
         Object.entries(shipmentsSet).forEach(([turno, set]) => {
-            shipmentCounts[turno] = (shipmentCounts[turno] || 0) + set.size
+            if (shipmentCounts[turno] === undefined) shipmentCounts[turno] = 0
+            shipmentCounts[turno] += set.size
         })
+
+        // Calcular total global
+        shipmentCounts['Totales'] = Object.entries(shipmentCounts)
+            .filter(([k]) => k !== 'Totales')
+            .reduce((acc, [_, v]) => acc + v, 0)
         
         // @ts-ignore
         const descuentosTurnos = await prisma.planificacionDescuento.findMany({
