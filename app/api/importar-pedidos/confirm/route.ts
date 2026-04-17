@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
         // -----------------------------------------------------------------------
 
         // En Prisma SQLite, la forma más limpia es hacer operaciones batch o secuencias
+        const newClientsCache = new Map<string, string>(); // Evita duplicar clientes nuevos en el mismo batch
+
         for (const row of validRows) {
             try {
                 await prisma.$transaction(async (tx) => {
@@ -117,20 +119,26 @@ export async function POST(req: NextRequest) {
 
                     // 1. Crear o Actualizar cliente
                     if (row.clientMatch.isNew || !finalClientId) {
-                        const newClient = await tx.cliente.create({
-                            data: {
-                                nombreComercial: row.clientMatch.proposedData.nombreComercial,
-                                contactoTelefono: row.clientMatch.proposedData.contactoTelefono || null,
-                                direccion: full || row.clientMatch.proposedData.direccion || null,
-                                calle,
-                                numero,
-                                localidad: row.clientMatch.proposedData.localidad || null,
-                                zona: "C",
-                                latitud,
-                                longitud
-                            },
-                        });
-                        finalClientId = newClient.id;
+                        const cacheKey = row.clientMatch.proposedData.nombreComercial.trim().toLowerCase();
+                        if (newClientsCache.has(cacheKey)) {
+                            finalClientId = newClientsCache.get(cacheKey)!;
+                        } else {
+                            const newClient = await tx.cliente.create({
+                                data: {
+                                    nombreComercial: row.clientMatch.proposedData.nombreComercial,
+                                    contactoTelefono: row.clientMatch.proposedData.contactoTelefono || null,
+                                    direccion: full || row.clientMatch.proposedData.direccion || null,
+                                    calle,
+                                    numero,
+                                    localidad: row.clientMatch.proposedData.localidad || null,
+                                    zona: "C",
+                                    latitud,
+                                    longitud
+                                },
+                            });
+                            finalClientId = newClient.id;
+                            newClientsCache.set(cacheKey, finalClientId);
+                        }
                     } else if (finalClientId) {
                         const existing = await tx.cliente.findUnique({ where: { id: finalClientId } });
                         if (existing) {

@@ -70,6 +70,14 @@ export class PlanificacionService {
             'Por Asignar': {}
         }
 
+        // --- NUEVO: Objeto separado para demanda de logística (solo referencia) ---
+        const demandaRutas: Record<string, Record<string, number>> = {
+            'Mañana': {},
+            'Siesta': {},
+            'Tarde': {},
+            'Por Asignar': {}
+        }
+
         const infoProductos: Record<string, any> = {}
 
         // Helper para registrar en infoProductos
@@ -85,10 +93,10 @@ export class PlanificacionService {
             return key
         }
 
-        // Procesar rutas
+        // Procesar rutas -> AHORA VA A demandaRutas (NO a necesidades)
         rutas.forEach(ruta => {
             const turno = ruta.turno || 'Sin Turno'
-            if (!necesidades[turno]) necesidades[turno] = {}
+            if (!demandaRutas[turno]) demandaRutas[turno] = {}
             
             ruta.entregas.forEach(entrega => {
                 entrega.pedido.detalles.forEach(detalle => {
@@ -97,19 +105,17 @@ export class PlanificacionService {
                     const key = registerInfo(prod, pres)
                     const cantTotal = detalle.cantidad * pres.cantidad
                     
-                    necesidades[turno][key] = (necesidades[turno][key] || 0) + cantTotal
+                    demandaRutas[turno][key] = (demandaRutas[turno][key] || 0) + cantTotal
                 })
             })
         })
 
-        // Procesar pedidos sin ruta
+        // Procesar pedidos sin ruta -> AHORA SE IGNORAN para el total de producción
         pedidosSinRuta.forEach(pedido => {
-            // Intentamos usar el turno del pedido, si no, va a "Por Asignar"
             const turnoPedido = pedido.turno || 'Por Asignar'
-            // Validamos que el turno sea uno de los conocidos para evitar errores de claves
             const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
             
-            if (!necesidades[turnoFinal]) necesidades[turnoFinal] = {}
+            if (!demandaRutas[turnoFinal]) demandaRutas[turnoFinal] = {}
 
             pedido.detalles.forEach(detalle => {
                 const prod = detalle.presentacion.producto
@@ -117,7 +123,8 @@ export class PlanificacionService {
                 const key = registerInfo(prod, pres)
                 const cantTotal = detalle.cantidad * pres.cantidad
                 
-                necesidades[turnoFinal][key] = (necesidades[turnoFinal][key] || 0) + cantTotal
+                // Lo sumamos a demandaRutas como referencia "proyectada"
+                demandaRutas[turnoFinal][key] = (demandaRutas[turnoFinal][key] || 0) + cantTotal
             })
         })
 
@@ -185,32 +192,15 @@ export class PlanificacionService {
         }
         const shipmentsSet: Record<string, Set<string>> = {}
 
-        // 1. Contar envíos de Rutas
-        rutas.forEach(ruta => {
-            const turno = ruta.turno || 'Sin Turno'
-            if (shipmentCounts[turno] === undefined) shipmentCounts[turno] = 0
-            shipmentCounts[turno] += ruta.entregas.length
-        })
-
-        // 2. Contar envíos de Pedidos Sin Ruta (NUEVO: para que aparezcan en los badges del dashboard)
-        pedidosSinRuta.forEach(pedido => {
-            const turnoPedido = pedido.turno || 'Por Asignar'
-            const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
-            if (shipmentCounts[turnoFinal] === undefined) shipmentCounts[turnoFinal] = 0
-            shipmentCounts[turnoFinal] += 1
-        })
-
-        // 3. Contar envíos de Requerimientos Manuales/Importados (usando shipmentId único)
+        // --- AHORA shipmentCounts SOLO cuenta lo del Excel/Manual para no duplicar ---
         manuales.forEach(m => {
             if (m.destino === 'LOCAL') return // No es un envío de reparto
             const turno = m.turno
             if (!shipmentsSet[turno]) shipmentsSet[turno] = new Set()
             
-            // Si tiene shipmentId lo usamos para agrupar, si no (legacy) lo contamos como 1 individual
             if (m.shipmentId) {
                 shipmentsSet[turno].add(m.shipmentId)
             } else {
-                // Para datos viejos sin shipmentId, usamos el ID del registro para no subestimar
                 shipmentsSet[turno].add(m.id)
             }
         })
@@ -323,11 +313,12 @@ export class PlanificacionService {
         })
 
         return {
-            necesidades,
+            necesidades, // Pura demanda manual (Excel)
+            demandaRutas, // Nueva referencia de Logística
             infoProductos,
             shipmentCounts,
             descuentosRealizados: descuentosTurnos.map((d: any) => d.turno),
-            pendientesAnteriores, // <-- Enviamos los pendientes acumulados de días pasados
+            pendientesAnteriores,
             manualesDetalle: manuales.reduce((acc, m) => {
                 const turno = m.turno
                 // @ts-ignore

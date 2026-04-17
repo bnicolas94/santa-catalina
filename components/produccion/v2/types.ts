@@ -50,6 +50,7 @@ export interface Lote {
 
 export interface PlanningData {
     necesidades: Record<string, Record<string, number>>
+    demandaRutas?: Record<string, Record<string, number>>
     infoProductos: Record<string, any>
     manuales?: Record<string, Record<string, number>>
     manualesDetalle?: Record<string, Record<string, { fabrica: number, local: number }>>
@@ -58,6 +59,7 @@ export interface PlanningData {
     enProduccion: Record<string, number>
     shipmentCounts?: Record<string, number>
     descuentosRealizados?: string[]
+    pendientesAnteriores?: any
 }
 
 export const ESTADOS_LOTE = [

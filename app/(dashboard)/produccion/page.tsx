@@ -848,6 +848,9 @@ export default function ProduccionPage() {
                                         Object.values(planning?.necesidades || {}).forEach(t => {
                                             if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
                                         })
+                                        Object.values(planning?.demandaRutas || {}).forEach(t => {
+                                            if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
+                                        })
 
                                         const consolidado: Record<string, { ruta: number, manual: number, total: number }> = {}
                                         const manualesDetalleConsolidado: Record<string, { fabrica: number, local: number }> = {}
@@ -863,18 +866,18 @@ export default function ProduccionPage() {
                                         })
 
                                         todosPids.forEach(pid_presid => {
-                                            const totalUnitsOriginal = Object.values(planning?.necesidades || {}).reduce((sum: number, t: any) => sum + (t?.[pid_presid] || 0), 0) as number
+                                            const manualUnitsTotal = Object.values(planning?.necesidades || {}).reduce((sum: number, t: any) => sum + (t?.[pid_presid] || 0), 0) as number
+                                            const rutaUnitsRaw = Object.values(planning?.demandaRutas || {}).reduce((sum: number, t: any) => sum + (t?.[pid_presid] || 0), 0) as number
                                             const det = manualesDetalleConsolidado[pid_presid] || { fabrica: 0, local: 0 }
-                                            const rutaUnitsTotal = Math.max(0, totalUnitsOriginal - (det.fabrica + det.local))
                                             
                                             // Aplicar lógica de filtro: rutaUnits siempre es fábrica
-                                            const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsTotal
+                                            const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
                                             const manualUnits = filterDestino === 'TODOS' ? (det.fabrica + det.local) : (filterDestino === 'LOCAL' ? det.local : det.fabrica)
 
                                             consolidado[pid_presid] = {
                                                 ruta: rutaUnits,
                                                 manual: manualUnits,
-                                                total: rutaUnits + manualUnits
+                                                total: manualUnits // El Total para producción AHORA es solo lo manual (Excel)
                                             }
                                         })
 
@@ -1014,10 +1017,14 @@ export default function ProduccionPage() {
                                         const indexActual = TURNOS_ORDEN.indexOf(activeTurno);
 
                                         const necesidadesTurno = planning?.necesidades?.[activeTurno] || {}
+                                        const rutasTurno = planning?.demandaRutas?.[activeTurno] || {}
                                         const manualesTurno = planning?.manualesDetalle?.[activeTurno] || {}
 
+                                        // Unimos las claves de lo manual y lo de rutas para que se vean ambos productos
+                                        const allKeys = Array.from(new Set([...Object.keys(necesidadesTurno), ...Object.keys(rutasTurno)]))
+
                                         // ALFABÉTICO POR CÓDIGO INTERNO (Excluyendo Elegidos y Premium del flujo estándar)
-                                        const items = Object.entries(necesidadesTurno)
+                                        const items = (allKeys.map(key => [key, necesidadesTurno[key] || 0]) as [string, number][])
                                             .filter(([key]) => {
                                                 const code = planning?.infoProductos?.[key]?.codigoInterno
                                                 return code !== 'ELE' && code !== 'PRE'
@@ -1043,12 +1050,13 @@ export default function ProduccionPage() {
                                             const presid = prodInfo?.presentacion?.id || null
 
                                             const manInfo = manualesTurno[key] || { fabrica: 0, local: 0 }
-                                            const rutaUnitsRaw = Math.max(0, totalUnitsOriginal - (manInfo.fabrica + manInfo.local))
+                                            const rutaUnitsRaw = planning?.demandaRutas?.[activeTurno]?.[key] || 0
 
                                             // Aplicar filtro
                                             const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
                                             const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
-                                            const totalUnits = rutaUnits + manualUnits
+                                            // El total de producción AHORA solo contempla lo manual/Excel por pedido del usuario
+                                            const totalUnits = manualUnits
 
                                             if (totalUnits === 0 && filterDestino !== 'TODOS') return null
 

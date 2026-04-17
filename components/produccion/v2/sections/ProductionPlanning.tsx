@@ -56,6 +56,9 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
             Object.values(planning?.necesidades || {}).forEach(t => {
                 if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
             })
+            Object.values(planning?.demandaRutas || {}).forEach(t => {
+                if (t) Object.keys(t).forEach(pid_presid => todosPids.add(pid_presid))
+            })
 
             const manualesDetalleConsolidado: Record<string, { fabrica: number, local: number }> = {}
             Object.values(planning?.manualesDetalle || {}).forEach(turnoData => {
@@ -68,11 +71,11 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
 
             const items: any[] = []
             todosPids.forEach(pid_presid => {
-                const totalUnitsOriginal = Object.values(planning?.necesidades || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
+                const manualUnitsTotal = Object.values(planning?.necesidades || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
+                const rutaUnitsRaw = Object.values(planning?.demandaRutas || {}).reduce((sum, t) => sum + (t?.[pid_presid] || 0), 0)
                 const det = manualesDetalleConsolidado[pid_presid] || { fabrica: 0, local: 0 }
-                const rutaUnitsTotal = Math.max(0, totalUnitsOriginal - (det.fabrica + det.local))
                 
-                const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsTotal
+                const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
                 const manualUnits = filterDestino === 'TODOS' ? (det.fabrica + det.local) : (filterDestino === 'LOCAL' ? det.local : det.fabrica)
 
                 if (rutaUnits + manualUnits > 0 || filterDestino === 'TODOS') {
@@ -80,18 +83,23 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
                         key: pid_presid,
                         ruta: rutaUnits,
                         manual: manualUnits,
-                        total: rutaUnits + manualUnits
+                        total: manualUnits // El Total para producción es solo lo manual (Excel)
                     })
                 }
             })
             return items.sort((a,b) => (planning.infoProductos[a.key]?.codigoInterno || '').localeCompare(planning.infoProductos[b.key]?.codigoInterno || ''))
         } else {
             const necesidadesTurno = planning.necesidades[activeTurno] || {}
+            const rutasTurno = planning.demandaRutas?.[activeTurno] || {}
             const manualesTurno = planning.manualesDetalle?.[activeTurno] || {}
             
-            return Object.entries(necesidadesTurno).map(([key, totalUnitsOriginal]) => {
+            const allKeys = Array.from(new Set([...Object.keys(necesidadesTurno), ...Object.keys(rutasTurno)]))
+
+            return allKeys.map(key => {
+                const manualUnitsOriginal = necesidadesTurno[key] || 0
                 const manInfo = manualesTurno[key] || { fabrica: 0, local: 0 }
-                const rutaUnitsRaw = Math.max(0, totalUnitsOriginal - (manInfo.fabrica + manInfo.local))
+                const rutaUnitsRaw = rutasTurno[key] || 0
+
                 const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
                 const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
                 
@@ -99,7 +107,7 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
                     key,
                     ruta: rutaUnits,
                     manual: manualUnits,
-                    total: rutaUnits + manualUnits
+                    total: manualUnits // El Total para producción es solo lo manual (Excel)
                 }
             }).sort((a,b) => (planning.infoProductos[a.key]?.codigoInterno || '').localeCompare(planning.infoProductos[b.key]?.codigoInterno || ''))
         }
