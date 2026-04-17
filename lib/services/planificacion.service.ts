@@ -104,13 +104,20 @@ export class PlanificacionService {
 
         // Procesar pedidos sin ruta
         pedidosSinRuta.forEach(pedido => {
+            // Intentamos usar el turno del pedido, si no, va a "Por Asignar"
+            const turnoPedido = pedido.turno || 'Por Asignar'
+            // Validamos que el turno sea uno de los conocidos para evitar errores de claves
+            const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
+            
+            if (!necesidades[turnoFinal]) necesidades[turnoFinal] = {}
+
             pedido.detalles.forEach(detalle => {
                 const prod = detalle.presentacion.producto
                 const pres = detalle.presentacion
                 const key = registerInfo(prod, pres)
                 const cantTotal = detalle.cantidad * pres.cantidad
                 
-                necesidades['Por Asignar'][key] = (necesidades['Por Asignar'][key] || 0) + cantTotal
+                necesidades[turnoFinal][key] = (necesidades[turnoFinal][key] || 0) + cantTotal
             })
         })
 
