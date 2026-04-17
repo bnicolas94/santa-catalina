@@ -196,13 +196,28 @@ export async function POST(req: NextRequest) {
 
         // Si es solo preview, devolvemos resultados sin guardar
         if (!confirmar) {
+            // NUEVO: Detectar si ya hay rutas creadas para los turnos que se están queriendo importar
+            const turnosInteres = Array.from(new Set(resultados.filter(r => r.turnoNorm).map(r => r.turnoNorm!)))
+            const fechasInteres = Array.from(new Set(resultados.filter(r => r.fechaValue).map(r => r.fechaValue!.toISOString().split('T')[0])))
+            
+            const rutasExistentes = await prisma.ruta.findMany({
+                where: {
+                    fecha: { in: fechasInteres.map(f => new Date(f + 'T00:00:00.000Z')) },
+                    turno: { in: turnosInteres }
+                },
+                select: { turno: true, fecha: true }
+            })
+
+            const turnosConRuta = Array.from(new Set(rutasExistentes.map(r => r.turno)))
+
             return NextResponse.json({ 
                 preview: true, 
                 resultados,
                 ok: resultados.filter(r => r.status === 'ok').length,
                 parcial: resultados.filter(r => r.status === 'parcial').length,
                 error: resultados.filter(r => r.status === 'sin_turno' || r.status === 'sin_match').length,
-                totalPlanchasBajoDemanda: Math.round(totalPlanchasBajoDemanda * 10) / 10
+                totalPlanchasBajoDemanda: Math.round(totalPlanchasBajoDemanda * 10) / 10,
+                turnosConRuta // <-- Enviamos esto para que la UI pueda advertir
             })
         }
 

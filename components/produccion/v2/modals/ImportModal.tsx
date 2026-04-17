@@ -36,6 +36,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     const [importSummary, setImportSummary] = useState<ImportSummary>({ ok: 0, parcial: 0, error: 0 })
     const [importTotalPlanchasElegidos, setImportTotalPlanchasElegidos] = useState(0)
     const [importLoading, setImportLoading] = useState(false)
+    const [importTurnosConRuta, setImportTurnosConRuta] = useState<string[]>([])
 
     async function handleExcelFile(file: File) {
         try {
@@ -112,6 +113,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
             setImportPreview(data.resultados)
             setImportSummary({ ok: data.ok, parcial: data.parcial, error: data.error })
             setImportTotalPlanchasElegidos(data.totalPlanchasElegidos || 0)
+            setImportTurnosConRuta(data.turnosConRuta || [])
             setImportStep('preview')
         } catch (err: any) {
             setError(err.message)
@@ -251,6 +253,27 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
                                 </div>
                             )}
                         </div>
+
+                        {importTurnosConRuta.length > 0 && (
+                            <div style={{ 
+                                background: '#FFF3E0', 
+                                border: '1px solid #FFE0B2', 
+                                borderRadius: '8px', 
+                                padding: '12px 16px', 
+                                marginBottom: '15px',
+                                display: 'flex',
+                                gap: '12px',
+                                alignItems: 'center'
+                            }}>
+                                <span style={{ fontSize: '24px' }}>⚠️</span>
+                                <div style={{ fontSize: '12px', color: '#E65100', lineHeight: '1.4' }}>
+                                    <strong style={{ fontSize: '13px' }}>Atención: Conflicto con Logística</strong><br />
+                                    Ya se han generado hojas de ruta para los turnos: <strong>{importTurnosConRuta.join(', ')}</strong>.
+                                    Si confirmas esta importación, los pedidos se <strong>DUPLICARÁN</strong> en el planificador.
+                                </div>
+                            </div>
+                        )}
+
                         <div className="table-container" style={{ margin: 0, maxHeight: '360px', overflowY: 'auto' }}>
                             <table className="table table-sm">
                                 <thead>
