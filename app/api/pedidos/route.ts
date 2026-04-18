@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
         const fechaDesde = searchParams.get('fechaDesde')
         const fechaHasta = searchParams.get('fechaHasta')
         const estado = searchParams.get('estado')
+        const turno = searchParams.get('turno')
         const search = searchParams.get('search')
 
         // Construir filtros dinámicos
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
         }
 
         if (estado) where.estado = estado
+        if (turno) where.turno = turno
 
         if (search) {
             where.cliente = {

@@ -48,6 +48,7 @@ export default function PedidosPage() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [filterEstado, setFilterEstado] = useState('')
+    const [filterTurno, setFilterTurno] = useState('')
     const [detalles, setDetalles] = useState<{ presentacionId: string; cantidad: string }[]>([{ presentacionId: '', cantidad: '1' }])
     const [form, setForm] = useState({ clienteId: '', fechaEntrega: '', medioPago: 'efectivo' })
     const [error, setError] = useState('')
@@ -74,7 +75,7 @@ export default function PedidosPage() {
     const [sortField, setSortField] = useState<SortField | ''>('')
     const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, fechaDesde, fechaHasta, sortField, sortDir])
+    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, filterTurno, fechaDesde, fechaHasta, sortField, sortDir])
     useEffect(() => { fetchCatalogos() }, [])
 
     // Debounce para búsqueda
@@ -105,6 +106,7 @@ export default function PedidosPage() {
             params.set('page', String(currentPage))
             params.set('limit', String(ITEMS_PER_PAGE))
             if (filterEstado) params.set('estado', filterEstado)
+            if (filterTurno) params.set('turno', filterTurno)
             if (fechaDesde) params.set('fechaDesde', fechaDesde)
             if (fechaHasta) params.set('fechaHasta', fechaHasta)
             if (searchTerm) params.set('search', searchTerm)
@@ -311,6 +313,7 @@ export default function PedidosPage() {
                 params.set('page', '1')
                 params.set('limit', String(totalRecords))
                 if (filterEstado) params.set('estado', filterEstado)
+                if (filterTurno) params.set('turno', filterTurno)
                 if (fechaDesde) params.set('fechaDesde', fechaDesde)
                 if (fechaHasta) params.set('fechaHasta', fechaHasta)
                 if (searchTerm) params.set('search', searchTerm)
@@ -482,7 +485,7 @@ export default function PedidosPage() {
             {error && <div className="toast toast-error">{error}</div>}
 
             {/* Filtros de Estado */}
-            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-2)', flexWrap: 'wrap' }}>
                 <button className={`btn btn-sm ${filterEstado === '' ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => { setFilterEstado(''); setCurrentPage(1) }}>
                     Todos ({totalRecords})
                 </button>
@@ -494,6 +497,33 @@ export default function PedidosPage() {
                             border: `2px solid ${est.color}`, fontWeight: 600,
                         }}>
                         {est.emoji} {est.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Filtros de Turno */}
+            <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
+                <button className={`btn btn-sm ${filterTurno === '' ? 'btn-secondary' : 'btn-ghost'}`} 
+                        onClick={() => { setFilterTurno(''); setCurrentPage(1) }}
+                        style={{ borderRadius: 'var(--radius-lg)', fontWeight: 700 }}>
+                    Todos los Turnos
+                </button>
+                {[
+                    { value: 'Mañana', label: 'Mañana', icon: '🌅', color: '#E67E22' },
+                    { value: 'Siesta', label: 'Siesta', icon: '☀️', color: '#F1C40F' },
+                    { value: 'Tarde', label: 'Tarde', icon: '🌆', color: '#9B59B6' }
+                ].map((t) => (
+                    <button key={t.value} className="btn btn-sm" 
+                            onClick={() => { setFilterTurno(filterTurno === t.value ? '' : t.value); setCurrentPage(1) }}
+                            style={{
+                                backgroundColor: filterTurno === t.value ? t.color : `${t.color}15`,
+                                color: filterTurno === t.value ? '#fff' : t.color,
+                                border: `2px solid ${t.color}`, 
+                                fontWeight: 700,
+                                borderRadius: 'var(--radius-lg)',
+                                transition: 'all 0.2s'
+                            }}>
+                        {t.icon} {t.label}
                     </button>
                 ))}
             </div>
