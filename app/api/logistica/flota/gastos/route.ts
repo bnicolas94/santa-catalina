@@ -25,7 +25,7 @@ export async function GET(request: Request) {
             orderBy: { fecha: 'desc' },
             include: { 
                 categoria: true,
-                vehiculo: { select: { patente: true, marca: true, modelo: true } }
+                vehiculo: { select: { patente: true, alias: true, marca: true, modelo: true } }
             },
         })
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { fecha, monto, descripcion, categoriaId, vehiculoId, kmVehiculo, taller, cajaTipo } = body
 
-        if (!fecha || !monto || !descripcion || !categoriaId || !vehiculoId || !cajaTipo) {
+        if (!fecha || !monto || !categoriaId || !vehiculoId || !cajaTipo) {
             return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
         }
 
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
                         return new Date(fecha);
                     })(),
                     monto: numericMonto,
-                    descripcion,
+                    descripcion: descripcion || '',
                     categoriaId,
                     vehiculoId,
                     kmVehiculo: kmVehiculo ? parseInt(kmVehiculo) : null,
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
             // Crear el Movimiento de Caja (Egreso) y actualizar saldo
             await CajaService.createMovimientoEnTx(tx, {
                 tipo: 'egreso',
-                concepto: `Gasto Flota: ${descripcion}`,
+                concepto: `Gasto Flota: ${descripcion || 'S/D'}`,
                 monto: numericMonto,
                 medioPago: 'efectivo',
                 cajaOrigen: cajaTipo,

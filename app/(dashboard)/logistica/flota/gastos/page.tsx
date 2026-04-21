@@ -23,7 +23,7 @@ interface Gasto {
     monto: number
     descripcion: string
     categoria: { nombre: string }
-    vehiculo: { patente: string }
+    vehiculo: { patente: string; alias?: string }
     kmVehiculo?: number
     taller?: string
 }
@@ -75,7 +75,7 @@ export default function GastosFlotaPage() {
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
-        if (!selectedVehiculo || !selectedCategoria || !monto || !descripcion || !selectedCaja) {
+        if (!selectedVehiculo || !selectedCategoria || !monto || !selectedCaja) {
             toast.error('Completá todos los campos obligatorios')
             return
         }
@@ -172,7 +172,7 @@ export default function GastosFlotaPage() {
 
                         <div className="form-group">
                             <label className="form-label">Descripción / Novedad</label>
-                            <textarea className="form-input" rows={2} value={descripcion} onChange={e => setDescripcion(e.target.value)} placeholder="Ej: Carga de Diesel, Cambio de aceite..." required />
+                            <textarea className="form-input" rows={2} value={descripcion} onChange={e => setDescripcion(e.target.value)} placeholder="Ej: Carga de Diesel, Cambio de aceite..." />
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
@@ -217,7 +217,16 @@ export default function GastosFlotaPage() {
                                     gastos.map(g => (
                                         <tr key={g.id}>
                                             <td style={{ fontSize: 'var(--text-sm)' }}>{new Date(g.fecha).toLocaleDateString()}</td>
-                                            <td style={{ fontWeight: 'bold' }}>{g.vehiculo?.patente}</td>
+                                            <td style={{ fontWeight: 'bold' }}>
+                                                {g.vehiculo?.alias ? (
+                                                    <>
+                                                        <div>{g.vehiculo.alias}</div>
+                                                        <div style={{ fontSize: '0.8em', color: 'var(--color-gray-500)', fontWeight: 'normal' }}>({g.vehiculo.patente})</div>
+                                                    </>
+                                                ) : (
+                                                    g.vehiculo?.patente
+                                                )}
+                                            </td>
                                             <td><span className="badge badge-outline">{g.categoria.nombre}</span></td>
                                             <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
                                                 {g.descripcion}
