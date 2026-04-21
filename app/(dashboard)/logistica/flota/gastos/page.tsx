@@ -195,51 +195,63 @@ export default function GastosFlotaPage() {
                 {/* Listado Reciente */}
                 <div className="card">
                     <div className="card-header">
-                        <h2 className="card-title">Últimos Gastos de Flota</h2>
+                        <h2 className="card-title">Últimos Gastos (Agrupados por Vehículo)</h2>
                     </div>
-                    <div className="table-container">
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Fecha</th>
-                                    <th>Vehículo</th>
-                                    <th>Categoría</th>
-                                    <th>Descripción</th>
-                                    <th style={{ textAlign: 'right' }}>Monto</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: 'var(--space-10)' }}>Cargando historial...</td></tr>
-                                ) : gastos.length === 0 ? (
-                                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: 'var(--space-10)' }}>No hay gastos registrados.</td></tr>
-                                ) : (
-                                    gastos.map(g => (
-                                        <tr key={g.id}>
-                                            <td style={{ fontSize: 'var(--text-sm)' }}>{new Date(g.fecha).toLocaleDateString()}</td>
-                                            <td style={{ fontWeight: 'bold' }}>
-                                                {g.vehiculo?.alias ? (
-                                                    <>
-                                                        <div>{g.vehiculo.alias}</div>
-                                                        <div style={{ fontSize: '0.8em', color: 'var(--color-gray-500)', fontWeight: 'normal' }}>({g.vehiculo.patente})</div>
-                                                    </>
-                                                ) : (
-                                                    g.vehiculo?.patente
-                                                )}
-                                            </td>
-                                            <td><span className="badge badge-outline">{g.categoria.nombre}</span></td>
-                                            <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
-                                                {g.descripcion}
-                                                {g.taller && <div style={{ fontSize: '10px', color: 'var(--color-primary)' }}>🛠️ {g.taller}</div>}
-                                            </td>
-                                            <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-danger)' }}>
-                                                -${g.monto.toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                    <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                        {loading ? (
+                            <p style={{ textAlign: 'center', padding: 'var(--space-10)' }}>Cargando historial...</p>
+                        ) : gastos.length === 0 ? (
+                            <p style={{ textAlign: 'center', padding: 'var(--space-10)' }}>No hay gastos registrados.</p>
+                        ) : (
+                            (() => {
+                                const grouped = gastos.reduce((acc, g) => {
+                                    const originalV = g.vehiculo || { patente: 'Desconocido', alias: '' }
+                                    const vKey = originalV.alias ? `${originalV.alias} (${originalV.patente})` : originalV.patente
+                                    if (!acc[vKey]) acc[vKey] = { items: [], total: 0 }
+                                    acc[vKey].items.push(g)
+                                    acc[vKey].total += g.monto
+                                    return acc
+                                }, {} as Record<string, { items: Gasto[], total: number }>)
+
+                                return Object.entries(grouped).map(([vKey, data]) => (
+                                    <div key={vKey} style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+                                        <div style={{ backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--color-gray-200)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <h3 style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 'bold' }}>🚗 {vKey}</h3>
+                                            <span style={{ fontWeight: 'bold', color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+                                                Total Agrupado: -${data.total.toLocaleString('es-AR')}
+                                            </span>
+                                        </div>
+                                        <div className="table-container" style={{ border: 'none', margin: 0, borderRadius: 0 }}>
+                                            <table className="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Fecha</th>
+                                                        <th>Categoría</th>
+                                                        <th>Descripción / Novedad</th>
+                                                        <th style={{ textAlign: 'right' }}>Monto</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {data.items.map(g => (
+                                                        <tr key={g.id}>
+                                                            <td style={{ fontSize: 'var(--text-xs)' }}>{new Date(g.fecha).toLocaleDateString('es-AR')}</td>
+                                                            <td><span className="badge badge-outline">{g.categoria.nombre}</span></td>
+                                                            <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
+                                                                {g.descripcion || 'Sin descripción'}
+                                                                {g.taller && <span style={{ marginLeft: '6px', fontSize: '10px', color: 'var(--color-primary)' }}>🛠️ {g.taller}</span>}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-danger)' }}>
+                                                                -${g.monto.toLocaleString('es-AR')}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                ))
+                            })()
+                        )}
                     </div>
                 </div>
             </div>
