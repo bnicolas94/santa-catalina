@@ -36,6 +36,13 @@ export default function GastosFlotaPage() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
+    // Filtros de tabla
+    const dateNow = new Date()
+    const firstDay = new Date(dateNow.getFullYear(), dateNow.getMonth(), 1).toISOString().split('T')[0]
+    const lastDay = new Date(dateNow.getFullYear(), dateNow.getMonth() + 1, 0).toISOString().split('T')[0]
+    const [filterDesde, setFilterDesde] = useState(firstDay)
+    const [filterHasta, setFilterHasta] = useState(lastDay)
+
     // Form state
     const [selectedVehiculo, setSelectedVehiculo] = useState('')
     const [selectedCategoria, setSelectedCategoria] = useState('')
@@ -47,15 +54,19 @@ export default function GastosFlotaPage() {
 
     useEffect(() => {
         fetchData()
-    }, [])
+    }, [filterDesde, filterHasta])
 
     async function fetchData() {
         setLoading(true)
         try {
+            const qs = new URLSearchParams()
+            if (filterDesde) qs.set('fechaDesde', filterDesde)
+            if (filterHasta) qs.set('fechaHasta', filterHasta)
+
             const [vehRes, catRes, gasRes] = await Promise.all([
                 fetch('/api/flota/vehiculos'),
                 fetch('/api/reportes/categorias'), // Usamos las categorías de gastos operativos generales
-                fetch('/api/logistica/flota/gastos')
+                fetch(`/api/logistica/flota/gastos?${qs.toString()}`)
             ])
             
             const vData = await vehRes.json()
@@ -194,8 +205,12 @@ export default function GastosFlotaPage() {
 
                 {/* Listado Reciente */}
                 <div className="card">
-                    <div className="card-header">
-                        <h2 className="card-title">Últimos Gastos (Agrupados por Vehículo)</h2>
+                    <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                        <h2 className="card-title" style={{ margin: 0 }}>Últimos Gastos (Agrupados por Vehículo)</h2>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <input type="date" className="form-input" style={{ padding: '4px 8px', fontSize: '12px', height: '32px' }} value={filterDesde} onChange={e => setFilterDesde(e.target.value)} title="Fecha Desde" />
+                            <input type="date" className="form-input" style={{ padding: '4px 8px', fontSize: '12px', height: '32px' }} value={filterHasta} onChange={e => setFilterHasta(e.target.value)} title="Fecha Hasta" />
+                        </div>
                     </div>
                     <div style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                         {loading ? (

@@ -9,12 +9,16 @@ export async function GET(request: Request) {
         const vehiculoId = searchParams.get('vehiculoId')
         const mes = searchParams.get('mes')
         const anio = searchParams.get('anio')
+        const fechaDesde = searchParams.get('fechaDesde')
+        const fechaHasta = searchParams.get('fechaHasta')
 
         let whereClause: any = {
             vehiculoId: vehiculoId ? vehiculoId : { not: null } // Gastos que tengan un vehículo asignado
         }
 
-        if (mes && anio) {
+        if (fechaDesde && fechaHasta) {
+            whereClause.fecha = { gte: new Date(`${fechaDesde}T00:00:00.000Z`), lte: new Date(`${fechaHasta}T23:59:59.999Z`) }
+        } else if (mes && anio) {
             const startOfMonth = new Date(parseInt(anio), parseInt(mes) - 1, 1)
             const endOfMonth = new Date(parseInt(anio), parseInt(mes), 0, 23, 59, 59, 999)
             whereClause.fecha = { gte: startOfMonth, lte: endOfMonth }
