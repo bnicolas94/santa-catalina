@@ -17,6 +17,12 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const [licenciaId, setLicenciaId] = useState<string>('')
     const [tiposLicencias, setTiposLicencias] = useState<any[]>([])
     
+    // Conceptos Salariales Adicionales
+    const [conceptosConfig, setConceptosConfig] = useState<any[]>([])
+    const [adicionales, setAdicionales] = useState<{ conceptoSalarialId: string, nombre: string, montoCalculado: number }[]>([])
+    const [nuevoAdicionalId, setNuevoAdicionalId] = useState('')
+    const [nuevoAdicionalMonto, setNuevoAdicionalMonto] = useState<number | ''>('')
+    
     // Fechas: Default a Lunes y Domingo de la semana actual
     const [fechaDesde, setFechaDesde] = useState(() => {
         const d = new Date()
@@ -57,8 +63,15 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
             setTiposLicencias(data.filter((l: any) => l.activo))
         }
 
+        const fetchConceptos = async () => {
+            const res = await fetch('/api/conceptos-salariales')
+            const data = await res.json()
+            setConceptosConfig(data.filter((c: any) => c.activo))
+        }
+
         fetchCajas()
         fetchLicencias()
+        fetchConceptos()
         
         // Cargar valores por defecto del empleado si existen
         if (empleado) {
@@ -88,8 +101,22 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const valSueldo = Number(sueldoBase) || 0
     const valExtras = Number(montoHsExtras) || 0
     const valPrestamos = Number(descuentoPrestamos) || 0
+    const valAdicionales = adicionales.reduce((acc, ad) => acc + ad.montoCalculado, 0)
 
-    const totalNeto = valSueldo + valExtras - valPrestamos
+    const totalNeto = valSueldo + valExtras + valAdicionales - valPrestamos
+
+    const handleAddAdicional = () => {
+        if (!nuevoAdicionalId || !nuevoAdicionalMonto) return
+        const concepto = conceptosConfig.find(c => c.id === nuevoAdicionalId)
+        if (!concepto) return
+
+        let monto = Number(nuevoAdicionalMonto)
+        if (concepto.tipo === 'DESCUENTO') monto = -Math.abs(monto)
+
+        setAdicionales([...adicionales, { conceptoSalarialId: concepto.id, nombre: concepto.nombre, montoCalculado: monto }])
+        setNuevoAdicionalId('')
+        setNuevoAdicionalMonto('')
+    }
 
     const handleGuardarYImprimir = async () => {
         if (totalNeto <= 0 && !confirm('El total es 0 o negativo. ¿Deseas continuar?')) return
@@ -112,7 +139,12 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                         montoHsExtras: valExtras,
                         descuentoPrestamos: valPrestamos,
                         diasTrabajados: 6 // Placeholder
-                    }
+                    },
+                    adicionales: adicionales.map(a => ({
+                        conceptoSalarialId: a.conceptoSalarialId,
+                        montoCalculado: a.montoCalculado,
+                        detalle: 'Manual Express'
+                    }))
                 })
             })
 
@@ -307,6 +339,54 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                         <div style={{ position: 'relative' }}>
                             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-danger)' }}>-$</span>
                             <input type="number" className="form-input" style={{ paddingLeft: '25px', color: 'var(--color-danger)' }} value={descuentoPrestamos} onChange={e => setDescuentoPrestamos(e.target.value === '' ? '' : Number(e.target.value))} />
+                        </div>
+                    </div>
+
+                    <div className="form-group" style={{ border: '1px dashed var(--color-gray-300)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)' }}>
+                        <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Conceptos Adicionales (Premios, Bonos, etc.)</span>
+                        </label>
+                        
+                        {adicionales.map((ad, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', marginBottom: 'var(--space-2)', border: '1px solid var(--color-gray-200)' }}>
+                                <span>{ad.nombre}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                    <strong style={{ color: ad.montoCalculado < 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                                        {ad.montoCalculado < 0 ? '' : '+'}${ad.montoCalculado.toLocaleString()}
+                                    </strong>
+                                    <button className="btn btn-ghost btn-sm btn-icon" onClick={() => setAdicionales(adicionales.filter((_, i) => i !== idx))} style={{ color: 'var(--color-danger)', height: '24px', width: '24px', padding: 0 }}>✕</button>
+                                </div>
+                            </div>
+                        ))}
+
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+                            <select className="form-select" style={{ flex: 2 }} value={nuevoAdicionalId} onChange={e => {
+                                setNuevoAdicionalId(e.target.value);
+                                const conf = conceptosConfig.find(c => c.id === e.target.value);
+                                if (conf?.valorPorDefecto) {
+                                    if (conf.esPorcentaje) {
+                                        setNuevoAdicionalMonto(Math.round(valSueldo * (conf.valorPorDefecto / 100)));
+                                    } else {
+                                        setNuevoAdicionalMonto(conf.valorPorDefecto);
+                                    }
+                                } else {
+                                    setNuevoAdicionalMonto('');
+                                }
+                            }}>
+                                <option value="">Seleccionar concepto...</option>
+                                {conceptosConfig.map(c => (
+                                    <option key={c.id} value={c.id}>{c.nombre} {c.tipo === 'DESCUENTO' ? '(-)' : '(+)'}</option>
+                                ))}
+                            </select>
+                            <input 
+                                type="number" 
+                                className="form-input" 
+                                style={{ flex: 1 }} 
+                                placeholder="$ Monto" 
+                                value={nuevoAdicionalMonto} 
+                                onChange={e => setNuevoAdicionalMonto(e.target.value === '' ? '' : Number(e.target.value))} 
+                            />
+                            <button className="btn btn-outline" onClick={handleAddAdicional} disabled={!nuevoAdicionalId || !nuevoAdicionalMonto}>Add</button>
                         </div>
                     </div>
 

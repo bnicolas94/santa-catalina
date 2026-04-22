@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Empleado } from '@prisma/client'
+import DocumentosTab from './DocumentosTab'
+import EvaluacionesTab from './EvaluacionesTab'
 
 interface EmpleadoDialogProps {
     empleado?: any
@@ -15,6 +17,9 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
     const [tab, setTab] = useState('personal')
     const [roles, setRoles] = useState<any[]>([])
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
+    const [areas, setAreas] = useState<any[]>([])
+    const [puestos, setPuestos] = useState<any[]>([])
+    const [turnos, setTurnos] = useState<any[]>([])
 
     // Estado local del form
     const [formData, setFormData] = useState({
@@ -38,7 +43,10 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         ubicacionId: empleado?.ubicacionId || '',
         rolId: empleado?.rolId || '',
         jornal: empleado?.jornal?.toString() || '0',
-        valorHoraExtra: empleado?.valorHoraExtra?.toString() || '0'
+        valorHoraExtra: empleado?.valorHoraExtra?.toString() || '0',
+        areaId: empleado?.areaId || '',
+        puestoId: empleado?.puestoId || '',
+        turnoId: empleado?.turnoId || '',
     })
 
     useEffect(() => {
@@ -70,7 +78,18 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         }
         fetchRoles()
         fetchUbicaciones()
+        fetchAreas()
+        fetchTurnos()
     }, [])
+
+    // Cargar puestos cuando cambia el área seleccionada
+    useEffect(() => {
+        if (formData.areaId) {
+            fetchPuestos(formData.areaId)
+        } else {
+            setPuestos([])
+        }
+    }, [formData.areaId])
 
     // Estado local para el input de remuneración para que no "salte" con los decimales mientras tipea
     const initialMonto = (
@@ -93,6 +112,36 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         if (diffMs < 0) diffMs += 24 * 60 // Caso nocturno si aplica
 
         return (diffMs / 60).toFixed(1)
+    }
+
+    const fetchAreas = async () => {
+        try {
+            const res = await fetch('/api/areas')
+            const data = await res.json()
+            setAreas(data.filter((a: any) => a.activo))
+        } catch (error) {
+            console.error('Error fetching areas:', error)
+        }
+    }
+
+    const fetchPuestos = async (areaId: string) => {
+        try {
+            const res = await fetch(`/api/puestos?areaId=${areaId}`)
+            const data = await res.json()
+            setPuestos(data)
+        } catch (error) {
+            console.error('Error fetching puestos:', error)
+        }
+    }
+
+    const fetchTurnos = async () => {
+        try {
+            const res = await fetch('/api/turnos')
+            const data = await res.json()
+            setTurnos(data.filter((t: any) => t.activo))
+        } catch (error) {
+            console.error('Error fetching turnos:', error)
+        }
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -118,6 +167,11 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
             } else if (value === '') {
                 newFormData.rol = ''
             }
+        }
+
+        // Si cambia el área, limpiar el puesto (ya no es válido para la nueva área)
+        if (name === 'areaId') {
+            newFormData.puestoId = ''
         }
 
         setFormData(newFormData)
@@ -219,6 +273,45 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                     >
                         Reloj Biométrico
                     </button>
+                
+                {isEdit && (
+                    <>
+                    <button
+                        style={{
+                            padding: 'var(--space-3) var(--space-4)',
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 600,
+                            borderBottom: tab === 'documentos' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            color: tab === 'documentos' ? 'var(--color-primary)' : 'var(--color-gray-500)',
+                            background: 'none',
+                            borderTop: 'none',
+                            borderLeft: 'none',
+                            borderRight: 'none',
+                            cursor: 'pointer'
+                        }}
+                        onClick={() => setTab('documentos')}
+                    >
+                        📄 Documentos
+                    </button>
+                    <button
+                        style={{
+                            padding: 'var(--space-3) var(--space-4)',
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: 600,
+                            borderBottom: tab === 'evaluaciones' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            color: tab === 'evaluaciones' ? 'var(--color-primary)' : 'var(--color-gray-500)',
+                            background: 'none',
+                            borderTop: 'none',
+                            borderLeft: 'none',
+                            borderRight: 'none',
+                            cursor: 'pointer'
+                        }}
+                        onClick={() => setTab('evaluaciones')}
+                    >
+                        ⭐ Evaluaciones
+                    </button>
+                    </>
+                )}
                 </div>
 
                 <form onSubmit={handleSubmit}>
@@ -292,13 +385,29 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                     <label className="form-label">Horas Diarias Esperadas</label>
                                     <input type="number" step="0.5" name="horasTrabajoDiarias" value={formData.horasTrabajoDiarias} onChange={handleChange} className="form-input" />
                                 </div>
+                                
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label className="form-label">Turno de Trabajo (Asistencia Avanzada)</label>
+                                    <select name="turnoId" value={formData.turnoId} onChange={handleChange} className="form-select">
+                                        <option value="">— Horario Personalizado (Abajo) —</option>
+                                        {turnos.map(t => (
+                                            <option key={t.id} value={t.id}>
+                                                {t.nombre} ({t.horaInicio} - {t.horaFin})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <small style={{ color: 'var(--color-gray-500)', fontSize: '10px' }}>
+                                        Si selecciona un turno, las horas de entrada/salida de abajo se usarán solo como referencia secundaria.
+                                    </small>
+                                </div>
+
                                 <div className="form-group">
-                                    <label className="form-label">Horario Entrada</label>
-                                    <input type="time" name="horarioEntrada" value={formData.horarioEntrada} onChange={handleChange} className="form-input" />
+                                    <label className="form-label">Horario Entrada (Referencia)</label>
+                                    <input type="time" name="horarioEntrada" value={formData.horarioEntrada} onChange={handleChange} className="form-input" disabled={!!formData.turnoId} />
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Horario Salida</label>
-                                    <input type="time" name="horarioSalida" value={formData.horarioSalida} onChange={handleChange} className="form-input" />
+                                    <label className="form-label">Horario Salida (Referencia)</label>
+                                    <input type="time" name="horarioSalida" value={formData.horarioSalida} onChange={handleChange} className="form-input" disabled={!!formData.turnoId} />
                                 </div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                     <label className="form-label">Sede / Punto de Venta</label>
@@ -310,6 +419,33 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                             </option>
                                         ))}
                                     </select>
+                                </div>
+
+                                {/* Área y Puesto */}
+                                <div className="form-group">
+                                    <label className="form-label">Área</label>
+                                    <select name="areaId" value={formData.areaId} onChange={handleChange} className="form-select">
+                                        <option value="">— Sin asignar —</option>
+                                        {areas.map(a => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Puesto</label>
+                                    <select name="puestoId" value={formData.puestoId} onChange={handleChange} className="form-select" disabled={!formData.areaId}>
+                                        <option value="">{formData.areaId ? '— Sin asignar —' : '— Seleccione área primero —'}</option>
+                                        {puestos.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.nombre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {formData.areaId && puestos.length === 0 && (
+                                        <small style={{ color: 'var(--color-gray-500)', fontSize: '10px' }}>No hay puestos en esta área. Créelos desde el Organigrama.</small>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -430,6 +566,16 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                     <input type="text" name="codigoBiometrico" value={formData.codigoBiometrico} onChange={handleChange} placeholder="Ej: 001, 1044, etc" className="form-input" />
                                 </div>
                             </div>
+                        )}
+
+                        {/* Tab 5: Documentos */}
+                        {tab === 'documentos' && isEdit && (
+                            <DocumentosTab empleadoId={empleado.id} />
+                        )}
+
+                        {/* Tab 6: Evaluaciones */}
+                        {tab === 'evaluaciones' && isEdit && (
+                            <EvaluacionesTab empleadoId={empleado.id} />
                         )}
                     </div>
 

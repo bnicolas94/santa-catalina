@@ -10,6 +10,9 @@ import { ConfigLicenciasModal } from '@/components/empleados/ConfigLicenciasModa
 import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
 import FeriadosConfigModal from '@/components/empleados/FeriadosConfigModal'
 import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
+import OrganigramaModal from '@/components/empleados/OrganigramaModal'
+import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
+import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalarialesModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -30,6 +33,11 @@ export default function EmpleadosPage() {
     const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
     const [updatingId, setUpdatingId] = useState<string | null>(null)
+    const [showOrganigramaModal, setShowOrganigramaModal] = useState(false)
+    const [showTurnosModal, setShowTurnosModal] = useState(false)
+    const [showConceptosModal, setShowConceptosModal] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
+    const [filterActivo, setFilterActivo] = useState<boolean | 'todos'>(true)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -222,9 +230,24 @@ export default function EmpleadosPage() {
         }
     }
 
+    const filteredEmpleados = empleados.filter(e => {
+        const matchesSearch = e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              (e as any).apellido?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              (e as any).dni?.includes(searchTerm)
+        const matchesActivo = filterActivo === 'todos' ? true : e.activo === filterActivo
+        return matchesSearch && matchesActivo
+    })
+
+    const stats = {
+        total: empleados.length,
+        presentes: empleados.filter(e => (e as any).asistenciaHoy?.tieneEntrada).length,
+        tardanzas: empleados.filter(e => (e as any).asistenciaHoy?.esTarde).length,
+        ausentes: empleados.filter(e => (e as any).asistenciaHoy?.esAusente).length
+    }
+
     return (
-        <div>
-            <div className="page-header">
+        <div className="fade-in">
+            <div className="page-header" style={{ marginBottom: 'var(--space-4)' }}>
                 <div>
                     <h1>⚙️ Equipo y RRHH</h1>
                     <p style={{ color: 'var(--color-gray-500)', marginTop: 'var(--space-1)' }}>
@@ -239,59 +262,79 @@ export default function EmpleadosPage() {
                         style={{ display: 'none' }}
                         accept=".txt, .csv, .xls, .xlsx"
                     />
-                    <button
-                        onClick={() => setMassLiquidationOpen(true)}
-                        className="btn btn-outline"
-                    >
-                        🏢 Liquidación Masiva
-                    </button>
-                    <button
-                        onClick={() => setWeeklyPayrollOpen(true)}
-                        className="btn btn-primary"
-                        style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                    >
+                    <button onClick={() => setWeeklyPayrollOpen(true)} className="btn btn-primary" style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}>
                         💰 Liquidación Semanal
                     </button>
-                    <button
-                        onClick={() => setShowFeriadosModal(true)}
-                        className="btn btn-outline"
-                    >
-                        📅 Feriados
+                    <button onClick={() => setMassLiquidationOpen(true)} className="btn btn-outline">
+                        🏢 Liq. Masiva
                     </button>
-                    <button
-                        onClick={() => setShowReportePagos(true)}
-                        className="btn btn-outline"
-                    >
-                        🖨️ Reporte de Pagos
+                    <button onClick={() => fileInputRef.current?.click()} className="btn btn-outline" disabled={importLoading}>
+                        {importLoading ? '...' : '📥 Importar Fichadas'}
                     </button>
-                    <button
-                        onClick={handleImportarClic}
-                        disabled={importLoading}
-                        className="btn btn-outline"
-                    >
-                        {importLoading ? 'Importando...' : '📥 Importar'}
-                    </button>
-                    <button
-                        onClick={() => setShowRolesModal(true)}
-                        className="btn btn-outline"
-                    >
-                        ⚙️ Roles
-                    </button>
-                    <button
-                        onClick={() => setShowLicenciasModal(true)}
-                        className="btn btn-outline"
-                    >
-                        ⚙️ Licencias
-                    </button>
-                    <button
-                        onClick={() => handleOpenDialog()}
-                        className="btn btn-primary"
-                    >
+                    <button onClick={() => handleOpenDialog()} className="btn btn-primary">
                         + Nuevo Empleado
                     </button>
                 </div>
             </div>
 
+            {/* Stats Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-primary)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Total Equipo</div>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>{stats.total}</div>
+                </div>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-success)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Presentes Hoy</div>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-success)' }}>{stats.presentes}</div>
+                </div>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-danger)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Tardanzas</div>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: stats.tardanzas > 0 ? 'var(--color-danger)' : 'inherit' }}>{stats.tardanzas}</div>
+                </div>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-gray-300)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)', textTransform: 'uppercase' }}>Ausentes / Restan</div>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-gray-500)' }}>{stats.ausentes}</div>
+                </div>
+            </div>
+
+            {/* Toolbar Secundaria */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                    <Link href="/empleados/analytics" className="btn btn-outline btn-sm" style={{ textDecoration: 'none' }}>📊 Analytics</Link>
+                    <button onClick={() => setShowOrganigramaModal(true)} className="btn btn-outline btn-sm">🏢 Organigrama</button>
+                    <button onClick={() => setShowTurnosModal(true)} className="btn btn-outline btn-sm">🕒 Turnos</button>
+                    <button onClick={() => setShowConceptosModal(true)} className="btn btn-outline btn-sm">🏷️ Conceptos</button>
+                    <button onClick={() => setShowLicenciasModal(true)} className="btn btn-outline btn-sm">⚙️ Licencias</button>
+                    <button onClick={() => setShowFeriadosModal(true)} className="btn btn-outline btn-sm">📅 Feriados</button>
+                    <button onClick={() => setShowReportePagos(true)} className="btn btn-outline btn-sm">🖨️ Recibos</button>
+                    <button onClick={() => setShowRolesModal(true)} className="btn btn-outline btn-sm">🔑 Roles</button>
+                </div>
+                
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                    <div className="form-group" style={{ margin: 0, position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>🔍</span>
+                        <input 
+                            type="text" 
+                            className="form-input" 
+                            placeholder="Buscar por nombre, apellido o DNI..." 
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            style={{ paddingLeft: '36px', width: '300px', height: '36px' }}
+                        />
+                    </div>
+                    <select 
+                        className="form-select" 
+                        value={String(filterActivo)} 
+                        onChange={e => setFilterActivo(e.target.value === 'todos' ? 'todos' : e.target.value === 'true')}
+                        style={{ height: '36px', fontSize: 'var(--text-sm)' }}
+                    >
+                        <option value="true">Activos</option>
+                        <option value="false">Inactivos</option>
+                        <option value="todos">Todos</option>
+                    </select>
+                </div>
+            </div>
+            
             {loading ? (
                 <div className="empty-state">
                     <div className="spinner"></div>
@@ -300,19 +343,20 @@ export default function EmpleadosPage() {
             ) : (
                 <div className="table-container">
                     <table className="table">
-                        <thead>
+<thead>
                             <tr>
                                 <th>Empleado</th>
                                 <th>Rol / Puesto</th>
                                 <th>Contacto</th>
-                                <th>Ciclo / Base</th>
-                                <th>Sede / Ubicación</th>
+                                <th>Sueldo / Ciclo</th>
+                                <th>Ubicación</th>
+                                <th>Hoy</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {empleados.map((emp: any) => (
+                            {filteredEmpleados.map((emp: any) => (
                                 <tr key={emp.id} style={{ opacity: emp.activo ? 1 : 0.6 }}>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
@@ -338,6 +382,17 @@ export default function EmpleadosPage() {
                                         <span className="badge badge-info">
                                             {emp.rol}
                                         </span>
+                                        {(emp as any).area && (
+                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '2px' }}>
+                                                <span style={{
+                                                    display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                                                    backgroundColor: (emp as any).area?.color || 'var(--color-gray-300)',
+                                                    marginRight: 4
+                                                }} />
+                                                {(emp as any).area?.nombre}
+                                                {(emp as any).puesto && <span> • {(emp as any).puesto?.nombre}</span>}
+                                            </div>
+                                        )}
                                     </td>
                                     <td>
                                         <div>{emp.email}</div>
@@ -389,6 +444,27 @@ export default function EmpleadosPage() {
                                                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                                                 )}
                                             </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                            <div 
+                                                title={ (emp as any).asistenciaHoy?.tieneEntrada ? 'Entrada registrada' : 'Sin entrada' }
+                                                style={{ 
+                                                    width: 10, height: 10, borderRadius: '50%', 
+                                                    backgroundColor: (emp as any).asistenciaHoy?.esTarde ? 'var(--color-danger)' : ((emp as any).asistenciaHoy?.tieneEntrada ? 'var(--color-success)' : 'var(--color-gray-200)') 
+                                                }} 
+                                            />
+                                            <div 
+                                                title={ (emp as any).asistenciaHoy?.tieneSalida ? 'Salida registrada' : 'Sin salida' }
+                                                style={{ 
+                                                    width: 10, height: 10, borderRadius: '50%', 
+                                                    backgroundColor: (emp as any).asistenciaHoy?.tieneSalida ? 'var(--color-success)' : 'var(--color-gray-200)' 
+                                                }} 
+                                            />
+                                            { (emp as any).asistenciaHoy?.esTarde && (
+                                                <span style={{ fontSize: '9px', color: 'var(--color-danger)', fontWeight: 800 }}>TARDE</span>
+                                            )}
                                         </div>
                                     </td>
                                     <td>
@@ -495,6 +571,19 @@ export default function EmpleadosPage() {
                     onClose={() => setWeeklyPayrollOpen(false)} 
                     onSuccess={() => fetchEmpleados()} 
                 />
+            )}
+            {showOrganigramaModal && (
+                <OrganigramaModal
+                    onClose={() => setShowOrganigramaModal(false)}
+                    empleados={empleados.map(e => ({ id: e.id, nombre: e.nombre, apellido: (e as any).apellido }))}
+                    onChanged={() => fetchEmpleados()}
+                />
+            )}
+            {showTurnosModal && (
+                <TurnosConfigModal onClose={() => setShowTurnosModal(false)} />
+            )}
+            {showConceptosModal && (
+                <ConceptosSalarialesModal onClose={() => setShowConceptosModal(false)} />
             )}
         </div>
     )

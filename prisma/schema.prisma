@@ -35,19 +35,48 @@ model Empleado {
   codigoBiometrico     String?              @unique @map("codigo_biometrico")
   ubicacionId          String?              @map("id_ubicacion")
   rolId                String?              @map("id_rol")
+  areaId               String?              @map("id_area")
+  puestoId             String?              @map("id_puesto")
+  turnoId              String?              @map("id_turno")
   preferenciasReporte  Json?                @map("preferencias_reporte")
   asignaciones         AsignacionOperario[]
   asignacionesVehiculo AsignacionVehiculo[] @relation("AsignacionesVehiculo")
   rolRel               RolEmpleado?         @relation(fields: [rolId], references: [id])
   ubicacion            Ubicacion?           @relation(fields: [ubicacionId], references: [id])
+  area                 Area?                @relation("EmpleadoArea", fields: [areaId], references: [id])
+  puesto               Puesto?              @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
+  turno                TurnoTrabajo?        @relation("EmpleadoTurno", fields: [turnoId], references: [id])
+  areasResponsable     Area[]               @relation("ResponsableArea")
   fichadas             FichadaEmpleado[]
   liquidaciones        LiquidacionSueldo[]
   lotesCoordinados     Lote[]               @relation("CoordinadorLote")
   prestamos            PrestamoEmpleado[]
   rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
   rutasChofer          Ruta[]               @relation("ChoferRuta")
+  documentos           DocumentoEmpleado[]
+  evaluaciones         Evaluacion[]         @relation("EmpleadoEvaluado")
+  evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
 
   @@map("empleados")
+}
+
+model Evaluacion {
+  id            String   @id @default(uuid())
+  fecha         DateTime @default(now())
+  calificacion  String // Excelente, Bueno, Regular, Malo
+  puntosFuertes String?  @map("puntos_fuertes")
+  puntosMejora  String?  @map("puntos_mejora")
+  comentarios   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  empleadoId  String   @map("id_empleado")
+  evaluadorId String   @map("id_evaluador")
+
+  empleado  Empleado @relation("EmpleadoEvaluado", fields: [empleadoId], references: [id], onDelete: Cascade)
+  evaluador Empleado @relation("Evaluador", fields: [evaluadorId], references: [id])
+
+  @@map("evaluaciones_desempeno")
 }
 
 model Proveedor {
@@ -493,6 +522,50 @@ model ConceptoCaja {
   @@map("conceptos_caja")
 }
 
+model ConceptoSalarial {
+  id              String            @id @default(uuid())
+  nombre          String            @unique
+  tipo            String            // "REMUNERATIVO", "NO_REMUNERATIVO", "DESCUENTO"
+  esPorcentaje    Boolean           @default(false) @map("es_porcentaje")
+  valorPorDefecto Float?            @map("valor_por_defecto")
+  activo          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  items           ItemLiquidacion[]
+
+  @@map("conceptos_salariales")
+}
+
+model ItemLiquidacion {
+  id                 String            @id @default(uuid())
+  liquidacionId      String            @map("id_liquidacion")
+  conceptoSalarialId String            @map("id_concepto")
+  montoCalculado     Float             @map("monto_calculado")
+  detalle            String?           // Por ej: "10% sobre base"
+  createdAt          DateTime          @default(now())
+
+  liquidacion        LiquidacionSueldo @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
+  concepto           ConceptoSalarial  @relation(fields: [conceptoSalarialId], references: [id])
+
+  @@map("items_liquidacion")
+}
+
+model DocumentoEmpleado {
+  id               String    @id @default(uuid())
+  empleadoId       String    @map("id_empleado")
+  tipoDocumento    String    @map("tipo_documento") // "DNI", "ALTA_AFIP", "CERTIFICADO_MEDICO", "CONTRATO", "OTRO"
+  archivoUrl       String    @map("archivo_url")
+  fechaVencimiento DateTime? @map("fecha_vencimiento")
+  observaciones    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  empleado         Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("documentos_empleado")
+}
+
 model FichadaEmpleado {
   id             String        @id @default(uuid())
   fechaHora      DateTime      @map("fecha_hora")
@@ -581,6 +654,7 @@ model LiquidacionSueldo {
   empleadoId          String          @map("id_empleado")
   desglose            Json?           @map("desglose")
   cuotasDescontadas   CuotaPrestamo[]
+  items               ItemLiquidacion[]
   empleado            Empleado        @relation(fields: [empleadoId], references: [id])
 
   @@map("liquidaciones_sueldos")
@@ -605,6 +679,58 @@ model RolEmpleado {
   empleados         Empleado[]
 
   @@map("roles_empleado")
+}
+
+model Area {
+  id            String     @id @default(uuid())
+  nombre        String     @unique
+  descripcion   String?
+  color         String?
+  activo        Boolean    @default(true)
+  responsableId String?    @map("id_responsable")
+  parentId      String?    @map("id_area_padre")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  responsable   Empleado?  @relation("ResponsableArea", fields: [responsableId], references: [id])
+  parent        Area?      @relation("AreaJerarquia", fields: [parentId], references: [id])
+  children      Area[]     @relation("AreaJerarquia")
+  puestos       Puesto[]
+  empleados     Empleado[] @relation("EmpleadoArea")
+
+  @@map("areas")
+}
+
+model Puesto {
+  id              String     @id @default(uuid())
+  nombre          String
+  descripcion     String?
+  nivelJerarquico Int        @default(0) @map("nivel_jerarquico")
+  areaId          String     @map("id_area")
+  activo          Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  area            Area       @relation(fields: [areaId], references: [id])
+  empleados       Empleado[] @relation("EmpleadoPuesto")
+
+  @@map("puestos")
+}
+
+model TurnoTrabajo {
+  id                String     @id @default(uuid())
+  nombre            String     @unique
+  descripcion       String?
+  horaInicio        String     @map("hora_inicio") // Formato "HH:mm"
+  horaFin           String     @map("hora_fin")    // Formato "HH:mm"
+  toleranciaMinutos Int        @default(15) @map("tolerancia_minutos")
+  activo            Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  empleados         Empleado[] @relation("EmpleadoTurno")
+
+  @@map("turnos_trabajo")
 }
 
 model ConceptoProduccion {

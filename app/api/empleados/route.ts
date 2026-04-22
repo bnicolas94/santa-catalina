@@ -1,40 +1,10 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
+import { EmpleadoService, EmpleadoValidationError } from '@/lib/services/empleado.service'
 
 // GET /api/empleados — Lista todos los empleados
 export async function GET() {
     try {
-        const empleados = await prisma.empleado.findMany({
-            orderBy: { nombre: 'asc' },
-            select: {
-                id: true,
-                nombre: true,
-                apellido: true,
-                dni: true,
-                email: true,
-                rol: true,
-                telefono: true,
-                activo: true,
-                createdAt: true,
-                fechaIngreso: true,
-                sueldoBaseMensual: true,
-                cicloPago: true,
-                porcentajeHoraExtra: true,
-                valorHoraExtra: true,
-                porcentajeFeriado: true,
-                horasTrabajoDiarias: true,
-                diasTrabajoSemana: true,
-                horarioEntrada: true,
-                horarioSalida: true,
-                jornal: true,
-                codigoBiometrico: true,
-                ubicacionId: true,
-                rolId: true,
-                ubicacion: { select: { id: true, nombre: true, tipo: true } },
-                rolRel: { select: { id: true, nombre: true, jornal: true, valorHoraExtra: true } },
-            },
-        })
+        const empleados = await EmpleadoService.findAll()
         return NextResponse.json(empleados)
     } catch (error) {
         console.error('Error fetching empleados:', error)
@@ -46,86 +16,12 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const {
-            nombre, apellido, dni, email, password, rol, rolId, telefono, fechaIngreso,
-            sueldoBaseMensual, cicloPago, porcentajeHoraExtra, valorHoraExtra,
-            porcentajeFeriado, horasTrabajoDiarias, diasTrabajoSemana,
-            horarioEntrada, horarioSalida, jornal, codigoBiometrico, ubicacionId
-        } = body
-
-        if (!nombre || !rol) {
-            return NextResponse.json(
-                { error: 'Nombre y rol son requeridos' },
-                { status: 400 }
-            )
+        const empleado = await EmpleadoService.create(body)
+        return NextResponse.json(empleado, { status: 201 })
+    } catch (error: any) {
+        if (error instanceof EmpleadoValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
         }
-
-        // Verificar email único si se proporciona
-        if (email && email.trim() !== '') {
-            const existingEmail = await prisma.empleado.findUnique({ where: { email } })
-            if (existingEmail) {
-                return NextResponse.json(
-                    { error: 'Ya existe un empleado con este email' },
-                    { status: 400 }
-                )
-            }
-        }
-
-        if (dni) {
-            const existingDni = await prisma.empleado.findUnique({ where: { dni } })
-            if (existingDni) {
-                return NextResponse.json(
-                    { error: 'Ya existe un empleado con este DNI' },
-                    { status: 400 }
-                )
-            }
-        }
-
-        if (codigoBiometrico) {
-            const existingBiometrico = await prisma.empleado.findUnique({ where: { codigoBiometrico } })
-            if (existingBiometrico) {
-                return NextResponse.json(
-                    { error: 'El código biométrico ya está en uso por otro empleado' },
-                    { status: 400 }
-                )
-            }
-        }
-
-        // Password es opcional
-        let hashedPassword = null
-        if (password) {
-            hashedPassword = await bcrypt.hash(password, 10)
-        }
-
-        const empleado = await prisma.empleado.create({
-            data: {
-                nombre,
-                apellido,
-                dni: (dni && dni.trim() !== '') ? dni : null,
-                email: (email && email.trim() !== '') ? email : null,
-                password: hashedPassword,
-                rol,
-                telefono: (telefono && telefono.trim() !== '') ? telefono : null,
-                fechaIngreso: fechaIngreso ? new Date(fechaIngreso) : null,
-                sueldoBaseMensual: sueldoBaseMensual ? parseFloat(sueldoBaseMensual) : 0,
-                cicloPago: cicloPago || 'SEMANAL',
-                porcentajeHoraExtra: porcentajeHoraExtra ? parseFloat(porcentajeHoraExtra) : 50,
-                valorHoraExtra: valorHoraExtra ? parseFloat(valorHoraExtra) : 0,
-                porcentajeFeriado: porcentajeFeriado ? parseFloat(porcentajeFeriado) : 100,
-                horasTrabajoDiarias: horasTrabajoDiarias ? parseFloat(horasTrabajoDiarias) : 8,
-                diasTrabajoSemana: diasTrabajoSemana || 'Lunes a Viernes',
-                horarioEntrada: horarioEntrada || null,
-                horarioSalida: horarioSalida || null,
-                jornal: jornal ? parseFloat(jornal) : 0,
-                codigoBiometrico: codigoBiometrico || null,
-                ubicacionId: ubicacionId || null,
-                rolId: rolId || null,
-            },
-        })
-
-        const { password: _, ...empleadoWithoutPassword } = empleado;
-        return NextResponse.json(empleadoWithoutPassword, { status: 201 })
-    } catch (error) {
         console.error('Error creating empleado:', error)
         return NextResponse.json({ error: 'Error al crear empleado' }, { status: 500 })
     }
