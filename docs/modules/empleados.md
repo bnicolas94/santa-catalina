@@ -19,23 +19,26 @@ El módulo de **Empleados** es el núcleo de la gestión de capital humano del s
 *   **[EmpleadoDialog.tsx](file:///c:/Users/sandw/Documents/santa-catalina/components/empleados/EmpleadoDialog.tsx)**: Formulario polifacético (tabs) para la gestión de datos personales, laborales, salariales y vinculación biométrica.
 *   **MassLiquidationModal.tsx**: Interfaz para generar múltiples pagos de sueldo en un solo proceso.
 *   **ExpressLiquidationModal.tsx**: Permite liquidaciones manuales rápidas cuando no se dispone de fichadas automáticas.
+*   **[ReportePagosModal.tsx](file:///c:/Users/sandw/Documents/santa-catalina/components/empleados/ReportePagosModal.tsx)**: Centro de reportes y emisión masiva. Permite filtrar empleados, seleccionar por lotes y generar recibos de sueldo individuales en bloque (formato A4).
 *   **ReviewImportModal**: Asistente de validación que detecta inconsistencias en las marcas de reloj (ej: entrada sin salida) antes de impactar la base de datos.
 *   **[id]/page.tsx**: Perfil detallado del empleado con historial de fichadas, liquidaciones y préstamos.
 
 ### Backend (API Routes)
 *   **[api/empleados/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/empleados/route.ts)**: Operaciones CRUD y validaciones de unicidad (DNI, Email, Código Biométrico).
-*   **[api/fichadas/importar/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/fichadas/importar/route.ts)**: Lógica de procesamiento de marcas de reloj, mapeo de códigos biométricos y normalización de datos.
+*   **[api/fichadas/importar/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/fichadas/importar/route.ts)**: Procesamiento robusto de marcas. Incluye parser inteligente para diversos formatos de fecha (`YYYY/MM/DD`) e **idempotencia** (evita duplicados si se re-importa el mismo archivo).
 *   **[api/liquidaciones/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/liquidaciones/route.ts)**: Motor de cálculo salarial. Gestiona la lógica de "días trabajados", aplicación de porcentajes de recargo e integración con el módulo de Caja.
+*   **[api/liquidaciones/reporte/route.ts](file:///c:/Users/sandw/Documents/santa-catalina/app/api/liquidaciones/reporte/route.ts)**: Generación de datos consolidados para el reporte de pagos y recibos masivos.
 
 ---
 
 ## 3. 🔄 Flujo de funcionamiento
 
 ### A. Gestión de Asistencia (Biometría)
-1.  **Carga:** El administrador sube un archivo (habitualmente `.txt` tabulado) extraído del reloj biométrico.
+1.  **Carga:** El administrador sube un archivo (ej: `GLG_001.txt`). El sistema utiliza expresiones regulares para extraer fecha, hora y código de empleado, soportando formatos como `YYYY/MM/DD`.
 2.  **Mapeo:** El sistema extrae el "Código Biométrico" y lo asocia al `id` del empleado interno. Se normalizan ceros a la izquierda (ej: "00012" -> "12").
 3.  **Validación de Secuencia:** El sistema detecta marcas impares o tipos de fichada incoherentes.
-4.  **Impacto:** Se guardan como `FichadaEmpleado` con origen "importado".
+4.  **Idempotencia:** Antes de insertar, el sistema verifica si ya existe un registro con la misma fecha, hora y tipo para ese empleado, evitando duplicados accidentales.
+5.  **Impacto:** Se guardan como `FichadaEmpleado` con origen "importado".
 
 ### B. Ciclo de Liquidación
 1.  **Selección de Periodo:** Se define el rango de fechas (ej: semana actual).
@@ -48,6 +51,7 @@ El módulo de **Empleados** es el núcleo de la gestión de capital humano del s
     *   Se crea el registro `LiquidacionSueldo`.
     *   Se marca la cuota del préstamo como "pagada".
     *   Se genera un **egreso automático** en la caja seleccionada.
+5.  **Emisión de Recibos:** Desde el **Reporte de Pagos**, el administrador puede buscar por nombre, seleccionar múltiples empleados y generar sus recibos individuales en un solo lote imprimible.
 
 ---
 
@@ -88,8 +92,8 @@ El módulo de **Empleados** es el núcleo de la gestión de capital humano del s
 *   **Ciclo de Pago:** El sueldo en base de datos (`sueldoBaseMensual`) es siempre proyectado a mes completo (30 días). Si un empleado es "Semanal", el total ingresado en el form se multiplica por 4.3 para guardarlo en la DB.
 
 ### Puntos de Falla:
-*   **Marcas Nocturnas:** Si un empleado ficha entrada a las 23:00 y salida a las 06:00, el cálculo de horas debe manejar el cambio de día (actualmente el sistema prioriza días trabajados sobre horas netas en el cálculo estándar).
 *   **Cajas sin Saldo:** El sistema permite liquidar aunque la caja quede en negativo, pero emite una alerta visual.
+*   **Definición de "Bruto":** En los reportes de pago, la columna **Bruto** se refiere estrictamente al sueldo base (proporcional + horas normales). Las horas extras se muestran en una columna aparte para máxima transparencia antes de llegar al **Neto**.
 
 ---
 
@@ -101,6 +105,7 @@ El módulo de **Empleados** es el núcleo de la gestión de capital humano del s
 | **Importación TXT** | Subir archivo con códigos desordenados | El sistema debe agrupar por empleado/día y marcar inconsistencias. |
 | **Liquidación con Préstamo**| Liquidar a alguien con cuota pendiente | El neto debe restarse automáticamente y la cuota pasar a "pagada". |
 | **Reversión** | Eliminar una liquidación ya pagada | Se debe borrar la liquidación, reabrir la cuota del préstamo y restaurar el saldo en caja. |
+| **Re-importación** | Subir el mismo archivo TXT dos veces | El sistema debe detectar que los registros ya existen y no crear duplicados. |
 | **Baja de Personal** | Click en "Dar de baja" | El empleado desaparece de las listas operativas pero se mantiene en el historial de reportes. |
 
 ---
@@ -108,8 +113,7 @@ El módulo de **Empleados** es el núcleo de la gestión de capital humano del s
 ## 8. 🚀 Posibles mejoras
 
 *   **Cálculo de Horas Netas:** Actualmente el sueldo proporcional se basa en "días trabajados". Mejorar el motor para calcular sueldo por minutos netos fichados.
-*   **Recibos de Sueldo PDF:** Generación automática de comprobantes firmables digitalmente.
-*   **Notificaciones:** Alerta automática cuando un empleado no ficha su entrada tras 15 minutos del horario previsto.
+*   **Automatización de Notificaciones:** Alerta automática cuando un empleado no ficha su entrada tras 15 minutos del horario previsto.
 *   **Escalabilidad Biométrica:** Soporte para múltiples relojes (sucursales remotas) enviando datos via API en tiempo real en lugar de archivos manuales.
 
 ---
