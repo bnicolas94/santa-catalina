@@ -21,7 +21,22 @@ export class LiquidacionFinalService {
         }
 
         const ingreso = new Date(empleado.fechaIngreso)
-        const sueldoBase = empleado.sueldoBaseMensual || 0
+        
+        // Determinar el sueldo base para el cálculo (Mensual o Jornal * 30)
+        let sueldoBase = empleado.sueldoBaseMensual || 0
+        
+        if (sueldoBase === 0) {
+            const jornal = empleado.jornal || empleado.rolRel?.jornal || 0
+            if (jornal > 0) {
+                // Si es jornalizado, calculamos un equivalente mensual de 25 días (estándar LCT para proporcional)
+                // o 30 días según el criterio. Vamos con 30 para cubrir la remuneración mensual habitual.
+                sueldoBase = jornal * 30
+            }
+        }
+
+        if (sueldoBase === 0) {
+            throw new Error('El empleado no tiene sueldo base ni jornal configurado. Por favor, asigne una remuneración en su perfil.')
+        }
 
         // 1. Días trabajados en el mes
         const diasMesEgreso = egreso.getDate()
