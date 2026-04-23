@@ -77,29 +77,70 @@ export class LiquidacionFinalService {
         const sacSobrePreavisoEIntegracion = (indemnizacionPreaviso + integracionMes) / 12
 
         const items = [
-            { nombre: `Días Trabajados (${diasMesEgreso} días)`, monto: montoDiasMes, tipo: 'REMUNERATIVO' },
-            { nombre: 'SAC Proporcional', monto: sacProporcional, tipo: 'REMUNERATIVO' },
-            { nombre: `Vacaciones No Gozadas (${vacacionesData.dias.toFixed(2)} días)`, monto: vacacionesData.monto, tipo: 'NO_REMUNERATIVO' },
-            { nombre: 'SAC sobre Vacaciones No Gozadas', monto: vacacionesData.monto / 12, tipo: 'NO_REMUNERATIVO' }
+            { 
+                nombre: `Días Trabajados (${diasMesEgreso} días)`, 
+                monto: montoDiasMes, 
+                tipo: 'REMUNERATIVO',
+                metodologia: `(Sueldo / 30) * ${diasMesEgreso} días trabajados en el mes.`
+            },
+            { 
+                nombre: 'SAC Proporcional', 
+                monto: sacProporcional, 
+                tipo: 'REMUNERATIVO',
+                metodologia: `Sueldo Anual Complementario proporcional al tiempo trabajado en el semestre.`
+            },
+            { 
+                nombre: `Vacaciones No Gozadas (${vacacionesData.dias.toFixed(2)} días)`, 
+                monto: vacacionesData.monto, 
+                tipo: 'NO_REMUNERATIVO',
+                metodologia: `(Días Totales / 365) * Días trabajados en el año. Pagado con plus vacacional (Sueldo / 25).`
+            },
+            { 
+                nombre: 'SAC sobre Vacaciones No Gozadas', 
+                monto: vacacionesData.monto / 12, 
+                tipo: 'NO_REMUNERATIVO',
+                metodologia: `1/12 del monto de Vacaciones No Gozadas.`
+            }
         ]
 
         if (indemnizacionAntiguedad > 0) {
-            items.push({ nombre: 'Indemnización por Antigüedad (Art. 245)', monto: indemnizacionAntiguedad, tipo: 'NO_REMUNERATIVO' })
+            items.push({ 
+                nombre: 'Indemnización por Antigüedad (Art. 245)', 
+                monto: indemnizacionAntiguedad, 
+                tipo: 'NO_REMUNERATIVO',
+                metodologia: `1 sueldo por cada año de antigüedad o fracción mayor a 3 meses.`
+            })
         }
         if (indemnizacionPreaviso > 0) {
-            items.push({ nombre: 'Indemnización Sustitutiva Preaviso', monto: indemnizacionPreaviso, tipo: 'NO_REMUNERATIVO' })
+            items.push({ 
+                nombre: 'Indemnización Sustitutiva Preaviso', 
+                monto: indemnizacionPreaviso, 
+                tipo: 'NO_REMUNERATIVO',
+                metodologia: `1 mes de sueldo (antigüedad < 5 años) o 2 meses (antigüedad > 5 años).`
+            })
         }
         if (integracionMes > 0) {
-            items.push({ nombre: 'Integración Mes de Despido', monto: integracionMes, tipo: 'NO_REMUNERATIVO' })
+            items.push({ 
+                nombre: 'Integración Mes de Despido', 
+                monto: integracionMes, 
+                tipo: 'NO_REMUNERATIVO',
+                metodologia: `Monto correspondiente a los días restantes para terminar el mes de despido.`
+            })
         }
         if (sacSobrePreavisoEIntegracion > 0) {
-            items.push({ nombre: 'SAC sobre Preaviso e Integración', monto: sacSobrePreavisoEIntegracion, tipo: 'NO_REMUNERATIVO' })
+            items.push({ 
+                nombre: 'SAC sobre Preaviso e Integración', 
+                monto: sacSobrePreavisoEIntegracion, 
+                tipo: 'NO_REMUNERATIVO',
+                metodologia: `1/12 de las indemnizaciones por preaviso e integración.`
+            })
         }
 
         const totalNeto = items.reduce((acc, item) => acc + item.monto, 0)
 
         return {
             empleado: `${empleado.nombre} ${empleado.apellido || ''}`,
+            sueldoReferencia: sueldoBase,
             ingreso: empleado.fechaIngreso,
             egreso: fechaEgreso,
             antiguedad: `${antiguedadAnios} años`,

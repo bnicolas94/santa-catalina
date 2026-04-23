@@ -13,6 +13,8 @@ export default function LiquidacionFinalModal({ empleado, onClose, onSuccess }: 
     const [causaEgreso, setCausaEgreso] = useState('RENUNCIA')
     const [omitirPreaviso, setOmitirPreaviso] = useState(false)
     const [preview, setPreview] = useState<any>(null)
+    const [excludedItems, setExcludedItems] = useState<string[]>([])
+    const [showMetodologia, setShowMetodologia] = useState<string | null>(null)
     const [loading, setLoading] = useState(false)
     const [confirming, setConfirming] = useState(false)
 
@@ -33,6 +35,7 @@ export default function LiquidacionFinalModal({ empleado, onClose, onSuccess }: 
             const data = await res.json()
             if (res.ok) {
                 setPreview(data)
+                setExcludedItems([]) // Reset exclusions on new calculation
             } else {
                 alert(data.error)
             }
@@ -43,11 +46,25 @@ export default function LiquidacionFinalModal({ empleado, onClose, onSuccess }: 
         }
     }
 
+    const toggleItem = (nombre: string) => {
+        setExcludedItems(prev => 
+            prev.includes(nombre) ? prev.filter(i => i !== nombre) : [...prev, nombre]
+        )
+    }
+
+    const getFinalItems = () => {
+        if (!preview) return []
+        return preview.items.filter((item: any) => !excludedItems.includes(item.nombre))
+    }
+
+    const finalTotal = getFinalItems().reduce((acc: number, item: any) => acc + item.monto, 0)
+
     const handleConfirm = async () => {
         if (!confirm('¿Estás seguro? Esta acción dará de baja al empleado y generará la liquidación final.')) return
         
         setConfirming(true)
         try {
+            const finalItems = getFinalItems()
             const res = await fetch('/api/liquidaciones/final', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -56,7 +73,8 @@ export default function LiquidacionFinalModal({ empleado, onClose, onSuccess }: 
                     empleadoId: empleado.id,
                     fechaEgreso,
                     causaEgreso,
-                    omitirPreaviso
+                    omitirPreaviso,
+                    customCalculo: { ...preview, items: finalItems, totalNeto: finalTotal }
                 })
             })
             if (res.ok) {
@@ -74,7 +92,7 @@ export default function LiquidacionFinalModal({ empleado, onClose, onSuccess }: 
 
     return (
         <div className="modal-overlay" onClick={onClose} style={{ zIndex: 3000 }}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ width: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
                 <div className="modal-header">
                     <h2>⚖️ Liquidación Final LCT</h2>
                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>
@@ -131,22 +149,56 @@ export default function LiquidacionFinalModal({ empleado, onClose, onSuccess }: 
                     {preview && (
                         <div className="card shadow-sm" style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-gray-50)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--color-gray-200)', paddingBottom: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                                <span style={{ fontWeight: 700 }}>Resumen del Cálculo</span>
+                                <div>
+                                    <span style={{ fontWeight: 700 }}>Resumen del Cálculo</span>
+                                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>Sueldo referencia: ${preview.sueldoReferencia.toLocaleString()}</div>
+                                </div>
                                 <span className="badge badge-info">Antigüedad: {preview.antiguedad}</span>
                             </div>
                             
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
                                 {preview.items.map((item: any, idx: number) => (
-                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)' }}>
-                                        <span style={{ color: 'var(--color-gray-600)' }}>{item.nombre}</span>
-                                        <span style={{ fontWeight: 600 }}>${item.monto.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    <div key={idx} style={{ borderBottom: '1px solid var(--color-gray-100)', padding: 'var(--space-1) 0' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!excludedItems.includes(item.nombre)} 
+                                                    onChange={() => toggleItem(item.nombre)}
+                                                />
+                                                <span 
+                                                    style={{ 
+                                                        fontSize: 'var(--text-sm)', 
+                                                        textDecoration: excludedItems.includes(item.nombre) ? 'line-through' : 'none',
+                                                        color: excludedItems.includes(item.nombre) ? 'var(--color-gray-400)' : 'inherit'
+                                                    }}
+                                                >
+                                                    {item.nombre}
+                                                </span>
+                                                <button 
+                                                    onClick={() => setShowMetodologia(showMetodologia === item.nombre ? null : item.nombre)}
+                                                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-info)', cursor: 'pointer', fontSize: '12px' }}
+                                                    title="Ver cómo se calculó"
+                                                >
+                                                    ⓘ
+                                                </button>
+                                            </div>
+                                            <span style={{ fontWeight: 600, color: excludedItems.includes(item.nombre) ? 'var(--color-gray-400)' : 'inherit' }}>
+                                                ${item.monto.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        {showMetodologia === item.nombre && (
+                                            <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', background: 'white', padding: '4px 8px', borderRadius: '4px', marginTop: '4px', borderLeft: '2px solid var(--color-info)' }}>
+                                                {item.metodologia}
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-4)', paddingTop: 'var(--space-2)', borderTop: '2px solid var(--color-gray-300)', fontSize: 'var(--text-lg)', fontWeight: 800 }}>
                                 <span>TOTAL NETO A PAGAR</span>
-                                <span style={{ color: 'var(--color-primary)' }}>${preview.totalNeto.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span style={{ color: 'var(--color-primary)' }}>${finalTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     )}

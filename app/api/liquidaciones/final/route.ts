@@ -5,13 +5,13 @@ import { prisma } from '@/lib/prisma'
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { isPreview, empleadoId, fechaEgreso, causaEgreso, omitirPreaviso } = body
+        const { isPreview, empleadoId, fechaEgreso, causaEgreso, omitirPreaviso, customCalculo } = body
 
         if (!empleadoId || !fechaEgreso || !causaEgreso) {
             return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 })
         }
 
-        const calculo = await LiquidacionFinalService.calcular({
+        const calculo = customCalculo || await LiquidacionFinalService.calcular({
             empleadoId,
             fechaEgreso,
             causaEgreso,
