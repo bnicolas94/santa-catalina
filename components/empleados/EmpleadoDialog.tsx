@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Empleado } from '@prisma/client'
 import DocumentosTab from './DocumentosTab'
 import EvaluacionesTab from './EvaluacionesTab'
+import LiquidacionFinalModal from './LiquidacionFinalModal'
 
 interface EmpleadoDialogProps {
     empleado?: any
@@ -15,6 +16,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
     const isEdit = !!empleado
     const [loading, setLoading] = useState(false)
     const [tab, setTab] = useState('personal')
+    const [showFinalModal, setShowFinalModal] = useState(false)
     const [roles, setRoles] = useState<any[]>([])
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
     const [areas, setAreas] = useState<any[]>([])
@@ -450,6 +452,19 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                             </div>
                         )}
 
+                        {tab === 'personal' && isEdit && (
+                            <div style={{ marginTop: 'var(--space-6)', borderTop: '1px solid var(--color-gray-100)', paddingTop: 'var(--space-4)', display: 'flex', justifyContent: 'flex-end' }}>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-outline" 
+                                    style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                                    onClick={() => setShowFinalModal(true)}
+                                >
+                                    ⚖️ Liquidación Final (Egreso)
+                                </button>
+                            </div>
+                        )}
+
                         {/* Tab 3: Salarial */}
                         {tab === 'salarial' && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
@@ -588,6 +603,17 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                         </button>
                     </div>
                 </form>
+
+                {showFinalModal && (
+                    <LiquidacionFinalModal
+                        empleado={empleado}
+                        onClose={() => setShowFinalModal(false)}
+                        onSuccess={() => {
+                            setShowFinalModal(false)
+                            onClose()
+                        }}
+                    />
+                )}
             </div>
         </div>
     )

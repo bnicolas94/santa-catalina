@@ -639,6 +639,7 @@ model CuotaPrestamo {
 model LiquidacionSueldo {
   id                  String          @id @default(uuid())
   periodo             String
+  tipo                String          @default("NORMAL") // "NORMAL", "FINAL"
   fechaGeneracion     DateTime        @default(now()) @map("fecha_generacion")
   sueldoProporcional  Float           @default(0) @map("sueldo_proporcional")
   horasNormales       Float           @default(0) @map("horas_normales")
