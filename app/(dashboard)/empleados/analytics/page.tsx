@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import {
     Chart as ChartJS, CategoryScale, LinearScale, BarElement,
     Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler
@@ -211,16 +211,31 @@ export default function RRHHAnalyticsPage() {
                         <thead>
                             <tr>
                                 <th></th>
-                                <th>Empleado</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => a.empleado.localeCompare(b.empleado))
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Empleado ↕</th>
                                 <th>Periodo</th>
                                 <th style={{ cursor: 'pointer' }} onClick={() => {
                                     const sorted = [...data.nomina.detalle].sort((a, b) => b.hsExtras - a.hsExtras)
                                     setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
                                 }}>Hs Extras ↕</th>
-                                <th>Monto Extras</th>
-                                <th>Ingresos</th>
-                                <th>Descuentos</th>
-                                <th>Neto Final</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.montoExtras - a.montoExtras)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Monto Extras ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.ingresos - a.ingresos)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Ingresos ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.descuentos - a.descuentos)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Descuentos ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.neto - a.neto)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Neto Final ↕</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -232,8 +247,8 @@ export default function RRHHAnalyticsPage() {
                                 </tr>
                             ) : (
                                 filteredDetalle.map((liq: any) => (
-                                    <>
-                                        <tr key={liq.id} style={{ cursor: 'pointer' }} onClick={() => setExpandedRow(expandedRow === liq.id ? null : liq.id)}>
+                                    <Fragment key={liq.id}>
+                                        <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedRow(expandedRow === liq.id ? null : liq.id)}>
                                             <td style={{ fontSize: '12px', color: 'var(--color-gray-400)' }}>{expandedRow === liq.id ? '▼' : '▶'}</td>
                                             <td style={{ fontWeight: 600 }}>{liq.empleado}</td>
                                             <td style={{ fontSize: 'var(--text-xs)' }}>{liq.periodo}</td>
@@ -248,20 +263,23 @@ export default function RRHHAnalyticsPage() {
                                         {expandedRow === liq.id && (
                                             <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
                                                 <td colSpan={8} style={{ padding: 'var(--space-4) var(--space-8)' }}>
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
-                                                        {liq.conceptos.map((c: any, idx: number) => (
-                                                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2)', borderBottom: '1px solid var(--color-gray-200)' }}>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 'var(--space-2)' }}>
+                                                        {liq.conceptos?.map((c: any, idx: number) => (
+                                                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2)', borderBottom: '1px solid var(--color-gray-200)', background: 'white', borderRadius: '4px' }}>
                                                                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>{c.nombre}</span>
                                                                 <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: c.tipo === 'DESCUENTO' ? 'var(--color-danger)' : 'var(--color-success)' }}>
                                                                     {c.tipo === 'DESCUENTO' ? '-' : ''}${c.monto.toLocaleString()}
                                                                 </span>
                                                             </div>
                                                         ))}
+                                                        {(!liq.conceptos || liq.conceptos.length === 0) && (
+                                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>No hay conceptos detallados para esta liquidación.</div>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
                                         )}
-                                    </>
+                                    </Fragment>
                                 ))
                             )}
                         </tbody>
