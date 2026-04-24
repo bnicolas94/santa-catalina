@@ -86,6 +86,7 @@ model Proveedor {
   telefono         String?
   email            String?
   direccion        String?
+  categoria        String?
   activo           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Proveedor {
     id: string
@@ -9,6 +10,7 @@ interface Proveedor {
     telefono: string | null
     email: string | null
     direccion: string | null
+    categoria: string | null
     activo: boolean
     _count: { insumos: number }
 }
@@ -23,6 +25,7 @@ export default function ProveedoresPage() {
         telefono: '',
         email: '',
         direccion: '',
+        categoria: '',
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -60,7 +63,7 @@ export default function ProveedoresPage() {
 
             setSuccess('Proveedor creado exitosamente')
             setShowModal(false)
-            setForm({ nombre: '', contacto: '', telefono: '', email: '', direccion: '' })
+            setForm({ nombre: '', contacto: '', telefono: '', email: '', direccion: '', categoria: '' })
             fetchProveedores()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
@@ -94,12 +97,12 @@ export default function ProveedoresPage() {
                     <thead>
                         <tr>
                             <th>Nombre</th>
+                            <th>Categoría</th>
                             <th>Contacto</th>
                             <th>Teléfono</th>
-                            <th>Email</th>
-                            <th>Dirección</th>
                             <th>Insumos</th>
                             <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -111,14 +114,17 @@ export default function ProveedoresPage() {
                             </tr>
                         ) : (
                             proveedores.map((prov) => (
-                                <tr key={prov.id}>
+                                <tr key={prov.id} className={!prov.activo ? 'opacity-50' : ''}>
                                     <td style={{ fontWeight: 600 }}>{prov.nombre}</td>
+                                    <td>
+                                        {prov.categoria ? (
+                                            <span className="badge badge-neutral">{prov.categoria}</span>
+                                        ) : (
+                                            <span className="text-muted small">Sin categoría</span>
+                                        )}
+                                    </td>
                                     <td>{prov.contacto || '—'}</td>
                                     <td>{prov.telefono || '—'}</td>
-                                    <td>{prov.email || '—'}</td>
-                                    <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {prov.direccion || '—'}
-                                    </td>
                                     <td>
                                         <span className="badge badge-info">{prov._count.insumos} insumos</span>
                                     </td>
@@ -126,6 +132,11 @@ export default function ProveedoresPage() {
                                         <span className={`badge ${prov.activo ? 'badge-success' : 'badge-neutral'}`}>
                                             {prov.activo ? 'Activo' : 'Inactivo'}
                                         </span>
+                                    </td>
+                                    <td>
+                                        <Link href={`/proveedores/${prov.id}`} className="btn btn-ghost btn-sm">
+                                            Ver Perfil
+                                        </Link>
                                     </td>
                                 </tr>
                             ))
@@ -174,15 +185,32 @@ export default function ProveedoresPage() {
                                         />
                                     </div>
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Email</label>
-                                    <input
-                                        type="email"
-                                        className="form-input"
-                                        value={form.email}
-                                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                        placeholder="proveedor@email.com"
-                                    />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Email</label>
+                                        <input
+                                            type="email"
+                                            className="form-input"
+                                            value={form.email}
+                                            onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                            placeholder="proveedor@email.com"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Categoría</label>
+                                        <select
+                                            className="form-input"
+                                            value={form.categoria}
+                                            onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+                                        >
+                                            <option value="">Seleccionar categoría...</option>
+                                            <option value="Materia Prima">Materia Prima</option>
+                                            <option value="Servicios">Servicios</option>
+                                            <option value="Mantenimiento">Mantenimiento</option>
+                                            <option value="Embalaje">Embalaje</option>
+                                            <option value="Otros">Otros</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Dirección</label>
