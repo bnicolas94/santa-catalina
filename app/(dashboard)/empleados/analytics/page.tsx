@@ -16,6 +16,8 @@ export default function RRHHAnalyticsPage() {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [filtroConcepto, setFiltroConcepto] = useState<string>('todos')
+    const [expandedRow, setExpandedRow] = useState<string | null>(null)
     const [fechaDesde, setFechaDesde] = useState(() => {
         const d = new Date()
         d.setMonth(d.getMonth() - 1)
@@ -44,6 +46,15 @@ export default function RRHHAnalyticsPage() {
     if (loading && !data) return <div className="loading-container">Cargando Analytics...</div>
     if (error) return <div className="error-state">{error}</div>
     if (!data) return null
+
+    const filteredDetalle = data.nomina.detalle.filter((liq: any) => {
+        if (filtroConcepto === 'todos') return true
+        return liq.conceptos.some((c: any) => c.nombre === filtroConcepto)
+    })
+
+    // KPI Cards calculation for filtered view (optional, but good for UX)
+    const filteredTotalHsExtras = filteredDetalle.reduce((acc: number, l: any) => acc + l.hsExtras, 0)
+    const filteredInversionExtras = filteredDetalle.reduce((acc: number, l: any) => acc + l.montoExtras, 0)
 
     // Chart Data: Distribución por Área
     const areaChartData = {
@@ -152,11 +163,11 @@ export default function RRHHAnalyticsPage() {
                     <div style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)', color: 'var(--color-gray-400)' }}>{data.asistencia.ausencias} ausencias registradas</div>
                 </div>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)', borderLeft: '4px solid #10b981' }}>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Masa Salarial Netas</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Inversión Periodo</div>
                     <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: 'var(--color-success)' }}>
                         ${data.nomina.total.toLocaleString()}
                     </div>
-                    <div style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)', color: 'var(--color-gray-400)' }}>En el periodo seleccionado</div>
+                    <div style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)', color: 'var(--color-gray-400)' }}>Masa salarial neta</div>
                 </div>
             </div>
 
@@ -165,16 +176,32 @@ export default function RRHHAnalyticsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
                     <div>
                         <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>📋 Planilla de Liquidaciones</h3>
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>Detalle de pagos y horas extras en el periodo.</p>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>Detalle de pagos y desglose de conceptos.</p>
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-primary)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
-                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Total Hs Extras</span>
-                            <span style={{ fontWeight: 700 }}>{data.nomina.totalHsExtras.toFixed(1)} hs</span>
+                    <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label" style={{ fontSize: '10px', textTransform: 'uppercase' }}>Filtrar por Concepto</label>
+                            <select 
+                                className="form-select" 
+                                value={filtroConcepto} 
+                                onChange={e => setFiltroConcepto(e.target.value)}
+                                style={{ height: '36px', padding: '4px 12px' }}
+                            >
+                                <option value="todos">Mostrar todos los conceptos</option>
+                                {data.nomina.conceptos.map((c: string) => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
                         </div>
-                        <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-success)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
-                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Inversión Extras</span>
-                            <span style={{ fontWeight: 700 }}>${data.nomina.totalMontoHsExtras.toLocaleString()}</span>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-primary)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+                                <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Hs Extras (Filtro)</span>
+                                <span style={{ fontWeight: 700 }}>{filteredTotalHsExtras.toFixed(1)} hs</span>
+                            </div>
+                            <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-success)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+                                <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Extras (Filtro)</span>
+                                <span style={{ fontWeight: 700 }}>${filteredInversionExtras.toLocaleString()}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -183,6 +210,7 @@ export default function RRHHAnalyticsPage() {
                     <table className="table">
                         <thead>
                             <tr>
+                                <th></th>
                                 <th>Empleado</th>
                                 <th>Periodo</th>
                                 <th style={{ cursor: 'pointer' }} onClick={() => {
@@ -196,25 +224,44 @@ export default function RRHHAnalyticsPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {data.nomina.detalle.length === 0 ? (
+                            {filteredDetalle.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
-                                        No hay liquidaciones registradas en este periodo.
+                                    <td colSpan={8} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                        No hay liquidaciones con el concepto seleccionado.
                                     </td>
                                 </tr>
                             ) : (
-                                data.nomina.detalle.map((liq: any) => (
-                                    <tr key={liq.id}>
-                                        <td style={{ fontWeight: 600 }}>{liq.empleado}</td>
-                                        <td style={{ fontSize: 'var(--text-xs)' }}>{liq.periodo}</td>
-                                        <td style={{ color: liq.hsExtras > 0 ? 'var(--color-primary)' : 'inherit', fontWeight: liq.hsExtras > 0 ? 700 : 400 }}>
-                                            {liq.hsExtras} hs
-                                        </td>
-                                        <td>${liq.montoExtras.toLocaleString()}</td>
-                                        <td>${liq.ingresos.toLocaleString()}</td>
-                                        <td style={{ color: 'var(--color-danger)' }}>{liq.descuentos > 0 ? `-$${liq.descuentos.toLocaleString()}` : '-'}</td>
-                                        <td style={{ fontWeight: 800, color: 'var(--color-success)' }}>${liq.neto.toLocaleString()}</td>
-                                    </tr>
+                                filteredDetalle.map((liq: any) => (
+                                    <>
+                                        <tr key={liq.id} style={{ cursor: 'pointer' }} onClick={() => setExpandedRow(expandedRow === liq.id ? null : liq.id)}>
+                                            <td style={{ fontSize: '12px', color: 'var(--color-gray-400)' }}>{expandedRow === liq.id ? '▼' : '▶'}</td>
+                                            <td style={{ fontWeight: 600 }}>{liq.empleado}</td>
+                                            <td style={{ fontSize: 'var(--text-xs)' }}>{liq.periodo}</td>
+                                            <td style={{ color: liq.hsExtras > 0 ? 'var(--color-primary)' : 'inherit', fontWeight: liq.hsExtras > 0 ? 700 : 400 }}>
+                                                {liq.hsExtras} hs
+                                            </td>
+                                            <td>${liq.montoExtras.toLocaleString()}</td>
+                                            <td>${liq.ingresos.toLocaleString()}</td>
+                                            <td style={{ color: 'var(--color-danger)' }}>{liq.descuentos > 0 ? `-$${liq.descuentos.toLocaleString()}` : '-'}</td>
+                                            <td style={{ fontWeight: 800, color: 'var(--color-success)' }}>${liq.neto.toLocaleString()}</td>
+                                        </tr>
+                                        {expandedRow === liq.id && (
+                                            <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
+                                                <td colSpan={8} style={{ padding: 'var(--space-4) var(--space-8)' }}>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+                                                        {liq.conceptos.map((c: any, idx: number) => (
+                                                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2)', borderBottom: '1px solid var(--color-gray-200)' }}>
+                                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>{c.nombre}</span>
+                                                                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: c.tipo === 'DESCUENTO' ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                                                                    {c.tipo === 'DESCUENTO' ? '-' : ''}${c.monto.toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </>
                                 ))
                             )}
                         </tbody>

@@ -99,6 +99,11 @@ export async function GET(request: Request) {
                         apellido: true,
                         areaId: true
                     }
+                },
+                items: {
+                    include: {
+                        concepto: true
+                    }
                 }
             },
             orderBy: { fechaGeneracion: 'desc' }
@@ -123,6 +128,14 @@ export async function GET(request: Request) {
             monto
         }))
 
+        // Extraer todos los conceptos únicos del periodo para el filtro
+        const conceptosUnicos = new Set<string>()
+        liquidaciones.forEach(l => {
+            l.items.forEach(item => {
+                conceptosUnicos.add(item.concepto.nombre)
+            })
+        })
+
         // Detalle para la planilla
         const detallePlanilla = liquidaciones.map(l => ({
             id: l.id,
@@ -131,9 +144,14 @@ export async function GET(request: Request) {
             fecha: l.fechaGeneracion,
             hsExtras: l.horasExtras || 0,
             montoExtras: l.montoHorasExtras || 0,
-            ingresos: l.totalNeto + (l.descuentosPrestamos || 0), // Aproximación
+            ingresos: l.totalNeto + (l.descuentosPrestamos || 0),
             descuentos: l.descuentosPrestamos || 0,
-            neto: l.totalNeto
+            neto: l.totalNeto,
+            conceptos: l.items.map(item => ({
+                nombre: item.concepto.nombre,
+                monto: item.montoCalculado,
+                tipo: item.concepto.tipo
+            }))
         }))
 
         return NextResponse.json({
@@ -160,7 +178,8 @@ export async function GET(request: Request) {
                 totalHsExtras: totalHorasExtras,
                 totalMontoHsExtras: totalMontoHorasExtras,
                 porArea: masaPorAreaConNombre,
-                detalle: detallePlanilla
+                detalle: detallePlanilla,
+                conceptos: Array.from(conceptosUnicos).sort()
             }
         })
 
