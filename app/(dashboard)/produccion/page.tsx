@@ -313,10 +313,11 @@ export default function ProduccionPage() {
         const movimientosPrevios = lote.movimientosProducto || []
 
         const distribucion = presentaciones.map((pred: any) => {
+            const savedDist = (lote as any).distribucion?.find((d: any) => d.presentacionId === pred.id)
             const mov = movimientosPrevios.find((m: any) => m.presentacionId === pred.id)
             return {
                 presentacionId: pred.id,
-                cantidad: mov ? mov.cantidad : (movimientosPrevios.length === 0 && presentaciones[0].id === pred.id ? cantProducidaInicial : 0)
+                cantidad: savedDist ? Number(savedDist.cantidad) : (mov ? mov.cantidad : (movimientosPrevios.length === 0 && presentaciones.length > 0 && presentaciones[0].id === pred.id ? cantProducidaInicial : 0))
             }
         })
 
