@@ -8,6 +8,8 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params
+        const { searchParams } = new URL(_request.url)
+        const ignorarPagados = searchParams.get('ignorarPagados') === 'true'
 
         // 1. Verificar si el préstamo tiene cuotas pagadas
         const cuotasPagadas = await prisma.cuotaPrestamo.count({
@@ -17,9 +19,12 @@ export async function DELETE(
             }
         })
 
-        if (cuotasPagadas > 0) {
+        if (cuotasPagadas > 0 && !ignorarPagados) {
             return NextResponse.json(
-                { error: 'No se puede eliminar un préstamo que ya tiene cuotas pagadas.' },
+                { 
+                    error: 'Este préstamo tiene cuotas ya pagadas/descontadas.',
+                    hasPaid: true 
+                },
                 { status: 400 }
             )
         }

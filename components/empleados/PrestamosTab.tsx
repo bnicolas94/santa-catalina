@@ -116,17 +116,27 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
         }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('¿Estás seguro de que deseas eliminar este préstamo? Esta acción borrará todas sus cuotas pendientes.')) return
+    const handleDelete = async (id: string, force = false) => {
+        const msg = force 
+            ? 'Este préstamo tiene cuotas descontadas. ¿Deseas eliminarlo del historial de todas formas? (Esto NO afectará la caja ni las liquidaciones pasadas)'
+            : '¿Estás seguro de que deseas eliminar este préstamo? Esta acción borrará todas sus cuotas.'
+        
+        if (!confirm(msg)) return
+
         try {
-            const res = await fetch(`/api/prestamos/${id}`, {
+            const url = `/api/prestamos/${id}${force ? '?ignorarPagados=true' : ''}`
+            const res = await fetch(url, {
                 method: 'DELETE'
             })
             if (res.ok) {
                 fetchPrestamos()
             } else {
                 const err = await res.json()
-                alert(err.error || 'Error al eliminar el préstamo')
+                if (err.hasPaid && !force) {
+                    handleDelete(id, true) // Re-intentar con force si el usuario acepta
+                } else {
+                    alert(err.error || 'Error al eliminar el préstamo')
+                }
             }
         } catch (error) {
             console.error(error)
