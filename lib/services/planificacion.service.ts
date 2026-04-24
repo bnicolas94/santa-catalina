@@ -181,8 +181,10 @@ export class PlanificacionService {
                 // Si el lote tiene distribución detallada, la usamos
                 const dist = l.distribucion as any[]
                 dist.forEach(d => {
+                    const pres = l.producto.presentaciones.find(p => p.id === d.presentacionId)
+                    const size = pres?.cantidad || 48
                     const key = `${l.productoId}_${d.presentacionId}`
-                    enProduccion[key] = (enProduccion[key] || 0) + Number(d.cantidad)
+                    enProduccion[key] = (enProduccion[key] || 0) + (Number(d.cantidad) * size)
                 })
             } else {
                 // Unidades por paquete: usamos la presentación más grande del producto como estándar
