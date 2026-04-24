@@ -34,6 +34,7 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
         modoInicio: 'INMEDIATO',
         fechaInicio: '' 
     })
+    const [editingCuota, setEditingCuota] = useState<any>(null)
 
     const fetchPrestamos = async () => {
         setLoading(true)
@@ -51,6 +52,42 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
     useEffect(() => {
         fetchPrestamos()
     }, [empleadoId])
+
+    const handleUpdateCuota = async (id: string, data: any) => {
+        try {
+            const res = await fetch(`/api/prestamos/cuotas/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            if (res.ok) {
+                setEditingCuota(null)
+                fetchPrestamos()
+            } else {
+                alert('Error al actualizar la cuota')
+            }
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    const handleDeleteCuota = async (id: string) => {
+        if (!confirm('¿Estás seguro de que deseas eliminar esta cuota?')) return
+        try {
+            const res = await fetch(`/api/prestamos/cuotas/${id}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                setEditingCuota(null)
+                fetchPrestamos()
+            } else {
+                const err = await res.json()
+                alert(err.error || 'Error al eliminar la cuota')
+            }
+        } catch (error) {
+            console.error(error)
+        }
+    }
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -101,6 +138,53 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+            {/* Modal de edición de cuota */}
+            {editingCuota && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div className="card shadow-lg" style={{ width: '400px', padding: 'var(--space-6)', background: 'white' }}>
+                        <h4 style={{ marginBottom: 'var(--space-4)', fontWeight: 700 }}>Gestionar Cuota</h4>
+                        <div className="form-group">
+                            <label className="form-label">Monto de la Cuota</label>
+                            <input 
+                                type="number" 
+                                className="form-input" 
+                                value={editingCuota.monto} 
+                                onChange={e => setEditingCuota({ ...editingCuota, monto: e.target.value })} 
+                            />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-6)' }}>
+                            <button 
+                                className="btn btn-primary"
+                                onClick={() => handleUpdateCuota(editingCuota.id, { monto: editingCuota.monto })}
+                            >
+                                Guardar Monto
+                            </button>
+                            {editingCuota.estado === 'pagada' && (
+                                <button 
+                                    className="btn btn-secondary"
+                                    onClick={() => handleUpdateCuota(editingCuota.id, { estado: 'pendiente' })}
+                                >
+                                    ↩ Volver a Pendiente
+                                </button>
+                            )}
+                            <button 
+                                className="btn btn-danger-outline"
+                                onClick={() => handleDeleteCuota(editingCuota.id)}
+                            >
+                                🗑️ Eliminar Cuota
+                            </button>
+                            <button 
+                                className="btn btn-outline"
+                                onClick={() => setEditingCuota(null)}
+                                style={{ marginTop: 'var(--space-2)' }}
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Historial de Préstamos y Adelantos</h3>
@@ -201,19 +285,27 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                             </div>
                             <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
                                 {p.cuotas.map((c: Cuota) => (
-                                    <div key={c.id} style={{
-                                        padding: 'var(--space-3)',
-                                        borderRadius: 'var(--radius-lg)',
-                                        border: `1px solid ${c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-gray-200)'}`,
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        textAlign: 'center',
-                                        backgroundColor: c.estado === 'pagada' ? 'var(--color-success-bg)' : 'var(--color-white)',
-                                        opacity: c.estado === 'pagada' ? 0.7 : 1,
-                                        boxShadow: c.estado === 'pagada' ? 'none' : 'var(--shadow-sm)'
-                                    }}>
+                                    <div 
+                                        key={c.id} 
+                                        onClick={() => setEditingCuota(c)}
+                                        style={{
+                                            padding: 'var(--space-3)',
+                                            borderRadius: 'var(--radius-lg)',
+                                            border: `1px solid ${c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-gray-200)'}`,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            textAlign: 'center',
+                                            backgroundColor: c.estado === 'pagada' ? 'var(--color-success-bg)' : 'var(--color-white)',
+                                            opacity: c.estado === 'pagada' ? 0.7 : 1,
+                                            boxShadow: c.estado === 'pagada' ? 'none' : 'var(--shadow-sm)',
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.2s',
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                    >
                                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 500, marginBottom: 'var(--space-1)' }}>Cuota {c.numeroCuota}/{p.cantidadCuotas}</span>
                                         <span style={{ fontWeight: 700, color: c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-gray-900)' }}>${c.monto.toLocaleString()}</span>
                                         <span style={{ fontSize: '10px', marginTop: 'var(--space-1)', fontWeight: 600, color: c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-warning)' }}>
