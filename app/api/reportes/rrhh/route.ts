@@ -154,7 +154,7 @@ export async function GET(request: Request) {
             }))
         }))
 
-        // 5. Préstamos Activos
+        // 5. Préstamos Activos (Agrupados por empleado)
         const prestamosActivos = await prisma.prestamoEmpleado.findMany({
             where: {
                 estado: 'activo'
@@ -162,6 +162,7 @@ export async function GET(request: Request) {
             include: {
                 empleado: {
                     select: {
+                        id: true,
                         nombre: true,
                         apellido: true
                     }
@@ -170,24 +171,42 @@ export async function GET(request: Request) {
             }
         })
 
-        const resumenPrestamos = prestamosActivos.map(p => {
-            const totalPagado = p.cuotas
+        const agrupadosPorEmpleado: Record<string, any> = {}
+
+        prestamosActivos.forEach(p => {
+            const empId = p.empleadoId
+            if (!agrupadosPorEmpleado[empId]) {
+                agrupadosPorEmpleado[empId] = {
+                    empleado: `${p.empleado.nombre} ${p.empleado.apellido || ''}`,
+                    montoTotal: 0,
+                    pagado: 0,
+                    saldo: 0,
+                    cuotasPagadas: 0,
+                    cuotasTotales: 0,
+                    prestamosActivos: 0
+                }
+            }
+
+            const pagadoEstePrestamo = p.cuotas
                 .filter(c => c.estado === 'pagada')
                 .reduce((acc, c) => acc + c.monto, 0)
-            
-            const saldoPendiente = p.montoTotal - totalPagado
-            const cuotasPagadas = p.cuotas.filter(c => c.estado === 'pagada').length
 
-            return {
-                id: p.id,
-                empleado: `${p.empleado.nombre} ${p.empleado.apellido || ''}`,
-                montoTotal: p.montoTotal,
-                pagado: totalPagado,
-                saldo: saldoPendiente,
-                cuotas: `${cuotasPagadas}/${p.cantidadCuotas}`,
-                progreso: (totalPagado / p.montoTotal) * 100
-            }
-        }).filter(p => p.saldo > 0) // Solo los que tienen saldo pendiente real
+            agrupadosPorEmpleado[empId].montoTotal += p.montoTotal
+            agrupadosPorEmpleado[empId].pagado += pagadoEstePrestamo
+            agrupadosPorEmpleado[empId].saldo += (p.montoTotal - pagadoEstePrestamo)
+            agrupadosPorEmpleado[empId].cuotasPagadas += p.cuotas.filter(c => c.estado === 'pagada').length
+            agrupadosPorEmpleado[empId].cuotasTotales += p.cantidadCuotas
+            agrupadosPorEmpleado[empId].prestamosActivos++
+        })
+
+        const resumenPrestamos = Object.values(agrupadosPorEmpleado)
+            .map(p => ({
+                ...p,
+                cuotas: `${p.cuotasPagadas}/${p.cuotasTotales} (${p.prestamosActivos} p.)`,
+                progreso: (p.pagado / p.montoTotal) * 100
+            }))
+            .filter(p => p.saldo > 0)
+            .sort((a, b) => b.saldo - a.saldo)
 
         const totalDeudaActiva = resumenPrestamos.reduce((acc, p) => acc + p.saldo, 0)
 
