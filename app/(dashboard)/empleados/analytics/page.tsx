@@ -99,6 +99,33 @@ export default function RRHHAnalyticsPage() {
                         <label className="form-label" style={{ fontSize: '10px', textTransform: 'uppercase' }}>Hasta</label>
                         <input type="date" className="form-input" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} style={{ padding: '4px 8px', height: 'auto' }} />
                     </div>
+                    <button 
+                        className="btn btn-outline" 
+                        onClick={() => {
+                            const now = new Date()
+                            const first = now.getDate() - now.getDay() + 1
+                            const monday = new Date(now.setDate(first))
+                            const sunday = new Date(now.setDate(first + 6))
+                            setFechaDesde(monday.toISOString().split('T')[0])
+                            setFechaHasta(sunday.toISOString().split('T')[0])
+                        }}
+                        style={{ fontSize: '10px' }}
+                    >
+                        📅 Esta Semana
+                    </button>
+                    <button 
+                        className="btn btn-outline" 
+                        onClick={() => {
+                            const now = new Date()
+                            const first = new Date(now.getFullYear(), now.getMonth(), 1)
+                            const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+                            setFechaDesde(first.toISOString().split('T')[0])
+                            setFechaHasta(last.toISOString().split('T')[0])
+                        }}
+                        style={{ fontSize: '10px' }}
+                    >
+                        🗓️ Este Mes
+                    </button>
                     <button className="btn btn-outline" onClick={fetchData} style={{ marginTop: '14px' }}>🔄</button>
                 </div>
             </div>
@@ -133,8 +160,70 @@ export default function RRHHAnalyticsPage() {
                 </div>
             </div>
 
+            {/* Planilla de Liquidaciones */}
+            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
+                    <div>
+                        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>📋 Planilla de Liquidaciones</h3>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>Detalle de pagos y horas extras en el periodo.</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-primary)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Total Hs Extras</span>
+                            <span style={{ fontWeight: 700 }}>{data.nomina.totalHsExtras.toFixed(1)} hs</span>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-success)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Inversión Extras</span>
+                            <span style={{ fontWeight: 700 }}>${data.nomina.totalMontoHsExtras.toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Periodo</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.hsExtras - a.hsExtras)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Hs Extras ↕</th>
+                                <th>Monto Extras</th>
+                                <th>Ingresos</th>
+                                <th>Descuentos</th>
+                                <th>Neto Final</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {data.nomina.detalle.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                        No hay liquidaciones registradas en este periodo.
+                                    </td>
+                                </tr>
+                            ) : (
+                                data.nomina.detalle.map((liq: any) => (
+                                    <tr key={liq.id}>
+                                        <td style={{ fontWeight: 600 }}>{liq.empleado}</td>
+                                        <td style={{ fontSize: 'var(--text-xs)' }}>{liq.periodo}</td>
+                                        <td style={{ color: liq.hsExtras > 0 ? 'var(--color-primary)' : 'inherit', fontWeight: liq.hsExtras > 0 ? 700 : 400 }}>
+                                            {liq.hsExtras} hs
+                                        </td>
+                                        <td>${liq.montoExtras.toLocaleString()}</td>
+                                        <td>${liq.ingresos.toLocaleString()}</td>
+                                        <td style={{ color: 'var(--color-danger)' }}>{liq.descuentos > 0 ? `-$${liq.descuentos.toLocaleString()}` : '-'}</td>
+                                        <td style={{ fontWeight: 800, color: 'var(--color-success)' }}>${liq.neto.toLocaleString()}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* Charts Grid */}
-            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-6)' }}>
+            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
                     <h3 style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Distribución por Área</h3>
                     <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>

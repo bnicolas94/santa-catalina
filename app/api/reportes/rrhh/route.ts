@@ -90,20 +90,23 @@ export async function GET(request: Request) {
         const liquidaciones = await prisma.liquidacionSueldo.findMany({
             where: {
                 fechaGeneracion: { gte: desde, lte: hasta },
-                estado: 'pagado'
+                estado: { not: 'anulado' }
             },
-            select: {
-                totalNeto: true,
-                fechaGeneracion: true,
+            include: {
                 empleado: {
                     select: {
+                        nombre: true,
+                        apellido: true,
                         areaId: true
                     }
                 }
-            }
+            },
+            orderBy: { fechaGeneracion: 'desc' }
         })
 
         const totalMasaSalarial = liquidaciones.reduce((acc, l) => acc + l.totalNeto, 0)
+        const totalHorasExtras = liquidaciones.reduce((acc, l) => acc + (l.horasExtras || 0), 0)
+        const totalMontoHorasExtras = liquidaciones.reduce((acc, l) => acc + (l.montoHorasExtras || 0), 0)
         
         // Agrupar masa salarial por área
         const masaPorArea: Record<string, number> = {}
@@ -113,10 +116,24 @@ export async function GET(request: Request) {
         })
 
         // Obtener nombres de áreas para el mapeo
-        const areas = await prisma.area.findMany({ where: { id: { in: Object.keys(masaPorArea) } } })
+        const areasIds = Object.keys(masaPorArea)
+        const areasData = await prisma.area.findMany({ where: { id: { in: areasIds } } })
         const masaPorAreaConNombre = Object.entries(masaPorArea).map(([id, monto]) => ({
-            nombre: areas.find(a => a.id === id)?.nombre || 'Sin Área',
+            nombre: areasData.find(a => a.id === id)?.nombre || 'Sin Área',
             monto
+        }))
+
+        // Detalle para la planilla
+        const detallePlanilla = liquidaciones.map(l => ({
+            id: l.id,
+            empleado: `${l.empleado?.nombre} ${l.empleado?.apellido || ''}`,
+            periodo: l.periodo,
+            fecha: l.fechaGeneracion,
+            hsExtras: l.horasExtras || 0,
+            montoExtras: l.montoHorasExtras || 0,
+            ingresos: l.totalNeto + (l.descuentosPrestamos || 0), // Aproximación
+            descuentos: l.descuentosPrestamos || 0,
+            neto: l.totalNeto
         }))
 
         return NextResponse.json({
@@ -140,7 +157,10 @@ export async function GET(request: Request) {
             },
             nomina: {
                 total: totalMasaSalarial,
-                porArea: masaPorAreaConNombre
+                totalHsExtras: totalHorasExtras,
+                totalMontoHsExtras: totalMontoHorasExtras,
+                porArea: masaPorAreaConNombre,
+                detalle: detallePlanilla
             }
         })
 
