@@ -28,15 +28,22 @@ export async function PATCH(
             include: { prestamo: true }
         })
 
-        // Si todas las cuotas están pagadas, marcar el préstamo como pagado
+        // Recalcular montoTotal y cantidadCuotas del préstamo
         const allCuotas = await prisma.cuotaPrestamo.findMany({
             where: { prestamoId: cuota.prestamoId }
         })
         
-        const allPaid = allCuotas.every(c => c.estado === 'pagada')
+        const newTotal = allCuotas.reduce((acc, c) => acc + c.monto, 0)
+        const newCount = allCuotas.length
+        const allPaid = allCuotas.length > 0 && allCuotas.every(c => c.estado === 'pagada')
+
         await prisma.prestamoEmpleado.update({
             where: { id: cuota.prestamoId },
-            data: { estado: allPaid ? 'pagado' : 'activo' }
+            data: { 
+                montoTotal: newTotal,
+                cantidadCuotas: newCount,
+                estado: allPaid ? 'pagado' : 'activo' 
+            }
         })
 
         return NextResponse.json(cuota)
@@ -53,7 +60,8 @@ export async function DELETE(
         const { id } = await params;
         
         const cuota = await prisma.cuotaPrestamo.findUnique({
-            where: { id }
+            where: { id },
+            include: { prestamo: true }
         })
 
         if (!cuota) {
@@ -64,8 +72,28 @@ export async function DELETE(
             return NextResponse.json({ error: 'No se puede eliminar una cuota ya pagada' }, { status: 400 })
         }
 
+        const prestamoId = cuota.prestamoId
+
         await prisma.cuotaPrestamo.delete({
             where: { id }
+        })
+
+        // Recalcular tras eliminar
+        const remainingCuotas = await prisma.cuotaPrestamo.findMany({
+            where: { prestamoId }
+        })
+
+        const newTotal = remainingCuotas.reduce((acc, c) => acc + c.monto, 0)
+        const newCount = remainingCuotas.length
+        const allPaid = remainingCuotas.length > 0 && remainingCuotas.every(c => c.estado === 'pagada')
+
+        await prisma.prestamoEmpleado.update({
+            where: { id: prestamoId },
+            data: { 
+                montoTotal: newTotal,
+                cantidadCuotas: newCount,
+                estado: allPaid ? 'pagado' : 'activo' 
+            }
         })
 
         return NextResponse.json({ success: true })
