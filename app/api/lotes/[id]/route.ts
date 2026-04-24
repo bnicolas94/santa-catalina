@@ -38,8 +38,14 @@ export async function PUT(
                     ...(body.distribucionPresentaciones !== undefined && { distribucion: body.distribucionPresentaciones }),
                 },
                 include: {
-                    producto: true,
+                    producto: { include: { presentaciones: true } },
                     coordinador: { select: { id: true, nombre: true } },
+                    ubicacion: { select: { id: true, nombre: true } },
+                    _count: { select: { detallePedidos: true } },
+                    movimientosProducto: {
+                        where: { tipo: 'produccion', signo: 'entrada' },
+                        select: { presentacionId: true, cantidad: true }
+                    }
                 },
             })
 

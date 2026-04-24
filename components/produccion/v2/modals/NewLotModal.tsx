@@ -87,6 +87,7 @@ export const NewLotModal: React.FC<NewLotModalProps> = ({ initialData }) => {
                     coordinadorId: form.coordinadorId,
                     estado: form.estado,
                     ubicacionId: form.ubicacionId,
+                    distribucionPresentaciones: form.presentacionId ? [{ presentacionId: form.presentacionId, cantidad: paquetesTotal }] : [],
                 }),
             })
             if (!res.ok) {

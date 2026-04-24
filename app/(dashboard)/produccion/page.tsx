@@ -50,6 +50,7 @@ interface Lote {
     producto: Producto
     coordinador: Coordinador | null
     ubicacion: Ubicacion | null
+    distribucion?: any
 }
 
 const ESTADOS_LOTE = [

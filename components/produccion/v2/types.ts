@@ -46,6 +46,7 @@ export interface Lote {
     producto: Producto
     coordinador: Coordinador | null
     ubicacion: Ubicacion | null
+    distribucion?: any
 }
 
 export interface PlanningData {
