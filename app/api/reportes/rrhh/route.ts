@@ -177,26 +177,41 @@ export async function GET(request: Request) {
             const empId = p.empleadoId
             if (!agrupadosPorEmpleado[empId]) {
                 agrupadosPorEmpleado[empId] = {
+                    id: empId,
                     empleado: `${p.empleado.nombre} ${p.empleado.apellido || ''}`,
                     montoTotal: 0,
                     pagado: 0,
                     saldo: 0,
                     cuotasPagadas: 0,
                     cuotasTotales: 0,
-                    prestamosActivos: 0
+                    prestamosActivos: 0,
+                    listaPrestamos: []
                 }
             }
 
             const pagadoEstePrestamo = p.cuotas
                 .filter(c => c.estado === 'pagada')
                 .reduce((acc, c) => acc + c.monto, 0)
+            
+            const cuotasPagadasEste = p.cuotas.filter(c => c.estado === 'pagada').length
 
             agrupadosPorEmpleado[empId].montoTotal += p.montoTotal
             agrupadosPorEmpleado[empId].pagado += pagadoEstePrestamo
             agrupadosPorEmpleado[empId].saldo += (p.montoTotal - pagadoEstePrestamo)
-            agrupadosPorEmpleado[empId].cuotasPagadas += p.cuotas.filter(c => c.estado === 'pagada').length
+            agrupadosPorEmpleado[empId].cuotasPagadas += cuotasPagadasEste
             agrupadosPorEmpleado[empId].cuotasTotales += p.cantidadCuotas
             agrupadosPorEmpleado[empId].prestamosActivos++
+            
+            agrupadosPorEmpleado[empId].listaPrestamos.push({
+                id: p.id,
+                montoTotal: p.montoTotal,
+                pagado: pagadoEstePrestamo,
+                saldo: p.montoTotal - pagadoEstePrestamo,
+                cuotas: `${cuotasPagadasEste}/${p.cantidadCuotas}`,
+                fecha: p.fechaSolicitud,
+                observaciones: p.observaciones,
+                progreso: (pagadoEstePrestamo / p.montoTotal) * 100
+            })
         })
 
         const resumenPrestamos = Object.values(agrupadosPorEmpleado)

@@ -199,118 +199,40 @@ export default function RRHHAnalyticsPage() {
                                 <span style={{ fontWeight: 700 }}>{filteredTotalHsExtras.toFixed(1)} hs</span>
                             </div>
                             <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-success)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
-                                <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Extras (Filtro)</span>
-                                <span style={{ fontWeight: 700 }}>${filteredInversionExtras.toLocaleString()}</span>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Gráficos / Distribución */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                        <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Área</h3>
+                        {data.distribucion.area.map((a: any) => (
+                            <div key={a.nombre} style={{ marginBottom: 'var(--space-3)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
+                                    <span>{a.nombre}</span>
+                                    <span style={{ fontWeight: 700 }}>{a.cantidad}</span>
+                                </div>
+                                <div style={{ height: '8px', background: 'var(--color-gray-100)', borderRadius: '4px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${(a.cantidad / data.stats.total) * 100}%`, height: '100%', background: 'var(--color-primary)' }}></div>
+                                </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
-                </div>
-
-                <div className="table-container">
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th style={{ cursor: 'pointer' }} onClick={() => {
-                                    const sorted = [...data.nomina.detalle].sort((a, b) => a.empleado.localeCompare(b.empleado))
-                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
-                                }}>Empleado ↕</th>
-                                <th>Periodo</th>
-                                <th style={{ cursor: 'pointer' }} onClick={() => {
-                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.hsExtras - a.hsExtras)
-                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
-                                }}>Hs Extras ↕</th>
-                                <th style={{ cursor: 'pointer' }} onClick={() => {
-                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.montoExtras - a.montoExtras)
-                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
-                                }}>Monto Extras ↕</th>
-                                <th style={{ cursor: 'pointer' }} onClick={() => {
-                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.ingresos - a.ingresos)
-                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
-                                }}>Ingresos ↕</th>
-                                <th style={{ cursor: 'pointer' }} onClick={() => {
-                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.descuentos - a.descuentos)
-                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
-                                }}>Descuentos ↕</th>
-                                <th style={{ cursor: 'pointer' }} onClick={() => {
-                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.neto - a.neto)
-                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
-                                }}>Neto Final ↕</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredDetalle.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
-                                        No hay liquidaciones con el concepto seleccionado.
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredDetalle.map((liq: any) => (
-                                    <Fragment key={liq.id}>
-                                        <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedRow(expandedRow === liq.id ? null : liq.id)}>
-                                            <td style={{ fontSize: '12px', color: 'var(--color-gray-400)' }}>{expandedRow === liq.id ? '▼' : '▶'}</td>
-                                            <td style={{ fontWeight: 600 }}>{liq.empleado}</td>
-                                            <td style={{ fontSize: 'var(--text-xs)' }}>{liq.periodo}</td>
-                                            <td style={{ color: liq.hsExtras > 0 ? 'var(--color-primary)' : 'inherit', fontWeight: liq.hsExtras > 0 ? 700 : 400 }}>
-                                                {liq.hsExtras} hs
-                                            </td>
-                                            <td>${liq.montoExtras.toLocaleString()}</td>
-                                            <td>${liq.ingresos.toLocaleString()}</td>
-                                            <td style={{ color: 'var(--color-danger)' }}>{liq.descuentos > 0 ? `-$${liq.descuentos.toLocaleString()}` : '-'}</td>
-                                            <td style={{ fontWeight: 800, color: 'var(--color-success)' }}>${liq.neto.toLocaleString()}</td>
-                                        </tr>
-                                        {expandedRow === liq.id && (
-                                            <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                                <td colSpan={8} style={{ padding: 'var(--space-4) var(--space-8)' }}>
-                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 'var(--space-2)' }}>
-                                                        {liq.conceptos?.map((c: any, idx: number) => (
-                                                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2)', borderBottom: '1px solid var(--color-gray-200)', background: 'white', borderRadius: '4px' }}>
-                                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>{c.nombre}</span>
-                                                                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: c.tipo === 'DESCUENTO' ? 'var(--color-danger)' : 'var(--color-success)' }}>
-                                                                    {c.tipo === 'DESCUENTO' ? '-' : ''}${c.monto.toLocaleString()}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                        {(!liq.conceptos || liq.conceptos.length === 0) && (
-                                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>No hay conceptos detallados para esta liquidación.</div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </Fragment>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Charts Grid */}
-            <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Distribución por Área</h3>
-                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
-                        <Pie data={areaChartData} options={{ maintainAspectRatio: false }} />
-                    </div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Distribución por Puesto</h3>
-                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
-                        <Pie data={puestoChartData} options={{ maintainAspectRatio: false }} />
-                    </div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-6)', gridColumn: 'span 2' }}>
-                    <h3 style={{ marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Masa Salarial por Área (Inversión neta)</h3>
-                    <div style={{ height: '300px' }}>
-                        <Bar 
-                            data={payrollChartData} 
-                            options={{ 
-                                maintainAspectRatio: false,
-                                scales: { y: { beginAtZero: true } }
-                            }} 
-                        />
+                    <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                        <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Inversión por Área</h3>
+                        {data.nomina.porArea.map((a: any) => (
+                            <div key={a.nombre} style={{ marginBottom: 'var(--space-3)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
+                                    <span>{a.nombre}</span>
+                                    <span style={{ fontWeight: 700 }}>${a.monto.toLocaleString()}</span>
+                                </div>
+                                <div style={{ height: '8px', background: 'var(--color-gray-100)', borderRadius: '4px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${(a.monto / data.nomina.total) * 100}%`, height: '100%', background: 'var(--color-success)' }}></div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -320,7 +242,7 @@ export default function RRHHAnalyticsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
                     <div>
                         <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>💰 Préstamos y Adelantos Activos</h3>
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>Saldos pendientes de cobro por empleado.</p>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>Saldos pendientes de cobro consolidado por empleado.</p>
                     </div>
                     <div className="card shadow-sm" style={{ padding: 'var(--space-3) var(--space-6)', borderLeft: '4px solid var(--color-danger)', background: 'var(--color-gray-50)' }}>
                         <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Deuda Total a Recuperar</div>
@@ -334,9 +256,19 @@ export default function RRHHAnalyticsPage() {
                     <table className="table">
                         <thead>
                             <tr>
-                                <th>Empleado</th>
-                                <th>Monto Otorgado</th>
-                                <th>Monto Recuperado</th>
+                                <th></th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.prestamos.detalle].sort((a, b) => a.empleado.localeCompare(b.empleado))
+                                    setData({ ...data, prestamos: { ...data.prestamos, detalle: sorted } })
+                                }}>Empleado ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.prestamos.detalle].sort((a, b) => b.montoTotal - a.montoTotal)
+                                    setData({ ...data, prestamos: { ...data.prestamos, detalle: sorted } })
+                                }}>Monto Otorgado ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.prestamos.detalle].sort((a, b) => b.pagado - a.pagado)
+                                    setData({ ...data, prestamos: { ...data.prestamos, detalle: sorted } })
+                                }}>Monto Recuperado ↕</th>
                                 <th style={{ cursor: 'pointer' }} onClick={() => {
                                     const sorted = [...data.prestamos.detalle].sort((a, b) => b.saldo - a.saldo)
                                     setData({ ...data, prestamos: { ...data.prestamos, detalle: sorted } })
@@ -348,27 +280,68 @@ export default function RRHHAnalyticsPage() {
                         <tbody>
                             {data.prestamos.detalle.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                    <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
                                         No hay préstamos activos en este momento.
                                     </td>
                                 </tr>
                             ) : (
                                 data.prestamos.detalle.map((p: any) => (
-                                    <tr key={p.id}>
-                                        <td style={{ fontWeight: 600 }}>{p.empleado}</td>
-                                        <td>${p.montoTotal.toLocaleString()}</td>
-                                        <td style={{ color: 'var(--color-success)' }}>${p.pagado.toLocaleString()}</td>
-                                        <td style={{ fontWeight: 700, color: 'var(--color-danger)' }}>${p.saldo.toLocaleString()}</td>
-                                        <td>{p.cuotas}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                                <div style={{ flex: 1, height: '6px', background: 'var(--color-gray-200)', borderRadius: '3px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${p.progreso}%`, height: '100%', background: 'var(--color-primary)' }}></div>
+                                    <Fragment key={p.id}>
+                                        <tr>
+                                            <td>
+                                                {p.prestamosActivos > 1 && (
+                                                    <button 
+                                                        onClick={() => togglePrestamo(p.id)}
+                                                        style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 'var(--space-1)' }}
+                                                    >
+                                                        {expandedPrestamo === p.id ? '▼' : '▶'}
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td style={{ fontWeight: 600 }}>{p.empleado}</td>
+                                            <td>${p.montoTotal.toLocaleString()}</td>
+                                            <td style={{ color: 'var(--color-success)' }}>${p.pagado.toLocaleString()}</td>
+                                            <td style={{ fontWeight: 700, color: 'var(--color-danger)' }}>${p.saldo.toLocaleString()}</td>
+                                            <td>{p.cuotas}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                    <div style={{ flex: 1, height: '6px', background: 'var(--color-gray-200)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                        <div style={{ width: `${p.progreso}%`, height: '100%', background: 'var(--color-primary)' }}></div>
+                                                    </div>
+                                                    <span style={{ fontSize: '10px', fontWeight: 600 }}>{p.progreso.toFixed(0)}%</span>
                                                 </div>
-                                                <span style={{ fontSize: '10px', fontWeight: 600 }}>{p.progreso.toFixed(0)}%</span>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                        </tr>
+                                        {expandedPrestamo === p.id && (
+                                            <tr>
+                                                <td colSpan={7} style={{ padding: '0', background: 'var(--color-gray-50)' }}>
+                                                    <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-danger)' }}>
+                                                        <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-4)' }}>Detalle de Préstamos Individuales</div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                            {p.listaPrestamos.map((item: any) => (
+                                                                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-3)', background: 'white', borderRadius: '8px', border: '1px solid var(--color-gray-200)', alignItems: 'center' }}>
+                                                                    <div>
+                                                                        <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>{item.observaciones || 'Préstamo Personal'}</div>
+                                                                        <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>Otorgado el {new Date(item.fecha).toLocaleDateString()}</div>
+                                                                    </div>
+                                                                    <div style={{ fontSize: 'var(--text-sm)' }}>${item.montoTotal.toLocaleString()}</div>
+                                                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-success)' }}>${item.pagado.toLocaleString()}</div>
+                                                                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-danger)' }}>${item.saldo.toLocaleString()}</div>
+                                                                    <div style={{ fontSize: 'var(--text-sm)' }}>{item.cuotas} cuotas</div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <div style={{ flex: 1, height: '4px', background: 'var(--color-gray-100)', borderRadius: '2px', overflow: 'hidden' }}>
+                                                                            <div style={{ width: `${item.progreso}%`, height: '100%', background: 'var(--color-danger)' }}></div>
+                                                                        </div>
+                                                                        <span style={{ fontSize: '10px' }}>{item.progreso.toFixed(0)}%</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </Fragment>
                                 ))
                             )}
                         </tbody>
@@ -380,6 +353,7 @@ export default function RRHHAnalyticsPage() {
                 .analytics-container {
                     background-color: var(--color-gray-50);
                     min-height: 100vh;
+                    padding: var(--space-8);
                 }
                 .card {
                     background: white;
