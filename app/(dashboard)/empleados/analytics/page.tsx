@@ -24,6 +24,11 @@ export default function RRHHAnalyticsPage() {
         return d.toISOString().split('T')[0]
     })
     const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
+    const [expandedPrestamo, setExpandedPrestamo] = useState<string | null>(null)
+
+    const togglePrestamo = (id: string) => {
+        setExpandedPrestamo(expandedPrestamo === id ? null : id)
+    }
 
     const fetchData = async () => {
         setLoading(true)
@@ -195,44 +200,96 @@ export default function RRHHAnalyticsPage() {
                         </div>
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                             <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-primary)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
-                                <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Hs Extras (Filtro)</span>
-                                <span style={{ fontWeight: 700 }}>{filteredTotalHsExtras.toFixed(1)} hs</span>
+                                <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase' }}>Inversión (Filtro)</span>
+                                <span style={{ fontWeight: 700 }}>${filteredInversionExtras.toLocaleString()}</span>
                             </div>
-                            <div className="card shadow-sm" style={{ padding: 'var(--space-2) var(--space-4)', borderLeft: '3px solid var(--color-success)', display: 'flex', flexDirection: 'column', minWidth: '150px' }}>
-                            </tbody>
-                        </table>
+                        </div>
                     </div>
                 </div>
 
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => a.empleado.localeCompare(b.empleado))
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Empleado ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.hsExtras - a.hsExtras)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Hs Extras ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.ingresos - a.ingresos)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Ingresos ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.descuentos - a.descuentos)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Descuentos ↕</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.nomina.detalle].sort((a, b) => b.neto - a.neto)
+                                    setData({ ...data, nomina: { ...data.nomina, detalle: sorted } })
+                                }}>Neto ↕</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredDetalle.map((l: any) => (
+                                <Fragment key={l.id}>
+                                    <tr>
+                                        <td>
+                                            <button 
+                                                onClick={() => setExpandedRow(expandedRow === l.id ? null : l.id)}
+                                                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 'var(--space-1)' }}
+                                            >
+                                                {expandedRow === l.id ? '▼' : '▶'}
+                                            </button>
+                                        </td>
+                                        <td style={{ fontWeight: 600 }}>{l.empleado}</td>
+                                        <td>{l.hsExtras} hs</td>
+                                        <td style={{ color: 'var(--color-success)', fontWeight: 600 }}>${l.ingresos.toLocaleString()}</td>
+                                        <td style={{ color: 'var(--color-danger)' }}>-${l.descuentos.toLocaleString()}</td>
+                                        <td style={{ fontWeight: 700 }}>${l.neto.toLocaleString()}</td>
+                                    </tr>
+                                    {expandedRow === l.id && (
+                                        <tr>
+                                            <td colSpan={6} style={{ padding: '0', background: 'var(--color-gray-50)' }}>
+                                                <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-primary)' }}>
+                                                    <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-2)' }}>Desglose de Conceptos</div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
+                                                        {l.conceptos?.map((item: any, idx: number) => (
+                                                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2)', background: 'white', borderRadius: '4px', border: '1px solid var(--color-gray-200)' }}>
+                                                                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)' }}>{item.nombre}</span>
+                                                                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: item.tipo === 'DESCUENTO' ? 'var(--color-danger)' : 'inherit' }}>
+                                                                    {item.tipo === 'DESCUENTO' ? '-' : ''}${item.monto.toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
                 {/* Gráficos / Distribución */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                    <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
-                        <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Área</h3>
-                        {data.distribucion.area.map((a: any) => (
-                            <div key={a.nombre} style={{ marginBottom: 'var(--space-3)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
-                                    <span>{a.nombre}</span>
-                                    <span style={{ fontWeight: 700 }}>{a.cantidad}</span>
-                                </div>
-                                <div style={{ height: '8px', background: 'var(--color-gray-100)', borderRadius: '4px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${(a.cantidad / data.stats.total) * 100}%`, height: '100%', background: 'var(--color-primary)' }}></div>
-                                </div>
-                            </div>
-                        ))}
+                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                    <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Área</h3>
+                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
+                        <Pie data={areaChartData} options={{ maintainAspectRatio: false }} />
                     </div>
-                    <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
-                        <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Inversión por Área</h3>
-                        {data.nomina.porArea.map((a: any) => (
-                            <div key={a.nombre} style={{ marginBottom: 'var(--space-3)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
-                                    <span>{a.nombre}</span>
-                                    <span style={{ fontWeight: 700 }}>${a.monto.toLocaleString()}</span>
-                                </div>
-                                <div style={{ height: '8px', background: 'var(--color-gray-100)', borderRadius: '4px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${(a.monto / data.nomina.total) * 100}%`, height: '100%', background: 'var(--color-success)' }}></div>
-                                </div>
-                            </div>
-                        ))}
+                </div>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                    <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Puesto</h3>
+                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
+                        <Pie data={puestoChartData} options={{ maintainAspectRatio: false }} />
                     </div>
                 </div>
             </div>
