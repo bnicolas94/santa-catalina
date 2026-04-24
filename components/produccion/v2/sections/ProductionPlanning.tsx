@@ -187,7 +187,7 @@ export const ProductionPlanning: React.FC<ProductionPlanningProps> = ({
                                 if (stockSource === 'local') return loc
                                 return fab + loc
                             })()
-                            const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[prodInfo.id] || 0) : 0
+                            const enProcUnits = planning?.enProduccion?.[item.key] || 0
                             const faltanteUnits = Math.max(0, item.total - stockValue - enProcUnits)
                             const finalUnits = stockValue + enProcUnits - item.total
                             

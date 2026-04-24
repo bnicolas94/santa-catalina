@@ -101,6 +101,7 @@ export async function POST(request: Request) {
                     productoId,
                     coordinadorId: coordinadorId || null,
                     ubicacionId,
+                    distribucion: body.distribucionPresentaciones || null,
                 },
                 include: {
                     producto: true,

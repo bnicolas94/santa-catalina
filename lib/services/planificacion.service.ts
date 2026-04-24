@@ -177,10 +177,20 @@ export class PlanificacionService {
 
         const enProduccion: Record<string, number> = {}
         enProduccionRaw.forEach(l => {
-            // Unidades por paquete: usamos la presentación más grande del producto como estándar
-            // o 48 si no tiene presentaciones definidas
-            const size = l.producto.presentaciones[0]?.cantidad || 48
-            enProduccion[l.productoId] = (enProduccion[l.productoId] || 0) + (l.unidadesProducidas * size)
+            if (l.distribucion && Array.isArray(l.distribucion)) {
+                // Si el lote tiene distribución detallada, la usamos
+                const dist = l.distribucion as any[]
+                dist.forEach(d => {
+                    const key = `${l.productoId}_${d.presentacionId}`
+                    enProduccion[key] = (enProduccion[key] || 0) + Number(d.cantidad)
+                })
+            } else {
+                // Unidades por paquete: usamos la presentación más grande del producto como estándar
+                // o 48 si no tiene presentaciones definidas
+                const size = l.producto.presentaciones[0]?.cantidad || 48
+                const key = `${l.productoId}_${l.producto.presentaciones[0]?.id || 'null'}`
+                enProduccion[key] = (enProduccion[key] || 0) + (l.unidadesProducidas * size)
+            }
         })
 
         const shipmentCounts: Record<string, number> = {

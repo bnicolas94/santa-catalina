@@ -208,6 +208,7 @@ model Lote {
   ubicacion           Ubicacion            @relation(fields: [ubicacionId], references: [id])
   movimientosProducto MovimientoProducto[]
   movimientosStock    MovimientoStock[]
+  distribucion        Json?                @map("distribucion")
 
   @@map("lotes")
 }

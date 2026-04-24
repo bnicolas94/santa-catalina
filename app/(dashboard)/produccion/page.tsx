@@ -914,7 +914,7 @@ export default function ProduccionPage() {
                                                         return fab + loc
                                                     })()
 
-                                                    const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
+                                                    const enProcUnits = planning?.enProduccion?.[key] || 0
                                                     
                                                     // --- CORRECCIÓN EN TOTALES ---
                                                     // 1. Pendientes de días anteriores
@@ -1070,7 +1070,7 @@ export default function ProduccionPage() {
                                                 return fab + loc
                                             })()
 
-                                            const enProcUnits = prodInfo?.isPrimary ? (planning?.enProduccion?.[pid] || 0) : 0
+                                            const enProcUnits = planning?.enProduccion?.[key] || 0
                                             
                                             // --- CÁLCULO ACUMULATIVO ---
                                             // 1. Pendientes de días anteriores

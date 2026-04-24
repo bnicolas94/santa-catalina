@@ -49,7 +49,7 @@ export async function POST(request: Request) {
                     estado: 'completo',
                     desglose: calculo as any,
                     items: {
-                        create: calculo.items.map(item => ({
+                        create: calculo.items.map((item: any) => ({
                             conceptoSalarialId: concepto!.id,
                             montoCalculado: item.monto,
                             detalle: item.nombre

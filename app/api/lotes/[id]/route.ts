@@ -35,6 +35,7 @@ export async function PUT(
                         })()
                     }),
                     ...(body.coordinadorId !== undefined && { coordinadorId: body.coordinadorId || null }),
+                    ...(body.distribucionPresentaciones !== undefined && { distribucion: body.distribucionPresentaciones }),
                 },
                 include: {
                     producto: true,

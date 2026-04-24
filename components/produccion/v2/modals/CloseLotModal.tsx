@@ -36,10 +36,12 @@ export const CloseLotModal: React.FC<CloseLotModalProps> = ({ lote, onClose }) =
         const currentMovableItems = (lote as any).movimientosProducto || []
         
         const distribucion = presentaciones.map((p: any) => {
+            const savedDist = (lote as any).distribucion?.find((d: any) => d.presentacionId === p.id)
             const mov = currentMovableItems.find((m: any) => m.presentacionId === p.id)
+            
             return {
                 presentacionId: p.id,
-                cantidad: mov ? mov.cantidad : (presentaciones.length === 1 ? lote.unidadesProducidas : 0)
+                cantidad: savedDist ? Number(savedDist.cantidad) : (mov ? mov.cantidad : (presentaciones.length === 1 ? lote.unidadesProducidas : 0))
             }
         })
         setForm(f => ({ ...f, distribucionPresentaciones: distribucion }))
