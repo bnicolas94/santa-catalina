@@ -172,11 +172,11 @@ export async function GET(request: Request) {
 
         const resumenPrestamos = prestamosActivos.map(p => {
             const totalPagado = p.cuotas
-                .filter(c => c.estado === 'pagado')
+                .filter(c => c.estado === 'pagada')
                 .reduce((acc, c) => acc + c.monto, 0)
             
             const saldoPendiente = p.montoTotal - totalPagado
-            const cuotasPagadas = p.cuotas.filter(c => c.estado === 'pagado').length
+            const cuotasPagadas = p.cuotas.filter(c => c.estado === 'pagada').length
 
             return {
                 id: p.id,
