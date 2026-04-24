@@ -315,6 +315,67 @@ export default function RRHHAnalyticsPage() {
                 </div>
             </div>
 
+            {/* Sección de Préstamos */}
+            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
+                    <div>
+                        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>💰 Préstamos y Adelantos Activos</h3>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>Saldos pendientes de cobro por empleado.</p>
+                    </div>
+                    <div className="card shadow-sm" style={{ padding: 'var(--space-3) var(--space-6)', borderLeft: '4px solid var(--color-danger)', background: 'var(--color-gray-50)' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Deuda Total a Recuperar</div>
+                        <div style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-danger)' }}>
+                            ${data.prestamos.totalDeuda.toLocaleString()}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Monto Otorgado</th>
+                                <th>Monto Recuperado</th>
+                                <th style={{ cursor: 'pointer' }} onClick={() => {
+                                    const sorted = [...data.prestamos.detalle].sort((a, b) => b.saldo - a.saldo)
+                                    setData({ ...data, prestamos: { ...data.prestamos, detalle: sorted } })
+                                }}>Saldo Pendiente ↕</th>
+                                <th>Cuotas</th>
+                                <th style={{ width: '200px' }}>Progreso</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {data.prestamos.detalle.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                        No hay préstamos activos en este momento.
+                                    </td>
+                                </tr>
+                            ) : (
+                                data.prestamos.detalle.map((p: any) => (
+                                    <tr key={p.id}>
+                                        <td style={{ fontWeight: 600 }}>{p.empleado}</td>
+                                        <td>${p.montoTotal.toLocaleString()}</td>
+                                        <td style={{ color: 'var(--color-success)' }}>${p.pagado.toLocaleString()}</td>
+                                        <td style={{ fontWeight: 700, color: 'var(--color-danger)' }}>${p.saldo.toLocaleString()}</td>
+                                        <td>{p.cuotas}</td>
+                                        <td>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                <div style={{ flex: 1, height: '6px', background: 'var(--color-gray-200)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${p.progreso}%`, height: '100%', background: 'var(--color-primary)' }}></div>
+                                                </div>
+                                                <span style={{ fontSize: '10px', fontWeight: 600 }}>{p.progreso.toFixed(0)}%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <style jsx>{`
                 .analytics-container {
                     background-color: var(--color-gray-50);

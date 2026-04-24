@@ -154,6 +154,43 @@ export async function GET(request: Request) {
             }))
         }))
 
+        // 5. Préstamos Activos
+        const prestamosActivos = await prisma.prestamoEmpleado.findMany({
+            where: {
+                estado: 'activo'
+            },
+            include: {
+                empleado: {
+                    select: {
+                        nombre: true,
+                        apellido: true
+                    }
+                },
+                cuotas: true
+            }
+        })
+
+        const resumenPrestamos = prestamosActivos.map(p => {
+            const totalPagado = p.cuotas
+                .filter(c => c.estado === 'pagado')
+                .reduce((acc, c) => acc + c.monto, 0)
+            
+            const saldoPendiente = p.montoTotal - totalPagado
+            const cuotasPagadas = p.cuotas.filter(c => c.estado === 'pagado').length
+
+            return {
+                id: p.id,
+                empleado: `${p.empleado.nombre} ${p.empleado.apellido || ''}`,
+                montoTotal: p.montoTotal,
+                pagado: totalPagado,
+                saldo: saldoPendiente,
+                cuotas: `${cuotasPagadas}/${p.cantidadCuotas}`,
+                progreso: (totalPagado / p.montoTotal) * 100
+            }
+        }).filter(p => p.saldo > 0) // Solo los que tienen saldo pendiente real
+
+        const totalDeudaActiva = resumenPrestamos.reduce((acc, p) => acc + p.saldo, 0)
+
         return NextResponse.json({
             stats: {
                 total: totalEmpleados,
@@ -180,6 +217,10 @@ export async function GET(request: Request) {
                 porArea: masaPorAreaConNombre,
                 detalle: detallePlanilla,
                 conceptos: Array.from(conceptosUnicos).sort()
+            },
+            prestamos: {
+                totalDeuda: totalDeudaActiva,
+                detalle: resumenPrestamos
             }
         })
 
