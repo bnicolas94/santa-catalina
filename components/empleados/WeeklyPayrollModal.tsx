@@ -51,12 +51,30 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             const [ey, em, ed] = fechaFin.split('-').map(Number);
             const p_name = `Semana del ${new Date(sy, sm - 1, sd).toLocaleDateString()} al ${new Date(ey, em - 1, ed).toLocaleDateString()}`;
 
-            // 2. Buscar liquidaciones YA PAGADAS/FINALIZADAS en este periodo
-            const pagadasRes = await fetch(`/api/liquidaciones?periodo=${encodeURIComponent(p_name)}`)
+            // 2. Buscar liquidaciones YA PAGADAS en el sistema (traemos las recientes para filtrar en JS)
+            const pagadasRes = await fetch(`/api/liquidaciones`)
             const liquidacionesPagadas = pagadasRes.ok ? await pagadasRes.json() : []
-            const idsPagados = new Set(liquidacionesPagadas.map((l: any) => l.empleadoId))
+            
+            // Función para verificar si un periodo de liquidación coincide con las fechas buscadas
+            const coincidePeriodo = (periodoStr: string) => {
+                const s = fechaInicio.split('-').reverse().join('/') // DD/MM/YYYY o D/M/YYYY según split
+                const e = fechaFin.split('-').reverse().join('/')
+                
+                // Normalizar fechas para comparación (quitar ceros a la izquierda si los hay)
+                const sNorm = s.split('/').map(n => parseInt(n)).join('/')
+                const eNorm = e.split('/').map(n => parseInt(n)).join('/')
+                
+                return (periodoStr.includes(s) && periodoStr.includes(e)) || 
+                       (periodoStr.includes(sNorm) && periodoStr.includes(eNorm))
+            }
 
-            // 3. Filtrar empleados: Solo activos y que NO tengan liquidación pagada
+            const idsPagados = new Set(
+                liquidacionesPagadas
+                    .filter((l: any) => coincidePeriodo(l.periodo))
+                    .map((l: any) => l.empleadoId)
+            )
+
+            // 3. Filtrar empleados: Solo activos y que NO tengan liquidación pagada en este rango
             const empleadosParaLiquidar = empleados.filter(e => e.activo && !idsPagados.has(e.id))
             const excluidos = empleados.filter(e => e.activo && idsPagados.has(e.id))
             setEmpleadosExcluidos(excluidos)
