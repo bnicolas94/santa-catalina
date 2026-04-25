@@ -525,9 +525,13 @@ export class PayrollService {
     }
 
     // ─── Listar Liquidaciones ────────────────────────────────────────────────
-    static async findLiquidaciones(empleadoId?: string) {
+    static async findLiquidaciones(empleadoId?: string, periodo?: string) {
         return prisma.liquidacionSueldo.findMany({
-            where: empleadoId ? { empleadoId, estado: 'pagado' } : { estado: 'pagado' },
+            where: {
+                ...(empleadoId ? { empleadoId } : {}),
+                ...(periodo ? { periodo } : {}),
+                estado: 'pagado'
+            },
             orderBy: { fechaGeneracion: 'desc' },
             include: { 
                 cuotasDescontadas: true,

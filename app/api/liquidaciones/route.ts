@@ -18,7 +18,8 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const empleadoId = searchParams.get('empleadoId') || undefined
-        const liquidaciones = await PayrollService.findLiquidaciones(empleadoId)
+        const periodo = searchParams.get('periodo') || undefined
+        const liquidaciones = await PayrollService.findLiquidaciones(empleadoId, periodo)
         return NextResponse.json(liquidaciones)
     } catch (error) {
         console.error('Error listando liquidaciones:', error)

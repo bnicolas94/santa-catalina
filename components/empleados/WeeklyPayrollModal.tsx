@@ -30,6 +30,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     const [confirmando, setConfirmando] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [borradorCargado, setBorradorCargado] = useState(false)
+    const [empleadosExcluidos, setEmpleadosExcluidos] = useState<any[]>([])
 
     useEffect(() => {
         const [sy, sm, sd] = fechaInicio.split('-').map(Number);
@@ -41,25 +42,49 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
 
     const handleCalcular = async () => {
         setLoading(true)
+        setResultados([])
+        setEmpleadosExcluidos([])
+        
         try {
+            // 1. Determinar nombre del periodo para buscar liquidaciones existentes
+            const [sy, sm, sd] = fechaInicio.split('-').map(Number);
+            const [ey, em, ed] = fechaFin.split('-').map(Number);
+            const p_name = `Semana del ${new Date(sy, sm - 1, sd).toLocaleDateString()} al ${new Date(ey, em - 1, ed).toLocaleDateString()}`;
+
+            // 2. Buscar liquidaciones YA PAGADAS/FINALIZADAS en este periodo
+            const pagadasRes = await fetch(`/api/liquidaciones?periodo=${encodeURIComponent(p_name)}`)
+            const liquidacionesPagadas = pagadasRes.ok ? await pagadasRes.json() : []
+            const idsPagados = new Set(liquidacionesPagadas.map((l: any) => l.empleadoId))
+
+            // 3. Filtrar empleados: Solo activos y que NO tengan liquidación pagada
+            const empleadosParaLiquidar = empleados.filter(e => e.activo && !idsPagados.has(e.id))
+            const excluidos = empleados.filter(e => e.activo && idsPagados.has(e.id))
+            setEmpleadosExcluidos(excluidos)
+
+            if (empleadosParaLiquidar.length === 0) {
+                setLoading(false)
+                if (excluidos.length > 0) {
+                    alert('Todos los empleados activos ya tienen una liquidación procesada para este periodo.')
+                } else {
+                    alert('No hay empleados activos para liquidar.')
+                }
+                return
+            }
+
+            // 4. Pedir previsualización
             const res = await fetch('/api/liquidaciones/preview', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    empleadoIds: empleados.filter(e => e.activo).map(e => e.id),
+                    empleadoIds: empleadosParaLiquidar.map(e => e.id),
                     fechaInicio,
                     fechaFin
                 })
             })
             const data = await res.json()
             
-            // Buscar borradores guardados para este periodo
+            // 5. Buscar borradores guardados para este periodo
             try {
-                // Generamos el nombre del periodo usando la misma lógica que el useEffect para que coincida con el de la DB
-                const [sy, sm, sd] = fechaInicio.split('-').map(Number);
-                const [ey, em, ed] = fechaFin.split('-').map(Number);
-                const p_name = `Semana del ${new Date(sy, sm - 1, sd).toLocaleDateString()} al ${new Date(ey, em - 1, ed).toLocaleDateString()}`;
-
                 const bRes = await fetch(`/api/liquidaciones/borrador?periodo=${encodeURIComponent(p_name)}`)
                 if (bRes.ok) {
                     const borradores = await bRes.json()
@@ -67,8 +92,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         const merged = data.map((r: any) => {
                             const b = borradores.find((b: any) => b.empleadoId === r.empleadoId)
                             if (b) {
-                                // REGLA: No usamos el totalNeto del borrador directo, sino que aplicamos 
-                                // el ajuste del borrador al NUEVO cálculo de la API (para que justificaciones y cambios de sueldo se vean)
                                 const adjustmentHs = b.ajusteHorasExtras || 0;
                                 const adjustmentMoney = Math.round(adjustmentHs * r.valorHoraExtra);
 
@@ -78,7 +101,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                     montoHorasExtras: r.montoHorasExtras + adjustmentMoney,
                                     totalNeto: r.totalNeto + adjustmentMoney,
                                     borradorId: b.id,
-                                    // Guardamos originales para el cálculo local reactivo
                                     horasExtrasOriginal: r.horasExtras,
                                     totalNetoOriginal: r.totalNeto,
                                     montoHorasExtrasOriginal: r.montoHorasExtras
@@ -254,6 +276,18 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                             </button>
                         </div>
                     </div>
+
+                    {empleadosExcluidos.length > 0 && (
+                        <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: 'var(--color-info-bg)', border: '1px solid var(--color-info)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+                            <span>ℹ️</span>
+                            <div style={{ color: 'var(--color-info)', fontWeight: 500 }}>
+                                <strong>{empleadosExcluidos.length} empleados</strong> ya tienen una liquidación finalizada en este periodo y fueron omitidos: 
+                                <span style={{ marginLeft: 'var(--space-2)', fontWeight: 400, fontStyle: 'italic' }}>
+                                    {empleadosExcluidos.map(e => `${e.nombre} ${e.apellido || ''}`).join(', ')}
+                                </span>
+                            </div>
+                        </div>
+                    )}
 
                     {resultados.length > 0 ? (
                         <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
