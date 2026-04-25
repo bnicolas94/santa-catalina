@@ -222,7 +222,8 @@ export async function POST(req: NextRequest) {
         }
 
         // Si es confirmación, guardamos en DB
-        // BORRÓN Y CUENTA NUEVA: Identificamos todos los pares (fecha, turno) que están en el Excel
+        // Identificamos todos los pares (fecha, turno) que están en el Excel y su estado de descuento
+        const turnosDescontados = new Set<string>()
         const gruposABorrar = new Map<string, { fecha: Date, turnos: Set<string> }>()
         
         resultados.forEach(r => {
@@ -234,9 +235,8 @@ export async function POST(req: NextRequest) {
                 gruposABorrar.get(fStr)!.turnos.add(r.turnoNorm)
             }
         })
-        
+
         for (const [fStr, data] of gruposABorrar) {
-            // PREVENCIÓN: No permitir borrar ni sobreescribir si el turno ya fue descontado
             const turnosArray = Array.from(data.turnos)
             // @ts-ignore
             const yaDescontados = await prisma.planificacionDescuento.findMany({
@@ -245,26 +245,36 @@ export async function POST(req: NextRequest) {
                     turno: { in: turnosArray }
                 }
             })
+            yaDescontados.forEach(d => turnosDescontados.add(`${fStr}_${d.turno}`))
 
-            if (yaDescontados.length > 0) {
-                const nombres = yaDescontados.map(d => d.turno).join(', ')
-                return NextResponse.json({ 
-                    error: `No se puede importar: Los turnos (${nombres}) del día ${fStr} ya han sido procesados y su stock descontado.` 
-                }, { status: 400 })
+            for (const t of turnosArray) {
+                const isDescontado = turnosDescontados.has(`${fStr}_${t}`)
+                // Si está descontado, SOLO borramos los de LOCAL. 
+                // Los de FABRICA se mantienen porque ya fueron usados para el descuento de stock.
+                await prisma.requerimientoProduccion.deleteMany({
+                    where: {
+                        fecha: data.fecha,
+                        turno: t,
+                        ...(isDescontado && { destino: 'LOCAL' })
+                    }
+                })
             }
-
-            await prisma.requerimientoProduccion.deleteMany({
-                where: {
-                    fecha: data.fecha,
-                    turno: { in: turnosArray }
-                }
-            })
         }
 
         let guardados = 0
+        let omitidosPorDescuento = 0
         for (const resultado of resultados) {
             if (!resultado.turnoNorm) continue
             const fechaFila = resultado.fechaValue || new Date(fechaDefault + 'T00:00:00Z')
+            const fStr = fechaFila.toISOString().split('T')[0]
+            const isDescontado = turnosDescontados.has(`${fStr}_${resultado.turnoNorm}`)
+            
+            // Si el turno ya fue descontado, SOLO permitimos importar lo que es LOCAL
+            if (isDescontado && resultado.destino !== 'LOCAL') {
+                omitidosPorDescuento += (resultado.items.length || 1)
+                continue
+            }
+
             const shipmentId = crypto.randomUUID()
 
             if (resultado.items.length === 0) {
@@ -300,7 +310,16 @@ export async function POST(req: NextRequest) {
                 }
             }
         }
-        return NextResponse.json({ success: true, guardados, resultados })
+        
+        return NextResponse.json({ 
+            success: true, 
+            guardados, 
+            omitidosPorDescuento,
+            resultados,
+            message: omitidosPorDescuento > 0 
+                ? `Importación completada. Se guardaron ${guardados} ítems y se omitieron ${omitidosPorDescuento} de FÁBRICA porque esos turnos ya fueron descontados.`
+                : undefined
+        })
 
     } catch (error: any) {
         console.error('Error en importación de planificación:', error)
