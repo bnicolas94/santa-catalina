@@ -169,7 +169,7 @@ export class PlanificacionService {
         // 6. Obtener lo que ya está en producción hoy
         const enProduccionRaw = await prisma.lote.findMany({
             where: {
-                fechaProduccion: { lte: endOfDay },
+                fechaProduccion: { gte: startOfDay, lte: endOfDay },
                 estado: 'en_produccion'
             },
             include: { producto: { include: { presentaciones: { orderBy: { cantidad: 'desc' } } } } }
