@@ -22,7 +22,7 @@ interface Gasto {
     fecha: string
     monto: number
     descripcion: string
-    categoria: { nombre: string }
+    categoria: { id: string; nombre: string }
     vehiculo: { patente: string; alias?: string }
     kmVehiculo?: number
     taller?: string
@@ -42,6 +42,7 @@ export default function GastosFlotaPage() {
     const lastDay = new Date(dateNow.getFullYear(), dateNow.getMonth() + 1, 0).toISOString().split('T')[0]
     const [filterDesde, setFilterDesde] = useState(firstDay)
     const [filterHasta, setFilterHasta] = useState(lastDay)
+    const [filterCategoriaId, setFilterCategoriaId] = useState('')
 
     // Form state
     const [selectedVehiculo, setSelectedVehiculo] = useState('')
@@ -208,6 +209,17 @@ export default function GastosFlotaPage() {
                     <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                         <h2 className="card-title" style={{ margin: 0 }}>Últimos Gastos (Agrupados por Vehículo)</h2>
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                            <select 
+                                className="form-select" 
+                                style={{ padding: '4px 8px', fontSize: '12px', height: '32px', width: 'auto' }}
+                                value={filterCategoriaId}
+                                onChange={e => setFilterCategoriaId(e.target.value)}
+                            >
+                                <option value="">Todas las categorías</option>
+                                {categorias.map(c => (
+                                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                                ))}
+                            </select>
                             <input type="date" className="form-input" style={{ padding: '4px 8px', fontSize: '12px', height: '32px' }} value={filterDesde} onChange={e => setFilterDesde(e.target.value)} title="Fecha Desde" />
                             <input type="date" className="form-input" style={{ padding: '4px 8px', fontSize: '12px', height: '32px' }} value={filterHasta} onChange={e => setFilterHasta(e.target.value)} title="Fecha Hasta" />
                         </div>
@@ -219,7 +231,13 @@ export default function GastosFlotaPage() {
                             <p style={{ textAlign: 'center', padding: 'var(--space-10)' }}>No hay gastos registrados.</p>
                         ) : (
                             (() => {
-                                const grouped = gastos.reduce((acc, g) => {
+                                const filteredGastos = filterCategoriaId 
+                                    ? gastos.filter(g => g.categoria.id === filterCategoriaId)
+                                    : gastos
+
+                                if (filteredGastos.length === 0) return <p style={{ textAlign: 'center', padding: 'var(--space-10)' }}>No hay gastos que coincidan con los filtros.</p>
+
+                                const grouped = filteredGastos.reduce((acc, g) => {
                                     const originalV = g.vehiculo || { patente: 'Desconocido', alias: '' }
                                     const vKey = originalV.alias ? `${originalV.alias} (${originalV.patente})` : originalV.patente
                                     if (!acc[vKey]) acc[vKey] = { items: [], total: 0 }
