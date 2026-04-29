@@ -777,7 +777,7 @@ function StockContent() {
                                                 ) : (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                                         {form.pagos.map((p, idx) => (
-                                                            <div key={idx} style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 150px auto', gap: 'var(--space-2)' }}>
                                                                 <select className="form-select" value={p.cajaOrigen} onChange={(e) => {
                                                                     const newPagos = [...form.pagos];
                                                                     newPagos[idx].cajaOrigen = e.target.value;
@@ -785,11 +785,11 @@ function StockContent() {
                                                                 }}>
                                                                     {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
                                                                 </select>
-                                                                <input type="number" step="0.01" className="form-input" placeholder="Monto asignado ($)" value={p.monto} onChange={(e) => {
+                                                                <input type="number" step="0.01" className="form-input" placeholder="Monto ($)" value={p.monto} onChange={(e) => {
                                                                     const newPagos = [...form.pagos];
                                                                     newPagos[idx].monto = e.target.value;
                                                                     setForm({ ...form, pagos: newPagos });
-                                                                }} style={{ flex: 1 }} />
+                                                                }} />
                                                                 {idx > 0 && <button type="button" className="btn btn-icon btn-ghost" onClick={() => {
                                                                     const newPagos = [...form.pagos];
                                                                     newPagos.splice(idx, 1);
@@ -926,7 +926,7 @@ function StockContent() {
                                             ) : (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                                     {facturaForm.pagos.map((p, idx) => (
-                                                        <div key={idx} style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 150px auto', gap: 'var(--space-2)' }}>
                                                             <select className="form-select" value={p.cajaOrigen} onChange={(e) => {
                                                                 const newPagos = [...facturaForm.pagos];
                                                                 newPagos[idx].cajaOrigen = e.target.value;
@@ -934,11 +934,11 @@ function StockContent() {
                                                             }}>
                                                                 {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
                                                             </select>
-                                                            <input type="number" step="0.01" className="form-input" placeholder="Monto asignado ($)" value={p.monto} onChange={(e) => {
+                                                            <input type="number" step="0.01" className="form-input" placeholder="Monto ($)" value={p.monto} onChange={(e) => {
                                                                 const newPagos = [...facturaForm.pagos];
                                                                 newPagos[idx].monto = e.target.value;
                                                                 setFacturaForm({ ...facturaForm, pagos: newPagos });
-                                                            }} style={{ flex: 1 }} />
+                                                            }} />
                                                             {idx > 0 && <button type="button" className="btn btn-icon btn-ghost" onClick={() => {
                                                                 const newPagos = [...facturaForm.pagos];
                                                                 newPagos.splice(idx, 1);
