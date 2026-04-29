@@ -254,14 +254,11 @@ export async function GET(request: Request) {
             const historialSemanas = todasLiquidaciones.map(liq => {
                 const desglose = (liq.desglose as any[]) || []
                 
-                // Días laborales: Lun-Sáb (excluir Domingo), menos 1 día de franco/descanso
-                const diasLunASab = desglose.filter(d => d.diaSemana !== 'Domingo')
-                const DIAS_FRANCO = 1
-                const diasLaborales = diasLunASab.length - DIAS_FRANCO
-                const diasTrabajados = diasLunASab.filter(d => d.horasTrabajadas > 0).length
-                const diasJustificados = diasLunASab.filter(d => d.horasTrabajadas === 0 && d.esJustificado).length
-                const diasSinFichar = diasLunASab.filter(d => d.horasTrabajadas === 0 && !d.esJustificado).length
-                const diasAusentes = Math.max(0, diasSinFichar - DIAS_FRANCO)
+                // Días laborales: Lun-Sáb (excluir Domingo)
+                const diasLaborales = desglose.filter(d => d.diaSemana !== 'Domingo')
+                const diasTrabajados = diasLaborales.filter(d => d.horasTrabajadas > 0).length
+                const diasJustificados = diasLaborales.filter(d => d.horasTrabajadas === 0 && d.esJustificado).length
+                const diasAusentes = diasLaborales.filter(d => d.horasTrabajadas === 0 && !d.esJustificado).length
                 const hsExtras = desglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0)
                 const hsTotales = desglose.reduce((acc: number, d: any) => acc + (d.horasTrabajadas || 0), 0)
 
@@ -270,7 +267,7 @@ export async function GET(request: Request) {
                     periodo: liq.periodo,
                     fecha: liq.fechaGeneracion,
                     tipo: liq.tipo,
-                    diasLaborales,
+                    diasLaborales: diasLaborales.length,
                     diasTrabajados,
                     diasJustificados,
                     diasAusentes,
