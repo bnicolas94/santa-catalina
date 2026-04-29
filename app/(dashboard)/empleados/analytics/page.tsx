@@ -25,6 +25,8 @@ export default function RRHHAnalyticsPage() {
     })
     const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
     const [expandedPrestamo, setExpandedPrestamo] = useState<string | null>(null)
+    const [selectedEmpleado, setSelectedEmpleado] = useState<string>('')
+    const [expandedHistorico, setExpandedHistorico] = useState<string | null>(null)
 
     const togglePrestamo = (id: string) => {
         setExpandedPrestamo(expandedPrestamo === id ? null : id)
@@ -33,7 +35,9 @@ export default function RRHHAnalyticsPage() {
     const fetchData = async () => {
         setLoading(true)
         try {
-            const res = await fetch(`/api/reportes/rrhh?desde=${fechaDesde}&hasta=${fechaHasta}`)
+            let url = `/api/reportes/rrhh?desde=${fechaDesde}&hasta=${fechaHasta}`
+            if (selectedEmpleado) url += `&empleadoId=${selectedEmpleado}`
+            const res = await fetch(url)
             if (!res.ok) throw new Error('Error al cargar reportes')
             const json = await res.json()
             setData(json)
@@ -46,7 +50,7 @@ export default function RRHHAnalyticsPage() {
 
     useEffect(() => {
         fetchData()
-    }, [fechaDesde, fechaHasta])
+    }, [fechaDesde, fechaHasta, selectedEmpleado])
 
     if (loading && !data) return <div className="loading-container">Cargando Analytics...</div>
     if (error) return <div className="error-state">{error}</div>
@@ -101,12 +105,21 @@ export default function RRHHAnalyticsPage() {
 
     return (
         <div className="analytics-container fade-in" style={{ padding: 'var(--space-6)' }}>
-            <div className="header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-8)' }}>
+            <div className="header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-8)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                 <div>
                     <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700 }}>📊 Analytics de Recursos Humanos</h1>
                     <p style={{ color: 'var(--color-gray-500)' }}>Indicadores clave de rendimiento y estructura del personal.</p>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', background: 'white', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--color-gray-200)' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', background: 'white', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--color-gray-200)', flexWrap: 'wrap' }}>
+                    <div className="form-group" style={{ marginBottom: 0, minWidth: '200px' }}>
+                        <label className="form-label" style={{ fontSize: '10px', textTransform: 'uppercase' }}>Empleado</label>
+                        <select className="form-select" value={selectedEmpleado} onChange={e => { setSelectedEmpleado(e.target.value); setExpandedHistorico(null) }} style={{ padding: '4px 8px', height: 'auto' }}>
+                            <option value="">👥 Todos (Vista Global)</option>
+                            {data?.empleados?.map((e: any) => (
+                                <option key={e.id} value={e.id}>{e.nombre}</option>
+                            ))}
+                        </select>
+                    </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label" style={{ fontSize: '10px', textTransform: 'uppercase' }}>Desde</label>
                         <input type="date" className="form-input" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} style={{ padding: '4px 8px', height: 'auto' }} />
@@ -146,6 +159,109 @@ export default function RRHHAnalyticsPage() {
                 </div>
             </div>
 
+            {/* Vista Individual del Empleado */}
+            {selectedEmpleado && data.historico ? (
+                <div>
+                    {/* KPIs Individuales */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #10b981' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Neto Acumulado</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-success)' }}>${data.historico.kpis.totalNeto.toLocaleString()}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{data.historico.kpis.cantidadLiquidaciones} liquidaciones</div>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #3b82f6' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Promedio Semanal</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>${data.historico.kpis.promedioNetoPorLiquidacion.toLocaleString()}</div>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #f59e0b' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Hs Extras Totales</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#f59e0b' }}>{data.historico.kpis.totalHsExtras}</div>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #ef4444' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Días Ausentes</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: data.historico.kpis.totalDiasAusentes > 0 ? 'var(--color-danger)' : 'inherit' }}>{data.historico.kpis.totalDiasAusentes}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{data.historico.kpis.totalDiasJustificados} justificados</div>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #8b5cf6' }}>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Días Trabajados</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>{data.historico.kpis.totalDiasTrabajados}</div>
+                        </div>
+                        {data.historico.kpis.deudaPendiente > 0 && (
+                            <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid var(--color-danger)' }}>
+                                <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Deuda Préstamos</div>
+                                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-danger)' }}>${data.historico.kpis.deudaPendiente.toLocaleString()}</div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tabla Historial de Liquidaciones */}
+                    <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>📋 Historial de Liquidaciones — {data.historico.empleado?.nombre} {data.historico.empleado?.apellido || ''}</h3>
+                        <div className="table-container">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Periodo</th>
+                                        <th style={{ textAlign: 'center' }}>Días Trab.</th>
+                                        <th style={{ textAlign: 'center' }}>Ausencias</th>
+                                        <th style={{ textAlign: 'center' }}>Justif.</th>
+                                        <th style={{ textAlign: 'center' }}>Hs Extras</th>
+                                        <th style={{ textAlign: 'right' }}>Base</th>
+                                        <th style={{ textAlign: 'right' }}>Extras</th>
+                                        <th style={{ textAlign: 'right' }}>Desc.</th>
+                                        <th style={{ textAlign: 'right', fontWeight: 800 }}>Neto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.historico.semanas.length === 0 ? (
+                                        <tr><td colSpan={10} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>No hay liquidaciones registradas.</td></tr>
+                                    ) : data.historico.semanas.map((s: any) => (
+                                        <Fragment key={s.id}>
+                                            <tr onClick={() => setExpandedHistorico(expandedHistorico === s.id ? null : s.id)} style={{ cursor: 'pointer', backgroundColor: expandedHistorico === s.id ? 'var(--color-info-bg)' : 'transparent' }}>
+                                                <td>{expandedHistorico === s.id ? '▼' : '▶'}</td>
+                                                <td style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{s.periodo}</td>
+                                                <td style={{ textAlign: 'center' }}>{s.diasTrabajados}/{s.diasLaborales}</td>
+                                                <td style={{ textAlign: 'center', color: s.diasAusentes > 0 ? 'var(--color-danger)' : 'var(--color-success)', fontWeight: 600 }}>{s.diasAusentes}</td>
+                                                <td style={{ textAlign: 'center', color: s.diasJustificados > 0 ? '#f59e0b' : 'inherit' }}>{s.diasJustificados}</td>
+                                                <td style={{ textAlign: 'center', color: s.hsExtras > 0 ? 'var(--color-success)' : 'inherit' }}>{s.hsExtras}h</td>
+                                                <td style={{ textAlign: 'right' }}>${s.sueldoBase.toLocaleString()}</td>
+                                                <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>${s.montoExtras.toLocaleString()}</td>
+                                                <td style={{ textAlign: 'right', color: 'var(--color-danger)' }}>-${s.descuentos.toLocaleString()}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 700 }}>${s.neto.toLocaleString()}</td>
+                                            </tr>
+                                            {expandedHistorico === s.id && s.desglose?.length > 0 && (
+                                                <tr>
+                                                    <td colSpan={10} style={{ padding: 0, background: 'var(--color-gray-50)' }}>
+                                                        <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-primary)' }}>
+                                                            <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-3)' }}>Desglose Día por Día</div>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 'var(--space-2)' }}>
+                                                                {s.desglose.map((dia: any) => (
+                                                                    <div key={dia.fecha} style={{ backgroundColor: 'white', padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: `1px solid ${dia.esFeriado ? '#f59e0b' : dia.horasTrabajadas > 0 ? 'var(--color-gray-200)' : dia.esJustificado ? '#10b981' : '#ef4444'}`, fontSize: '11px', opacity: dia.horasTrabajadas > 0 || dia.esJustificado ? 1 : 0.6 }}>
+                                                                        <div style={{ fontWeight: 700, borderBottom: '1px solid var(--color-gray-100)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                                                                            <span>{dia.diaSemana?.substring(0, 3)} {dia.fecha?.split('-')[2]}</span>
+                                                                            {dia.esFeriado && <span>🚩</span>}
+                                                                            {dia.esJustificado && <span style={{ color: '#10b981', fontSize: '9px' }}>✓M</span>}
+                                                                        </div>
+                                                                        <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
+                                                                        <div style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas} {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)' }}>(+{dia.horasExtras})</span>}</div>
+                                                                        <div style={{ fontWeight: 600, textAlign: 'right' }}>${dia.totalDia?.toLocaleString()}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+            <>
             {/* KPI Cards */}
             <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)', borderLeft: '4px solid #3b82f6' }}>
@@ -405,6 +521,8 @@ export default function RRHHAnalyticsPage() {
                     </table>
                 </div>
             </div>
+            </>
+            )}
 
             <style jsx>{`
                 .analytics-container {

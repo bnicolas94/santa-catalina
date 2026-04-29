@@ -6,12 +6,20 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const desdeStr = searchParams.get('desde')
         const hastaStr = searchParams.get('hasta')
+        const empleadoId = searchParams.get('empleadoId')
 
         const ahora = new Date()
         const inicioMesActual = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
         
         const desde = desdeStr ? new Date(desdeStr) : new Date(ahora.getFullYear(), ahora.getMonth() - 3, 1)
         const hasta = hastaStr ? new Date(hastaStr) : new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59)
+
+        // Lista de empleados activos para el selector
+        const empleadosActivos = await prisma.empleado.findMany({
+            where: { activo: true },
+            select: { id: true, nombre: true, apellido: true },
+            orderBy: [{ nombre: 'asc' }]
+        })
 
         // 1. Estadísticas Generales
         const [totalEmpleados, activos, nuevosMes, bajasMes] = await Promise.all([
@@ -225,7 +233,102 @@ export async function GET(request: Request) {
 
         const totalDeudaActiva = resumenPrestamos.reduce((acc, p) => acc + p.saldo, 0)
 
+        // 6. Datos Históricos por Empleado (si se filtra)
+        let historico = null
+        if (empleadoId) {
+            const empleadoInfo = await prisma.empleado.findUnique({
+                where: { id: empleadoId },
+                select: { id: true, nombre: true, apellido: true, fechaIngreso: true, rol: true, activo: true }
+            })
+
+            // Todas las liquidaciones del empleado (sin filtro de fecha)
+            const todasLiquidaciones = await prisma.liquidacionSueldo.findMany({
+                where: { empleadoId, estado: { not: 'anulado' } },
+                orderBy: { fechaGeneracion: 'desc' },
+                include: {
+                    items: { include: { concepto: true } }
+                }
+            })
+
+            // Analizar ausencias desde el desglose de cada liquidación
+            const historialSemanas = todasLiquidaciones.map(liq => {
+                const desglose = (liq.desglose as any[]) || []
+                
+                // Días laborales: Lun-Sáb (excluir Domingo)
+                const diasLaborales = desglose.filter(d => d.diaSemana !== 'Domingo')
+                const diasTrabajados = diasLaborales.filter(d => d.horasTrabajadas > 0).length
+                const diasJustificados = diasLaborales.filter(d => d.horasTrabajadas === 0 && d.esJustificado).length
+                const diasAusentes = diasLaborales.filter(d => d.horasTrabajadas === 0 && !d.esJustificado).length
+                const hsExtras = desglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0)
+                const hsTotales = desglose.reduce((acc: number, d: any) => acc + (d.horasTrabajadas || 0), 0)
+
+                return {
+                    id: liq.id,
+                    periodo: liq.periodo,
+                    fecha: liq.fechaGeneracion,
+                    tipo: liq.tipo,
+                    diasLaborales: diasLaborales.length,
+                    diasTrabajados,
+                    diasJustificados,
+                    diasAusentes,
+                    horasTotales: parseFloat(hsTotales.toFixed(2)),
+                    hsExtras: parseFloat(hsExtras.toFixed(2)),
+                    sueldoBase: liq.sueldoProporcional,
+                    montoExtras: liq.montoHorasExtras,
+                    montoFeriado: liq.montoHorasFeriado,
+                    descuentos: liq.descuentosPrestamos,
+                    neto: liq.totalNeto,
+                    ajusteHsExtras: liq.ajusteHorasExtras,
+                    desglose,
+                    conceptos: liq.items.map(item => ({
+                        nombre: item.concepto.nombre,
+                        monto: item.montoCalculado,
+                        tipo: item.concepto.tipo
+                    }))
+                }
+            })
+
+            // KPIs acumulados
+            const totalNetoHistorico = todasLiquidaciones.reduce((acc, l) => acc + l.totalNeto, 0)
+            const totalHsExtrasHistorico = todasLiquidaciones.reduce((acc, l) => acc + (l.horasExtras || 0), 0)
+            const totalDescuentosHistorico = todasLiquidaciones.reduce((acc, l) => acc + (l.descuentosPrestamos || 0), 0)
+            const totalDiasAusentes = historialSemanas.reduce((acc, s) => acc + s.diasAusentes, 0)
+            const totalDiasTrabajados = historialSemanas.reduce((acc, s) => acc + s.diasTrabajados, 0)
+            const totalDiasJustificados = historialSemanas.reduce((acc, s) => acc + s.diasJustificados, 0)
+
+            // Préstamos del empleado
+            const prestamosEmpleado = await prisma.prestamoEmpleado.findMany({
+                where: { empleadoId },
+                include: { cuotas: true },
+                orderBy: { fechaSolicitud: 'desc' }
+            })
+
+            const deudaEmpleado = prestamosEmpleado
+                .filter(p => p.estado === 'activo')
+                .reduce((acc, p) => {
+                    const pagado = p.cuotas.filter(c => c.estado === 'pagada').reduce((a, c) => a + c.monto, 0)
+                    return acc + (p.montoTotal - pagado)
+                }, 0)
+
+            historico = {
+                empleado: empleadoInfo,
+                kpis: {
+                    totalNeto: totalNetoHistorico,
+                    totalHsExtras: parseFloat(totalHsExtrasHistorico.toFixed(2)),
+                    totalDescuentos: totalDescuentosHistorico,
+                    totalDiasTrabajados,
+                    totalDiasAusentes,
+                    totalDiasJustificados,
+                    cantidadLiquidaciones: todasLiquidaciones.length,
+                    promedioNetoPorLiquidacion: todasLiquidaciones.length > 0 ? Math.round(totalNetoHistorico / todasLiquidaciones.length) : 0,
+                    deudaPendiente: deudaEmpleado
+                },
+                semanas: historialSemanas
+            }
+        }
+
         return NextResponse.json({
+            empleados: empleadosActivos.map(e => ({ id: e.id, nombre: `${e.nombre} ${e.apellido || ''}`.trim() })),
             stats: {
                 total: totalEmpleados,
                 activos,
@@ -255,7 +358,8 @@ export async function GET(request: Request) {
             prestamos: {
                 totalDeuda: totalDeudaActiva,
                 detalle: resumenPrestamos
-            }
+            },
+            historico
         })
 
     } catch (error: any) {
