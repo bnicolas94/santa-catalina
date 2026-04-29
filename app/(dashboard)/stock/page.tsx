@@ -25,7 +25,7 @@ function StockContent() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', ubicacionId: '', observaciones: '', items: [] as any[] })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[] })
     const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -39,7 +39,7 @@ function StockContent() {
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
-        ubicacionId: '', cajaOrigen: 'caja_chica',
+        ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[],
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -100,6 +100,13 @@ function StockContent() {
                 unidadesPorBulto: String(form.unidadesPorBulto).replace(',', '.'),
             }
 
+            if (form.tipo === 'entrada' && form.estadoPago === 'pagado' && form.pagoDividido) {
+                const totalCalculado = form.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
+                if (Math.abs(totalCalculado - parseFloat(form.costoTotal || '0')) > 0.01) {
+                    return setError('La suma de los pagos divididos debe ser exactamente igual al costo total ($' + parseFloat(form.costoTotal || '0').toLocaleString('es-AR') + ')');
+                }
+            }
+
             const payloadParams = {
                 ...cleansingForm,
                 cantidad: cleansingForm.useBultos 
@@ -116,7 +123,7 @@ function StockContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_chica' })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -160,6 +167,15 @@ function StockContent() {
         if (!isManualProveedor && !facturaForm.proveedorId) return setError('Seleccione un proveedor')
         if (isManualProveedor && !facturaForm.proveedorNombre) return setError('Ingrese el nombre del proveedor manual')
         if (facturaForm.items.length === 0) return setError('Debe agregar al menos un insumo a la factura')
+        
+        if (facturaForm.estadoPago === 'pagado' && facturaForm.pagoDividido) {
+            const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
+            const totalPagos = facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
+            if (Math.abs(totalFactura - totalPagos) > 0.01) {
+                return setError('La suma de los pagos divididos debe ser exactamente igual al total de la factura ($' + totalFactura.toLocaleString('es-AR') + ')');
+            }
+        }
+
         try {
             const res = await fetch('/api/movimientos-stock/factura', {
                 method: 'POST',
@@ -169,7 +185,7 @@ function StockContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Factura registrada correctamente')
             setShowFacturaModal(false)
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', ubicacionId: '', observaciones: '', items: [] })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -194,6 +210,8 @@ function StockContent() {
             fechaMovimiento: mov.fecha ? new Date(mov.fecha).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
             ubicacionId: mov.ubicacion?.id || '',
             cajaOrigen: 'caja_madre',
+            pagoDividido: false,
+            pagos: [{ cajaOrigen: 'caja_madre', monto: '' }],
         })
         setShowModal(true)
     }
@@ -310,7 +328,7 @@ function StockContent() {
                     )}
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', ubicacionId: defaultUbi, observaciones: '', items: [] })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_madre', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_madre', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [] })
                         setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
@@ -320,7 +338,7 @@ function StockContent() {
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi, cajaOrigen: 'caja_madre' })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi, cajaOrigen: 'caja_madre', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_madre', monto: '' }] })
                         setShowModal(true)
                     }}>+ Simple</button>
                 </div>
@@ -711,43 +729,84 @@ function StockContent() {
                                         </div>
                                         {form.estadoPago === 'pagado' && (
                                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                                <label className="form-label" style={{ fontSize: 'var(--text-xs)' }}>¿De qué caja sale el pago?</label>
-                                                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                                    {cajas.length > 0 ? (
-                                                        cajas.map((c) => {
-                                                            const isMP = c.tipo === 'mercado_pago';
-                                                            const color = isMP ? '#3498DB' : (c.tipo === 'caja_madre' ? '#8E44AD' : (c.tipo === 'caja_chica' ? '#E67E22' : '#27AE60'));
-                                                            const label = c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                                                            return (
-                                                                <button key={c.tipo} type="button" className="btn btn-sm"
-                                                                    onClick={() => setForm({ ...form, cajaOrigen: c.tipo })}
-                                                                    style={{ 
-                                                                        flex: '1 1 100px', 
-                                                                        backgroundColor: form.cajaOrigen === c.tipo ? color : `${color}18`, 
-                                                                        color: form.cajaOrigen === c.tipo ? '#fff' : color, 
-                                                                        border: `2px solid ${color}`, 
-                                                                        fontWeight: 600, 
-                                                                        fontSize: '0.75rem',
-                                                                        padding: '6px 4px'
-                                                                    }}>
-                                                                    {isMP ? '💳 ' : '🏦 '}{label}
-                                                                </button>
-                                                            );
-                                                        })
-                                                    ) : (
-                                                        [
-                                                            { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' },
-                                                            { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' },
-                                                            { key: 'local', label: '🏪 Local', color: '#27AE60' }
-                                                        ].map((c) => (
-                                                            <button key={c.key} type="button" className="btn btn-sm"
-                                                                onClick={() => setForm({ ...form, cajaOrigen: c.key })}
-                                                                style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
-                                                                {c.label}
-                                                            </button>
-                                                        ))
-                                                    )}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                    <label className="form-label" style={{ margin: 0, fontSize: 'var(--text-xs)' }}>¿De qué caja sale el pago?</label>
+                                                    <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600 }}>
+                                                        <input type="checkbox" checked={form.pagoDividido} onChange={(e) => setForm({ ...form, pagoDividido: e.target.checked })} />
+                                                        Pago Dividido
+                                                    </label>
                                                 </div>
+                                                
+                                                {!form.pagoDividido ? (
+                                                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                        {cajas.length > 0 ? (
+                                                            cajas.map((c) => {
+                                                                const isMP = c.tipo === 'mercado_pago';
+                                                                const color = isMP ? '#3498DB' : (c.tipo === 'caja_madre' ? '#8E44AD' : (c.tipo === 'caja_chica' ? '#E67E22' : '#27AE60'));
+                                                                const label = c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                                                return (
+                                                                    <button key={c.tipo} type="button" className="btn btn-sm"
+                                                                        onClick={() => setForm({ ...form, cajaOrigen: c.tipo })}
+                                                                        style={{ 
+                                                                            flex: '1 1 100px', 
+                                                                            backgroundColor: form.cajaOrigen === c.tipo ? color : `${color}18`, 
+                                                                            color: form.cajaOrigen === c.tipo ? '#fff' : color, 
+                                                                            border: `2px solid ${color}`, 
+                                                                            fontWeight: 600, 
+                                                                            fontSize: '0.75rem',
+                                                                            padding: '6px 4px'
+                                                                        }}>
+                                                                        {isMP ? '💳 ' : '🏦 '}{label}
+                                                                    </button>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            [
+                                                                { key: 'caja_madre', label: '🏦 Madre', color: '#8E44AD' },
+                                                                { key: 'caja_chica', label: '💼 Chica', color: '#E67E22' },
+                                                                { key: 'local', label: '🏪 Local', color: '#27AE60' }
+                                                            ].map((c) => (
+                                                                <button key={c.key} type="button" className="btn btn-sm"
+                                                                    onClick={() => setForm({ ...form, cajaOrigen: c.key })}
+                                                                    style={{ flex: 1, backgroundColor: form.cajaOrigen === c.key ? c.color : `${c.color}18`, color: form.cajaOrigen === c.key ? '#fff' : c.color, border: `2px solid ${c.color}`, fontWeight: 600, fontSize: '0.8rem' }}>
+                                                                    {c.label}
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                        {form.pagos.map((p, idx) => (
+                                                            <div key={idx} style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                                <select className="form-select" value={p.cajaOrigen} onChange={(e) => {
+                                                                    const newPagos = [...form.pagos];
+                                                                    newPagos[idx].cajaOrigen = e.target.value;
+                                                                    setForm({ ...form, pagos: newPagos });
+                                                                }}>
+                                                                    {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
+                                                                </select>
+                                                                <input type="number" step="0.01" className="form-input" placeholder="Monto asignado ($)" value={p.monto} onChange={(e) => {
+                                                                    const newPagos = [...form.pagos];
+                                                                    newPagos[idx].monto = e.target.value;
+                                                                    setForm({ ...form, pagos: newPagos });
+                                                                }} style={{ flex: 1 }} />
+                                                                {idx > 0 && <button type="button" className="btn btn-icon btn-ghost" onClick={() => {
+                                                                    const newPagos = [...form.pagos];
+                                                                    newPagos.splice(idx, 1);
+                                                                    setForm({ ...form, pagos: newPagos });
+                                                                }} style={{ color: 'var(--color-danger)' }}>✕</button>}
+                                                            </div>
+                                                        ))}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setForm({ ...form, pagos: [...form.pagos, { cajaOrigen: cajas.length > 0 ? cajas[0].tipo : 'caja_chica', monto: '' }] })} style={{ color: 'var(--color-primary)' }}>+ Agregar otra caja</button>
+                                                            {form.costoTotal && (
+                                                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: Math.abs(form.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0) - parseFloat(form.costoTotal || '0')) < 0.01 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                                                    Total asignado: ${form.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${parseFloat(form.costoTotal || '0').toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -824,24 +883,79 @@ function StockContent() {
                                         <input type="date" className="form-input" value={facturaForm.fechaMovimiento} onChange={(e) => setFacturaForm({ ...facturaForm, fechaMovimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
                                     {facturaForm.estadoPago === 'pagado' && (
-                                        <div className="form-group">
-                                            <label className="form-label">Caja de Origen</label>
-                                            <select className="form-select" value={facturaForm.cajaOrigen} onChange={(e) => setFacturaForm({ ...facturaForm, cajaOrigen: e.target.value })}>
-                                                {cajas.length > 0 ? (
-                                                    cajas.map(c => (
-                                                        <option key={c.tipo} value={c.tipo}>
-                                                            {c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '}
-                                                            {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                                                        </option>
-                                                    ))
-                                                ) : (
-                                                    <>
-                                                        <option value="caja_madre">Caja Madre</option>
-                                                        <option value="caja_chica">Caja Chica</option>
-                                                        <option value="local">Local</option>
-                                                    </>
-                                                )}
-                                            </select>
+                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                <label className="form-label" style={{ margin: 0 }}>Caja de Origen</label>
+                                                <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600 }}>
+                                                    <input type="checkbox" checked={facturaForm.pagoDividido} onChange={(e) => setFacturaForm({ ...facturaForm, pagoDividido: e.target.checked })} />
+                                                    Pago Dividido
+                                                </label>
+                                            </div>
+                                            
+                                            {!facturaForm.pagoDividido ? (
+                                                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                    {cajas.length > 0 ? (
+                                                        cajas.map((c) => {
+                                                            const isMP = c.tipo === 'mercado_pago';
+                                                            const color = isMP ? '#3498DB' : (c.tipo === 'caja_madre' ? '#8E44AD' : (c.tipo === 'caja_chica' ? '#E67E22' : '#27AE60'));
+                                                            const label = c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                                            return (
+                                                                <button key={c.tipo} type="button" className="btn btn-sm"
+                                                                    onClick={() => setFacturaForm({ ...facturaForm, cajaOrigen: c.tipo })}
+                                                                    style={{ 
+                                                                        flex: '1 1 120px', 
+                                                                        backgroundColor: facturaForm.cajaOrigen === c.tipo ? color : `${color}18`, 
+                                                                        color: facturaForm.cajaOrigen === c.tipo ? '#fff' : color, 
+                                                                        border: `2px solid ${color}`, 
+                                                                        fontWeight: 600, 
+                                                                        fontSize: '0.8rem',
+                                                                        padding: '8px 4px'
+                                                                    }}>
+                                                                    {isMP ? '💳 ' : '🏦 '}{label}
+                                                                </button>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <select className="form-select" value={facturaForm.cajaOrigen} onChange={(e) => setFacturaForm({ ...facturaForm, cajaOrigen: e.target.value })}>
+                                                            <option value="caja_madre">Caja Madre</option>
+                                                            <option value="caja_chica">Caja Chica</option>
+                                                            <option value="local">Local</option>
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                    {facturaForm.pagos.map((p, idx) => (
+                                                        <div key={idx} style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                            <select className="form-select" value={p.cajaOrigen} onChange={(e) => {
+                                                                const newPagos = [...facturaForm.pagos];
+                                                                newPagos[idx].cajaOrigen = e.target.value;
+                                                                setFacturaForm({ ...facturaForm, pagos: newPagos });
+                                                            }}>
+                                                                {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
+                                                            </select>
+                                                            <input type="number" step="0.01" className="form-input" placeholder="Monto asignado ($)" value={p.monto} onChange={(e) => {
+                                                                const newPagos = [...facturaForm.pagos];
+                                                                newPagos[idx].monto = e.target.value;
+                                                                setFacturaForm({ ...facturaForm, pagos: newPagos });
+                                                            }} style={{ flex: 1 }} />
+                                                            {idx > 0 && <button type="button" className="btn btn-icon btn-ghost" onClick={() => {
+                                                                const newPagos = [...facturaForm.pagos];
+                                                                newPagos.splice(idx, 1);
+                                                                setFacturaForm({ ...facturaForm, pagos: newPagos });
+                                                            }} style={{ color: 'var(--color-danger)' }}>✕</button>}
+                                                        </div>
+                                                    ))}
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setFacturaForm({ ...facturaForm, pagos: [...facturaForm.pagos, { cajaOrigen: cajas.length > 0 ? cajas[0].tipo : 'caja_chica', monto: '' }] })} style={{ color: 'var(--color-primary)' }}>+ Agregar otra caja</button>
+                                                        {facturaForm.items.length > 0 && (
+                                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: Math.abs(facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0) - facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0)) < 0.01 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                                                Total asignado: ${facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

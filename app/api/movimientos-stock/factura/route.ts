@@ -74,16 +74,34 @@ export async function POST(request: Request) {
                 })
                 gastoId = gasto.id
 
-                await CajaService.createMovimientoEnTx(tx, {
-                    tipo: 'egreso',
-                    concepto: 'pago_proveedor',
-                    monto: costoTotalFactura,
-                    medioPago: 'efectivo',
-                    cajaOrigen: selectedCaja,
-                    descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
-                    gastoId: gastoId,
-                    fecha: parsedFecha,
-                })
+                if (body.pagoDividido && body.pagos && Array.isArray(body.pagos)) {
+                    for (const pago of body.pagos) {
+                        const montoPago = parseFloat(String(pago.monto).replace(',', '.'));
+                        if (montoPago > 0) {
+                            await CajaService.createMovimientoEnTx(tx, {
+                                tipo: 'egreso',
+                                concepto: 'pago_proveedor',
+                                monto: montoPago,
+                                medioPago: pago.cajaOrigen === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                                cajaOrigen: pago.cajaOrigen,
+                                descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
+                                gastoId: gastoId,
+                                fecha: parsedFecha,
+                            })
+                        }
+                    }
+                } else {
+                    await CajaService.createMovimientoEnTx(tx, {
+                        tipo: 'egreso',
+                        concepto: 'pago_proveedor',
+                        monto: costoTotalFactura,
+                        medioPago: selectedCaja === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                        cajaOrigen: selectedCaja,
+                        descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
+                        gastoId: gastoId,
+                        fecha: parsedFecha,
+                    })
+                }
             }
 
             // 4. Crear cada MovimientoStock y actualizar Insumo

@@ -35,7 +35,8 @@ export async function POST(request: Request) {
         const { 
             insumoId, tipo, cantidad, cantidadSecundaria, observaciones, 
             proveedorId, costoTotal, estadoPago, actualizarCosto, 
-            fechaVencimiento, ubicacionId, fechaMovimiento, cajaOrigen
+            fechaVencimiento, ubicacionId, fechaMovimiento, cajaOrigen,
+            pagoDividido, pagos
         } = body
 
         if (!insumoId || !tipo || !cantidad || !ubicacionId) {
@@ -76,18 +77,38 @@ export async function POST(request: Request) {
                     gastoId = gasto.id
                     console.log('Gasto created:', gastoId)
 
-                    const movCaja = await CajaService.createMovimientoEnTx(tx, {
-                        tipo: 'egreso',
-                        concepto: 'pago_proveedor',
-                        monto: costoTotalFloat,
-                        medioPago: 'efectivo',
-                        cajaOrigen: selectedCaja,
-                        descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
-                        gastoId: gastoId,
-                        fecha: parsedFecha,
-                    })
-                    movimientoCajaId = movCaja.id
-                    console.log('MovimientoCaja created via CajaService:', movimientoCajaId)
+                    if (pagoDividido && pagos && Array.isArray(pagos)) {
+                        for (const pago of pagos) {
+                            const montoPago = parseFloat(String(pago.monto).replace(',', '.'));
+                            if (montoPago > 0) {
+                                await CajaService.createMovimientoEnTx(tx, {
+                                    tipo: 'egreso',
+                                    concepto: 'pago_proveedor',
+                                    monto: montoPago,
+                                    medioPago: pago.cajaOrigen === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                                    cajaOrigen: pago.cajaOrigen,
+                                    descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
+                                    gastoId: gastoId,
+                                    fecha: parsedFecha,
+                                })
+                            }
+                        }
+                        movimientoCajaId = 'multiple_pagos';
+                        console.log('Multiple MovimientoCaja created via CajaService');
+                    } else {
+                        const movCaja = await CajaService.createMovimientoEnTx(tx, {
+                            tipo: 'egreso',
+                            concepto: 'pago_proveedor',
+                            monto: costoTotalFloat,
+                            medioPago: selectedCaja === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                            cajaOrigen: selectedCaja,
+                            descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
+                            gastoId: gastoId,
+                            fecha: parsedFecha,
+                        })
+                        movimientoCajaId = movCaja.id
+                        console.log('MovimientoCaja created via CajaService:', movimientoCajaId)
+                    }
                 } catch (financialError) {
                     console.error('ERROR in financial steps:', financialError)
                     throw new Error('Error en el proceso financiero (gasto/caja): ' + (financialError instanceof Error ? financialError.message : String(financialError)))
