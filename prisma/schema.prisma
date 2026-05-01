@@ -822,16 +822,18 @@ model KilometrajeVehiculo {
 }
 
 model VencimientoVehiculo {
-  id               String   @id @default(uuid())
-  vehiculoId       String   @map("id_vehiculo")
+  id               String    @id @default(uuid())
+  vehiculoId       String    @map("id_vehiculo")
   tipo             String
-  fechaVencimiento DateTime @map("fecha_vencimiento")
+  fechaVencimiento DateTime? @map("fecha_vencimiento")
+  kmVencimiento    Int?      @map("km_vencimiento")
+  kmAviso          Int?      @map("km_aviso")
   observaciones    String?
-  notificado       Boolean  @default(false)
-  diasAviso        Int      @default(30) @map("dias_aviso")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  vehiculo         Vehiculo @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
+  notificado       Boolean   @default(false)
+  diasAviso        Int       @default(30) @map("dias_aviso")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  vehiculo         Vehiculo  @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
 
   @@map("vencimientos_vehiculo")
 }

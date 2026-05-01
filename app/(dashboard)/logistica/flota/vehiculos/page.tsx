@@ -40,14 +40,24 @@ export default function VehiculosPage() {
     const hoy = new Date()
     
     v.vencimientos?.forEach((venc: any) => {
-      const fecha = new Date(venc.fechaVencimiento)
-      const diasAviso = venc.diasAviso || 30
-      const limite = new Date(fecha)
-      limite.setDate(fecha.getDate() - diasAviso)
-      if (fecha < hoy) alertas.push({ grave: true, msj: `${venc.tipo} Vencido` })
-      else if (hoy >= limite) alertas.push({ grave: false, msj: `${venc.tipo} en <${diasAviso}d` })
+      if (venc.kmVencimiento) {
+        // Alerta por KM
+        const faltan = venc.kmVencimiento - v.kmActual
+        const aviso = venc.kmAviso || 2000
+        if (faltan <= 0) alertas.push({ grave: true, msj: `${venc.tipo} Pasado` })
+        else if (faltan <= aviso) alertas.push({ grave: false, msj: `${venc.tipo} en ${faltan}km` })
+      } else if (venc.fechaVencimiento) {
+        // Alerta por Fecha
+        const fecha = new Date(venc.fechaVencimiento)
+        const diasAviso = venc.diasAviso || 30
+        const limite = new Date(fecha)
+        limite.setDate(fecha.getDate() - diasAviso)
+        if (fecha < hoy) alertas.push({ grave: true, msj: `${venc.tipo} Vencido` })
+        else if (hoy >= limite) alertas.push({ grave: false, msj: `${venc.tipo} en <${diasAviso}d` })
+      }
     })
 
+    // Alerta de Service legacy (si sigue existiendo)
     if (v.kmProximoService) {
       const faltan = v.kmProximoService - v.kmActual
       const aviso = v.avisoKmsAntes || 2000

@@ -41,12 +41,19 @@ export default function VehiculoDetallePage() {
     const hoy = new Date()
     
     v.vencimientos?.forEach((venc: any) => {
-      const fecha = new Date(venc.fechaVencimiento)
-      const diasAviso = venc.diasAviso || 30
-      const limite = new Date(fecha)
-      limite.setDate(fecha.getDate() - diasAviso)
-      if (fecha < hoy) alertas.push({ grave: true, msj: `${venc.tipo} Vencido` })
-      else if (hoy >= limite) alertas.push({ grave: false, msj: `${venc.tipo} vence en breve` })
+      if (venc.kmVencimiento) {
+        const faltan = venc.kmVencimiento - v.kmActual
+        const aviso = venc.kmAviso || 2000
+        if (faltan <= 0) alertas.push({ grave: true, msj: `${venc.tipo} Pasado (${Math.abs(faltan)}km)` })
+        else if (faltan <= aviso) alertas.push({ grave: false, msj: `${venc.tipo} próximo en ${faltan}km` })
+      } else if (venc.fechaVencimiento) {
+        const fecha = new Date(venc.fechaVencimiento)
+        const diasAviso = venc.diasAviso || 30
+        const limite = new Date(fecha)
+        limite.setDate(fecha.getDate() - diasAviso)
+        if (fecha < hoy) alertas.push({ grave: true, msj: `${venc.tipo} Vencido` })
+        else if (hoy >= limite) alertas.push({ grave: false, msj: `${venc.tipo} vence en breve` })
+      }
     })
 
     if (v.kmProximoService) {
@@ -195,14 +202,21 @@ export default function VehiculoDetallePage() {
                 <tbody>
                   {vehiculo.vencimientos?.length > 0 ? (
                     vehiculo.vencimientos.map((v: any) => {
-                      const isVencido = new Date(v.fechaVencimiento) < new Date();
+                      const isVencido = v.kmVencimiento 
+                        ? (v.kmVencimiento <= vehiculo.kmActual) 
+                        : (new Date(v.fechaVencimiento) < new Date());
+                      
                       return (
                         <tr key={v.id}>
                           <td style={{ fontWeight: 'bold' }}>{v.tipo}</td>
-                          <td>{new Date(v.fechaVencimiento).toLocaleDateString()}</td>
+                          <td>
+                            {v.kmVencimiento 
+                              ? `${v.kmVencimiento.toLocaleString()} km` 
+                              : new Date(v.fechaVencimiento).toLocaleDateString()}
+                          </td>
                           <td>
                             <span className={`badge badge-${isVencido ? 'danger' : 'success'}`}>
-                              {isVencido ? 'VENCIDO' : 'VIGENTE'}
+                              {isVencido ? (v.kmVencimiento ? 'ALCANZADO' : 'VENCIDO') : 'VIGENTE'}
                             </span>
                           </td>
                           <td>{v.observaciones || '-'}</td>

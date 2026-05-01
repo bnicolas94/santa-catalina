@@ -9,7 +9,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       where: { id: params.id },
       data: {
         tipo: data.tipo,
-        fechaVencimiento: data.fechaVencimiento ? new Date(data.fechaVencimiento) : undefined,
+        fechaVencimiento: data.fechaVencimiento ? new Date(data.fechaVencimiento) : null,
+        kmVencimiento: data.kmVencimiento ? parseInt(data.kmVencimiento) : null,
+        kmAviso: data.kmAviso ? parseInt(data.kmAviso) : null,
         observaciones: data.observaciones,
         notificado: data.notificado,
         diasAviso: data.diasAviso ? parseInt(data.diasAviso) : undefined,

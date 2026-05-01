@@ -21,17 +21,20 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const { vehiculoId, tipo, fechaVencimiento, observaciones } = data;
+    const { vehiculoId, tipo, fechaVencimiento, kmVencimiento, kmAviso, observaciones, diasAviso } = data;
 
-    if (!vehiculoId || !tipo || !fechaVencimiento) {
-      return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
+    if (!vehiculoId || !tipo || (!fechaVencimiento && !kmVencimiento)) {
+      return NextResponse.json({ error: 'Falta vehículo, tipo o parámetro de vencimiento (fecha/km)' }, { status: 400 });
     }
 
     const vencimiento = await prisma.vencimientoVehiculo.create({
       data: {
         vehiculoId,
         tipo,
-        fechaVencimiento: new Date(fechaVencimiento),
+        fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
+        kmVencimiento: kmVencimiento ? parseInt(kmVencimiento) : null,
+        kmAviso: kmAviso ? parseInt(kmAviso) : null,
+        diasAviso: diasAviso ? parseInt(diasAviso) : 30,
         observaciones,
       },
     });
