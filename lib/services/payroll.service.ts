@@ -14,7 +14,9 @@ export interface DiaTrabajado {
     horasExtras: number
     entrada: string | null
     salida: string | null
+    jornalBase: number
     valorDiaBase: number
+    multiplicadorJornal: number // 1.0 = Día completo, 0.5 = Medio día, etc.
     valorExtra: number
     valorFeriado: number
     totalDia: number
@@ -186,7 +188,8 @@ export class PayrollService {
             const esFeriado = !!feriadosMap[fechaStr]
 
             // Cálculos del día
-            const valorDiaBase = marcas.length > 0 ? jornalBase : 0
+            const multiplicadorJornal = 1.0 // Por defecto día completo si hay marcas
+            const valorDiaBase = marcas.length > 0 ? (jornalBase * multiplicadorJornal) : 0
             const valorExtra = hsExtrasRedondeadas * valorHoraExtra
             // Recargo feriado: 50% extra del valor de la hora.
             // REGLA: Si trabajó, el recargo se aplica sobre MÍNIMO la hsJornada, o la real si fue mayor.
@@ -207,7 +210,9 @@ export class PayrollService {
                 horasExtras: hsExtrasRedondeadas,
                 entrada: primerEntrada ? new Date(primerEntrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 salida: ultimaSalida ? new Date(ultimaSalida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+                jornalBase: Math.round(jornalBase),
                 valorDiaBase: Math.round(valorDiaBase),
+                multiplicadorJornal,
                 valorExtra: Math.round(valorExtra),
                 valorFeriado: Math.round(valorFeriado),
                 totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado),

@@ -255,7 +255,41 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             }
             return r;
         }))
-        setBorradorCargado(false) // Al cambiar algo, el borrador en cloud ya no coincide
+        setBorradorCargado(false)
+    }
+
+    const handleMultiplicadorChange = (empleadoId: string, fecha: string, value: string) => {
+        const mult = parseFloat(value);
+        setResultados(prev => prev.map(r => {
+            if (r.empleadoId === empleadoId) {
+                const nuevoDesglose = r.desglosePorDia.map((dia: any) => {
+                    if (dia.fecha === fecha) {
+                        const nuevoValorDiaBase = Math.round(dia.jornalBase * mult);
+                        return {
+                            ...dia,
+                            multiplicadorJornal: mult,
+                            valorDiaBase: nuevoValorDiaBase,
+                            totalDia: Math.round(nuevoValorDiaBase + dia.valorExtra + dia.valorFeriado)
+                        }
+                    }
+                    return dia;
+                });
+
+                const nuevoSueldoBase = nuevoDesglose.reduce((acc: number, d: any) => acc + d.valorDiaBase, 0);
+                // Si el multiplicador es 0, no lo contamos como día trabajado en el contador general
+                const nuevoDiasTrabajados = nuevoDesglose.filter((d: any) => d.multiplicadorJornal > 0).length;
+                
+                return {
+                    ...r,
+                    desglosePorDia: nuevoDesglose,
+                    sueldoBase: nuevoSueldoBase,
+                    diasTrabajados: nuevoDiasTrabajados,
+                    totalNeto: nuevoSueldoBase + r.montoHorasExtras + r.montoHorasFeriado - r.descuentoPrestamos
+                }
+            }
+            return r;
+        }));
+        setBorradorCargado(false);
     }
 
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
@@ -396,7 +430,19 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                             )}
                                                                         </div>
                                                                     </div>
-                                                                    <div style={{ fontWeight: 600, marginTop: '4px', textAlign: 'right' }}>${dia.totalDia.toLocaleString()}</div>
+                                                                    <div style={{ fontWeight: 600, marginTop: '4px', textAlign: 'right', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <select 
+                                                                            className="form-select" 
+                                                                            style={{ padding: '0px 2px', fontSize: '9px', height: '18px', width: '70px', border: '1px solid var(--color-gray-200)' }}
+                                                                            value={dia.multiplicadorJornal}
+                                                                            onChange={e => handleMultiplicadorChange(r.empleadoId, dia.fecha, e.target.value)}
+                                                                        >
+                                                                            <option value="1">Día Comp.</option>
+                                                                            <option value="0.5">Medio Día</option>
+                                                                            <option value="0">No Pagar</option>
+                                                                        </select>
+                                                                        <span>${dia.totalDia.toLocaleString()}</span>
+                                                                    </div>
                                                                 </div>
                                                             ))}
                                                         </div>
