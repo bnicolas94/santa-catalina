@@ -27,6 +27,10 @@ export async function POST(request: Request) {
 
         // 1. Calcular costo total de la factura
         const costoTotalFactura = items.reduce((acc: number, item: any) => acc + (parseFloat(String(item.costoTotal || 0).replace(',', '.'))), 0)
+        
+        const esACuenta = estadoPago === 'a_cuenta'
+        const montoACuentaFloat = body.montoPagado ? parseFloat(String(body.montoPagado).replace(',', '.')) : 0
+        const montoADescontar = estadoPago === 'pagado' ? costoTotalFactura : (esACuenta ? montoACuentaFloat : 0)
 
         const result = await prisma.$transaction(async (tx) => {
             let gastoId = null
@@ -55,9 +59,9 @@ export async function POST(request: Request) {
                 if (provParams) resolvedProveedorNombre = provParams.nombre
             }
 
-            // 3. Si hay costo y está pagado, creamos UN solo gasto
-            if (costoTotalFactura > 0 && estadoPago === 'pagado') {
-                console.log('Factura: Processing paid entry financial records for total:', costoTotalFactura)
+            // 3. Si hay costo y está pagado o a cuenta, creamos UN solo gasto
+            if (montoADescontar > 0) {
+                console.log(`Factura: Processing ${estadoPago} entry financial records for amount:`, montoADescontar)
                 
                 let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
                 if (!cat) {
@@ -67,8 +71,10 @@ export async function POST(request: Request) {
                 const gasto = await tx.gastoOperativo.create({
                     data: {
                         fecha: parsedFecha,
-                        monto: costoTotalFactura,
-                        descripcion: `Factura ${numeroFactura || 'S/N'} - ${resolvedProveedorNombre}`,
+                        monto: montoADescontar,
+                        descripcion: esACuenta
+                            ? `Pago a cuenta Fac. ${numeroFactura || 'S/N'} - ${resolvedProveedorNombre} (Abonado: $${montoADescontar.toLocaleString('es-AR')} / $${costoTotalFactura.toLocaleString('es-AR')})`
+                            : `Factura ${numeroFactura || 'S/N'} - ${resolvedProveedorNombre}`,
                         categoriaId: cat.id
                     }
                 })
@@ -82,7 +88,7 @@ export async function POST(request: Request) {
                                 tipo: 'egreso',
                                 concepto: 'pago_proveedor',
                                 monto: montoPago,
-                                medioPago: pago.cajaOrigen === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                                medioPago: pago.cajaOrigen?.includes('mercado_pago') ? 'transferencia' : 'efectivo',
                                 cajaOrigen: pago.cajaOrigen,
                                 descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
                                 gastoId: gastoId,
@@ -94,10 +100,12 @@ export async function POST(request: Request) {
                     await CajaService.createMovimientoEnTx(tx, {
                         tipo: 'egreso',
                         concepto: 'pago_proveedor',
-                        monto: costoTotalFactura,
-                        medioPago: selectedCaja === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                        monto: montoADescontar,
+                        medioPago: selectedCaja.includes('mercado_pago') ? 'transferencia' : 'efectivo',
                         cajaOrigen: selectedCaja,
-                        descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
+                        descripcion: esACuenta
+                            ? `Pago a cuenta Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`
+                            : `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
                         gastoId: gastoId,
                         fecha: parsedFecha,
                     })
@@ -151,6 +159,7 @@ export async function POST(request: Request) {
                         numeroFactura: numeroFactura || null,
                         costoTotal: costoItemFloat,
                         estadoPago: estadoPago || 'pendiente',
+                        montoPagado: estadoPago === 'pagado' ? costoItemFloat : (esACuenta && costoItemFloat ? (montoACuentaFloat / costoTotalFactura * (costoItemFloat || 0)) : 0),
                         gastoId,
                         fechaVencimiento: item.fechaVencimiento ? new Date(item.fechaVencimiento) : null,
                         ubicacionId

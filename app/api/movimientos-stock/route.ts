@@ -36,7 +36,7 @@ export async function POST(request: Request) {
             insumoId, tipo, cantidad, cantidadSecundaria, observaciones, 
             proveedorId, costoTotal, estadoPago, actualizarCosto, 
             fechaVencimiento, ubicacionId, fechaMovimiento, cajaOrigen,
-            pagoDividido, pagos
+            pagoDividido, pagos, montoPagado
         } = body
 
         if (!insumoId || !tipo || !cantidad || !ubicacionId) {
@@ -57,9 +57,14 @@ export async function POST(request: Request) {
             let gastoId = null
             let movimientoCajaId = null
 
-            // 1. Manejo de Gasto y Caja si es entrada pagada
-            if (tipo === 'entrada' && costoTotalFloat && estadoPago === 'pagado') {
-                console.log('Processing paid entry financial records...')
+            // 1. Manejo de Gasto y Caja si es entrada pagada o a cuenta
+            const esPagado = estadoPago === 'pagado'
+            const esACuenta = estadoPago === 'a_cuenta'
+            const montoACuentaFloat = montoPagado ? parseFloat(String(montoPagado).replace(',', '.')) : 0
+            const montoADescontar = esPagado ? costoTotalFloat : (esACuenta ? montoACuentaFloat : 0)
+
+            if (tipo === 'entrada' && montoADescontar && montoADescontar > 0) {
+                console.log(`Processing ${esPagado ? 'paid' : 'partial'} entry financial records... Amount: ${montoADescontar}`)
                 try {
                     let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
                     if (!cat) {
@@ -69,8 +74,10 @@ export async function POST(request: Request) {
                     const gasto = await tx.gastoOperativo.create({
                         data: {
                             fecha: parsedFecha,
-                            monto: costoTotalFloat,
-                            descripcion: `Compra de Insumos - ${observaciones || 'Directa'}`,
+                            monto: montoADescontar,
+                            descripcion: esACuenta 
+                                ? `Pago a cuenta Insumos - ${observaciones || 'Directa'} (Abonado: $${montoADescontar.toLocaleString('es-AR')} / $${costoTotalFloat?.toLocaleString('es-AR')})`
+                                : `Compra de Insumos - ${observaciones || 'Directa'}`,
                             categoriaId: cat.id
                         }
                     })
@@ -79,13 +86,13 @@ export async function POST(request: Request) {
 
                     if (pagoDividido && pagos && Array.isArray(pagos)) {
                         for (const pago of pagos) {
-                            const montoPago = parseFloat(String(pago.monto).replace(',', '.'));
-                            if (montoPago > 0) {
+                            const montoPagoItem = parseFloat(String(pago.monto).replace(',', '.'));
+                            if (montoPagoItem > 0) {
                                 await CajaService.createMovimientoEnTx(tx, {
                                     tipo: 'egreso',
                                     concepto: 'pago_proveedor',
-                                    monto: montoPago,
-                                    medioPago: pago.cajaOrigen === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                                    monto: montoPagoItem,
+                                    medioPago: pago.cajaOrigen?.includes('mercado_pago') ? 'transferencia' : 'efectivo',
                                     cajaOrigen: pago.cajaOrigen,
                                     descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
                                     gastoId: gastoId,
@@ -99,10 +106,12 @@ export async function POST(request: Request) {
                         const movCaja = await CajaService.createMovimientoEnTx(tx, {
                             tipo: 'egreso',
                             concepto: 'pago_proveedor',
-                            monto: costoTotalFloat,
-                            medioPago: selectedCaja === 'mercado_pago' ? 'transferencia' : 'efectivo',
+                            monto: montoADescontar,
+                            medioPago: selectedCaja.includes('mercado_pago') ? 'transferencia' : 'efectivo',
                             cajaOrigen: selectedCaja,
-                            descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
+                            descripcion: esACuenta 
+                                ? `Pago a cuenta: ${observaciones || 'Directa'}`
+                                : `Compra de Insumos: ${observaciones || 'Directa'}`,
                             gastoId: gastoId,
                             fecha: parsedFecha,
                         })
@@ -128,6 +137,7 @@ export async function POST(request: Request) {
                     proveedorId: proveedorId || null,
                     costoTotal: costoTotalFloat,
                     estadoPago: tipo === 'entrada' ? (estadoPago || 'pendiente') : null,
+                    montoPagado: esPagado ? costoTotalFloat : (esACuenta ? montoACuentaFloat : 0),
                     gastoId,
                     fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
                     ubicacionId

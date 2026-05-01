@@ -8,6 +8,7 @@ interface Proveedor { id: string; nombre: string }
 interface Movimiento {
     id: string; tipo: string; cantidad: number; cantidadSecundaria: number | null; fecha: string; observaciones: string | null
     costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null; numeroFactura: string | null;
+    montoPagado: number | null;
     insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
     proveedor: { id: string; nombre: string } | null
     ubicacion: { id: string; nombre: string } | null
@@ -25,7 +26,7 @@ function StockContent() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[] })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[], montoPagado: '' })
     const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -100,11 +101,19 @@ function StockContent() {
                 unidadesPorBulto: String(form.unidadesPorBulto).replace(',', '.'),
             }
 
-            if (form.tipo === 'entrada' && form.estadoPago === 'pagado' && form.pagoDividido) {
+            if (form.tipo === 'entrada' && (form.estadoPago === 'pagado' || form.estadoPago === 'a_cuenta') && form.pagoDividido) {
+                const totalEsperado = form.estadoPago === 'a_cuenta' ? parseFloat((form as any).montoPagado || '0') : parseFloat(form.costoTotal || '0');
                 const totalCalculado = form.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
-                if (Math.abs(totalCalculado - parseFloat(form.costoTotal || '0')) > 0.01) {
-                    return setError('La suma de los pagos divididos debe ser exactamente igual al costo total ($' + parseFloat(form.costoTotal || '0').toLocaleString('es-AR') + ')');
+                if (Math.abs(totalCalculado - totalEsperado) > 0.01) {
+                    return setError('La suma de los pagos divididos debe ser exactamente igual al monto a pagar ($' + totalEsperado.toLocaleString('es-AR') + ')');
                 }
+            }
+
+            if (form.tipo === 'entrada' && form.estadoPago === 'a_cuenta') {
+                const montoP = parseFloat((form as any).montoPagado || '0');
+                const costoT = parseFloat(form.costoTotal || '0');
+                if (montoP <= 0) return setError('Ingrese el monto a pagar a cuenta');
+                if (montoP >= costoT) return setError('El monto a cuenta debe ser menor al costo total. Si paga todo, use "Pagado".');
             }
 
             const payloadParams = {
@@ -112,6 +121,7 @@ function StockContent() {
                 cantidad: cleansingForm.useBultos 
                     ? String(parseFloat(cleansingForm.bultos || '0') * parseFloat(cleansingForm.unidadesPorBulto || '1')) 
                     : cleansingForm.cantidad,
+                montoPagado: (form as any).montoPagado ? String((form as any).montoPagado).replace(',', '.') : undefined,
             }
 
             const res = await fetch(editingId ? `/api/movimientos-stock/${editingId}` : '/api/movimientos-stock', {
@@ -168,12 +178,20 @@ function StockContent() {
         if (isManualProveedor && !facturaForm.proveedorNombre) return setError('Ingrese el nombre del proveedor manual')
         if (facturaForm.items.length === 0) return setError('Debe agregar al menos un insumo a la factura')
         
-        if (facturaForm.estadoPago === 'pagado' && facturaForm.pagoDividido) {
+        if ((facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && facturaForm.pagoDividido) {
             const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
+            const totalEsperado = facturaForm.estadoPago === 'a_cuenta' ? parseFloat(facturaForm.montoPagado || '0') : totalFactura;
             const totalPagos = facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
-            if (Math.abs(totalFactura - totalPagos) > 0.01) {
-                return setError('La suma de los pagos divididos debe ser exactamente igual al total de la factura ($' + totalFactura.toLocaleString('es-AR') + ')');
+            if (Math.abs(totalEsperado - totalPagos) > 0.01) {
+                return setError('La suma de los pagos divididos debe ser exactamente igual al monto a pagar ($' + totalEsperado.toLocaleString('es-AR') + ')');
             }
+        }
+
+        if (facturaForm.estadoPago === 'a_cuenta') {
+            const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
+            const montoP = parseFloat(facturaForm.montoPagado || '0');
+            if (montoP <= 0) return setError('Ingrese el monto a pagar a cuenta');
+            if (montoP >= totalFactura) return setError('El monto a cuenta debe ser menor al total. Si paga todo, use "Pagado".');
         }
 
         try {
@@ -185,7 +203,7 @@ function StockContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Factura registrada correctamente')
             setShowFacturaModal(false)
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [] })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -216,9 +234,21 @@ function StockContent() {
         setShowModal(true)
     }
 
-    async function handlePago(id: string) {
+    async function handlePago(id: string, esParcial = false) {
         if (cajas.length === 0) return setError('No hay cajas disponibles para realizar el pago')
         
+        const mov = movimientos.find(m => m.id === id)
+        const saldoPendiente = mov ? (mov.costoTotal || 0) - (mov.montoPagado || 0) : 0
+        
+        let montoPago: number | null = null
+        if (esParcial) {
+            const montoStr = prompt(`Saldo pendiente: $${saldoPendiente.toLocaleString('es-AR')}\n\n¿Cuánto abonás ahora?`, String(saldoPendiente))
+            if (!montoStr) return
+            montoPago = parseFloat(montoStr.replace(',', '.'))
+            if (isNaN(montoPago) || montoPago <= 0) return setError('Monto inválido')
+            if (montoPago > saldoPendiente + 0.01) return setError('El monto supera el saldo pendiente')
+        }
+
         const opcionesStr = cajas.map((c, i) => `${i + 1} = ${c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`).join('\n')
         const resp = prompt(`¿De qué caja sale el pago?\n\n${opcionesStr}\n\nIngresá el número:`, '1')
         if (!resp) return
@@ -228,19 +258,23 @@ function StockContent() {
         
         const selectedBox = cajas[idx]
         const label = selectedBox.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+        const montoLabel = montoPago ? `$${montoPago.toLocaleString('es-AR')}` : `$${saldoPendiente.toLocaleString('es-AR')} (total pendiente)`
         
-        if (!confirm(`¿Marcar compra como pagada desde ${label}?`)) return
+        if (!confirm(`¿Registrar pago de ${montoLabel} desde ${label}?`)) return
         try {
+            const payload: any = { cajaOrigen: selectedBox.tipo }
+            if (montoPago !== null) payload.monto = montoPago
+            
             const res = await fetch(`/api/movimientos-stock/${id}/pago`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cajaOrigen: selectedBox.tipo })
+                body: JSON.stringify(payload)
             })
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error || 'Error al pagar la compra')
             }
-            setSuccess('Compra registrada como pagada.')
+            setSuccess(montoPago && montoPago < saldoPendiente ? 'Pago a cuenta registrado.' : 'Compra registrada como pagada.')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
@@ -328,7 +362,7 @@ function StockContent() {
                     )}
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [] })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
                         setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
@@ -507,9 +541,28 @@ function StockContent() {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                             <span style={{ fontWeight: 600 }}>${mov.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                                             {mov.estadoPago === 'pendiente' ? (
-                                                <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#F39C1220', color: '#E67E22', border: '1px solid #F39C12', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
-                                                    ⏳ Pendiente (Pagar)
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                    <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#F39C1220', color: '#E67E22', border: '1px solid #F39C12', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
+                                                        ⏳ Pagar todo
+                                                    </button>
+                                                    <button onClick={() => handlePago(mov.id, true)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
+                                                        💰 A cuenta
+                                                    </button>
+                                                </div>
+                                            ) : mov.estadoPago === 'a_cuenta' ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    <span className="badge" style={{ backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.2rem 0.6rem', fontSize: '0.7rem' }}>
+                                                        💰 Pagado ${(mov.montoPagado || 0).toLocaleString('es-AR')} / ${mov.costoTotal.toLocaleString('es-AR')}
+                                                    </span>
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#27AE6020', color: '#27AE60', border: '1px solid #27AE60', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
+                                                            ✅ Completar
+                                                        </button>
+                                                        <button onClick={() => handlePago(mov.id, true)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
+                                                            + Abonar
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             ) : (
                                                 <span className="badge" style={{ backgroundColor: '#2ECC7120', color: '#27AE60', border: '1px solid #2ECC71', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
                                                     ✅ Pagado
@@ -718,16 +771,33 @@ function StockContent() {
                                             <label className="form-label">Estado de Pago</label>
                                             <select className="form-select" value={form.estadoPago} onChange={(e) => setForm({ ...form, estadoPago: e.target.value })}>
                                                 <option value="pagado">✅ Pagado (Contado)</option>
+                                                <option value="a_cuenta">💰 A Cuenta (Parcial)</option>
                                                 <option value="pendiente">⏳ Pendiente (Cta. Cte.)</option>
                                             </select>
                                         </div>
+                                        {form.estadoPago === 'a_cuenta' && (
+                                            <div className="form-group">
+                                                <label className="form-label">Monto que abona ahora ($)</label>
+                                                <input type="number" step="0.01" className="form-input" 
+                                                    value={(form as any).montoPagado || ''} 
+                                                    onChange={(e) => setForm({ ...form, montoPagado: e.target.value } as any)} 
+                                                    placeholder="Ej: 50000" 
+                                                    required 
+                                                />
+                                                {(form as any).montoPagado && form.costoTotal && (
+                                                    <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#2980B9' }}>
+                                                        Quedará pendiente: <strong>${(parseFloat(form.costoTotal) - parseFloat((form as any).montoPagado || '0')).toLocaleString('es-AR')}</strong>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="form-group" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', marginTop: 'var(--space-2)' }}>
                                             <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
                                                 <input type="checkbox" checked={form.actualizarCosto} onChange={(e) => setForm({ ...form, actualizarCosto: e.target.checked })} />
                                                 Actualizar costo unitario del insumo
                                             </label>
                                         </div>
-                                        {form.estadoPago === 'pagado' && (
+                                        {(form.estadoPago === 'pagado' || form.estadoPago === 'a_cuenta') && (
                                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                                     <label className="form-label" style={{ margin: 0, fontSize: 'var(--text-xs)' }}>¿De qué caja sale el pago?</label>
@@ -875,14 +945,29 @@ function StockContent() {
                                         <label className="form-label">Estado de Pago</label>
                                         <select className="form-select" value={facturaForm.estadoPago} onChange={(e) => setFacturaForm({ ...facturaForm, estadoPago: e.target.value })}>
                                             <option value="pagado">✅ Pagado (Contado)</option>
+                                            <option value="a_cuenta">💰 A Cuenta (Parcial)</option>
                                             <option value="pendiente">⏳ Pendiente (Cta. Cte.)</option>
                                         </select>
                                     </div>
+                                    {facturaForm.estadoPago === 'a_cuenta' && (
+                                        <div className="form-group">
+                                            <label className="form-label">Monto a pagar ahora ($)</label>
+                                            <input type="number" step="0.01" className="form-input" 
+                                                value={facturaForm.montoPagado} 
+                                                onChange={(e) => setFacturaForm({ ...facturaForm, montoPagado: e.target.value })} 
+                                                placeholder="Ej: 50000" required />
+                                            {facturaForm.montoPagado && facturaForm.items.length > 0 && (
+                                                <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#2980B9' }}>
+                                                    Quedará pendiente: <strong>${(facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0) - parseFloat(facturaForm.montoPagado || '0')).toLocaleString('es-AR')}</strong>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="form-group">
                                         <label className="form-label">Fecha del Movimiento</label>
                                         <input type="date" className="form-input" value={facturaForm.fechaMovimiento} onChange={(e) => setFacturaForm({ ...facturaForm, fechaMovimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
-                                    {facturaForm.estadoPago === 'pagado' && (
+                                    {(facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && (
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                                 <label className="form-label" style={{ margin: 0 }}>Caja de Origen</label>
