@@ -34,7 +34,7 @@ export function VencimientoDialog({ vencimiento, onSave, onClose }: { vencimient
     e.preventDefault()
     setLoading(true)
     // Clean up data based on mode
-    const submitData = { ...formData }
+    const submitData: any = { ...formData }
     if (mode === 'fecha') {
       submitData.kmVencimiento = null
       submitData.kmAviso = null
