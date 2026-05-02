@@ -182,8 +182,25 @@ export class PayrollService {
 
             const resumen = calcularResumenDia(marcas, hsJornada)
 
-            // Regla: HS Extras redondeadas al 0.5 más cercano
-            const hsExtrasRedondeadas = Math.round(resumen.horasExtras * 2) / 2
+            // Cálculo de Tardanza para compensar horas extras
+            let minutosTardanza = 0
+            if (empleado.horarioEntrada && marcas.length > 0) {
+                const primerEntrada = marcas.find((m: any) => m.tipo === 'entrada')?.fechaHora
+                if (primerEntrada) {
+                    const [hH, hM] = empleado.horarioEntrada.split(':').map(Number)
+                    const dEntrada = new Date(primerEntrada)
+                    const dConfig = new Date(dEntrada)
+                    dConfig.setHours(hH, hM, 0, 0)
+                    
+                    if (dEntrada > dConfig) {
+                        minutosTardanza = (dEntrada.getTime() - dConfig.getTime()) / (1000 * 60)
+                    }
+                }
+            }
+
+            // Regla: HS Extras compensadas por tardanza y redondeadas al 0.5 más cercano
+            const hsExtrasNetas = Math.max(0, resumen.horasExtras - (minutosTardanza / 60))
+            const hsExtrasRedondeadas = Math.round(hsExtrasNetas * 2) / 2
 
             const esFeriado = !!feriadosMap[fechaStr]
 
