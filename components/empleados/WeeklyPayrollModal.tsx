@@ -118,17 +118,26 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                             const montoExtrasItems = extraItems.reduce((acc: number, item: any) => acc + item.montoCalculado, 0)
                             
                             if (b) {
+                                const currentDesglose = b.desglose || r.desglosePorDia;
+                                const currentHsExtrasBase = currentDesglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0);
+                                const currentMontoExtrasBase = currentDesglose.reduce((acc: number, d: any) => acc + (d.valorExtra || 0), 0);
+                                const currentMontoFeriado = currentDesglose.reduce((acc: number, d: any) => acc + (d.valorFeriado || 0), 0);
+                                const currentSueldoBase = currentDesglose.reduce((acc: number, d: any) => acc + (d.valorDiaBase || 0), 0);
+                                
                                 const adjustmentHs = b.ajusteHorasExtras || 0;
                                 const adjustmentMoney = Math.round(adjustmentHs * r.valorHoraExtra);
+                                const totalMontoExtras = currentMontoExtrasBase + adjustmentMoney;
 
                                 return {
                                     ...r,
-                                    desglosePorDia: b.desglose || r.desglosePorDia,
-                                    horasExtras: b.horasExtras ?? r.horasExtras,
+                                    desglosePorDia: currentDesglose,
+                                    sueldoBase: currentSueldoBase,
+                                    horasExtras: currentHsExtrasBase,
                                     ajusteHorasExtras: adjustmentHs,
-                                    montoHorasExtras: (b.montoHorasExtras || r.montoHorasExtras) + adjustmentMoney,
+                                    montoHorasExtras: totalMontoExtras,
+                                    montoHorasFeriado: currentMontoFeriado,
                                     adicionales: extraItems,
-                                    totalNeto: (b.totalNeto || r.totalNeto) + adjustmentMoney + montoExtrasItems,
+                                    totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems - (r.descuentoPrestamos || 0),
                                     borradorId: b.id
                                 }
                             }
@@ -282,21 +291,15 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         const val = parseFloat(value) || 0;
         setResultados(prev => prev.map(r => {
             if (r.empleadoId === empleadoId) {
-                const baseExtras = r.horasExtrasOriginal ?? r.horasExtras;
-                const baseMontoNeto = r.totalNetoOriginal ?? r.totalNeto;
-                const baseMontoExtras = r.montoHorasExtrasOriginal ?? r.montoHorasExtras;
-                
-                const diffHs = val;
-                const diffMonto = Math.round(diffHs * r.valorHoraExtra);
+                const baseMontoExtras = r.desglosePorDia.reduce((acc: number, d: any) => acc + (d.valorExtra || 0), 0);
+                const montoExtrasItems = (r.adicionales || []).reduce((acc: number, a: any) => acc + a.montoCalculado, 0);
+                const totalMontoExtras = baseMontoExtras + Math.round(val * r.valorHoraExtra);
                 
                 return {
                     ...r,
                     ajusteHorasExtras: val,
-                    montoHorasExtras: baseMontoExtras + diffMonto,
-                    totalNeto: baseMontoNeto + diffMonto,
-                    horasExtrasOriginal: baseExtras,
-                    totalNetoOriginal: baseMontoNeto,
-                    montoHorasExtrasOriginal: baseMontoExtras
+                    montoHorasExtras: totalMontoExtras,
+                    totalNeto: (r.sueldoBase || 0) + totalMontoExtras + (r.montoHorasFeriado || 0) + montoExtrasItems - (r.descuentoPrestamos || 0)
                 }
             }
             return r;
