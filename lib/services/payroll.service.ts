@@ -587,7 +587,9 @@ export class PayrollService {
             montosPorMes[mes] = (montosPorMes[mes] || 0) + bruto;
         });
 
-        const brutoMaximo = Object.values(montosPorMes).length > 0 ? Math.max(...Object.values(montosPorMes)) : (empleado.sueldoBaseMensual || 0);
+        const brutoMaximo = Object.values(montosPorMes).length > 0 
+            ? Math.max(...Object.values(montosPorMes)) 
+            : (empleado.sueldoBaseMensual || (empleado.jornal * 25) || 0);
         
         // Cálculo de días proporcionales
         let diasBase = 180;
@@ -622,8 +624,11 @@ export class PayrollService {
         else if (antiguedad >= 5) dias = 21;
 
         // Valor vacaciones = (Sueldo / 25) * dias
-        // Usamos sueldoBaseMensual o el promedio de los últimos meses
-        const valorDia = (empleado.sueldoBaseMensual || 0) / 25;
+        // Usamos sueldoBaseMensual / 25 o directamente el jornal si es jornalero
+        const valorDia = empleado.sueldoBaseMensual > 0 
+            ? (empleado.sueldoBaseMensual / 25) 
+            : (empleado.jornal || 0);
+            
         const monto = Math.round(valorDia * dias);
 
         return {
