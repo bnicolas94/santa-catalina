@@ -264,7 +264,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor, 
                     ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
                     del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                    Recibiendo un total neto de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
+                    Recibiendo un neto total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
                     (pesos ${totalLetras}).
                 `
             }
@@ -365,7 +365,12 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                 </td>
                                                 <td>
                                                     <div style={{ fontWeight: 500 }}>{d.empleado}</div>
-                                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{d.periodo}</div>
+                                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                        {d.periodo}
+                                                        {(d.tipo === 'VACACIONES' || d.manualData?.esVacaciones || d.periodo.toLowerCase().includes('vacaciones')) && (
+                                                            <span style={{ backgroundColor: 'var(--color-success-light)', color: 'var(--color-success)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>VACACIONES</span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     {d.horasExtras > 0 ? `${d.horasExtras}hs ($${d.montoHorasExtras.toLocaleString('es-AR')})` : '-'}
