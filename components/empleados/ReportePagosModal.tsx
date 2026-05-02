@@ -9,6 +9,8 @@ interface ReportePagosModalProps {
 
 interface ReporteFila {
     id: string
+    tipo: string
+    manualData: any
     empleado: string
     empleadoDatos: {
         nombre: string
@@ -229,6 +231,41 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             const totalBruto = liq.totalBruto || 0
             const totalLetras = formatCurrencyToWords(liq.totalNeto || 0)
 
+            const isVacaciones = liq.tipo === 'VACACIONES'
+            const manualData = liq.manualData || {}
+            const goceInicio = manualData.fechaInicioGoce ? manualData.fechaInicioGoce.split('-').reverse().join('/') : '___'
+            const goceFin = manualData.fechaFinGoce ? manualData.fechaFinGoce.split('-').reverse().join('/') : '___'
+            const diasVacas = manualData.diasTrabajados || '___'
+
+            let textoHtml = ''
+            if (isVacaciones) {
+                textoHtml = `
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h2 style="text-decoration: underline;">Vacaciones anuales</h2>
+                    </div>
+                    <p>
+                        Se abona la suma <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
+                        (pesos ${totalLetras}) correspondiente a <span class="data-label">${diasVacas}</span> días corridos 
+                        de vacaciones anuales, conforme a la Ley de Contrato de Trabajo N° 20.744.
+                    </p>
+                    <p>
+                        El período de goce fue desde <span class="data-label">${goceInicio}</span> hasta <span class="data-label">${goceFin}</span>, 
+                        inclusive, habiendo el empleado usufructuado su licencia anual ordinaria.
+                    </p>
+                `
+            } else {
+                textoHtml = `
+                    Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
+                    (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral, 
+                    <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
+                    (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor, 
+                    ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
+                    del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
+                    Recibiendo un total neto de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
+                    (pesos ${totalLetras}).
+                `
+            }
+
             allHtml += `
                 <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
                     <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
@@ -236,14 +273,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                         <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
                     <div class="texto">
-                        Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
-                        (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral, 
-                        <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
-                        (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor, 
-                        ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
-                        del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                        Recibiendo un total neto de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                        (pesos ${totalLetras}).
+                        ${textoHtml}
                     </div>
                     <div class="firma-section">
                         <div class="firma-line">Firma</div>

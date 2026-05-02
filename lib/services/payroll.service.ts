@@ -443,7 +443,7 @@ export class PayrollService {
                 descuentosPrestamos: deduccionCuotas,
                 totalNeto: neto,
                 estado: 'pagado',
-                desglose: calculatedData?.desglosePorDia || null,
+                desglose: calculatedData?.desglosePorDia || manualData || null,
                 items: (adicionales && adicionales.length > 0) ? {
                     create: adicionales.map(ad => ({
                         conceptoSalarialId: ad.conceptoSalarialId,

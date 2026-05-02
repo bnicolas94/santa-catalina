@@ -18,6 +18,8 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
     const [previewData, setPreviewData] = useState<any>(null)
     const [montoManual, setMontoManual] = useState<number | null>(null)
     const [diasManual, setDiasManual] = useState<number>(0)
+    const [fechaInicioGoce, setFechaInicioGoce] = useState('')
+    const [fechaFinGoce, setFechaFinGoce] = useState('')
 
     useEffect(() => {
         if (selectedEmpleado) {
@@ -60,7 +62,15 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
             const url = tab === 'sac' ? '/api/liquidaciones/sac' : '/api/liquidaciones/vacaciones'
             const body = tab === 'sac' 
                 ? { empleadoId: selectedEmpleado, anio, semestre, monto: montoManual, cajaId }
-                : { empleadoId: selectedEmpleado, anio, monto: montoManual, dias: diasManual, cajaId }
+                : { 
+                    empleadoId: selectedEmpleado, 
+                    anio, 
+                    monto: montoManual, 
+                    dias: diasManual, 
+                    cajaId,
+                    fechaInicioGoce,
+                    fechaFinGoce
+                  }
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -196,9 +206,26 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                                         <strong>Monto Vacaciones Sugerido:</strong>
                                         <strong>${montoManual?.toLocaleString() || '0'}</strong>
                                     </div>
-                                    <p style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)', marginTop: '8px' }}>
-                                        * Basado en Sueldo Mensual / 25
-                                    </p>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Inicio Goce:</label>
+                                            <input 
+                                                type="date" 
+                                                className="form-input" 
+                                                value={fechaInicioGoce} 
+                                                onChange={e => setFechaInicioGoce(e.target.value)} 
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Fin Goce:</label>
+                                            <input 
+                                                type="date" 
+                                                className="form-input" 
+                                                value={fechaFinGoce} 
+                                                onChange={e => setFechaFinGoce(e.target.value)} 
+                                            />
+                                        </div>
+                                    </div>
                                 </>
                             )}
 

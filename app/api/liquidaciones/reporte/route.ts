@@ -40,6 +40,8 @@ export async function GET(request: Request) {
             
             return {
                 id: liq.id,
+                tipo: liq.tipo,
+                manualData: liq.desglose,
                 empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
                 empleadoDatos: {
                     nombre: liq.empleado.nombre,

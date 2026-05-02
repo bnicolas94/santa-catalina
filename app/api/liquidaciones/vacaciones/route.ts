@@ -19,10 +19,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { empleadoId, anio, monto, dias, cajaId } = body
+        const { empleadoId, anio, monto, dias, cajaId, fechaInicioGoce, fechaFinGoce } = body
 
         if (!empleadoId || !monto) return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
 
+        // Creamos una liquidación especial de tipo VACACIONES
         const liquidacion = await PayrollService.ejecutarLiquidacion({
             empleadoId,
             periodo: `Vacaciones ${anio} (${dias} días)`,
@@ -34,8 +35,18 @@ export async function POST(request: Request) {
                 horasExtras: 0,
                 montoHsExtras: 0,
                 descuentoPrestamos: 0,
-                diasTrabajados: dias
+                diasTrabajados: dias,
+                fechaInicioGoce,
+                fechaFinGoce,
+                esVacaciones: true
             }
+        })
+
+        // Cambiamos el tipo a VACACIONES (por defecto es NORMAL en ejecutarLiquidacion si no se especifica)
+        const { prisma } = await import('@/lib/prisma')
+        await prisma.liquidacionSueldo.update({
+            where: { id: liquidacion.id },
+            data: { tipo: 'VACACIONES' }
         })
 
         return NextResponse.json(liquidacion)
