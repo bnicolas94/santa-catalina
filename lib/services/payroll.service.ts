@@ -49,6 +49,7 @@ export interface LiquidacionInput {
     concepto?: string
     manualData?: any
     calculatedData?: any
+    tipo?: string
     adicionales?: { conceptoSalarialId: string; montoCalculado: number; detalle?: string }[]
 }
 
@@ -295,7 +296,7 @@ export class PayrollService {
      * Soporta 3 modos: automático (fichadas), calculado (WeeklyPayroll), manual (Express).
      */
     static async ejecutarLiquidacion(input: LiquidacionInput) {
-        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData, adicionales } = input
+        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData, adicionales, tipo } = input
 
         if (!empleadoId || !periodo) {
             throw new Error('Faltan datos obligatorios')
@@ -443,6 +444,7 @@ export class PayrollService {
                 descuentosPrestamos: deduccionCuotas,
                 totalNeto: neto,
                 estado: 'pagado',
+                tipo: tipo || 'NORMAL',
                 desglose: calculatedData?.desglosePorDia || manualData || null,
                 items: (adicionales && adicionales.length > 0) ? {
                     create: adicionales.map(ad => ({

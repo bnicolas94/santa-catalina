@@ -30,6 +30,7 @@ export async function POST(request: Request) {
             fechaInicio: `${anio}-01-01`,
             fechaFin: `${anio}-12-31`,
             cajaId: cajaId || 'caja_chica',
+            tipo: 'VACACIONES',
             manualData: {
                 sueldoBase: monto,
                 horasExtras: 0,
@@ -40,13 +41,6 @@ export async function POST(request: Request) {
                 fechaFinGoce,
                 esVacaciones: true
             }
-        })
-
-        // Cambiamos el tipo a VACACIONES (por defecto es NORMAL en ejecutarLiquidacion si no se especifica)
-        const { prisma } = await import('@/lib/prisma')
-        await prisma.liquidacionSueldo.update({
-            where: { id: liquidacion.id },
-            data: { tipo: 'VACACIONES' }
         })
 
         return NextResponse.json(liquidacion)

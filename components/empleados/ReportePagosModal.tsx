@@ -231,7 +231,10 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             const totalBruto = liq.totalBruto || 0
             const totalLetras = formatCurrencyToWords(liq.totalNeto || 0)
 
-            const isVacaciones = liq.tipo === 'VACACIONES'
+            const isVacaciones = liq.tipo === 'VACACIONES' || 
+                                liq.manualData?.esVacaciones === true || 
+                                liq.periodo.toLowerCase().includes('vacaciones')
+
             const manualData = liq.manualData || {}
             const goceInicio = manualData.fechaInicioGoce ? manualData.fechaInicioGoce.split('-').reverse().join('/') : '___'
             const goceFin = manualData.fechaFinGoce ? manualData.fechaFinGoce.split('-').reverse().join('/') : '___'
