@@ -299,6 +299,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 const nuevoDesglose = r.desglosePorDia.map((dia: any) => {
                     if (dia.fecha === fecha) {
                         const nuevoValorDiaBase = Math.round(dia.jornalBase * mult);
+                        // Si mult es 0, también anulamos extras y feriado de ese día por defecto?
+                        // Por ahora lo dejamos a criterio del usuario o lo forzamos.
                         return {
                             ...dia,
                             multiplicadorJornal: mult,
@@ -310,7 +312,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 });
 
                 const nuevoSueldoBase = nuevoDesglose.reduce((acc: number, d: any) => acc + d.valorDiaBase, 0);
-                // Si el multiplicador es 0, no lo contamos como día trabajado en el contador general
                 const nuevoDiasTrabajados = nuevoDesglose.filter((d: any) => d.multiplicadorJornal > 0).length;
                 
                 return {
@@ -319,6 +320,39 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     sueldoBase: nuevoSueldoBase,
                     diasTrabajados: nuevoDiasTrabajados,
                     totalNeto: nuevoSueldoBase + r.montoHorasExtras + r.montoHorasFeriado - r.descuentoPrestamos
+                }
+            }
+            return r;
+        }));
+        setBorradorCargado(false);
+    }
+
+    const handleDailyExtrasChange = (empleadoId: string, fecha: string, value: string) => {
+        const extraHs = parseFloat(value) || 0;
+        setResultados(prev => prev.map(r => {
+            if (r.empleadoId === empleadoId) {
+                const nuevoDesglose = r.desglosePorDia.map((dia: any) => {
+                    if (dia.fecha === fecha) {
+                        const nuevoValorExtra = Math.round(extraHs * r.valorHoraExtra);
+                        return {
+                            ...dia,
+                            horasExtras: extraHs,
+                            valorExtra: nuevoValorExtra,
+                            totalDia: Math.round(dia.valorDiaBase + nuevoValorExtra + dia.valorFeriado)
+                        }
+                    }
+                    return dia;
+                });
+
+                const montoExtrasBase = nuevoDesglose.reduce((acc: number, d: any) => acc + d.valorExtra, 0);
+                const montoExtrasAjuste = Math.round((r.ajusteHorasExtras || 0) * r.valorHoraExtra);
+                const nuevoMontoExtras = montoExtrasBase + montoExtrasAjuste;
+                
+                return {
+                    ...r,
+                    desglosePorDia: nuevoDesglose,
+                    montoHorasExtras: nuevoMontoExtras,
+                    totalNeto: r.sueldoBase + nuevoMontoExtras + r.montoHorasFeriado - r.descuentoPrestamos
                 }
             }
             return r;
@@ -452,8 +486,19 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     </div>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                         <div>
-                                                                            <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
-                                                                            <div style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas} {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)' }}>(+{dia.horasExtras})</span>}</div>
+                                                                             <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
+                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                <span style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas}</span>
+                                                                                <input 
+                                                                                    type="number" 
+                                                                                    step="0.5" 
+                                                                                    className="form-input" 
+                                                                                    style={{ width: '40px', padding: '0px 2px', fontSize: '10px', height: '18px', textAlign: 'center', color: 'var(--color-success)', fontWeight: 600 }}
+                                                                                    value={dia.horasExtras}
+                                                                                    onChange={e => handleDailyExtrasChange(r.empleadoId, dia.fecha, e.target.value)}
+                                                                                    title="Editar horas extra de este día"
+                                                                                />
+                                                                             </div>
                                                                         </div>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                                             {dia.horasTrabajadas === 0 && (
