@@ -36,6 +36,10 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
             const res = await fetch(url)
             if (res.ok) {
                 const data = await res.json()
+                if (data.error) {
+                    toast.error(data.error)
+                    return
+                }
                 setPreviewData(data)
                 setMontoManual(tab === 'sac' ? data.sac : data.monto)
             }
@@ -147,16 +151,16 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                                 <>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                                         <span>Mejor Bruto del Semestre:</span>
-                                        <span style={{ fontWeight: 700 }}>${previewData.brutoMaximo.toLocaleString()}</span>
+                                        <span style={{ fontWeight: 700 }}>${previewData.brutoMaximo?.toLocaleString() || '0'}</span>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
                                         <span>Días Proporcionales (base 180):</span>
-                                        <span>{previewData.diasTrabajados} días</span>
+                                        <span>{previewData.diasTrabajados || 0} días</span>
                                     </div>
                                     <hr style={{ margin: 'var(--space-2) 0', opacity: 0.2 }} />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', color: 'var(--color-primary)' }}>
                                         <strong>Monto SAC Sugerido:</strong>
-                                        <strong>${previewData.sac.toLocaleString()}</strong>
+                                        <strong>${previewData.sac?.toLocaleString() || '0'}</strong>
                                     </div>
                                 </>
                             ) : (
@@ -172,7 +176,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                                     <hr style={{ margin: 'var(--space-2) 0', opacity: 0.2 }} />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', color: 'var(--color-success)' }}>
                                         <strong>Monto Vacaciones Sugerido:</strong>
-                                        <strong>${previewData.monto.toLocaleString()}</strong>
+                                        <strong>${previewData.monto?.toLocaleString() || '0'}</strong>
                                     </div>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)', marginTop: '8px' }}>
                                         * Basado en Sueldo Mensual / 25
