@@ -124,15 +124,12 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                 return {
                                     ...r,
                                     desglosePorDia: b.desglose || r.desglosePorDia,
-                                    horasExtras: b.horasExtras || r.horasExtras,
+                                    horasExtras: b.horasExtras ?? r.horasExtras,
                                     ajusteHorasExtras: adjustmentHs,
                                     montoHorasExtras: (b.montoHorasExtras || r.montoHorasExtras) + adjustmentMoney,
                                     adicionales: extraItems,
                                     totalNeto: (b.totalNeto || r.totalNeto) + adjustmentMoney + montoExtrasItems,
-                                    borradorId: b.id,
-                                    horasExtrasOriginal: r.horasExtras,
-                                    totalNetoOriginal: r.totalNeto,
-                                    montoHorasExtrasOriginal: r.montoHorasExtras
+                                    borradorId: b.id
                                 }
                             }
                             return { ...r, adicionales: [] };
@@ -512,7 +509,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                         </td>
                                                         <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>
                                                             <span style={{ fontSize: '10px', display: 'block' }}>
-                                                                ({(r.horasExtrasOriginal ?? r.horasExtras) + (r.ajusteHorasExtras || 0)}h)
+                                                                ({(r.horasExtras || 0) + (r.ajusteHorasExtras || 0)}h)
                                                                 {r.ajusteHorasExtras !== 0 && <span style={{ color: r.ajusteHorasExtras > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}> {r.ajusteHorasExtras > 0 ? '+' : ''}{r.ajusteHorasExtras}</span>}
                                                             </span>
                                                             ${(r.montoHorasExtras || 0).toLocaleString()}
