@@ -23,6 +23,7 @@ interface ReporteFila {
     montoHorasNormales: number
     montoHorasFeriado: number
     totalBruto: number
+    montoAdicionales: number
     descuentos: number
     totalNeto: number
 }
@@ -224,8 +225,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
             const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
             const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
-            const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0)
-            const totalLetras = formatCurrencyToWords(totalBruto)
+            const montoOtrosLetras = formatCurrencyToWords(liq.montoAdicionales || 0)
+            const totalBruto = liq.totalBruto || 0
+            const totalLetras = formatCurrencyToWords(liq.totalNeto || 0)
 
             allHtml += `
                 <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
@@ -235,11 +237,12 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     </div>
                     <div class="texto">
                         Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
-                        (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
+                        (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral, 
                         <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
-                        (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
+                        (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor, 
+                        ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
                         del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                        Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
+                        Recibiendo un total neto de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
                         (pesos ${totalLetras}).
                     </div>
                     <div class="firma-section">

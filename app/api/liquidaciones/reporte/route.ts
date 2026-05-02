@@ -23,7 +23,8 @@ export async function GET(request: Request) {
                 estado: 'pagado'
             },
             include: {
-                empleado: true
+                empleado: true,
+                items: true
             },
             orderBy: [
                 { empleado: { nombre: 'asc'} },
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
         // Map the data for easier consumption in the frontend
         const reporte = liquidaciones.map(liq => {
             const totalEgresos = liq.descuentosPrestamos
+            const montoAdicionales = liq.items.reduce((acc, item) => acc + item.montoCalculado, 0)
             const soloSueldoBase = liq.sueldoProporcional + liq.montoHorasNormales + liq.montoHorasFeriado
             
             return {
@@ -51,7 +53,8 @@ export async function GET(request: Request) {
                 sueldoProporcional: liq.sueldoProporcional,
                 montoHorasNormales: liq.montoHorasNormales,
                 montoHorasFeriado: liq.montoHorasFeriado,
-                totalBruto: soloSueldoBase,
+                montoAdicionales,
+                totalBruto: soloSueldoBase + liq.montoHorasExtras + montoAdicionales,
                 descuentos: totalEgresos,
                 totalNeto: liq.totalNeto
             }
