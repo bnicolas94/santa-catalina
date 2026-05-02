@@ -13,6 +13,7 @@ import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
 import OrganigramaModal from '@/components/empleados/OrganigramaModal'
 import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
 import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalarialesModal'
+import { VacacionesSACModal } from '@/components/empleados/VacacionesSACModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -38,6 +39,7 @@ export default function EmpleadosPage() {
     const [showConceptosModal, setShowConceptosModal] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterActivo, setFilterActivo] = useState<boolean | 'todos'>(true)
+    const [vacacionesSacOpen, setVacacionesSacOpen] = useState(false)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -263,7 +265,10 @@ export default function EmpleadosPage() {
                         accept=".txt, .csv, .xls, .xlsx"
                     />
                     <button onClick={() => setWeeklyPayrollOpen(true)} className="btn btn-primary" style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}>
-                        💰 Liquidación Semanal
+                        💰 Liq. Semanal
+                    </button>
+                    <button onClick={() => setVacacionesSacOpen(true)} className="btn btn-primary" style={{ backgroundColor: 'var(--color-warning)', borderColor: 'var(--color-warning)', color: 'var(--color-gray-900)' }}>
+                        🏖️ Vacaciones/SAC
                     </button>
                     <button onClick={() => setMassLiquidationOpen(true)} className="btn btn-outline">
                         🏢 Liq. Masiva
@@ -584,6 +589,12 @@ export default function EmpleadosPage() {
             )}
             {showConceptosModal && (
                 <ConceptosSalarialesModal onClose={() => setShowConceptosModal(false)} />
+            )}
+            {vacacionesSacOpen && (
+                <VacacionesSACModal 
+                    empleados={empleados.filter(e => e.activo)} 
+                    onClose={() => setVacacionesSacOpen(false)} 
+                />
             )}
         </div>
     )

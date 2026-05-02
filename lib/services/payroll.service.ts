@@ -561,4 +561,76 @@ export class PayrollService {
             }
         })
     }
+
+    // ─── Cálculos Especiales: SAC y Vacaciones ────────────────────────────────
+    static async calcularSACPreview(empleadoId: string, anio: number, semestre: 1 | 2) {
+        const start = semestre === 1 ? new Date(anio, 0, 1) : new Date(anio, 6, 1);
+        const end = semestre === 1 ? new Date(anio, 5, 30, 23, 59, 59) : new Date(anio, 11, 31, 23, 59, 59);
+
+        const liquidaciones = await prisma.liquidacionSueldo.findMany({
+            where: {
+                empleadoId,
+                fechaGeneracion: { gte: start, lte: end },
+                estado: 'pagado',
+                tipo: 'NORMAL'
+            }
+        });
+
+        const empleado = await prisma.empleado.findUnique({ where: { id: empleadoId } });
+        if (!empleado) throw new Error('Empleado no encontrado');
+
+        // Agrupamos por mes para encontrar el mejor mes
+        const montosPorMes: Record<number, number> = {};
+        liquidaciones.forEach(l => {
+            const mes = l.fechaGeneracion.getMonth();
+            const bruto = l.sueldoProporcional + l.montoHorasNormales + l.montoHorasExtras + l.montoHorasFeriado;
+            montosPorMes[mes] = (montosPorMes[mes] || 0) + bruto;
+        });
+
+        const brutoMaximo = Object.values(montosPorMes).length > 0 ? Math.max(...Object.values(montosPorMes)) : (empleado.sueldoBaseMensual || 0);
+        
+        // Cálculo de días proporcionales
+        let diasBase = 180;
+        if (empleado.fechaIngreso && empleado.fechaIngreso > start) {
+            const diffTime = Math.abs(end.getTime() - empleado.fechaIngreso.getTime());
+            diasBase = Math.min(180, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        }
+
+        const sac = Math.round((brutoMaximo / 2) * (diasBase / 180));
+
+        return { 
+            brutoMaximo, 
+            sac, 
+            diasTrabajados: diasBase, 
+            mesesConsiderados: Object.keys(montosPorMes).length,
+            periodo: `${anio}-${semestre}`
+        };
+    }
+
+    static async calcularVacacionesPreview(empleadoId: string, anio: number) {
+        const empleado = await prisma.empleado.findUnique({ where: { id: empleadoId } });
+        if (!empleado) throw new Error('Empleado no encontrado');
+
+        if (!empleado.fechaIngreso) return { dias: 0, monto: 0, antiguedad: 0 };
+
+        const hoy = new Date();
+        const antiguedad = hoy.getFullYear() - empleado.fechaIngreso.getFullYear();
+        
+        let dias = 14;
+        if (antiguedad >= 20) dias = 35;
+        else if (antiguedad >= 10) dias = 28;
+        else if (antiguedad >= 5) dias = 21;
+
+        // Valor vacaciones = (Sueldo / 25) * dias
+        // Usamos sueldoBaseMensual o el promedio de los últimos meses
+        const valorDia = (empleado.sueldoBaseMensual || 0) / 25;
+        const monto = Math.round(valorDia * dias);
+
+        return {
+            dias,
+            monto,
+            antiguedad,
+            fechaIngreso: empleado.fechaIngreso
+        };
+    }
 }
