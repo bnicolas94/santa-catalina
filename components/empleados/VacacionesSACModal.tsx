@@ -17,6 +17,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
     const [loading, setLoading] = useState(false)
     const [previewData, setPreviewData] = useState<any>(null)
     const [montoManual, setMontoManual] = useState<number | null>(null)
+    const [diasManual, setDiasManual] = useState<number>(0)
 
     useEffect(() => {
         if (selectedEmpleado) {
@@ -42,6 +43,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                 }
                 setPreviewData(data)
                 setMontoManual(tab === 'sac' ? data.sac : data.monto)
+                setDiasManual(tab === 'sac' ? 180 : data.dias)
             }
         } catch (error) {
             console.error('Error previewing:', error)
@@ -58,7 +60,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
             const url = tab === 'sac' ? '/api/liquidaciones/sac' : '/api/liquidaciones/vacaciones'
             const body = tab === 'sac' 
                 ? { empleadoId: selectedEmpleado, anio, semestre, monto: montoManual, cajaId }
-                : { empleadoId: selectedEmpleado, anio, monto: montoManual, dias: previewData.dias, cajaId }
+                : { empleadoId: selectedEmpleado, anio, monto: montoManual, dias: diasManual, cajaId }
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -77,6 +79,14 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
             toast.error('Error de red')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleDiasManualChange = (val: number) => {
+        setDiasManual(val);
+        if (previewData && previewData.dias > 0) {
+            const valorDia = previewData.monto / previewData.dias;
+            setMontoManual(Math.round(valorDia * val));
         }
     }
 
@@ -169,14 +179,22 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                                         <span>Antigüedad Calculada:</span>
                                         <span>{previewData.antiguedad} años</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-                                        <span>Días de Vacaciones:</span>
-                                        <span style={{ fontWeight: 700 }}>{previewData.dias} días</span>
+                                    <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
+                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Días a Liquidar:</label>
+                                        <input 
+                                            type="number" 
+                                            className="form-input" 
+                                            value={diasManual} 
+                                            onChange={e => handleDiasManualChange(parseInt(e.target.value) || 0)} 
+                                        />
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
+                                            Sugerido por antigüedad: {previewData.dias} días
+                                        </div>
                                     </div>
                                     <hr style={{ margin: 'var(--space-2) 0', opacity: 0.2 }} />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', color: 'var(--color-success)' }}>
                                         <strong>Monto Vacaciones Sugerido:</strong>
-                                        <strong>${previewData.monto?.toLocaleString() || '0'}</strong>
+                                        <strong>${montoManual?.toLocaleString() || '0'}</strong>
                                     </div>
                                     <p style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)', marginTop: '8px' }}>
                                         * Basado en Sueldo Mensual / 25
