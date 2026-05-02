@@ -210,6 +210,40 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         }
     }
 
+    const handleRecalcularEmpleado = async (empleadoId: string) => {
+        try {
+            const res = await fetch('/api/liquidaciones/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleadoIds: [empleadoId],
+                    fechaInicio,
+                    fechaFin
+                })
+            })
+            if (!res.ok) return;
+            const [newData] = await res.json()
+            
+            setResultados(prev => prev.map(r => {
+                if (r.empleadoId === empleadoId) {
+                    // Mantener el ajuste manual de horas extras si ya existía
+                    const adj = r.ajusteHorasExtras || 0;
+                    const adjMoney = Math.round(adj * newData.valorHoraExtra);
+                    return {
+                        ...newData,
+                        ajusteHorasExtras: adj,
+                        montoHorasExtras: newData.montoHorasExtras + adjMoney,
+                        totalNeto: newData.totalNeto + adjMoney,
+                        horasExtrasOriginal: newData.horasExtras,
+                        totalNetoOriginal: newData.totalNeto,
+                        montoHorasExtrasOriginal: newData.montoHorasExtras
+                    }
+                }
+                return r;
+            }))
+        } catch (e) { console.error(e) }
+    }
+
     const handleJustificar = async (empleadoId: string, fecha: string) => {
         try {
             const res = await fetch('/api/fichadas/justificar', {
@@ -217,7 +251,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ empleadoId, fecha })
             })
-            if (res.ok) handleCalcular()
+            if (res.ok) await handleRecalcularEmpleado(empleadoId)
             else alert('Error al justificar')
         } catch (error) { console.error(error) }
     }
@@ -227,7 +261,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             const res = await fetch(`/api/fichadas/justificar?empleadoId=${empleadoId}&fecha=${fecha}`, {
                 method: 'DELETE'
             })
-            if (res.ok) handleCalcular()
+            if (res.ok) await handleRecalcularEmpleado(empleadoId)
             else alert('Error al quitar justificación')
         } catch (error) { console.error(error) }
     }
