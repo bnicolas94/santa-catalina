@@ -123,10 +123,12 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
 
                                 return {
                                     ...r,
+                                    desglosePorDia: b.desglose || r.desglosePorDia,
+                                    horasExtras: b.horasExtras || r.horasExtras,
                                     ajusteHorasExtras: adjustmentHs,
-                                    montoHorasExtras: r.montoHorasExtras + adjustmentMoney,
+                                    montoHorasExtras: (b.montoHorasExtras || r.montoHorasExtras) + adjustmentMoney,
                                     adicionales: extraItems,
-                                    totalNeto: r.totalNeto + adjustmentMoney + montoExtrasItems,
+                                    totalNeto: (b.totalNeto || r.totalNeto) + adjustmentMoney + montoExtrasItems,
                                     borradorId: b.id,
                                     horasExtrasOriginal: r.horasExtras,
                                     totalNetoOriginal: r.totalNeto,
@@ -360,12 +362,14 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 const montoExtrasBase = nuevoDesglose.reduce((acc: number, d: any) => acc + d.valorExtra, 0);
                 const montoExtrasAjuste = Math.round((r.ajusteHorasExtras || 0) * r.valorHoraExtra);
                 const nuevoMontoExtras = montoExtrasBase + montoExtrasAjuste;
+                const nuevasHorasExtrasTotales = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0);
                 
                 return {
                     ...r,
                     desglosePorDia: nuevoDesglose,
+                    horasExtras: nuevasHorasExtrasTotales,
                     montoHorasExtras: nuevoMontoExtras,
-                    totalNeto: r.sueldoBase + nuevoMontoExtras + r.montoHorasFeriado - r.descuentoPrestamos
+                    totalNeto: (r.sueldoBase || 0) + nuevoMontoExtras + (r.montoHorasFeriado || 0) + (r.adicionales || []).reduce((acc: number, a: any) => acc + a.montoCalculado, 0) - (r.descuentoPrestamos || 0)
                 }
             }
             return r;
