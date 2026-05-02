@@ -19,7 +19,7 @@ export async function GET(request: Request) {
             },
             include: {
                 items: {
-                    include: { conceptoSalarial: true }
+                    include: { concepto: true }
                 }
             }
         })
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
             ...b,
             items: b.items.map(it => ({
                 conceptoSalarialId: it.conceptoSalarialId,
-                nombre: it.conceptoSalarial?.nombre || 'Concepto',
+                nombre: it.concepto?.nombre || 'Concepto',
                 montoCalculado: it.montoCalculado
             }))
         }))
