@@ -31,6 +31,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [borradorCargado, setBorradorCargado] = useState(false)
     const [empleadosExcluidos, setEmpleadosExcluidos] = useState<any[]>([])
+    const [conceptos, setConceptos] = useState<any[]>([])
+
+    useEffect(() => {
+        fetch('/api/conceptos').then(res => res.json()).then(setConceptos).catch(console.error)
+    }, [])
 
     useEffect(() => {
         const [sy, sm, sd] = fechaInicio.split('-').map(Number);
@@ -109,6 +114,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     if (borradores.length > 0) {
                         const merged = data.map((r: any) => {
                             const b = borradores.find((b: any) => b.empleadoId === r.empleadoId)
+                            const extraItems = b?.items || []
+                            const montoExtrasItems = extraItems.reduce((acc: number, item: any) => acc + item.montoCalculado, 0)
+                            
                             if (b) {
                                 const adjustmentHs = b.ajusteHorasExtras || 0;
                                 const adjustmentMoney = Math.round(adjustmentHs * r.valorHoraExtra);
@@ -117,23 +125,24 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                     ...r,
                                     ajusteHorasExtras: adjustmentHs,
                                     montoHorasExtras: r.montoHorasExtras + adjustmentMoney,
-                                    totalNeto: r.totalNeto + adjustmentMoney,
+                                    adicionales: extraItems,
+                                    totalNeto: r.totalNeto + adjustmentMoney + montoExtrasItems,
                                     borradorId: b.id,
                                     horasExtrasOriginal: r.horasExtras,
                                     totalNetoOriginal: r.totalNeto,
                                     montoHorasExtrasOriginal: r.montoHorasExtras
                                 }
                             }
-                            return r
+                            return { ...r, adicionales: [] };
                         })
                         setResultados(merged)
                         setBorradorCargado(true)
                     } else {
-                        setResultados(data)
+                        setResultados(data.map((r: any) => ({ ...r, adicionales: [] })))
                         setBorradorCargado(false)
                     }
                 } else {
-                    setResultados(data)
+                    setResultados(data.map((r: any) => ({ ...r, adicionales: [] })))
                 }
             } catch (e) {
                 setResultados(data)
@@ -164,7 +173,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         fechaInicio,
                         fechaFin,
                         cajaId,
-                        calculatedData: result
+                        calculatedData: result,
+                        adicionales: result.adicionales || []
                     })
                 })
                 if (!res.ok) {
@@ -197,7 +207,10 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     body: JSON.stringify({
                         empleadoId: result.empleadoId,
                         periodo: periodoNombre,
-                        calculatedData: result
+                        calculatedData: {
+                            ...result,
+                            adicionales: result.adicionales || []
+                        }
                     })
                 })
             }
@@ -353,6 +366,45 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     desglosePorDia: nuevoDesglose,
                     montoHorasExtras: nuevoMontoExtras,
                     totalNeto: r.sueldoBase + nuevoMontoExtras + r.montoHorasFeriado - r.descuentoPrestamos
+                }
+            }
+            return r;
+        }));
+        setBorradorCargado(false);
+    }
+
+    const handleAddAdicional = (empleadoId: string, conceptoId: string, monto: number) => {
+        if (!conceptoId || monto === 0) return;
+        const concepto = conceptos.find(c => c.id === conceptoId);
+        
+        setResultados(prev => prev.map(r => {
+            if (r.empleadoId === empleadoId) {
+                const nuevosAdicionales = [...(r.adicionales || []), {
+                    conceptoSalarialId: conceptoId,
+                    nombre: concepto?.nombre || 'Otros',
+                    montoCalculado: monto
+                }];
+                const montoAdicTotal = nuevosAdicionales.reduce((acc, a) => acc + a.montoCalculado, 0);
+                return {
+                    ...r,
+                    adicionales: nuevosAdicionales,
+                    totalNeto: (r.sueldoBase || 0) + (r.montoHorasExtras || 0) + (r.montoHorasFeriado || 0) + montoAdicTotal - (r.descuentoPrestamos || 0)
+                }
+            }
+            return r;
+        }));
+        setBorradorCargado(false);
+    }
+
+    const handleRemoveAdicional = (empleadoId: string, index: number) => {
+        setResultados(prev => prev.map(r => {
+            if (r.empleadoId === empleadoId) {
+                const nuevosAdicionales = r.adicionales.filter((_: any, i: number) => i !== index);
+                const montoAdicTotal = nuevosAdicionales.reduce((acc: number, a: any) => acc + a.montoCalculado, 0);
+                return {
+                    ...r,
+                    adicionales: nuevosAdicionales,
+                    totalNeto: (r.sueldoBase || 0) + (r.montoHorasExtras || 0) + (r.montoHorasFeriado || 0) + montoAdicTotal - (r.descuentoPrestamos || 0)
                 }
             }
             return r;
@@ -524,6 +576,42 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     </div>
                                                                 </div>
                                                             ))}
+                                                        </div>
+
+                                                        {/* Sección de Conceptos Adicionales */}
+                                                        <div style={{ marginTop: 'var(--space-4)', paddingTop: 'var(--space-4)', borderTop: '1px dashed var(--color-gray-300)' }}>
+                                                            <h4 style={{ fontSize: '12px', marginBottom: 'var(--space-2)', color: 'var(--color-gray-700)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                                ➕ Conceptos Adicionales (Otros Pagos / Deudas)
+                                                            </h4>
+                                                            
+                                                            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                                                                {(r.adicionales || []).map((ad: any, idx: number) => (
+                                                                    <div key={idx} style={{ backgroundColor: 'var(--color-white)', border: '1px solid var(--color-primary)', padding: '4px 8px', borderRadius: 'var(--radius-md)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                                        <strong>{ad.nombre}:</strong> ${ad.montoCalculado.toLocaleString()}
+                                                                        <button onClick={() => handleRemoveAdicional(r.empleadoId, idx)} style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 0 }}>✕</button>
+                                                                    </div>
+                                                                ))}
+
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--color-gray-100)', padding: '2px 4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}>
+                                                                    <select id={`concepto-${r.empleadoId}`} className="form-select" style={{ height: '22px', fontSize: '10px', padding: '0 4px', width: '150px' }}>
+                                                                        <option value="">Seleccionar concepto...</option>
+                                                                        {conceptos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                                                    </select>
+                                                                    <input id={`monto-${r.empleadoId}`} type="number" className="form-input" placeholder="Monto" style={{ height: '22px', fontSize: '10px', width: '80px', padding: '0 4px' }} />
+                                                                    <button 
+                                                                        className="btn btn-primary" 
+                                                                        style={{ height: '22px', padding: '0 8px', fontSize: '10px' }}
+                                                                        onClick={() => {
+                                                                            const cId = (document.getElementById(`concepto-${r.empleadoId}`) as HTMLSelectElement).value;
+                                                                            const m = parseFloat((document.getElementById(`monto-${r.empleadoId}`) as HTMLInputElement).value);
+                                                                            handleAddAdicional(r.empleadoId, cId, m);
+                                                                            (document.getElementById(`monto-${r.empleadoId}`) as HTMLInputElement).value = '';
+                                                                        }}
+                                                                    >
+                                                                        Añadir
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                 </tr>

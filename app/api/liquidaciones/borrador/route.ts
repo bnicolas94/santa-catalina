@@ -16,10 +16,25 @@ export async function GET(request: Request) {
             where: {
                 estado: 'borrador',
                 periodo: periodo
+            },
+            include: {
+                items: {
+                    include: { conceptoSalarial: true }
+                }
             }
         })
 
-        return NextResponse.json(borradores)
+        // Mapeamos para que la UI reciba el formato que espera
+        const formatted = borradores.map(b => ({
+            ...b,
+            items: b.items.map(it => ({
+                conceptoSalarialId: it.conceptoSalarialId,
+                nombre: it.conceptoSalarial?.nombre || 'Concepto',
+                montoCalculado: it.montoCalculado
+            }))
+        }))
+
+        return NextResponse.json(formatted)
     } catch (error) {
         return NextResponse.json({ error: 'Error al obtener borradores' }, { status: 500 })
     }
@@ -41,7 +56,7 @@ export async function POST(request: Request) {
             }
         })
 
-        const data = {
+        const data: any = {
             empleadoId,
             periodo,
             sueldoProporcional: calculatedData.sueldoBase || 0,
@@ -59,13 +74,36 @@ export async function POST(request: Request) {
         }
 
         if (existente) {
+            // Primero borramos los ítems anteriores para este borrador
+            await prisma.itemLiquidacion.deleteMany({
+                where: { liquidacionId: existente.id }
+            })
+
             const borrador = await prisma.liquidacionSueldo.update({
                 where: { id: existente.id },
-                data
+                data: {
+                    ...data,
+                    items: {
+                        create: (calculatedData.adicionales || []).map((ad: any) => ({
+                            conceptoSalarialId: ad.conceptoSalarialId,
+                            montoCalculado: ad.montoCalculado
+                        }))
+                    }
+                }
             })
             return NextResponse.json(borrador)
         } else {
-            const borrador = await prisma.liquidacionSueldo.create({ data })
+            const borrador = await prisma.liquidacionSueldo.create({
+                data: {
+                    ...data,
+                    items: {
+                        create: (calculatedData.adicionales || []).map((ad: any) => ({
+                            conceptoSalarialId: ad.conceptoSalarialId,
+                            montoCalculado: ad.montoCalculado
+                        }))
+                    }
+                }
+            })
             return NextResponse.json(borrador, { status: 201 })
         }
     } catch (error) {
