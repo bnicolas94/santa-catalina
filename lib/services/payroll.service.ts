@@ -576,7 +576,10 @@ export class PayrollService {
             }
         });
 
-        const empleado = await prisma.empleado.findUnique({ where: { id: empleadoId } });
+        const empleado = await prisma.empleado.findUnique({ 
+            where: { id: empleadoId },
+            include: { rolRel: true }
+        });
         if (!empleado) throw new Error('Empleado no encontrado');
 
         // Agrupamos por mes para encontrar el mejor mes
@@ -587,9 +590,12 @@ export class PayrollService {
             montosPorMes[mes] = (montosPorMes[mes] || 0) + bruto;
         });
 
+        // Cascada de prioridad para el sueldo base mensual de referencia
+        const sueldoReferencia = empleado.sueldoBaseMensual || (empleado.jornal * 25) || (empleado.rolRel?.jornal ? empleado.rolRel.jornal * 25 : 0);
+
         const brutoMaximo = Object.values(montosPorMes).length > 0 
             ? Math.max(...Object.values(montosPorMes)) 
-            : (empleado.sueldoBaseMensual || (empleado.jornal * 25) || 0);
+            : sueldoReferencia;
         
         // Cálculo de días proporcionales
         let diasBase = 180;
@@ -610,7 +616,10 @@ export class PayrollService {
     }
 
     static async calcularVacacionesPreview(empleadoId: string, anio: number) {
-        const empleado = await prisma.empleado.findUnique({ where: { id: empleadoId } });
+        const empleado = await prisma.empleado.findUnique({ 
+            where: { id: empleadoId },
+            include: { rolRel: true }
+        });
         if (!empleado) throw new Error('Empleado no encontrado');
 
         if (!empleado.fechaIngreso) return { dias: 0, monto: 0, antiguedad: 0 };
@@ -623,11 +632,15 @@ export class PayrollService {
         else if (antiguedad >= 10) dias = 28;
         else if (antiguedad >= 5) dias = 21;
 
-        // Valor vacaciones = (Sueldo / 25) * dias
-        // Usamos sueldoBaseMensual / 25 o directamente el jornal si es jornalero
-        const valorDia = empleado.sueldoBaseMensual > 0 
-            ? (empleado.sueldoBaseMensual / 25) 
-            : (empleado.jornal || 0);
+        // Valor vacaciones: Empleado -> Rol -> Sueldo Base
+        let valorDia = 0;
+        if (empleado.jornal > 0) {
+            valorDia = empleado.jornal;
+        } else if (empleado.rolRel?.jornal) {
+            valorDia = empleado.rolRel.jornal;
+        } else if (empleado.sueldoBaseMensual > 0) {
+            valorDia = empleado.sueldoBaseMensual / 25;
+        }
             
         const monto = Math.round(valorDia * dias);
 
