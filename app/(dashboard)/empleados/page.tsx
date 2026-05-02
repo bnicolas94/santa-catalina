@@ -14,6 +14,7 @@ import OrganigramaModal from '@/components/empleados/OrganigramaModal'
 import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
 import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalarialesModal'
 import { VacacionesSACModal } from '@/components/empleados/VacacionesSACModal'
+import { ReporteVacacionesModal } from '@/components/empleados/ReporteVacacionesModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -40,6 +41,7 @@ export default function EmpleadosPage() {
     const [searchTerm, setSearchTerm] = useState('')
     const [filterActivo, setFilterActivo] = useState<boolean | 'todos'>(true)
     const [vacacionesSacOpen, setVacacionesSacOpen] = useState(false)
+    const [showReporteVacaciones, setShowReporteVacaciones] = useState(false)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -312,6 +314,7 @@ export default function EmpleadosPage() {
                     <button onClick={() => setShowLicenciasModal(true)} className="btn btn-outline btn-sm">⚙️ Licencias</button>
                     <button onClick={() => setShowFeriadosModal(true)} className="btn btn-outline btn-sm">📅 Feriados</button>
                     <button onClick={() => setShowReportePagos(true)} className="btn btn-outline btn-sm">🖨️ Recibos</button>
+                    <button onClick={() => setShowReporteVacaciones(true)} className="btn btn-outline btn-sm">📈 Vacaciones</button>
                     <button onClick={() => setShowRolesModal(true)} className="btn btn-outline btn-sm">🔑 Roles</button>
                 </div>
                 
@@ -564,6 +567,10 @@ export default function EmpleadosPage() {
             {showLicenciasModal && (
                 <ConfigLicenciasModal onClose={() => setShowLicenciasModal(false)} />
             )}
+            {showReporteVacaciones && (
+                <ReporteVacacionesModal onClose={() => setShowReporteVacaciones(false)} />
+            )}
+            
             {showReportePagos && (
                 <ReportePagosModal onClose={() => setShowReportePagos(false)} />
             )}
