@@ -454,6 +454,27 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         } catch (e) { console.error(e) }
     }
 
+    const handleManualDebt = async (empleadoId: string, hours: string, monto: number) => {
+        if (!hours || parseFloat(hours) <= 0) return;
+        try {
+            const res = await fetch('/api/empleados/horas-extras-pendientes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleadoId,
+                    cantidadHoras: hours,
+                    montoCalculado: monto,
+                    observaciones: 'Carga manual de deuda anterior'
+                })
+            })
+            if (res.ok) {
+                // Recargar los datos del empleado para que se refleje la nueva deuda en el total
+                await handleRecalcularEmpleado(empleadoId);
+                alert('Deuda cargada y sumada a la liquidación actual.');
+            }
+        } catch (e) { console.error(e) }
+    }
+
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
 
     return (
@@ -664,13 +685,12 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     </button>
                                                                 </div>
                                                             </div>
-                                                        </div>
-
-                                                        {/* Diferimiento de Horas Extras */}
-                                                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-primary)' }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <div style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600 }}>
-                                                                    ⏳ DIFERIR HORAS EXTRAS (Para el próximo sábado)
+                                                        {/* Gestión de Horas Pendientes / Adeudadas */}
+                                                        <div style={{ marginTop: 'var(--space-4)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                                            {/* Diferir a Futuro */}
+                                                            <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-gray-300)' }}>
+                                                                <div style={{ fontSize: '11px', color: 'var(--color-gray-600)', fontWeight: 600, marginBottom: '8px' }}>
+                                                                    ⏳ DIFERIR PARA EL PRÓXIMO SÁBADO
                                                                 </div>
                                                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                                                     <input 
@@ -678,11 +698,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                         id={`defer-hs-${r.empleadoId}`}
                                                                         className="form-input" 
                                                                         placeholder="Cant. HS"
-                                                                        style={{ width: '80px', height: '24px', fontSize: '11px', padding: '0 5px' }}
+                                                                        style={{ width: '80px', height: '24px', fontSize: '11px' }}
                                                                     />
                                                                     <button 
                                                                         className="btn btn-primary" 
-                                                                        style={{ height: '24px', fontSize: '10px', padding: '0 10px' }}
+                                                                        style={{ height: '24px', fontSize: '10px', padding: '0 10px', backgroundColor: 'var(--color-gray-600)', borderColor: 'var(--color-gray-600)' }}
                                                                         onClick={() => {
                                                                             const hsInput = document.getElementById(`defer-hs-${r.empleadoId}`) as HTMLInputElement;
                                                                             const hs = hsInput.value;
@@ -691,9 +711,40 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                             hsInput.value = '';
                                                                         }}
                                                                     >
-                                                                        Diferir al próximo sábado
+                                                                        Diferir
                                                                     </button>
                                                                 </div>
+                                                                <p style={{ fontSize: '9px', marginTop: '4px', color: 'var(--color-gray-400)' }}>Se descuentan de hoy y se pasan al sábado que viene.</p>
+                                                            </div>
+
+                                                            {/* Cargar Deuda Pasada */}
+                                                            <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-primary)' }}>
+                                                                <div style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, marginBottom: '8px' }}>
+                                                                    ➕ CARGAR DEUDA DE SEMANA ANTERIOR
+                                                                </div>
+                                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        id={`manual-debt-hs-${r.empleadoId}`}
+                                                                        className="form-input" 
+                                                                        placeholder="Cant. HS"
+                                                                        style={{ width: '80px', height: '24px', fontSize: '11px' }}
+                                                                    />
+                                                                    <button 
+                                                                        className="btn btn-primary" 
+                                                                        style={{ height: '24px', fontSize: '10px', padding: '0 10px' }}
+                                                                        onClick={() => {
+                                                                            const hsInput = document.getElementById(`manual-debt-hs-${r.empleadoId}`) as HTMLInputElement;
+                                                                            const hs = hsInput.value;
+                                                                            const monto = Math.round(parseFloat(hs) * r.valorHoraExtra);
+                                                                            handleManualDebt(r.empleadoId, hs, monto);
+                                                                            hsInput.value = '';
+                                                                        }}
+                                                                    >
+                                                                        Sumar a este Sábado
+                                                                    </button>
+                                                                </div>
+                                                                <p style={{ fontSize: '9px', marginTop: '4px', color: 'var(--color-primary)' }}>Se suman directamente al total de hoy.</p>
                                                             </div>
                                                         </div>
                                                     </td>
