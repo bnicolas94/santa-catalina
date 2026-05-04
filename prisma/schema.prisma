@@ -57,6 +57,7 @@ model Empleado {
   evaluaciones         Evaluacion[]         @relation("EmpleadoEvaluado")
   evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
   inasistencias        Inasistencia[]
+  horasPendientes      HoraExtraPendiente[]
 
   @@map("empleados")
 }
@@ -835,6 +836,20 @@ model AlertaAusentismo {
   activo          Boolean  @default(true)
   
   @@map("alertas_ausentismo")
+}
+model HoraExtraPendiente {
+  id              String   @id @default(uuid())
+  empleadoId      String   @map("id_empleado")
+  cantidadHoras   Float    @map("cantidad_horas")
+  montoCalculado  Float    @map("monto_calculado")
+  fechaOrigen     DateTime @default(now()) @map("fecha_origen")
+  pagado          Boolean  @default(false)
+  liquidacionId   String?  @map("id_liquidacion") // Relación con la liquidación donde se PAGÓ finalmente
+  observaciones   String?
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("horas_extras_pendientes")
 }
 
 

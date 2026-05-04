@@ -37,6 +37,8 @@ export interface ResumenSemanal {
     montoHorasExtras: number
     montoHorasFeriado: number
     descuentoPrestamos: number
+    horasPendientes: number
+    montoHorasPendientes: number
     totalNeto: number
     desglosePorDia: DiaTrabajado[]
 }
@@ -89,6 +91,9 @@ export class PayrollService {
                             lte: new Date(fechaFin + 'T23:59:59')
                         }
                     }
+                },
+                horasPendientes: {
+                    where: { pagado: false }
                 }
             }
         })
@@ -298,7 +303,10 @@ export class PayrollService {
         const horasExtrasTotales = desglosePorDia.reduce((acc, d) => acc + d.horasExtras, 0)
         const horasFeriadoTotales = desglosePorDia.reduce((acc, d) => acc + (d.esFeriado ? d.horasTrabajadas : 0), 0)
 
-        const totalNeto = sueldoBase + montoHorasExtras + montoHorasFeriado - descuentoPrestamos
+        const montoHorasPendientes = (empleado.horasPendientes || []).reduce((acc: number, hp: any) => acc + hp.montoCalculado, 0)
+        const horasPendientesTotales = (empleado.horasPendientes || []).reduce((acc: number, hp: any) => acc + hp.cantidadHoras, 0)
+
+        const totalNeto = sueldoBase + montoHorasExtras + montoHorasFeriado + montoHorasPendientes - descuentoPrestamos
 
         return {
             empleadoId: empleado.id,
@@ -313,6 +321,8 @@ export class PayrollService {
             montoHorasExtras,
             montoHorasFeriado,
             descuentoPrestamos,
+            horasPendientes: horasPendientesTotales,
+            montoHorasPendientes,
             totalNeto,
             desglosePorDia
         }
@@ -375,6 +385,7 @@ export class PayrollService {
         let deduccionCuotas = 0
         let diasTrabajados = 0
         let ajusteHorasExtras = 0
+        let montoHorasPendientes = 0
 
         if (manualData) {
             // Liquidación Express / Manual
@@ -395,6 +406,7 @@ export class PayrollService {
             deduccionCuotas = calculatedData.descuentoPrestamos || 0
             diasTrabajados = calculatedData.diasTrabajados || 0
             ajusteHorasExtras = calculatedData.ajusteHorasExtras || 0
+            montoHorasPendientes = calculatedData.montoHorasPendientes || 0
         } else {
             // Cálculo Automático basado en fichadas
             const fichadas = empleado.fichadas || []
@@ -453,7 +465,7 @@ export class PayrollService {
             montoAdicionales = adicionales.reduce((acc, item) => acc + item.montoCalculado, 0)
         }
 
-        const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales - deduccionCuotas
+        const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales + montoHorasPendientes - deduccionCuotas
 
         const cuotasAfectadas: string[] = []
         if (!manualData && !calculatedData) {
@@ -540,6 +552,15 @@ export class PayrollService {
             liquidacionId: liquidacion.id,
             empleadoId: empleado.id,
             monto: neto
+        })
+
+        // Marcar horas pendientes como pagadas
+        await prisma.horaExtraPendiente.updateMany({
+            where: { empleadoId: empleado.id, pagado: false },
+            data: {
+                pagado: true,
+                liquidacionId: liquidacion.id
+            }
         })
 
         return liquidacion

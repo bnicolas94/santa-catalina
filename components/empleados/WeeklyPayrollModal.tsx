@@ -416,6 +416,44 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setBorradorCargado(false);
     }
 
+    const handleDeferHours = async (empleadoId: string, hours: string, monto: number) => {
+        if (!hours || parseFloat(hours) <= 0) return;
+        if (!confirm(`¿Deseas diferir ${hours}hs ($${monto.toLocaleString()}) para la liquidación del próximo sábado? Se descontarán de la liquidación actual.`)) return;
+
+        try {
+            const res = await fetch('/api/empleados/horas-extras-pendientes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    empleadoId,
+                    cantidadHoras: hours,
+                    montoCalculado: monto,
+                    observaciones: 'Diferido desde liquidación semanal'
+                })
+            })
+            if (res.ok) {
+                // Descontar del ajuste manual actual
+                setResultados(prev => prev.map(r => {
+                    if (r.empleadoId === empleadoId) {
+                        const currentAdj = r.ajusteHorasExtras || 0;
+                        const newAdj = currentAdj - parseFloat(hours);
+                        const valExtra = r.valorHoraExtra || 0;
+                        const totalMontoExtras = r.desglosePorDia.reduce((acc: number, d: any) => acc + (d.valorExtra || 0), 0) + Math.round(newAdj * valExtra);
+                        
+                        return {
+                            ...r,
+                            ajusteHorasExtras: newAdj,
+                            montoHorasExtras: totalMontoExtras,
+                            totalNeto: (r.sueldoBase || 0) + totalMontoExtras + (r.montoHorasFeriado || 0) + (r.montoHorasPendientes || 0) + (r.adicionales || []).reduce((acc: any, a: any) => acc + a.montoCalculado, 0) - (r.descuentoPrestamos || 0)
+                        }
+                    }
+                    return r;
+                }));
+                alert('Horas diferidas correctamente. Se han descontado del total actual.');
+            }
+        } catch (e) { console.error(e) }
+    }
+
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
 
     return (
@@ -489,6 +527,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                 <td style={{ fontWeight: 600 }}>
                                                     {r.empleadoNombre || empleados.find(e => e.id === r.empleadoId)?.nombre || 'Empleado'}
                                                     {r.error && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '10px' }}>ERROR</span>}
+                                                    {r.montoHorasPendientes > 0 && (
+                                                        <div style={{ fontSize: '10px', color: 'var(--color-primary)', fontWeight: 700, marginTop: '2px' }}>
+                                                            ⚠️ HS ADEUDADAS: {r.horasPendientes}hs (${r.montoHorasPendientes.toLocaleString()})
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 {r.error ? (
                                                     <td colSpan={6} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>
@@ -622,7 +665,39 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                 </div>
                                                             </div>
                                                         </div>
+
+                                                        {/* Diferimiento de Horas Extras */}
+                                                        <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-primary)' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <div style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600 }}>
+                                                                    ⏳ DIFERIR HORAS EXTRAS (Para el próximo sábado)
+                                                                </div>
+                                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        id={`defer-hs-${r.empleadoId}`}
+                                                                        className="form-input" 
+                                                                        placeholder="Cant. HS"
+                                                                        style={{ width: '80px', height: '24px', fontSize: '11px', padding: '0 5px' }}
+                                                                    />
+                                                                    <button 
+                                                                        className="btn btn-primary" 
+                                                                        style={{ height: '24px', fontSize: '10px', padding: '0 10px' }}
+                                                                        onClick={() => {
+                                                                            const hsInput = document.getElementById(`defer-hs-${r.empleadoId}`) as HTMLInputElement;
+                                                                            const hs = hsInput.value;
+                                                                            const monto = Math.round(parseFloat(hs) * r.valorHoraExtra);
+                                                                            handleDeferHours(r.empleadoId, hs, monto);
+                                                                            hsInput.value = '';
+                                                                        }}
+                                                                    >
+                                                                        Diferir al próximo sábado
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </td>
+
                                                 </tr>
                                             )}
                                         </Fragment>
