@@ -75,20 +75,36 @@ export async function GET(request: Request) {
         
         // Cálculo de tardanzas dinámico
         let tardanzas = 0
+        const detalleTardanzas: any[] = []
+
         fichadas.forEach(f => {
             if (f.tipo !== 'entrada') return
             
             const horaObjetivo = f.empleado?.turno?.horaInicio || f.empleado?.horarioEntrada
             if (!horaObjetivo) return
 
-            const tolerancia = f.empleado?.turno?.toleranciaMinutos ?? 10
             const [h, m] = horaObjetivo.split(':').map(Number)
+            const limiteTolerancia = f.empleado?.turno?.toleranciaMinutos ?? 10
             
-            const limite = new Date(f.fechaHora)
-            limite.setHours(h, m + tolerancia, 0, 0)
+            const horaEntradaEsperada = new Date(f.fechaHora)
+            horaEntradaEsperada.setHours(h, m, 0, 0)
 
-            if (f.fechaHora > limite) {
+            const limiteConTolerancia = new Date(f.fechaHora)
+            limiteConTolerancia.setHours(h, m + limiteTolerancia, 0, 0)
+
+            if (f.fechaHora > limiteConTolerancia) {
                 tardanzas++
+                const diffMs = f.fechaHora.getTime() - horaEntradaEsperada.getTime()
+                const minutosRetraso = Math.floor(diffMs / 60000)
+
+                detalleTardanzas.push({
+                    empleadoId: f.empleadoId,
+                    empleadoNombre: (f as any).empleado?.nombre ? `${(f as any).empleado.nombre} ${(f as any).empleado.apellido || ''}` : 'Empleado',
+                    fecha: f.fechaHora,
+                    horaFichada: f.fechaHora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+                    horaEsperada: horaObjetivo,
+                    minutosRetraso
+                })
             }
         })
 
@@ -343,6 +359,7 @@ export async function GET(request: Request) {
             asistencia: {
                 totalFichadas,
                 tardanzas,
+                detalleTardanzas: detalleTardanzas.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()),
                 ausencias,
                 porcentajeTardanzas: totalFichadas > 0 ? (tardanzas / totalFichadas) * 100 : 0,
                 porcentajeAusentismo: totalFichadas > 0 ? (ausencias / totalFichadas) * 100 : 0

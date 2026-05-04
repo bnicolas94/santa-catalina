@@ -815,9 +815,10 @@ model Inasistencia {
   id               String   @id @default(uuid())
   empleadoId       String   @map("id_empleado")
   fecha            DateTime
-  tipo             String   // "INJUSTIFICADA", "CON_AVISO_INJUSTIFICADA", "JUSTIFICADA_PAGA", "JUSTIFICADA_NO_PAGA"
+  tipo             String   // "INJUSTIFICADA", "CON_AVISO_INJUSTIFICADA", "JUSTIFICADA_PAGA", "JUSTIFICADA_NO_PAGA", "TARDANZA"
   motivo           String?
   tieneCertificado Boolean  @default(false) @map("tiene_certificado")
+  minutosRetraso   Int?     @map("minutos_retraso")
   observaciones    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

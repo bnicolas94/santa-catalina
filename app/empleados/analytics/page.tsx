@@ -400,6 +400,53 @@ export default function RRHHAnalyticsPage() {
                 </div>
             </div>
 
+            {/* Detalle de Tardanzas */}
+            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
+                <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>🕒 Detalle de Tardanzas en el Periodo</h3>
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th>Empleado</th>
+                                <th>Fecha</th>
+                                <th style={{ textAlign: 'center' }}>Entrada Esperada</th>
+                                <th style={{ textAlign: 'center' }}>Fichada</th>
+                                <th style={{ textAlign: 'center' }}>Retraso</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {data.asistencia.detalleTardanzas.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                        No hay tardanzas registradas en este periodo.
+                                    </td>
+                                </tr>
+                            ) : (
+                                data.asistencia.detalleTardanzas.map((t: any, idx: number) => (
+                                    <tr key={idx}>
+                                        <td style={{ fontWeight: 600 }}>{t.empleadoNombre}</td>
+                                        <td>{new Date(t.fecha).toLocaleDateString()}</td>
+                                        <td style={{ textAlign: 'center' }}>{t.horaEsperada} hs</td>
+                                        <td style={{ textAlign: 'center', color: 'var(--color-danger)', fontWeight: 600 }}>{t.horaFichada} hs</td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <span className="badge badge-danger" style={{ fontSize: '11px' }}>
+                                                {t.minutosRetraso} min
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10px' }} onClick={() => setSelectedEmpleado(t.empleadoId)}>
+                                                Ir al Legajo
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
                 {/* Gráficos / Distribución */}
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>

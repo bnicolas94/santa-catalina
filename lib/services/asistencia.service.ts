@@ -37,7 +37,6 @@ export class AsistenciaService {
     /**
      * Procesa un array de registros de fichadas, mapea códigos biométricos
      * a empleados, y crea los registros evitando duplicados.
-     */
     static async importarFichadas(registros: ImportarFichadaInput[]): Promise<ImportResult> {
         if (!registros || !Array.isArray(registros)) {
             throw new Error('Formato inválido. Se espera un array de registros.')
@@ -46,33 +45,34 @@ export class AsistenciaService {
         let importados = 0
         const errores: string[] = []
 
-        // Obtener mapa de código biométrico → empleadoId
-        const empleados = await prisma.empleado.findMany({
+        // Obtener mapa de código biométrico → empleado completo (con turno)
+        const empleadosData = await prisma.empleado.findMany({
             where: { codigoBiometrico: { not: null } },
-            select: { id: true, codigoBiometrico: true }
+            include: { turno: true }
         })
-
+ 
         // Normalizamos: "00011" -> "11"
-        const mapEmpleados = new Map(empleados.map(e => {
+        const mapEmpleados = new Map(empleadosData.map(e => {
             const raw = e.codigoBiometrico || ""
             const normalized = raw.replace(/^0+/, '')
-            return [normalized, e.id]
+            return [normalized, e]
         }))
-
+ 
         for (const reg of registros) {
             const regRaw = reg.codigoBiometrico?.toString() || ""
             const regNormalized = regRaw.replace(/^0+/, '')
-
-            const empleadoId = mapEmpleados.get(regNormalized)
-
+ 
+            const emp = mapEmpleados.get(regNormalized)
+            const empleadoId = emp?.id
+ 
             if (!empleadoId) {
                 errores.push(`No se encontró empleado con código biométrico: ${regRaw} (Normalizado: ${regNormalized})`)
                 continue
             }
-
+ 
             try {
                 const fecha = new Date(reg.fechaHora)
-
+ 
                 // Idempotencia: verificar si ya existe un registro idéntico
                 const existe = await prisma.fichadaEmpleado.findFirst({
                     where: {
@@ -81,7 +81,7 @@ export class AsistenciaService {
                         tipo: reg.tipo.toLowerCase()
                     }
                 })
-
+ 
                 if (!existe) {
                     await prisma.fichadaEmpleado.create({
                         data: {
@@ -92,17 +92,47 @@ export class AsistenciaService {
                         }
                     })
                     importados++
+
+                    // REGISTRO AUTOMÁTICO EN LEGAJO SI ES TARDANZA
+                    if (reg.tipo.toLowerCase() === 'entrada') {
+                        const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
+                        if (mins > 0) {
+                            // Verificar si ya se registró esta tardanza para este día (evitar duplicados por re-importación)
+                            const start = new Date(fecha); start.setHours(0,0,0,0);
+                            const end = new Date(fecha); end.setHours(23,59,59,999);
+
+                            const existeTardanza = await prisma.inasistencia.findFirst({
+                                where: {
+                                    empleadoId,
+                                    tipo: 'TARDANZA',
+                                    fecha: { gte: start, lte: end }
+                                }
+                            })
+
+                            if (!existeTardanza) {
+                                await prisma.inasistencia.create({
+                                    data: {
+                                        empleadoId,
+                                        fecha: fecha,
+                                        tipo: 'TARDANZA',
+                                        minutosRetraso: mins,
+                                        observaciones: `Llegada tarde detectada automáticamente al importar fichada (${mins} min de retraso).`
+                                    }
+                                })
+                            }
+                        }
+                    }
                 }
             } catch (err: any) {
                 errores.push(`Error al insertar registro para empleado ${empleadoId}: ${err.message}`)
             }
         }
-
+ 
         // Evento de dominio
         if (importados > 0) {
             eventBus.emit('fichadas:imported', { importados, errores: errores.length })
         }
-
+ 
         return {
             success: true,
             importados,
@@ -153,15 +183,38 @@ export class AsistenciaService {
             throw new Error('Datos incompletos para crear fichada')
         }
 
+        const fecha = new Date(params.fechaHora)
         const fichada = await prisma.fichadaEmpleado.create({
             data: {
                 empleadoId: params.empleadoId,
-                fechaHora: new Date(params.fechaHora),
+                fechaHora: fecha,
                 tipo: params.tipo,
                 origen: params.origen || 'manual',
                 tipoLicenciaId: params.tipoLicenciaId || null
             }
         })
+
+        // REGISTRO AUTOMÁTICO EN LEGAJO SI ES TARDANZA (Manual)
+        if (params.tipo.toLowerCase() === 'entrada') {
+            const emp = await prisma.empleado.findUnique({
+                where: { id: params.empleadoId },
+                include: { turno: true }
+            })
+            if (emp) {
+                const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
+                if (mins > 0) {
+                    await prisma.inasistencia.create({
+                        data: {
+                            empleadoId: params.empleadoId,
+                            fecha: fecha,
+                            tipo: 'TARDANZA',
+                            minutosRetraso: mins,
+                            observaciones: `Llegada tarde registrada manualmente (${mins} min de retraso).`
+                        }
+                    })
+                }
+            }
+        }
 
         eventBus.emit('fichada:created', { empleadoId: params.empleadoId, tipo: params.tipo })
         return fichada
