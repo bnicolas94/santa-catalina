@@ -18,6 +18,7 @@ import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
 import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalarialesModal'
 import { VacacionesSACModal } from '@/components/empleados/VacacionesSACModal'
 import { ReporteVacacionesModal } from '@/components/empleados/ReporteVacacionesModal'
+import { InasistenciasModal } from '@/components/empleados/InasistenciasModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -56,6 +57,7 @@ function EmpleadosContent() {
     const [filterActivo, setFilterActivo] = useState<boolean | 'todos'>(true)
     const [vacacionesSacOpen, setVacacionesSacOpen] = useState(false)
     const [showReporteVacaciones, setShowReporteVacaciones] = useState(false)
+    const [showInasistenciasModal, setShowInasistenciasModal] = useState(false)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -99,6 +101,7 @@ function EmpleadosContent() {
         if (openParam === 'turnos') setShowTurnosModal(true)
         if (openParam === 'conceptos') setShowConceptosModal(true)
         if (openParam === 'licencias') setShowLicenciasModal(true)
+        if (openParam === 'inasistencias') setShowInasistenciasModal(true)
         if (openParam === 'new') handleOpenDialog()
         if (openParam === 'import') handleImportarClic()
     }, [openParam])
@@ -122,6 +125,7 @@ function EmpleadosContent() {
         setShowLicenciasModal(false)
         setDialogOpen(false)
         setExpressLiquidationOpen(false)
+        setShowInasistenciasModal(false)
     }
 
     const handleSave = async (formData: any) => {
@@ -377,7 +381,7 @@ function EmpleadosContent() {
             ) : (
                 <div className="table-container">
                     <table className="table">
-<thead>
+                        <thead>
                             <tr>
                                 <th>Empleado</th>
                                 <th>Rol / Puesto</th>
@@ -627,6 +631,13 @@ function EmpleadosContent() {
                 <VacacionesSACModal 
                     empleados={empleados.filter(e => e.activo)} 
                     onClose={closeModal} 
+                />
+            )}
+            {showInasistenciasModal && (
+                <InasistenciasModal
+                    isOpen={showInasistenciasModal}
+                    onClose={closeModal}
+                    empleados={empleados}
                 />
             )}
         </div>

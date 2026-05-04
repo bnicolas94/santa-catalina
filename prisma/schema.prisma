@@ -56,6 +56,7 @@ model Empleado {
   documentos           DocumentoEmpleado[]
   evaluaciones         Evaluacion[]         @relation("EmpleadoEvaluado")
   evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
+  inasistencias        Inasistencia[]
 
   @@map("empleados")
 }
@@ -808,6 +809,34 @@ model AsignacionVehiculo {
   @@unique([fecha, turno, vehiculoId])
   @@map("asignaciones_vehiculo")
 }
+
+model Inasistencia {
+  id               String   @id @default(uuid())
+  empleadoId       String   @map("id_empleado")
+  fecha            DateTime
+  tipo             String   // "INJUSTIFICADA", "CON_AVISO_INJUSTIFICADA", "JUSTIFICADA_PAGA", "JUSTIFICADA_NO_PAGA"
+  motivo           String?
+  tieneCertificado Boolean  @default(false) @map("tiene_certificado")
+  observaciones    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  empleado         Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("inasistencias_empleado")
+}
+
+model AlertaAusentismo {
+  id              String   @id @default(uuid())
+  tipoInasistencia String   @map("tipo_inasistencia") // "INJUSTIFICADA", "CON_AVISO_INJUSTIFICADA", etc.
+  limiteMaximo    Int      @map("limite_maximo")
+  periodoDias     Int      @default(30) @map("periodo_dias") // Ej: 3 injustificadas en 30 días
+  accionSugerida  String?  @map("accion_sugerida") // "Sanción", "Aviso", "Despido"
+  activo          Boolean  @default(true)
+  
+  @@map("alertas_ausentismo")
+}
+
 
 model KilometrajeVehiculo {
   id            String   @id @default(uuid())
