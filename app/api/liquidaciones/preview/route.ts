@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { calcularSueldoSemanal } from '@/lib/payroll/calculoSueldoSemanal'
+import { PayrollService } from '@/lib/services/payroll.service'
 
 export async function POST(request: Request) {
     try {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
         const resultados = await Promise.all(
             empleadoIds.map(async (id) => {
                 try {
-                    return await calcularSueldoSemanal(id, fechaInicio, fechaFin)
+                    return await PayrollService.calcularSueldoSemanal(id, fechaInicio, fechaFin)
                 } catch (err: any) {
                     return { empleadoId: id, error: err.message }
                 }

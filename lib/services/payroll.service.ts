@@ -21,6 +21,7 @@ export interface DiaTrabajado {
     valorFeriado: number
     totalDia: number
     esJustificado: boolean
+    tipoInasistencia?: string
 }
 
 export interface ResumenSemanal {
@@ -80,6 +81,14 @@ export class PayrollService {
                         }
                     },
                     include: { tipoLicencia: true }
+                },
+                inasistencias: {
+                    where: {
+                        fecha: {
+                            gte: new Date(fechaInicio + 'T00:00:00'),
+                            lte: new Date(fechaFin + 'T23:59:59')
+                        }
+                    }
                 }
             }
         })
@@ -204,10 +213,28 @@ export class PayrollService {
             const hsExtrasRedondeadas = Math.round(hsExtrasNetas * 2) / 2
 
             const esFeriado = !!feriadosMap[fechaStr]
+            
+            // 3.1 Verificar Inasistencias registradas
+            const inasistencia = empleado.inasistencias.find(i => 
+                i.fecha.toISOString().split('T')[0] === fechaStr
+            )
 
             // Cálculos del día
-            const multiplicadorJornal = 1.0 // Por defecto día completo si hay marcas
-            const valorDiaBase = marcas.length > 0 ? (jornalBase * multiplicadorJornal) : 0
+            let multiplicadorJornal = 1.0 
+            let valorDiaBase = 0
+            
+            if (marcas.length > 0) {
+                valorDiaBase = jornalBase * multiplicadorJornal
+            } else if (inasistencia) {
+                // Si no hay marcas pero hay inasistencia, vemos si es paga
+                if (inasistencia.tipo === 'JUSTIFICADA_PAGA') {
+                    valorDiaBase = jornalBase
+                } else {
+                    valorDiaBase = 0
+                }
+            } else {
+                valorDiaBase = 0
+            }
             const valorExtra = hsExtrasRedondeadas * valorHoraExtra
             // Recargo feriado: 50% extra del valor de la hora.
             // REGLA: Si trabajó, el recargo se aplica sobre MÍNIMO la hsJornada, o la real si fue mayor.
@@ -234,7 +261,8 @@ export class PayrollService {
                 valorExtra: Math.round(valorExtra),
                 valorFeriado: Math.round(valorFeriado),
                 totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado),
-                esJustificado: marcas.some((m: any) => m.origen === 'justificada')
+                esJustificado: marcas.some((m: any) => m.origen === 'justificada') || (!!inasistencia && inasistencia.tipo.startsWith('JUSTIFICADA')),
+                tipoInasistencia: inasistencia?.tipo
             })
 
             current.setDate(current.getDate() + 1)
@@ -377,6 +405,20 @@ export class PayrollService {
                     diasSet.add(d.toISOString().split('T')[0])
                 }
             })
+
+            // Sumar días de inasistencia justificada paga que no tengan fichadas
+            const inasistenciasPagas = await prisma.inasistencia.findMany({
+                where: {
+                    empleadoId: empleado.id,
+                    fecha: { gte: new Date(fechaInicio), lte: new Date(fechaFin) },
+                    tipo: 'JUSTIFICADA_PAGA'
+                }
+            })
+
+            inasistenciasPagas.forEach(i => {
+                diasSet.add(i.fecha.toISOString().split('T')[0])
+            })
+
             diasTrabajados = diasSet.size
 
             let sueldoDia = 0

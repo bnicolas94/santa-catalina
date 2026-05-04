@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, Fragment } from 'react'
-import { ResumenSemanal, DiaTrabajado } from '@/lib/payroll/calculoSueldoSemanal'
+import { ResumenSemanal, DiaTrabajado } from '@/lib/services/payroll.service'
 
 interface WeeklyPayrollModalProps {
     empleados: any[]
@@ -538,7 +538,12 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     <div style={{ fontWeight: 700, borderBottom: '1px solid var(--color-gray-100)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
                                                                         <span>{dia.diaSemana} {dia.fecha.split('-')[2]}</span>
                                                                         {dia.esFeriado && <span style={{ color: 'var(--color-warning)' }}>🚩</span>}
-                                                                        {dia.esJustificado && <span className="badge badge-success" style={{ fontSize: '8px', padding: '1px 3px' }}>MANUAL</span>}
+                                                                        {dia.esJustificado && !dia.tipoInasistencia && <span className="badge badge-success" style={{ fontSize: '8px', padding: '1px 3px' }}>MANUAL</span>}
+                                                                        {dia.tipoInasistencia && (
+                                                                            <span className={`badge badge-${dia.tipoInasistencia.includes('INJUSTIFICADA') ? 'danger' : 'info'}`} style={{ fontSize: '7px', padding: '1px 3px' }}>
+                                                                                {dia.tipoInasistencia.replace(/_/g, ' ')}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                         <div>
