@@ -85,6 +85,51 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
         }
     }
 
+    // Alertas form state
+    const [showAlertaForm, setShowAlertaForm] = useState(false)
+    const [editingAlerta, setEditingAlerta] = useState<any>(null)
+    const [alertaForm, setAlertaForm] = useState({
+        tipoInasistencia: 'INJUSTIFICADA',
+        limiteMaximo: 3,
+        periodoDias: 30,
+        accionSugerida: ''
+    })
+
+    const handleSaveAlerta = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setLoading(true)
+        try {
+            const url = editingAlerta ? `/api/empleados/inasistencias/alertas/${editingAlerta.id}` : '/api/empleados/inasistencias/alertas'
+            const method = editingAlerta ? 'PUT' : 'POST'
+            
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(alertaForm)
+            })
+            
+            if (res.ok) {
+                setShowAlertaForm(false)
+                setEditingAlerta(null)
+                fetchConfig()
+            }
+        } catch (error) {
+            console.error(error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDeleteAlerta = async (id: string) => {
+        if (!confirm('¿Seguro que quieres eliminar esta regla?')) return
+        try {
+            const res = await fetch(`/api/empleados/inasistencias/alertas/${id}`, { method: 'DELETE' })
+            if (res.ok) fetchConfig()
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
     if (!isOpen) return null
 
     return (
@@ -254,17 +299,82 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                                 <h3>Configuración de Umbrales de Alerta</h3>
-                                <button className="btn btn-outline btn-sm" onClick={() => {
-                                    // Logic to add new alert config
+                                <button className="btn btn-primary btn-sm" onClick={() => {
+                                    setEditingAlerta(null)
+                                    setAlertaForm({
+                                        tipoInasistencia: 'INJUSTIFICADA',
+                                        limiteMaximo: 3,
+                                        periodoDias: 30,
+                                        accionSugerida: ''
+                                    })
+                                    setShowAlertaForm(true)
                                 }}>➕ Nueva Regla</button>
                             </div>
+
+                            {showAlertaForm && (
+                                <form onSubmit={handleSaveAlerta} className="card shadow-sm" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-6)', backgroundColor: 'var(--color-gray-50)' }}>
+                                    <h4>{editingAlerta ? 'Editar Regla' : 'Nueva Regla de Alerta'}</h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginTop: '10px' }}>
+                                        <div className="form-group">
+                                            <label className="form-label">Tipo de Inasistencia</label>
+                                            <select 
+                                                className="form-select" 
+                                                value={alertaForm.tipoInasistencia}
+                                                onChange={e => setAlertaForm({...alertaForm, tipoInasistencia: e.target.value})}
+                                            >
+                                                <option value="INJUSTIFICADA">Injustificada (Sin Aviso)</option>
+                                                <option value="CON_AVISO_INJUSTIFICADA">Con Aviso - Injustificada</option>
+                                                <option value="JUSTIFICADA_PAGA">Justificada (Paga)</option>
+                                                <option value="JUSTIFICADA_NO_PAGA">Justificada (No Paga)</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Límite Máximo</label>
+                                            <input 
+                                                type="number" 
+                                                className="form-input" 
+                                                value={alertaForm.limiteMaximo}
+                                                onChange={e => setAlertaForm({...alertaForm, limiteMaximo: parseInt(e.target.value)})}
+                                                min={1}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Periodo (Días)</label>
+                                            <input 
+                                                type="number" 
+                                                className="form-input" 
+                                                value={alertaForm.periodoDias}
+                                                onChange={e => setAlertaForm({...alertaForm, periodoDias: parseInt(e.target.value)})}
+                                                min={1}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Acción Sugerida</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            value={alertaForm.accionSugerida}
+                                            onChange={e => setAlertaForm({...alertaForm, accionSugerida: e.target.value})}
+                                            placeholder="Ej: Sanción, Suspensión, Despido..."
+                                        />
+                                    </div>
+                                    <div style={{ textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                        <button type="button" className="btn btn-outline" onClick={() => setShowAlertaForm(false)}>Cancelar</button>
+                                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                                            {loading ? 'Guardando...' : editingAlerta ? 'Actualizar Regla' : 'Crear Regla'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
                             <div className="table-container">
                                 <table className="table">
                                     <thead>
                                         <tr>
                                             <th>Tipo de Inasistencia</th>
-                                            <th>Límite Máximo</th>
-                                            <th>Periodo (Días)</th>
+                                            <th style={{ textAlign: 'center' }}>Límite Máximo</th>
+                                            <th style={{ textAlign: 'center' }}>Periodo (Días)</th>
                                             <th>Acción Sugerida</th>
                                             <th>Acciones</th>
                                         </tr>
@@ -275,9 +385,19 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                                 <td>{a.tipoInasistencia.replace(/_/g, ' ')}</td>
                                                 <td style={{ textAlign: 'center', fontWeight: 700 }}>{a.limiteMaximo}</td>
                                                 <td style={{ textAlign: 'center' }}>Cada {a.periodoDias} días</td>
-                                                <td><span className="badge badge-warning">{a.accionSugerida}</span></td>
-                                                <td>
-                                                    <button className="btn btn-ghost btn-sm">Editar</button>
+                                                <td><span className="badge badge-warning" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--color-warning)', border: '1px solid var(--color-warning)' }}>{a.accionSugerida}</span></td>
+                                                <td style={{ display: 'flex', gap: '5px' }}>
+                                                    <button className="btn btn-outline btn-sm" onClick={() => {
+                                                        setEditingAlerta(a)
+                                                        setAlertaForm({
+                                                            tipoInasistencia: a.tipoInasistencia,
+                                                            limiteMaximo: a.limiteMaximo,
+                                                            periodoDias: a.periodoDias,
+                                                            accionSugerida: a.accionSugerida || ''
+                                                        })
+                                                        setShowAlertaForm(true)
+                                                    }}>Editar</button>
+                                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => handleDeleteAlerta(a.id)}>Borrar</button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -290,6 +410,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                         </div>
                     )}
                 </div>
+
 
                 <style jsx>{`
                     .modal-overlay {
