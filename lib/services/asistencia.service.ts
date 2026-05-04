@@ -33,10 +33,10 @@ export interface ResumenAsistenciaDia {
 
 export class AsistenciaService {
 
-    // ─── Importación Masiva con Idempotencia ─────────────────────────────────
     /**
      * Procesa un array de registros de fichadas, mapea códigos biométricos
      * a empleados, y crea los registros evitando duplicados.
+     */
     static async importarFichadas(registros: ImportarFichadaInput[]): Promise<ImportResult> {
         if (!registros || !Array.isArray(registros)) {
             throw new Error('Formato inválido. Se espera un array de registros.')
