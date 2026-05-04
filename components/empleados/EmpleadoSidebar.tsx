@@ -56,6 +56,7 @@ const menuItems: MenuItem[] = [
         icon: '📊',
         subItems: [
             { label: 'Recibos', href: '/empleados?open=recibos', icon: '🖨️', openModal: 'recibos' },
+            { label: 'Analíticas', href: '/empleados/analytics', icon: '📉', openModal: '' },
             { label: 'Historial Vacaciones', href: '/empleados?open=historial', icon: '📈', openModal: 'historial' },
             { label: 'Inasistencias', href: '/empleados?open=inasistencias', icon: '🚨', openModal: 'inasistencias' },
         ]
