@@ -59,6 +59,8 @@ export async function GET(request: Request) {
             include: {
                 empleado: {
                     select: {
+                        nombre: true,
+                        apellido: true,
                         horarioEntrada: true,
                         turno: {
                             select: {
