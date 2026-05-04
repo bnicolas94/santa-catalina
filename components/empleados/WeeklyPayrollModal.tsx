@@ -685,6 +685,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     </button>
                                                                 </div>
                                                             </div>
+                                                        </div>
+
                                                         {/* Gestión de Horas Pendientes / Adeudadas */}
                                                         <div style={{ marginTop: 'var(--space-4)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                                             {/* Diferir a Futuro */}
@@ -748,12 +750,12 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                             </div>
                                                         </div>
                                                     </td>
-
                                                 </tr>
                                             )}
                                         </Fragment>
                                     ))}
                                 </tbody>
+
                                 <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}>
                                     <tr>
                                         <td colSpan={7} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td>
