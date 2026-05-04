@@ -22,6 +22,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
     const [newInasistencia, setNewInasistencia] = useState({
         empleadoId: '',
         fecha: new Date().toISOString().split('T')[0],
+        fechaHasta: '',
         tipo: 'INJUSTIFICADA',
         motivo: '',
         tieneCertificado: false,
@@ -70,6 +71,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                 setNewInasistencia({
                     empleadoId: '',
                     fecha: new Date().toISOString().split('T')[0],
+                    fechaHasta: '',
                     tipo: 'INJUSTIFICADA',
                     motivo: '',
                     tieneCertificado: false,
@@ -111,7 +113,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
 
                             {showForm && (
                                 <form onSubmit={handleSubmit} className="card shadow-sm" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-6)', backgroundColor: 'var(--color-gray-50)' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
                                         <div className="form-group">
                                             <label className="form-label">Empleado</label>
                                             <select 
@@ -125,13 +127,23 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                             </select>
                                         </div>
                                         <div className="form-group">
-                                            <label className="form-label">Fecha</label>
+                                            <label className="form-label">Desde</label>
                                             <input 
                                                 type="date" 
                                                 className="form-input" 
                                                 value={newInasistencia.fecha}
                                                 onChange={e => setNewInasistencia({...newInasistencia, fecha: e.target.value})}
                                                 required
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Hasta (Opcional)</label>
+                                            <input 
+                                                type="date" 
+                                                className="form-input" 
+                                                value={newInasistencia.fechaHasta}
+                                                onChange={e => setNewInasistencia({...newInasistencia, fechaHasta: e.target.value})}
+                                                placeholder="Solo si es un rango..."
                                             />
                                         </div>
                                         <div className="form-group">

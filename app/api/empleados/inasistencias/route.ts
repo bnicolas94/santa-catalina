@@ -40,26 +40,36 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { empleadoId, fecha, tipo, motivo, tieneCertificado, observaciones } = body
+        const { empleadoId, fecha, fechaHasta, tipo, motivo, tieneCertificado, observaciones } = body
 
         if (!empleadoId || !fecha || !tipo) {
             return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
         }
 
-        const inasistencia = await prisma.inasistencia.create({
-            data: {
-                empleadoId,
-                fecha: new Date(fecha),
-                tipo,
-                motivo,
-                tieneCertificado: !!tieneCertificado,
-                observaciones
-            }
-        })
+        const results = []
+        const startDate = new Date(fecha)
+        const endDate = fechaHasta ? new Date(fechaHasta) : startDate
 
-        return NextResponse.json(inasistencia)
+        // Iterar día por día
+        let current = new Date(startDate)
+        while (current <= endDate) {
+            const inasistencia = await prisma.inasistencia.create({
+                data: {
+                    empleadoId,
+                    fecha: new Date(current),
+                    tipo,
+                    motivo,
+                    tieneCertificado: !!tieneCertificado,
+                    observaciones
+                }
+            })
+            results.push(inasistencia)
+            current.setDate(current.getDate() + 1)
+        }
+
+        return NextResponse.json(results)
     } catch (error) {
-        console.error('Error creating inasistencia:', error)
-        return NextResponse.json({ error: 'Error al registrar inasistencia' }, { status: 500 })
+        console.error('Error creating inasistencia(s):', error)
+        return NextResponse.json({ error: 'Error al registrar inasistencia(s)' }, { status: 500 })
     }
 }
