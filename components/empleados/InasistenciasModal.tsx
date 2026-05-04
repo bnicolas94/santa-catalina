@@ -280,6 +280,23 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                 </div>
 
                 <style jsx>{`
+                    .modal-overlay {
+                        position: fixed;
+                        inset: 0;
+                        background: rgba(0, 0, 0, 0.7);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 2000;
+                        backdrop-filter: blur(4px);
+                    }
+                    .modal-content {
+                        background: white;
+                        border-radius: var(--radius-xl);
+                        box-shadow: var(--shadow-2xl);
+                        padding: var(--space-6);
+                        color: var(--color-gray-900);
+                    }
                     .modal-tabs button {
                         padding: var(--space-3) var(--space-6);
                         border: none;
