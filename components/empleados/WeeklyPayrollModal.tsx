@@ -475,6 +475,18 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         } catch (e) { console.error(e) }
     }
 
+    const handleClearDebt = async (empleadoId: string) => {
+        if (!confirm('¿Seguro que quieres borrar todas las horas adeudadas de este empleado?')) return;
+        try {
+            const res = await fetch(`/api/empleados/horas-extras-pendientes?empleadoId=${empleadoId}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                await handleRecalcularEmpleado(empleadoId);
+            }
+        } catch (e) { console.error(e) }
+    }
+
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
 
     return (
@@ -549,8 +561,16 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                     {r.empleadoNombre || empleados.find(e => e.id === r.empleadoId)?.nombre || 'Empleado'}
                                                     {r.error && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '10px' }}>ERROR</span>}
                                                     {r.montoHorasPendientes > 0 && (
-                                                        <div style={{ fontSize: '10px', color: 'var(--color-primary)', fontWeight: 700, marginTop: '2px' }}>
+                                                        <div style={{ fontSize: '10px', color: 'var(--color-primary)', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                             ⚠️ HS ADEUDADAS: {r.horasPendientes}hs (${r.montoHorasPendientes.toLocaleString()})
+                                                            <button 
+                                                                className="btn btn-ghost" 
+                                                                style={{ padding: 0, height: '14px', width: '14px', color: 'var(--color-danger)', fontSize: '10px' }}
+                                                                title="Borrar deuda"
+                                                                onClick={(e) => { e.stopPropagation(); handleClearDebt(r.empleadoId); }}
+                                                            >
+                                                                🗑️
+                                                            </button>
                                                         </div>
                                                     )}
                                                 </td>

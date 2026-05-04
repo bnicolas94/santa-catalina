@@ -24,3 +24,25 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Error creating pending hours' }, { status: 500 })
     }
 }
+
+export async function DELETE(request: Request) {
+    try {
+        const { searchParams } = new URL(request.url)
+        const empleadoId = searchParams.get('empleadoId')
+
+        if (!empleadoId) {
+            return NextResponse.json({ error: 'Empleado ID requerido' }, { status: 400 })
+        }
+
+        await prisma.horaExtraPendiente.deleteMany({
+            where: {
+                empleadoId,
+                pagado: false
+            }
+        })
+
+        return NextResponse.json({ success: true })
+    } catch (error) {
+        return NextResponse.json({ error: 'Error clearing pending hours' }, { status: 500 })
+    }
+}
