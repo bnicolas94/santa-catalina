@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+export const dynamic = 'force-dynamic'
+
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Empleado } from '@prisma/client'
 import { EmpleadoDialog } from '@/components/empleados/EmpleadoDialog'
 import RolesConfigModal from '@/components/empleados/RolesConfigModal'
@@ -18,6 +21,17 @@ import { ReporteVacacionesModal } from '@/components/empleados/ReporteVacaciones
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
+    return (
+        <Suspense fallback={<div>Cargando...</div>}>
+            <EmpleadosContent />
+        </Suspense>
+    )
+}
+
+function EmpleadosContent() {
+    const searchParams = useSearchParams()
+    const router = useRouter()
+    const openParam = searchParams.get('open')
     const [empleados, setEmpleados] = useState<Empleado[]>([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -70,6 +84,45 @@ export default function EmpleadosPage() {
         fetchEmpleados()
         fetchUbicaciones()
     }, [])
+
+    useEffect(() => {
+        if (!openParam) return
+
+        // Sincronizar parámetros de URL con estados de modales
+        if (openParam === 'weekly') setWeeklyPayrollOpen(true)
+        if (openParam === 'vacaciones') setVacacionesSacOpen(true)
+        if (openParam === 'mass') setMassLiquidationOpen(true)
+        if (openParam === 'recibos') setShowReportePagos(true)
+        if (openParam === 'historial') setShowReporteVacaciones(true)
+        if (openParam === 'roles') setShowRolesModal(true)
+        if (openParam === 'feriados') setShowFeriadosModal(true)
+        if (openParam === 'turnos') setShowTurnosModal(true)
+        if (openParam === 'conceptos') setShowConceptosModal(true)
+        if (openParam === 'licencias') setShowLicenciasModal(true)
+        if (openParam === 'new') handleOpenDialog()
+        if (openParam === 'import') handleImportarClic()
+    }, [openParam])
+
+    const closeModal = () => {
+        // Limpiar parámetros de URL al cerrar cualquier modal
+        const params = new URLSearchParams(searchParams.toString())
+        params.delete('open')
+        router.push(`/empleados?${params.toString()}`)
+        
+        // También cerramos los estados locales
+        setWeeklyPayrollOpen(false)
+        setVacacionesSacOpen(false)
+        setMassLiquidationOpen(false)
+        setShowReportePagos(false)
+        setShowReporteVacaciones(false)
+        setShowRolesModal(false)
+        setShowFeriadosModal(false)
+        setShowTurnosModal(false)
+        setShowConceptosModal(false)
+        setShowLicenciasModal(false)
+        setDialogOpen(false)
+        setExpressLiquidationOpen(false)
+    }
 
     const handleSave = async (formData: any) => {
         const url = selectedEmpleado ? `/api/empleados/${selectedEmpleado.id}` : '/api/empleados'
@@ -258,7 +311,7 @@ export default function EmpleadosPage() {
                         Gestión de nómina, fichadas y liquidaciones
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                <div style={{ display: 'none' }}>
                     <input
                         type="file"
                         ref={fileInputRef}
@@ -266,21 +319,6 @@ export default function EmpleadosPage() {
                         style={{ display: 'none' }}
                         accept=".txt, .csv, .xls, .xlsx"
                     />
-                    <button onClick={() => setWeeklyPayrollOpen(true)} className="btn btn-primary" style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}>
-                        💰 Liq. Semanal
-                    </button>
-                    <button onClick={() => setVacacionesSacOpen(true)} className="btn btn-primary" style={{ backgroundColor: 'var(--color-warning)', borderColor: 'var(--color-warning)', color: 'var(--color-gray-900)' }}>
-                        🏖️ Vacaciones/SAC
-                    </button>
-                    <button onClick={() => setMassLiquidationOpen(true)} className="btn btn-outline">
-                        🏢 Liq. Masiva
-                    </button>
-                    <button onClick={() => fileInputRef.current?.click()} className="btn btn-outline" disabled={importLoading}>
-                        {importLoading ? '...' : '📥 Importar Fichadas'}
-                    </button>
-                    <button onClick={() => handleOpenDialog()} className="btn btn-primary">
-                        + Nuevo Empleado
-                    </button>
                 </div>
             </div>
 
@@ -305,19 +343,7 @@ export default function EmpleadosPage() {
             </div>
 
             {/* Toolbar Secundaria */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                    <Link href="/empleados/analytics" className="btn btn-outline btn-sm" style={{ textDecoration: 'none' }}>📊 Analytics</Link>
-                    <button onClick={() => setShowOrganigramaModal(true)} className="btn btn-outline btn-sm">🏢 Organigrama</button>
-                    <button onClick={() => setShowTurnosModal(true)} className="btn btn-outline btn-sm">🕒 Turnos</button>
-                    <button onClick={() => setShowConceptosModal(true)} className="btn btn-outline btn-sm">🏷️ Conceptos</button>
-                    <button onClick={() => setShowLicenciasModal(true)} className="btn btn-outline btn-sm">⚙️ Licencias</button>
-                    <button onClick={() => setShowFeriadosModal(true)} className="btn btn-outline btn-sm">📅 Feriados</button>
-                    <button onClick={() => setShowReportePagos(true)} className="btn btn-outline btn-sm">🖨️ Recibos</button>
-                    <button onClick={() => setShowReporteVacaciones(true)} className="btn btn-outline btn-sm">📈 Vacaciones</button>
-                    <button onClick={() => setShowRolesModal(true)} className="btn btn-outline btn-sm">🔑 Roles</button>
-                </div>
-                
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 'var(--space-4)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                     <div className="form-group" style={{ margin: 0, position: 'relative' }}>
                         <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>🔍</span>
@@ -535,8 +561,8 @@ export default function EmpleadosPage() {
             {massLiquidationOpen && (
                 <MassLiquidationModal
                     empleados={empleados}
-                    onClose={() => setMassLiquidationOpen(false)}
-                    onSuccess={() => fetchEmpleados()}
+                    onClose={closeModal}
+                    onSuccess={() => { fetchEmpleados(); closeModal(); }}
                 />
             )}
 
@@ -551,56 +577,56 @@ export default function EmpleadosPage() {
             {dialogOpen && (
                 <EmpleadoDialog
                     empleado={selectedEmpleado}
-                    onClose={() => setDialogOpen(false)}
+                    onClose={closeModal}
                     onSave={handleSave}
                 />
             )}
 
             {showRolesModal && (
                 <RolesConfigModal
-                    onClose={() => setShowRolesModal(false)}
+                    onClose={closeModal}
                     onRolesChanged={() => {
                         // Refresh logic if needed
                     }}
                 />
             )}
             {showLicenciasModal && (
-                <ConfigLicenciasModal onClose={() => setShowLicenciasModal(false)} />
+                <ConfigLicenciasModal onClose={closeModal} />
             )}
             {showReporteVacaciones && (
-                <ReporteVacacionesModal onClose={() => setShowReporteVacaciones(false)} />
+                <ReporteVacacionesModal onClose={closeModal} />
             )}
             
             {showReportePagos && (
-                <ReportePagosModal onClose={() => setShowReportePagos(false)} />
+                <ReportePagosModal onClose={closeModal} />
             )}
             {showFeriadosModal && (
-                <FeriadosConfigModal onClose={() => setShowFeriadosModal(false)} />
+                <FeriadosConfigModal onClose={closeModal} />
             )}
             {weeklyPayrollOpen && (
                 <WeeklyPayrollModal 
                     empleados={empleados} 
-                    onClose={() => setWeeklyPayrollOpen(false)} 
-                    onSuccess={() => fetchEmpleados()} 
+                    onClose={closeModal} 
+                    onSuccess={() => { fetchEmpleados(); closeModal(); }} 
                 />
             )}
             {showOrganigramaModal && (
                 <OrganigramaModal
-                    onClose={() => setShowOrganigramaModal(false)}
+                    onClose={closeModal}
                     empleados={empleados.map(e => ({ id: e.id, nombre: e.nombre, apellido: (e as any).apellido }))}
                     onChanged={() => fetchEmpleados()}
                 />
             )}
             {showTurnosModal && (
-                <TurnosConfigModal onClose={() => setShowTurnosModal(false)} />
+                <TurnosConfigModal onClose={closeModal} />
             )}
             {showConceptosModal && (
-                <ConceptosSalarialesModal onClose={() => setShowConceptosModal(false)} />
+                <ConceptosSalarialesModal onClose={closeModal} />
             )}
             {vacacionesSacOpen && (
                 <VacacionesSACModal 
                     empleados={empleados.filter(e => e.activo)} 
-                    onClose={() => setVacacionesSacOpen(false)} 
+                    onClose={closeModal} 
                 />
             )}
         </div>

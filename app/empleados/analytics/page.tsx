@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, Fragment } from 'react'
 import {
     Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -16,6 +18,7 @@ export default function RRHHAnalyticsPage() {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [isClient, setIsClient] = useState(false)
     const [filtroConcepto, setFiltroConcepto] = useState<string>('todos')
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
     const [fechaDesde, setFechaDesde] = useState(() => {
@@ -49,8 +52,11 @@ export default function RRHHAnalyticsPage() {
     }
 
     useEffect(() => {
+        setIsClient(true)
         fetchData()
     }, [fechaDesde, fechaHasta, selectedEmpleado])
+
+    if (!isClient) return <div className="loading-container">Iniciando...</div>
 
     if (loading && !data) return <div className="loading-container">Cargando Analytics...</div>
     if (error) return <div className="error-state">{error}</div>

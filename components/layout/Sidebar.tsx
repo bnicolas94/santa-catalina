@@ -125,7 +125,7 @@ const menuItems: MenuItem[] = [
     },
     {
         label: 'Empleados',
-        href: '/empleados',
+        href: 'https://empleados.santacatalina.online',
         icon: '👥',
         roles: ['ADMIN'],
         permissionKey: 'permisoPersonal',
