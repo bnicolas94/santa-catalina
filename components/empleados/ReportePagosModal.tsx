@@ -261,7 +261,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
                     (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral, 
                     <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
-                    (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor, 
+                    (pesos ${montoHsExtrasLetras}) en concepto de <span class="data-label">${liq.horasExtras}</span> horas extras al 100% más de su valor, 
                     ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
                     del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
                     Recibiendo un neto total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
