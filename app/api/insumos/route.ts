@@ -44,6 +44,7 @@ export async function POST(request: Request) {
                 familia: familiaId ? { connect: { id: familiaId } } : undefined,
                 unidadSecundaria: body.unidadSecundaria || null,
                 factorConversion: parseFloat(body.factorConversion) || null,
+                stockActualSecundario: parseFloat(body.stockActualSecundario) || 0,
             },
             include: { proveedor: true, familia: true },
         })

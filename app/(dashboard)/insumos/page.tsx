@@ -71,6 +71,7 @@ export default function InsumosPage() {
         familiaId: '',
         unidadSecundaria: '',
         factorConversion: '',
+        stockActualSecundario: '',
     })
     const [familiaForm, setFamiliaForm] = useState({ nombre: '', color: COLORES_FAMILIA[0] })
     const [error, setError] = useState('')
@@ -105,7 +106,7 @@ export default function InsumosPage() {
         setForm({ 
             nombre: '', unidadMedida: 'kg', stockActual: '', stockMinimo: '', 
             precioUnitario: '', diasReposicion: '1', proveedorId: '', familiaId: '',
-            unidadSecundaria: '', factorConversion: ''
+            unidadSecundaria: '', factorConversion: '', stockActualSecundario: ''
         })
     }
 
@@ -122,6 +123,7 @@ export default function InsumosPage() {
             familiaId: ins.familia?.id || '',
             unidadSecundaria: ins.unidadSecundaria || '',
             factorConversion: ins.factorConversion ? String(ins.factorConversion) : '',
+            stockActualSecundario: ins.stockActualSecundario ? String(ins.stockActualSecundario) : '',
         })
         setShowModal(true)
     }
@@ -164,6 +166,7 @@ export default function InsumosPage() {
                 stockMinimo: form.stockMinimo.replace(',', '.'),
                 precioUnitario: form.precioUnitario.replace(',', '.'),
                 factorConversion: form.factorConversion.replace(',', '.'),
+                stockActualSecundario: form.stockActualSecundario.replace(',', '.'),
             }
 
             const res = await fetch(url, {
@@ -502,7 +505,12 @@ export default function InsumosPage() {
                                             step="0.01"
                                             className="form-input"
                                             value={form.stockActual}
-                                            onChange={(e) => setForm({ ...form, stockActual: e.target.value })}
+                                            onChange={(e) => {
+                                                const val = e.target.value
+                                                const factor = parseFloat(form.factorConversion.replace(',', '.'))
+                                                const newSec = (val && factor && factor > 0) ? (parseFloat(val.replace(',', '.')) / factor).toFixed(2) : form.stockActualSecundario
+                                                setForm({ ...form, stockActual: val, stockActualSecundario: String(newSec) })
+                                            }}
                                             placeholder="0"
                                         />
                                     </div>
@@ -537,12 +545,41 @@ export default function InsumosPage() {
                                                 step="0.001"
                                                 className="form-input"
                                                 value={form.factorConversion}
-                                                onChange={(e) => setForm({ ...form, factorConversion: e.target.value })}
+                                                onChange={(e) => {
+                                                    const factorStr = e.target.value
+                                                    const factor = parseFloat(factorStr.replace(',', '.'))
+                                                    const stockPrim = parseFloat(form.stockActual.replace(',', '.'))
+                                                    const newSec = (stockPrim && factor && factor > 0) ? (stockPrim / factor).toFixed(2) : form.stockActualSecundario
+                                                    setForm({ ...form, factorConversion: factorStr, stockActualSecundario: String(newSec) })
+                                                }}
                                                 placeholder="Ej: 5 (si 1 barra = 5kg)"
                                             />
                                             <p style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>Dejar vacío si el peso es variable</p>
                                         </div>
                                     </div>
+                                    
+                                    {form.unidadSecundaria && (
+                                        <div className="form-group" style={{ marginTop: 'var(--space-3)', marginBottom: 0 }}>
+                                            <label className="form-label">Stock actual en {form.unidadSecundaria}</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="form-input"
+                                                value={form.stockActualSecundario}
+                                                onChange={(e) => {
+                                                    const val = e.target.value
+                                                    const factor = parseFloat(form.factorConversion.replace(',', '.'))
+                                                    const newPrim = (val && factor && factor > 0) ? (parseFloat(val.replace(',', '.')) * factor).toFixed(2) : form.stockActual
+                                                    setForm({ ...form, stockActualSecundario: val, stockActual: String(newPrim) })
+                                                }}
+                                                placeholder="0"
+                                                style={{ backgroundColor: '#fff', fontWeight: 600, color: 'var(--color-primary)' }}
+                                            />
+                                            <p style={{ fontSize: '10px', color: 'var(--color-gray-500)', marginTop: '4px' }}>
+                                                💡 Al modificar este valor, se calculará automáticamente el <strong>Stock Actual</strong> (arriba).
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="form-group">
