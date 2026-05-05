@@ -51,6 +51,12 @@ const menuItems: MenuItem[] = [
         openModal: 'mass'
     },
     {
+        label: 'Liquidación Final',
+        href: '/empleados?open=liquidacion-final',
+        icon: '📄',
+        openModal: 'liquidacion-final'
+    },
+    {
         label: 'Reportes',
         href: '#',
         icon: '📊',

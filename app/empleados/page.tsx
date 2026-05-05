@@ -19,6 +19,7 @@ import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalariales
 import { VacacionesSACModal } from '@/components/empleados/VacacionesSACModal'
 import { ReporteVacacionesModal } from '@/components/empleados/ReporteVacacionesModal'
 import { InasistenciasModal } from '@/components/empleados/InasistenciasModal'
+import LiquidacionFinalModal from '@/components/empleados/LiquidacionFinalModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -58,6 +59,7 @@ function EmpleadosContent() {
     const [vacacionesSacOpen, setVacacionesSacOpen] = useState(false)
     const [showReporteVacaciones, setShowReporteVacaciones] = useState(false)
     const [showInasistenciasModal, setShowInasistenciasModal] = useState(false)
+    const [showLiquidacionFinalModal, setShowLiquidacionFinalModal] = useState(false)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -102,6 +104,7 @@ function EmpleadosContent() {
         if (openParam === 'conceptos') setShowConceptosModal(true)
         if (openParam === 'licencias') setShowLicenciasModal(true)
         if (openParam === 'inasistencias') setShowInasistenciasModal(true)
+        if (openParam === 'liquidacion-final') setShowLiquidacionFinalModal(true)
         if (openParam === 'new') handleOpenDialog()
         if (openParam === 'import') handleImportarClic()
     }, [openParam])
@@ -126,6 +129,7 @@ function EmpleadosContent() {
         setDialogOpen(false)
         setExpressLiquidationOpen(false)
         setShowInasistenciasModal(false)
+        setShowLiquidacionFinalModal(false)
     }
 
     const handleSave = async (formData: any) => {
@@ -638,6 +642,14 @@ function EmpleadosContent() {
                     isOpen={showInasistenciasModal}
                     onClose={closeModal}
                     empleados={empleados}
+                />
+            )}
+            {showLiquidacionFinalModal && (
+                <LiquidacionFinalModal
+                    empleados={empleados}
+                    selectedEmpleadoId={selectedEmpleado?.id}
+                    onClose={closeModal}
+                    onSuccess={() => fetchEmpleados()}
                 />
             )}
         </div>

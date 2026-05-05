@@ -58,6 +58,7 @@ model Empleado {
   evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
   inasistencias        Inasistencia[]
   horasPendientes      HoraExtraPendiente[]
+  liquidacionesFinales LiquidacionFinal[]
 
   @@map("empleados")
 }
@@ -952,4 +953,21 @@ enum CicloPago {
   DIARIO
   SEMANAL
   MENSUAL
+}
+
+model LiquidacionFinal {
+  id               String   @id @default(uuid())
+  empleadoId       String   @map("id_empleado")
+  fechaEgreso      DateTime @map("fecha_egreso")
+  tipoEgreso       String   @map("tipo_egreso") // "RENUNCIA", "DESPIDO_SIN_CAUSA", "DESPIDO_CON_CAUSA", "FIN_CONTRATO"
+  antiguedadAnios  Int      @map("antiguedad_anios")
+  detalleConceptos Json     @map("detalle_conceptos")
+  totalHaberes     Float    @map("total_haberes")
+  totalDescuentos  Float    @map("total_descuentos")
+  totalNeto        Float    @map("total_neto")
+  createdAt        DateTime @default(now())
+  
+  empleado         Empleado @relation(fields: [empleadoId], references: [id])
+
+  @@map("liquidaciones_finales")
 }
