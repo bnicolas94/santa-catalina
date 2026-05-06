@@ -82,8 +82,14 @@ export default function FlotaDashboard() {
                 stats.alertas.map((a: any) => {
                   return (
                     <tr key={a.id}>
-                      <td style={{ fontWeight: 'bold' }}>{a.vehiculo?.patente}</td>
-                      <td>{a.tipo === 'km' ? 'Mantenimiento (KM)' : 'Documentación'}</td>
+                      <td style={{ fontWeight: 'bold' }}>
+                        {a.tipo === 'chofer' ? '👤 Chofer' : a.vehiculo?.patente}
+                      </td>
+                      <td>
+                        {a.tipo === 'km' ? 'Service (KM)' : 
+                         a.tipo === 'chofer' ? 'Licencia de Conducir' : 
+                         'Documentación'}
+                      </td>
                       <td>{a.titulo}</td>
                       <td>
                         <span className={`badge badge-${a.gravedad === 'roja' ? 'danger' : 'warning'}`}>
@@ -91,9 +97,15 @@ export default function FlotaDashboard() {
                         </span>
                       </td>
                       <td>
-                        <Link href={`/logistica/flota/vehiculos/${a.vehiculo?.id}`} className="btn btn-ghost btn-sm">
-                          Ver Detalle
-                        </Link>
+                        {a.tipo === 'chofer' ? (
+                          <Link href="/logistica/choferes" className="btn btn-ghost btn-sm">
+                            Gestionar
+                          </Link>
+                        ) : (
+                          <Link href={`/logistica/flota/vehiculos/${a.vehiculo?.id}`} className="btn btn-ghost btn-sm">
+                            Ver Detalle
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   )

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const [totalVehiculos, vehiculosActivos, vencimientos, vehiculos] = await Promise.all([
+    const [totalVehiculos, vehiculosActivos, vencimientos, vehiculos, choferDocs] = await Promise.all([
       // @ts-ignore
       prisma.vehiculo.count(),
       // @ts-ignore
@@ -13,7 +13,15 @@ export async function GET() {
         include: { vehiculo: true },
       }),
       // @ts-ignore
-      prisma.vehiculo.findMany({ where: { activo: true } })
+      prisma.vehiculo.findMany({ where: { activo: true } }),
+      // @ts-ignore
+      prisma.documentoEmpleado.findMany({
+        where: {
+          tipoDocumento: 'LICENCIA_CONDUCIR',
+          empleado: { rolRel: { nombre: 'LOGISTICA' }, activo: true }
+        },
+        include: { empleado: true }
+      })
     ]);
 
     const hoy = new Date();
@@ -23,7 +31,9 @@ export async function GET() {
 
     let alertasArray: any[] = [];
 
+    // 1. Vencimientos Vehículos (Fechas)
     vencimientos.forEach((v: any) => {
+      if (!v.fechaVencimiento) return;
       const fecha = new Date(v.fechaVencimiento);
       const diasAviso = v.diasAviso || 30;
       
@@ -41,6 +51,23 @@ export async function GET() {
       }
     });
 
+    // 2. Vencimientos Choferes (Licencias)
+    choferDocs.forEach((doc: any) => {
+      if (!doc.fechaVencimiento) return;
+      const fecha = new Date(doc.fechaVencimiento);
+      const diasAviso = doc.diasAviso || 30;
+      
+      const limiteAviso = new Date(fecha);
+      limiteAviso.setDate(fecha.getDate() - diasAviso);
+
+      if (fecha < hoy) {
+        alertasArray.push({ id: `chofer-${doc.id}`, tipo: 'chofer', gravedad: 'roja', titulo: `Licencia Vencida: ${doc.empleado.nombre} ${doc.empleado.apellido}`, fecha: doc.fechaVencimiento });
+      } else if (hoy >= limiteAviso) {
+        alertasArray.push({ id: `chofer-${doc.id}`, tipo: 'chofer', gravedad: 'naranja', titulo: `Licencia por vencer: ${doc.empleado.nombre} ${doc.empleado.apellido}`, fecha: doc.fechaVencimiento });
+      }
+    });
+
+    // 3. Mantenimientos por KM
     vehiculos.forEach((v: any) => {
       if (v.kmProximoService) {
         const kmsFaltantes = v.kmProximoService - v.kmActual;

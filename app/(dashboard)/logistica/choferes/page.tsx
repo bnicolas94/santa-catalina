@@ -34,7 +34,7 @@ export default function ChoferesPage() {
         }
     }
 
-    const getStatusInfo = (fechaStr: string | null) => {
+    const getStatusInfo = (fechaStr: string | null, diasAviso: number = 30) => {
         if (!fechaStr) return { label: 'PENDIENTE', color: 'var(--color-gray-500)', bg: 'var(--color-gray-100)' }
         
         const fecha = new Date(fechaStr)
@@ -43,7 +43,7 @@ export default function ChoferesPage() {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
         if (diffDays < 0) return { label: 'VENCIDO', color: 'var(--color-danger)', bg: 'var(--color-danger-light)' }
-        if (diffDays <= 30) return { label: `VENCE EN ${diffDays} DÍAS`, color: 'var(--color-warning-dark)', bg: 'var(--color-warning-light)' }
+        if (diffDays <= diasAviso) return { label: `VENCE EN ${diffDays} DÍAS`, color: 'var(--color-warning-dark)', bg: 'var(--color-warning-light)' }
         
         return { label: 'AL DÍA', color: 'var(--color-success)', bg: 'var(--color-success-light)' }
     }
@@ -81,7 +81,7 @@ export default function ChoferesPage() {
                             ) : (
                                 choferes.map(c => {
                                     const doc = c.documentos?.[0]
-                                    const status = getStatusInfo(doc?.fechaVencimiento)
+                                    const status = getStatusInfo(doc?.fechaVencimiento, doc?.diasAviso)
                                     return (
                                         <tr key={c.id}>
                                             <td style={{ fontWeight: 'bold' }}>{c.nombre} {c.apellido}</td>

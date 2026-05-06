@@ -33,6 +33,7 @@ export async function POST(request: Request) {
         const tipoDocumento = formData.get('tipoDocumento') as string
         const fechaVencimiento = formData.get('fechaVencimiento') as string | null
         const observaciones = formData.get('observaciones') as string | null
+        const diasAviso = formData.get('diasAviso') as string | null
         const file = formData.get('file') as File | null
 
         if (!empleadoId || !tipoDocumento || !file) {
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
                 tipoDocumento,
                 archivoUrl,
                 fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
+                diasAviso: diasAviso ? parseInt(diasAviso) : 30,
                 observaciones: observaciones || null
             }
         })

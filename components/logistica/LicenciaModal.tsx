@@ -17,6 +17,7 @@ export default function LicenciaModal({ chofer, onClose, onSuccess }: LicenciaMo
             : ''
     )
     const [file, setFile] = useState<File | null>(null)
+    const [diasAviso, setDiasAviso] = useState(chofer.documentos?.[0]?.diasAviso?.toString() || '30')
     const [observaciones, setObservaciones] = useState(chofer.documentos?.[0]?.observaciones || '')
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -32,6 +33,7 @@ export default function LicenciaModal({ chofer, onClose, onSuccess }: LicenciaMo
             formData.append('empleadoId', chofer.id)
             formData.append('tipoDocumento', 'LICENCIA_CONDUCIR')
             if (fechaVencimiento) formData.append('fechaVencimiento', fechaVencimiento)
+            if (diasAviso) formData.append('diasAviso', diasAviso)
             if (observaciones) formData.append('observaciones', observaciones)
             if (file) formData.append('file', file)
 
@@ -65,15 +67,28 @@ export default function LicenciaModal({ chofer, onClose, onSuccess }: LicenciaMo
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                        <div className="form-group">
-                            <label className="form-label">Fecha de Vencimiento</label>
-                            <input 
-                                type="date" 
-                                className="form-input" 
-                                value={fechaVencimiento} 
-                                onChange={e => setFechaVencimiento(e.target.value)} 
-                                required 
-                            />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                            <div className="form-group">
+                                <label className="form-label">Fecha de Vencimiento</label>
+                                <input 
+                                    type="date" 
+                                    className="form-input" 
+                                    value={fechaVencimiento} 
+                                    onChange={e => setFechaVencimiento(e.target.value)} 
+                                    required 
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Días de Aviso</label>
+                                <input 
+                                    type="number" 
+                                    className="form-input" 
+                                    value={diasAviso} 
+                                    onChange={e => setDiasAviso(e.target.value)} 
+                                    placeholder="Ej: 30"
+                                    required 
+                                />
+                            </div>
                         </div>
 
                         <div className="form-group">
