@@ -43,12 +43,17 @@ export default async function LogisticaPage() {
                         <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', flex: 1 }}>
                             Controlá los vehículos, mantenimientos y asigná qué auto usa cada chofer cada día.
                         </p>
-                        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <Link href="/logistica/flota/asignacion" className="btn btn-primary" style={{ flex: 1, textAlign: 'center' }}>
-                                Asignación Diaria
-                            </Link>
-                            <Link href="/logistica/flota" className="btn btn-outline" style={{ flex: 1, textAlign: 'center' }}>
-                                Dashboard Flota
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                <Link href="/logistica/flota/asignacion" className="btn btn-primary" style={{ flex: 1, textAlign: 'center' }}>
+                                    Asignación Diaria
+                                </Link>
+                                <Link href="/logistica/flota" className="btn btn-outline" style={{ flex: 1, textAlign: 'center' }}>
+                                    Dashboard Flota
+                                </Link>
+                            </div>
+                            <Link href="/logistica/choferes" className="btn btn-ghost" style={{ width: '100%', textAlign: 'center', border: '1px solid var(--color-gray-200)' }}>
+                                👤 Administración de Choferes
                             </Link>
                         </div>
                     </div>
