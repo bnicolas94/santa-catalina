@@ -105,11 +105,49 @@ export async function POST(request: Request) {
             // Actualizar el kilometraje actual del vehículo si se proporcionó uno mayor
             if (kmVehiculo) {
                 const v = await tx.vehiculo.findUnique({ where: { id: vehiculoId } })
-                if (v && parseInt(kmVehiculo) > v.kmActual) {
+                const numericKm = parseInt(kmVehiculo)
+                if (v && numericKm > v.kmActual) {
                     await tx.vehiculo.update({
                         where: { id: vehiculoId },
-                        data: { kmActual: parseInt(kmVehiculo) }
+                        data: { kmActual: numericKm }
                     })
+                }
+
+                // 3. Vincular con Recordatorio de Service si la categoría es "Service"
+                const categoria = await tx.categoriaGasto.findUnique({ where: { id: categoriaId } })
+                if (categoria && categoria.nombre.toLowerCase() === 'service') {
+                    const nextServiceKm = numericKm + 10000
+                    
+                    // Buscar si ya existe un recordatorio de tipo Service para este vehículo
+                    const existingVenc = await tx.vencimientoVehiculo.findFirst({
+                        where: { 
+                            vehiculoId,
+                            tipo: { equals: 'Service', mode: 'insensitive' }
+                        }
+                    })
+
+                    if (existingVenc) {
+                        await tx.vencimientoVehiculo.update({
+                            where: { id: existingVenc.id },
+                            data: {
+                                kmVencimiento: nextServiceKm,
+                                kmAviso: 2000,
+                                fechaVencimiento: null, // Priorizar KM
+                                notificado: false,
+                                observaciones: `Actualizado automáticamente por gasto el ${new Date().toLocaleDateString()}`
+                            }
+                        })
+                    } else {
+                        await tx.vencimientoVehiculo.create({
+                            data: {
+                                vehiculoId,
+                                tipo: 'Service',
+                                kmVencimiento: nextServiceKm,
+                                kmAviso: 2000,
+                                observaciones: 'Generado automáticamente por carga de gasto de Service'
+                            }
+                        })
+                    }
                 }
             }
 

@@ -35,30 +35,30 @@ model Empleado {
   codigoBiometrico     String?              @unique @map("codigo_biometrico")
   ubicacionId          String?              @map("id_ubicacion")
   rolId                String?              @map("id_rol")
+  preferenciasReporte  Json?                @map("preferencias_reporte")
   areaId               String?              @map("id_area")
   puestoId             String?              @map("id_puesto")
   turnoId              String?              @map("id_turno")
-  preferenciasReporte  Json?                @map("preferencias_reporte")
+  areasResponsable     Area[]               @relation("ResponsableArea")
   asignaciones         AsignacionOperario[]
   asignacionesVehiculo AsignacionVehiculo[] @relation("AsignacionesVehiculo")
-  rolRel               RolEmpleado?         @relation(fields: [rolId], references: [id])
-  ubicacion            Ubicacion?           @relation(fields: [ubicacionId], references: [id])
+  documentos           DocumentoEmpleado[]
   area                 Area?                @relation("EmpleadoArea", fields: [areaId], references: [id])
   puesto               Puesto?              @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
+  rolRel               RolEmpleado?         @relation(fields: [rolId], references: [id])
   turno                TurnoTrabajo?        @relation("EmpleadoTurno", fields: [turnoId], references: [id])
-  areasResponsable     Area[]               @relation("ResponsableArea")
+  ubicacion            Ubicacion?           @relation(fields: [ubicacionId], references: [id])
+  evaluaciones         Evaluacion[]         @relation("EmpleadoEvaluado")
+  evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
   fichadas             FichadaEmpleado[]
+  horasPendientes      HoraExtraPendiente[]
+  inasistencias        Inasistencia[]
+  liquidacionesFinales LiquidacionFinal[]
   liquidaciones        LiquidacionSueldo[]
   lotesCoordinados     Lote[]               @relation("CoordinadorLote")
   prestamos            PrestamoEmpleado[]
   rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
   rutasChofer          Ruta[]               @relation("ChoferRuta")
-  documentos           DocumentoEmpleado[]
-  evaluaciones         Evaluacion[]         @relation("EmpleadoEvaluado")
-  evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
-  inasistencias        Inasistencia[]
-  horasPendientes      HoraExtraPendiente[]
-  liquidacionesFinales LiquidacionFinal[]
 
   @@map("empleados")
 }
@@ -66,18 +66,16 @@ model Empleado {
 model Evaluacion {
   id            String   @id @default(uuid())
   fecha         DateTime @default(now())
-  calificacion  String // Excelente, Bueno, Regular, Malo
+  calificacion  String
   puntosFuertes String?  @map("puntos_fuertes")
   puntosMejora  String?  @map("puntos_mejora")
   comentarios   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-
-  empleadoId  String   @map("id_empleado")
-  evaluadorId String   @map("id_evaluador")
-
-  empleado  Empleado @relation("EmpleadoEvaluado", fields: [empleadoId], references: [id], onDelete: Cascade)
-  evaluador Empleado @relation("Evaluador", fields: [evaluadorId], references: [id])
+  empleadoId    String   @map("id_empleado")
+  evaluadorId   String   @map("id_evaluador")
+  empleado      Empleado @relation("EmpleadoEvaluado", fields: [empleadoId], references: [id], onDelete: Cascade)
+  evaluador     Empleado @relation("Evaluador", fields: [evaluadorId], references: [id])
 
   @@map("evaluaciones_desempeno")
 }
@@ -89,10 +87,10 @@ model Proveedor {
   telefono         String?
   email            String?
   direccion        String?
-  categoria        String?
   activo           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  categoria        String?
   insumos          Insumo[]
   movimientosStock MovimientoStock[]
 
@@ -181,9 +179,9 @@ model FichaTecnica {
   id                String   @id @default(uuid())
   cantidadPorUnidad Float    @map("cantidad_por_unidad")
   unidadMedida      String   @map("unidad_medida")
-  merma             Float    @default(0)
   productoId        String   @map("id_producto")
   insumoId          String   @map("id_insumo")
+  merma             Float    @default(0)
   insumo            Insumo   @relation(fields: [insumoId], references: [id])
   producto          Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
 
@@ -206,13 +204,13 @@ model Lote {
   ubicacionId         String               @map("id_ubicacion")
   productoId          String               @map("id_producto")
   coordinadorId       String?              @map("id_empleado_coord")
+  distribucion        Json?                @map("distribucion")
   detallePedidos      DetallePedido[]
   coordinador         Empleado?            @relation("CoordinadorLote", fields: [coordinadorId], references: [id])
   producto            Producto             @relation(fields: [productoId], references: [id])
   ubicacion           Ubicacion            @relation(fields: [ubicacionId], references: [id])
   movimientosProducto MovimientoProducto[]
   movimientosStock    MovimientoStock[]
-  distribucion        Json?                @map("distribucion")
 
   @@map("lotes")
 }
@@ -531,13 +529,12 @@ model ConceptoCaja {
 model ConceptoSalarial {
   id              String            @id @default(uuid())
   nombre          String            @unique
-  tipo            String            // "REMUNERATIVO", "NO_REMUNERATIVO", "DESCUENTO"
+  tipo            String
   esPorcentaje    Boolean           @default(false) @map("es_porcentaje")
   valorPorDefecto Float?            @map("valor_por_defecto")
   activo          Boolean           @default(true)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
-  
   items           ItemLiquidacion[]
 
   @@map("conceptos_salariales")
@@ -548,11 +545,10 @@ model ItemLiquidacion {
   liquidacionId      String            @map("id_liquidacion")
   conceptoSalarialId String            @map("id_concepto")
   montoCalculado     Float             @map("monto_calculado")
-  detalle            String?           // Por ej: "10% sobre base"
+  detalle            String?
   createdAt          DateTime          @default(now())
-
-  liquidacion        LiquidacionSueldo @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
   concepto           ConceptoSalarial  @relation(fields: [conceptoSalarialId], references: [id])
+  liquidacion        LiquidacionSueldo @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
 
   @@map("items_liquidacion")
 }
@@ -560,13 +556,12 @@ model ItemLiquidacion {
 model DocumentoEmpleado {
   id               String    @id @default(uuid())
   empleadoId       String    @map("id_empleado")
-  tipoDocumento    String    @map("tipo_documento") // "DNI", "ALTA_AFIP", "CERTIFICADO_MEDICO", "CONTRATO", "OTRO"
+  tipoDocumento    String    @map("tipo_documento")
   archivoUrl       String    @map("archivo_url")
   fechaVencimiento DateTime? @map("fecha_vencimiento")
   observaciones    String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
-
   empleado         Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("documentos_empleado")
@@ -643,26 +638,26 @@ model CuotaPrestamo {
 }
 
 model LiquidacionSueldo {
-  id                  String          @id @default(uuid())
+  id                  String            @id @default(uuid())
   periodo             String
-  tipo                String          @default("NORMAL") // "NORMAL", "FINAL"
-  fechaGeneracion     DateTime        @default(now()) @map("fecha_generacion")
-  sueldoProporcional  Float           @default(0) @map("sueldo_proporcional")
-  horasNormales       Float           @default(0) @map("horas_normales")
-  montoHorasNormales  Float           @default(0) @map("monto_horas_normales")
-  horasExtras         Float           @default(0) @map("horas_extras")
-  montoHorasExtras    Float           @default(0) @map("monto_horas_extras")
-  horasFeriado        Float           @default(0) @map("horas_feriado")
-  montoHorasFeriado   Float           @default(0) @map("monto_horas_feriado")
-  ajusteHorasExtras   Float           @default(0) @map("ajuste_horas_extras")
-  descuentosPrestamos Float           @default(0) @map("descuentos_prestamos")
-  totalNeto           Float           @default(0) @map("total_neto")
-  estado              String          @default("generado")
-  empleadoId          String          @map("id_empleado")
-  desglose            Json?           @map("desglose")
+  fechaGeneracion     DateTime          @default(now()) @map("fecha_generacion")
+  sueldoProporcional  Float             @default(0) @map("sueldo_proporcional")
+  horasNormales       Float             @default(0) @map("horas_normales")
+  montoHorasNormales  Float             @default(0) @map("monto_horas_normales")
+  horasExtras         Float             @default(0) @map("horas_extras")
+  montoHorasExtras    Float             @default(0) @map("monto_horas_extras")
+  horasFeriado        Float             @default(0) @map("horas_feriado")
+  montoHorasFeriado   Float             @default(0) @map("monto_horas_feriado")
+  ajusteHorasExtras   Float             @default(0) @map("ajuste_horas_extras")
+  descuentosPrestamos Float             @default(0) @map("descuentos_prestamos")
+  totalNeto           Float             @default(0) @map("total_neto")
+  estado              String            @default("generado")
+  empleadoId          String            @map("id_empleado")
+  desglose            Json?             @map("desglose")
+  tipo                String            @default("NORMAL")
   cuotasDescontadas   CuotaPrestamo[]
   items               ItemLiquidacion[]
-  empleado            Empleado        @relation(fields: [empleadoId], references: [id])
+  empleado            Empleado          @relation(fields: [empleadoId], references: [id])
 
   @@map("liquidaciones_sueldos")
 }
@@ -698,12 +693,11 @@ model Area {
   parentId      String?    @map("id_area_padre")
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
-
-  responsable   Empleado?  @relation("ResponsableArea", fields: [responsableId], references: [id])
   parent        Area?      @relation("AreaJerarquia", fields: [parentId], references: [id])
   children      Area[]     @relation("AreaJerarquia")
-  puestos       Puesto[]
+  responsable   Empleado?  @relation("ResponsableArea", fields: [responsableId], references: [id])
   empleados     Empleado[] @relation("EmpleadoArea")
+  puestos       Puesto[]
 
   @@map("areas")
 }
@@ -717,9 +711,8 @@ model Puesto {
   activo          Boolean    @default(true)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
-
-  area            Area       @relation(fields: [areaId], references: [id])
   empleados       Empleado[] @relation("EmpleadoPuesto")
+  area            Area       @relation(fields: [areaId], references: [id])
 
   @@map("puestos")
 }
@@ -728,13 +721,12 @@ model TurnoTrabajo {
   id                String     @id @default(uuid())
   nombre            String     @unique
   descripcion       String?
-  horaInicio        String     @map("hora_inicio") // Formato "HH:mm"
-  horaFin           String     @map("hora_fin")    // Formato "HH:mm"
+  horaInicio        String     @map("hora_inicio")
+  horaFin           String     @map("hora_fin")
   toleranciaMinutos Int        @default(15) @map("tolerancia_minutos")
   activo            Boolean    @default(true)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
-
   empleados         Empleado[] @relation("EmpleadoTurno")
 
   @@map("turnos_trabajo")
@@ -775,7 +767,6 @@ model Vehiculo {
   marca            String
   modelo           String
   anio             Int
-  alias            String?
   kmActual         Int                     @default(0) @map("km_actual")
   kmProximoService Int?                    @map("km_proximo_service")
   avisoKmsAntes    Int                     @default(2000) @map("aviso_kms_antes")
@@ -783,6 +774,7 @@ model Vehiculo {
   activo           Boolean                 @default(true)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
+  alias            String?
   asignaciones     AsignacionVehiculo[]    @relation("AsignacionesVehiculo")
   gastos           GastoOperativo[]
   kilometrajes     KilometrajeVehiculo[]
@@ -816,44 +808,42 @@ model Inasistencia {
   id               String   @id @default(uuid())
   empleadoId       String   @map("id_empleado")
   fecha            DateTime
-  tipo             String   // "INJUSTIFICADA", "CON_AVISO_INJUSTIFICADA", "JUSTIFICADA_PAGA", "JUSTIFICADA_NO_PAGA", "TARDANZA"
+  tipo             String
   motivo           String?
   tieneCertificado Boolean  @default(false) @map("tiene_certificado")
-  minutosRetraso   Int?     @map("minutos_retraso")
   observaciones    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-  
+  minutosRetraso   Int?     @map("minutos_retraso")
   empleado         Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("inasistencias_empleado")
 }
 
 model AlertaAusentismo {
-  id              String   @id @default(uuid())
-  tipoInasistencia String   @map("tipo_inasistencia") // "INJUSTIFICADA", "CON_AVISO_INJUSTIFICADA", etc.
-  limiteMaximo    Int      @map("limite_maximo")
-  periodoDias     Int      @default(30) @map("periodo_dias") // Ej: 3 injustificadas en 30 días
-  accionSugerida  String?  @map("accion_sugerida") // "Sanción", "Aviso", "Despido"
-  activo          Boolean  @default(true)
-  
+  id               String  @id @default(uuid())
+  tipoInasistencia String  @map("tipo_inasistencia")
+  limiteMaximo     Int     @map("limite_maximo")
+  periodoDias      Int     @default(30) @map("periodo_dias")
+  accionSugerida   String? @map("accion_sugerida")
+  activo           Boolean @default(true)
+
   @@map("alertas_ausentismo")
 }
-model HoraExtraPendiente {
-  id              String   @id @default(uuid())
-  empleadoId      String   @map("id_empleado")
-  cantidadHoras   Float    @map("cantidad_horas")
-  montoCalculado  Float    @map("monto_calculado")
-  fechaOrigen     DateTime @default(now()) @map("fecha_origen")
-  pagado          Boolean  @default(false)
-  liquidacionId   String?  @map("id_liquidacion") // Relación con la liquidación donde se PAGÓ finalmente
-  observaciones   String?
 
-  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+model HoraExtraPendiente {
+  id             String   @id @default(uuid())
+  empleadoId     String   @map("id_empleado")
+  cantidadHoras  Float    @map("cantidad_horas")
+  montoCalculado Float    @map("monto_calculado")
+  fechaOrigen    DateTime @default(now()) @map("fecha_origen")
+  pagado         Boolean  @default(false)
+  liquidacionId  String?  @map("id_liquidacion")
+  observaciones  String?
+  empleado       Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("horas_extras_pendientes")
 }
-
 
 model KilometrajeVehiculo {
   id            String   @id @default(uuid())
@@ -872,13 +862,13 @@ model VencimientoVehiculo {
   vehiculoId       String    @map("id_vehiculo")
   tipo             String
   fechaVencimiento DateTime? @map("fecha_vencimiento")
-  kmVencimiento    Int?      @map("km_vencimiento")
-  kmAviso          Int?      @map("km_aviso")
   observaciones    String?
   notificado       Boolean   @default(false)
   diasAviso        Int       @default(30) @map("dias_aviso")
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  kmAviso          Int?      @map("km_aviso")
+  kmVencimiento    Int?      @map("km_vencimiento")
   vehiculo         Vehiculo  @relation(fields: [vehiculoId], references: [id], onDelete: Cascade)
 
   @@map("vencimientos_vehiculo")
@@ -949,25 +939,24 @@ model PlanificacionDescuento {
   @@map("planificacion_descuentos")
 }
 
-enum CicloPago {
-  DIARIO
-  SEMANAL
-  MENSUAL
-}
-
 model LiquidacionFinal {
   id               String   @id @default(uuid())
   empleadoId       String   @map("id_empleado")
   fechaEgreso      DateTime @map("fecha_egreso")
-  tipoEgreso       String   @map("tipo_egreso") // "RENUNCIA", "DESPIDO_SIN_CAUSA", "DESPIDO_CON_CAUSA", "FIN_CONTRATO"
+  tipoEgreso       String   @map("tipo_egreso")
   antiguedadAnios  Int      @map("antiguedad_anios")
   detalleConceptos Json     @map("detalle_conceptos")
   totalHaberes     Float    @map("total_haberes")
   totalDescuentos  Float    @map("total_descuentos")
   totalNeto        Float    @map("total_neto")
   createdAt        DateTime @default(now())
-  
   empleado         Empleado @relation(fields: [empleadoId], references: [id])
 
   @@map("liquidaciones_finales")
+}
+
+enum CicloPago {
+  DIARIO
+  SEMANAL
+  MENSUAL
 }
