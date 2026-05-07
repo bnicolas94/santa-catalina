@@ -111,76 +111,77 @@ export async function POST(request: Request) {
                         where: { id: vehiculoId },
                         data: { kmActual: numericKm }
                     })
-                }
+            }
+            
+            const categoria = await tx.categoriaGasto.findUnique({ where: { id: categoriaId } })
 
-                // 3. Vincular con Recordatorio de Service si la categoría es "Service"
-                const categoria = await tx.categoriaGasto.findUnique({ where: { id: categoriaId } })
-                if (categoria && categoria.nombre.toLowerCase() === 'service') {
-                    const nextServiceKm = numericKm + 10000
-                    
-                    // Buscar si ya existe un recordatorio de tipo Service para este vehículo
-                    const existingVenc = await tx.vencimientoVehiculo.findFirst({
-                        where: { 
-                            vehiculoId,
-                            tipo: { equals: 'Service', mode: 'insensitive' }
+            // 3. Vincular con Recordatorio de Service si la categoría es "Service"
+            if (categoria && categoria.nombre.toLowerCase() === 'service' && kmVehiculo) {
+                const numericKm = parseInt(kmVehiculo)
+                const nextServiceKm = numericKm + 10000
+                
+                // Buscar si ya existe un recordatorio de tipo Service para este vehículo
+                const existingVenc = await tx.vencimientoVehiculo.findFirst({
+                    where: { 
+                        vehiculoId,
+                        tipo: { equals: 'Service', mode: 'insensitive' }
+                    }
+                })
+
+                if (existingVenc) {
+                    await tx.vencimientoVehiculo.update({
+                        where: { id: existingVenc.id },
+                        data: {
+                            kmVencimiento: nextServiceKm,
+                            kmAviso: 2000,
+                            fechaVencimiento: null, // Priorizar KM
+                            notificado: false,
+                            observaciones: `Actualizado automáticamente por gasto el ${new Date().toLocaleDateString()}`
                         }
                     })
-
-                    if (existingVenc) {
-                        await tx.vencimientoVehiculo.update({
-                            where: { id: existingVenc.id },
-                            data: {
-                                kmVencimiento: nextServiceKm,
-                                kmAviso: 2000,
-                                fechaVencimiento: null, // Priorizar KM
-                                notificado: false,
-                                observaciones: `Actualizado automáticamente por gasto el ${new Date().toLocaleDateString()}`
-                            }
-                        })
-                    } else {
-                        await tx.vencimientoVehiculo.create({
-                            data: {
-                                vehiculoId,
-                                tipo: 'Service',
-                                kmVencimiento: nextServiceKm,
-                                kmAviso: 2000,
-                                observaciones: 'Generado automáticamente por carga de gasto de Service'
-                            }
-                        })
-                    }
-                }
-
-                // 4. Vincular con Recordatorio de VTV si la categoría es "VTV"
-                if (categoria && categoria.nombre.toLowerCase() === 'vtv' && vencimientoVtv) {
-                    const existingVenc = await tx.vencimientoVehiculo.findFirst({
-                        where: { 
+                } else {
+                    await tx.vencimientoVehiculo.create({
+                        data: {
                             vehiculoId,
-                            tipo: { equals: 'VTV', mode: 'insensitive' }
+                            tipo: 'Service',
+                            kmVencimiento: nextServiceKm,
+                            kmAviso: 2000,
+                            observaciones: 'Generado automáticamente por carga de gasto de Service'
                         }
                     })
+                }
+            }
 
-                    const obsVtv = `Realizada el ${new Date(fecha).toLocaleDateString()}. Prox. vencimiento: ${new Date(vencimientoVtv).toLocaleDateString()}`
-
-                    if (existingVenc) {
-                        await tx.vencimientoVehiculo.update({
-                            where: { id: existingVenc.id },
-                            data: {
-                                fechaVencimiento: new Date(vencimientoVtv),
-                                kmVencimiento: null, // Priorizar Fecha
-                                notificado: false,
-                                observaciones: obsVtv
-                            }
-                        })
-                    } else {
-                        await tx.vencimientoVehiculo.create({
-                            data: {
-                                vehiculoId,
-                                tipo: 'VTV',
-                                fechaVencimiento: new Date(vencimientoVtv),
-                                observaciones: obsVtv
-                            }
-                        })
+            // 4. Vincular con Recordatorio de VTV si la categoría es "VTV"
+            if (categoria && categoria.nombre.toLowerCase() === 'vtv' && vencimientoVtv) {
+                const existingVenc = await tx.vencimientoVehiculo.findFirst({
+                    where: { 
+                        vehiculoId,
+                        tipo: { equals: 'VTV', mode: 'insensitive' }
                     }
+                })
+
+                const obsVtv = `Realizada el ${new Date(fecha).toLocaleDateString()}. Prox. vencimiento: ${new Date(vencimientoVtv).toLocaleDateString()}`
+
+                if (existingVenc) {
+                    await tx.vencimientoVehiculo.update({
+                        where: { id: existingVenc.id },
+                        data: {
+                            fechaVencimiento: new Date(vencimientoVtv),
+                            kmVencimiento: null, // Priorizar Fecha
+                            notificado: false,
+                            observaciones: obsVtv
+                        }
+                    })
+                } else {
+                    await tx.vencimientoVehiculo.create({
+                        data: {
+                            vehiculoId,
+                            tipo: 'VTV',
+                            fechaVencimiento: new Date(vencimientoVtv),
+                            observaciones: obsVtv
+                        }
+                    })
                 }
             }
 
