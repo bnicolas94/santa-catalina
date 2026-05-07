@@ -86,7 +86,7 @@ export default function FlotaDashboard() {
                         {a.tipo === 'chofer' ? '👤 Chofer' : a.vehiculo?.patente}
                       </td>
                       <td>
-                        {a.tipo === 'km' ? 'Service (KM)' : 
+                        {a.tipo === 'km' || a.tipo === 'vencimiento-km' ? 'Mantenimiento (KM)' : 
                          a.tipo === 'chofer' ? 'Licencia de Conducir' : 
                          'Documentación'}
                       </td>

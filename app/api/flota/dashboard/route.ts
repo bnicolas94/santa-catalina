@@ -33,21 +33,37 @@ export async function GET() {
 
     // 1. Vencimientos Vehículos (Fechas)
     vencimientos.forEach((v: any) => {
-      if (!v.fechaVencimiento) return;
-      const fecha = new Date(v.fechaVencimiento);
-      const diasAviso = v.diasAviso || 30;
-      
-      const limiteAviso = new Date(fecha);
-      limiteAviso.setDate(fecha.getDate() - diasAviso);
+      // 1.1 Alerta por Fecha
+      if (v.fechaVencimiento) {
+        const fecha = new Date(v.fechaVencimiento);
+        const diasAviso = v.diasAviso || 30;
+        const limiteAviso = new Date(fecha);
+        limiteAviso.setDate(fecha.getDate() - diasAviso);
 
-      if (fecha < hoy) {
-        vencidos++;
-        alertasArray.push({ id: `venc-${v.id}`, tipo: 'vencimiento', gravedad: 'roja', titulo: `${v.tipo} vencido`, fecha: v.fechaVencimiento, vehiculo: v.vehiculo });
-      } else if (hoy >= limiteAviso) {
-        proximosVencer++;
-        alertasArray.push({ id: `venc-${v.id}`, tipo: 'vencimiento', gravedad: 'naranja', titulo: `${v.tipo} próximo (en <${diasAviso}d)`, fecha: v.fechaVencimiento, vehiculo: v.vehiculo });
-      } else {
-        ok++;
+        if (fecha < hoy) {
+          vencidos++;
+          alertasArray.push({ id: `venc-${v.id}`, tipo: 'vencimiento', gravedad: 'roja', titulo: `${v.tipo} vencido`, fecha: v.fechaVencimiento, vehiculo: v.vehiculo });
+        } else if (hoy >= limiteAviso) {
+          proximosVencer++;
+          alertasArray.push({ id: `venc-${v.id}`, tipo: 'vencimiento', gravedad: 'naranja', titulo: `${v.tipo} próximo (en <${diasAviso}d)`, fecha: v.fechaVencimiento, vehiculo: v.vehiculo });
+        } else {
+          ok++;
+        }
+      } 
+      // 1.2 Alerta por KM (dentro de VencimientoVehiculo)
+      else if (v.kmVencimiento) {
+        const kmsFaltantes = v.kmVencimiento - v.vehiculo.kmActual;
+        const aviso = v.kmAviso || 2000;
+
+        if (kmsFaltantes <= 0) {
+          vencidos++;
+          alertasArray.push({ id: `venc-km-${v.id}`, tipo: 'vencimiento-km', gravedad: 'roja', titulo: `${v.tipo} Pasado (${Math.abs(kmsFaltantes)} km)`, vehiculo: v.vehiculo });
+        } else if (kmsFaltantes <= aviso) {
+          proximosVencer++;
+          alertasArray.push({ id: `venc-km-${v.id}`, tipo: 'vencimiento-km', gravedad: 'naranja', titulo: `${v.tipo} en ${kmsFaltantes} km`, vehiculo: v.vehiculo });
+        } else {
+          ok++;
+        }
       }
     });
 
