@@ -111,6 +111,7 @@ export async function POST(request: Request) {
                         where: { id: vehiculoId },
                         data: { kmActual: numericKm }
                     })
+                }
             }
             
             const categoria = await tx.categoriaGasto.findUnique({ where: { id: categoriaId } })
