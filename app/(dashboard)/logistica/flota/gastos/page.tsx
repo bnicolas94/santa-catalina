@@ -52,6 +52,9 @@ export default function GastosFlotaPage() {
     const [descripcion, setDescripcion] = useState('')
     const [kmVehiculo, setKmVehiculo] = useState('')
     const [taller, setTaller] = useState('')
+    const [fechaVencimientoVtv, setFechaVencimientoVtv] = useState('')
+
+    const isVtv = categorias.find(c => c.id === selectedCategoria)?.nombre.toLowerCase() === 'vtv'
 
     useEffect(() => {
         fetchData()
@@ -92,6 +95,11 @@ export default function GastosFlotaPage() {
             return
         }
 
+        if (isVtv && !fechaVencimientoVtv) {
+            toast.error('Completá la fecha de vencimiento de la VTV')
+            return
+        }
+
         setSaving(true)
         try {
             const res = await fetch('/api/logistica/flota/gastos', {
@@ -105,7 +113,8 @@ export default function GastosFlotaPage() {
                     vehiculoId: selectedVehiculo,
                     kmVehiculo,
                     taller,
-                    cajaTipo: selectedCaja
+                    cajaTipo: selectedCaja,
+                    vencimientoVtv: isVtv ? fechaVencimientoVtv : null
                 })
             })
 
@@ -120,6 +129,7 @@ export default function GastosFlotaPage() {
             setDescripcion('')
             setKmVehiculo('')
             setTaller('')
+            setFechaVencimientoVtv('')
             fetchData()
         } catch (error: any) {
             toast.error(error.message || 'Error al registrar el gasto')
@@ -166,6 +176,19 @@ export default function GastosFlotaPage() {
                                 ))}
                             </select>
                         </div>
+
+                        {isVtv && (
+                            <div className="form-group" style={{ backgroundColor: 'var(--color-success-light)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-success)' }}>
+                                <label className="form-label" style={{ color: 'var(--color-success-dark)', fontWeight: 'bold' }}>📅 Nuevo Vencimiento VTV</label>
+                                <input 
+                                    type="date" 
+                                    className="form-input" 
+                                    value={fechaVencimientoVtv} 
+                                    onChange={e => setFechaVencimientoVtv(e.target.value)} 
+                                    required 
+                                />
+                            </div>
+                        )}
 
                         <div className="form-group">
                             <label className="form-label">Caja de Origen</label>

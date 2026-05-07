@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { fecha, monto, descripcion, categoriaId, vehiculoId, kmVehiculo, taller, cajaTipo } = body
+        const { fecha, monto, descripcion, categoriaId, vehiculoId, kmVehiculo, taller, cajaTipo, vencimientoVtv } = body
 
         if (!fecha || !monto || !categoriaId || !vehiculoId || !cajaTipo) {
             return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
@@ -145,6 +145,39 @@ export async function POST(request: Request) {
                                 kmVencimiento: nextServiceKm,
                                 kmAviso: 2000,
                                 observaciones: 'Generado automáticamente por carga de gasto de Service'
+                            }
+                        })
+                    }
+                }
+
+                // 4. Vincular con Recordatorio de VTV si la categoría es "VTV"
+                if (categoria && categoria.nombre.toLowerCase() === 'vtv' && vencimientoVtv) {
+                    const existingVenc = await tx.vencimientoVehiculo.findFirst({
+                        where: { 
+                            vehiculoId,
+                            tipo: { equals: 'VTV', mode: 'insensitive' }
+                        }
+                    })
+
+                    const obsVtv = `Realizada el ${new Date(fecha).toLocaleDateString()}. Prox. vencimiento: ${new Date(vencimientoVtv).toLocaleDateString()}`
+
+                    if (existingVenc) {
+                        await tx.vencimientoVehiculo.update({
+                            where: { id: existingVenc.id },
+                            data: {
+                                fechaVencimiento: new Date(vencimientoVtv),
+                                kmVencimiento: null, // Priorizar Fecha
+                                notificado: false,
+                                observaciones: obsVtv
+                            }
+                        })
+                    } else {
+                        await tx.vencimientoVehiculo.create({
+                            data: {
+                                vehiculoId,
+                                tipo: 'VTV',
+                                fechaVencimiento: new Date(vencimientoVtv),
+                                observaciones: obsVtv
                             }
                         })
                     }
