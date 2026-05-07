@@ -128,6 +128,25 @@ export default function VehiculoDetallePage() {
     fetchVehiculo()
   }
 
+  const handleDeleteGasto = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este gasto? El monto será devuelto a la caja de origen.')) return
+    
+    try {
+      const res = await fetch(`/api/logistica/flota/gastos/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error)
+      }
+
+      fetchVehiculo()
+    } catch (error: any) {
+      alert(error.message || 'Error al eliminar el gasto')
+    }
+  }
+
   if (loading) return <div className="page-content"><p>Cargando ficha del vehículo...</p></div>
   if (!vehiculo) return <div className="page-content"><p>Vehículo no encontrado.</p><Link href="/logistica/flota/vehiculos">Volver</Link></div>
 
@@ -251,6 +270,7 @@ export default function VehiculoDetallePage() {
                     <th>Taller</th>
                     <th>KM</th>
                     <th style={{ textAlign: 'right' }}>Monto</th>
+                    <th style={{ textAlign: 'right' }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -268,6 +288,16 @@ export default function VehiculoDetallePage() {
                         <td style={{ fontSize: 'var(--text-xs)' }}>{g.kmVehiculo ? `${g.kmVehiculo.toLocaleString()} km` : '-'}</td>
                         <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-danger)' }}>
                            ${g.monto.toLocaleString()}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button 
+                            className="btn btn-ghost btn-sm" 
+                            style={{ color: 'var(--color-danger)' }} 
+                            onClick={() => handleDeleteGasto(g.id)}
+                            title="Eliminar gasto y sincronizar caja"
+                          >
+                            🗑️
+                          </button>
                         </td>
                       </tr>
                     ))

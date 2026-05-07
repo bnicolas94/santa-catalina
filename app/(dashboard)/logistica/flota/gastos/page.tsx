@@ -53,6 +53,7 @@ export default function GastosFlotaPage() {
     const [kmVehiculo, setKmVehiculo] = useState('')
     const [taller, setTaller] = useState('')
     const [fechaVencimientoVtv, setFechaVencimientoVtv] = useState('')
+    const [editingId, setEditingId] = useState<string | null>(null)
 
     const isVtv = categorias.find(c => c.id === selectedCategoria)?.nombre.toLowerCase() === 'vtv'
 
@@ -88,6 +89,29 @@ export default function GastosFlotaPage() {
         }
     }
 
+    const handleEdit = (gasto: Gasto) => {
+        setEditingId(gasto.id)
+        setFecha(new Date(gasto.fecha).toISOString().split('T')[0])
+        setSelectedVehiculo(gasto.vehiculoId)
+        setSelectedCategoria(gasto.categoriaId)
+        setMonto(gasto.monto.toString())
+        setDescripcion(gasto.descripcion || '')
+        setKmVehiculo(gasto.kmVehiculo?.toString() || '')
+        setTaller(gasto.taller || '')
+        // Para VTV no podemos recuperar la fecha de vencimiento tan fácil sin fetch extra, 
+        // pero podemos dejar que la vuelvan a poner si es necesario editarla.
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    const resetForm = () => {
+        setEditingId(null)
+        setMonto('')
+        setDescripcion('')
+        setKmVehiculo('')
+        setTaller('')
+        setFechaVencimientoVtv('')
+    }
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         if (!selectedVehiculo || !selectedCategoria || !monto || !selectedCaja) {
@@ -95,15 +119,18 @@ export default function GastosFlotaPage() {
             return
         }
 
-        if (isVtv && !fechaVencimientoVtv) {
+        if (isVtv && !fechaVencimientoVtv && !editingId) {
             toast.error('Completá la fecha de vencimiento de la VTV')
             return
         }
 
         setSaving(true)
         try {
-            const res = await fetch('/api/logistica/flota/gastos', {
-                method: 'POST',
+            const url = editingId ? `/api/logistica/flota/gastos/${editingId}` : '/api/logistica/flota/gastos'
+            const method = editingId ? 'PUT' : 'POST'
+
+            const res = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fecha,
@@ -123,18 +150,32 @@ export default function GastosFlotaPage() {
                 throw new Error(error.error)
             }
 
-            toast.success('Gasto registrado con éxito')
-            // Reset form
-            setMonto('')
-            setDescripcion('')
-            setKmVehiculo('')
-            setTaller('')
-            setFechaVencimientoVtv('')
+            toast.success(editingId ? 'Gasto actualizado' : 'Gasto registrado con éxito')
+            resetForm()
             fetchData()
         } catch (error: any) {
-            toast.error(error.message || 'Error al registrar el gasto')
+            toast.error(error.message || 'Error al procesar el gasto')
         } finally {
             setSaving(false)
+        }
+    }
+    async function handleDelete(id: string) {
+        if (!confirm('¿Estás seguro de eliminar este gasto? El monto será devuelto a la caja de origen.')) return
+
+        try {
+            const res = await fetch(`/api/logistica/flota/gastos/${id}`, {
+                method: 'DELETE'
+            })
+
+            if (!res.ok) {
+                const error = await res.json()
+                throw new Error(error.error)
+            }
+
+            toast.success('Gasto eliminado y caja actualizada')
+            fetchData()
+        } catch (error: any) {
+            toast.error(error.message || 'Error al eliminar el gasto')
         }
     }
 
@@ -150,7 +191,12 @@ export default function GastosFlotaPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '400px 1fr', gap: 'var(--space-6)', alignItems: 'start' }}>
                 {/* Formulario */}
                 <div className="card shadow-sm" style={{ padding: 'var(--space-5)' }}>
-                    <h2 className="card-title" style={{ marginBottom: 'var(--space-4)' }}>Registrar Gasto</h2>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                        <h2 className="card-title" style={{ margin: 0 }}>{editingId ? 'Editar Gasto' : 'Registrar Gasto'}</h2>
+                        {editingId && (
+                            <button onClick={resetForm} className="btn btn-ghost btn-sm">Cancelar</button>
+                        )}
+                    </div>
                     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                         <div className="form-group">
                             <label className="form-label">Fecha</label>
@@ -222,7 +268,7 @@ export default function GastosFlotaPage() {
                         </div>
 
                         <button className="btn btn-primary" type="submit" disabled={saving} style={{ marginTop: 'var(--space-2)' }}>
-                            {saving ? 'Procesando...' : '💰 Registrar Gasto'}
+                            {saving ? 'Procesando...' : editingId ? '💾 Guardar Cambios' : '💰 Registrar Gasto'}
                         </button>
                     </form>
                 </div>
@@ -285,6 +331,7 @@ export default function GastosFlotaPage() {
                                                         <th>Categoría</th>
                                                         <th>Descripción / Novedad</th>
                                                         <th style={{ textAlign: 'right' }}>Monto</th>
+                                                        <th style={{ textAlign: 'right' }}></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -298,6 +345,24 @@ export default function GastosFlotaPage() {
                                                             </td>
                                                             <td style={{ textAlign: 'right', fontWeight: 'bold', color: 'var(--color-danger)' }}>
                                                                 -${g.monto.toLocaleString('es-AR')}
+                                                            </td>
+                                                            <td style={{ textAlign: 'right', display: 'flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
+                                                                <button 
+                                                                    onClick={() => handleEdit(g)}
+                                                                    className="btn btn-ghost btn-sm"
+                                                                    style={{ padding: '4px' }}
+                                                                    title="Editar gasto"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleDelete(g.id)}
+                                                                    className="btn btn-ghost btn-sm"
+                                                                    style={{ color: 'var(--color-danger)', padding: '4px' }}
+                                                                    title="Eliminar gasto y devolver dinero a caja"
+                                                                >
+                                                                    🗑️
+                                                                </button>
                                                             </td>
                                                         </tr>
                                                     ))}
