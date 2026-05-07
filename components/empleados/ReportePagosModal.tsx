@@ -196,6 +196,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     .firma-line { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
                     .data-label { font-weight: bold; }
                     .amount { font-weight: bold; }
+                    .header-logo { width: 140px; height: auto; margin-bottom: 15px; }
                     @media print { 
                         .no-print { display: none; } 
                         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -325,8 +326,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
             allHtml += `
                 <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
-                    <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
+                    <img src="/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
                     <div class="header">
+                        <img src="/logo-watermark.png" class="header-logo" alt="Logo" />
                         <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
                     <div class="texto">
