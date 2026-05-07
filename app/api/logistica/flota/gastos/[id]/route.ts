@@ -13,16 +13,18 @@ export async function DELETE(
             // 1. Buscar el gasto
             const gasto = await tx.gastoOperativo.findUnique({
                 where: { id },
-                include: { movimientoCaja: true }
+                include: { movimientosCaja: true }
             })
 
             if (!gasto) {
                 throw new Error('Gasto no encontrado')
             }
 
-            // 2. Si tiene un movimiento de caja vinculado, revertirlo y eliminarlo
-            if (gasto.movimientoCaja) {
-                await CajaService.revertirMovimientoEnTx(tx, gasto.movimientoCaja.id)
+            // 2. Si tiene movimientos de caja vinculados, revertirlos y eliminarlos
+            if (gasto.movimientosCaja && gasto.movimientosCaja.length > 0) {
+                for (const mov of gasto.movimientosCaja) {
+                    await CajaService.revertirMovimientoEnTx(tx, mov.id)
+                }
             }
 
             // 3. Eliminar el gasto operativo
@@ -53,7 +55,7 @@ export async function PUT(
             // 1. Buscar el gasto original
             const oldGasto = await tx.gastoOperativo.findUnique({
                 where: { id },
-                include: { movimientoCaja: true }
+                include: { movimientosCaja: true }
             })
 
             if (!oldGasto) throw new Error('Gasto no encontrado')
@@ -74,15 +76,16 @@ export async function PUT(
                 }
             })
 
-            // 3. Si tiene movimiento de caja, actualizarlo
-            if (oldGasto.movimientoCaja) {
-                // Si cambió la caja de origen o el monto, el updateMovimiento del service se encarga de revertir e impactar
-                await CajaService.updateMovimiento(oldGasto.movimientoCaja.id, {
-                    monto: numericMonto,
-                    concepto: `Gasto Flota (Editado): ${descripcion || 'S/D'}`,
-                    fecha: gasto.fecha,
-                    cajaOrigen: cajaTipo,
-                })
+            // 3. Si tiene movimientos de caja, actualizarlos (asumiendo 1 por ahora para gastos de flota)
+            if (oldGasto.movimientosCaja && oldGasto.movimientosCaja.length > 0) {
+                for (const mov of oldGasto.movimientosCaja) {
+                    await CajaService.updateMovimiento(mov.id, {
+                        monto: numericMonto,
+                        concepto: `Gasto Flota (Editado): ${descripcion || 'S/D'}`,
+                        fecha: gasto.fecha,
+                        cajaOrigen: cajaTipo,
+                    })
+                }
             }
 
             return gasto
