@@ -467,6 +467,7 @@ model GastoOperativo {
   ubicacion        Ubicacion?        @relation(fields: [ubicacionId], references: [id])
   vehiculo         Vehiculo?         @relation(fields: [vehiculoId], references: [id])
   movimientosStock MovimientoStock[]
+  movimientoCaja   MovimientoCaja?
 
   @@map("gastos_operativos")
 }
@@ -482,10 +483,11 @@ model MovimientoCaja {
   descripcion  String?
   createdAt    DateTime               @default(now())
   pedidoId     String?                @map("id_pedido")
-  gastoId      String?                @map("id_gasto")
+  gastoId      String?                @unique @map("id_gasto")
   rendicionId  String?                @map("id_rendicion")
   pedido       Pedido?                @relation(fields: [pedidoId], references: [id])
   rendicion    RendicionChofer?       @relation(fields: [rendicionId], references: [id])
+  gasto        GastoOperativo?        @relation(fields: [gastoId], references: [id])
   movimientoMp MovimientoMercadoPago?
 
   @@map("movimientos_caja")

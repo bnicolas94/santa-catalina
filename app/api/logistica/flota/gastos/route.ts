@@ -29,7 +29,7 @@ export async function GET(request: Request) {
             orderBy: { fecha: 'desc' },
             include: { 
                 categoria: true,
-                vehiculo: { select: { patente: true, alias: true, marca: true, modelo: true } }
+                vehiculo: { select: { id: true, patente: true, alias: true, marca: true, modelo: true } }
             },
         })
 

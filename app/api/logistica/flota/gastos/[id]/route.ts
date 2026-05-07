@@ -4,10 +4,10 @@ import { CajaService } from '@/lib/services/caja.service'
 
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = params
+        const { id } = await params
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Buscar el gasto
@@ -42,10 +42,10 @@ export async function DELETE(
 
 export async function PUT(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = params
+        const { id } = await params
         const body = await request.json()
         const { fecha, monto, descripcion, categoriaId, vehiculoId, kmVehiculo, taller, cajaTipo } = body
 

@@ -22,8 +22,10 @@ interface Gasto {
     fecha: string
     monto: number
     descripcion: string
+    categoriaId: string
     categoria: { id: string; nombre: string }
-    vehiculo: { patente: string; alias?: string }
+    vehiculoId: string
+    vehiculo: { id: string; patente: string; alias?: string }
     kmVehiculo?: number
     taller?: string
 }
