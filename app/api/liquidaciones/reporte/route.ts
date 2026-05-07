@@ -14,26 +14,42 @@ export async function GET(request: Request) {
         const fechaInicio = new Date(`${desde}T00:00:00.000Z`)
         const fechaFin = new Date(`${hasta}T23:59:59.999Z`)
 
-        const liquidaciones = await prisma.liquidacionSueldo.findMany({
-            where: {
-                fechaGeneracion: {
-                    gte: fechaInicio,
-                    lte: fechaFin
+        const [liquidaciones, liquidacionesFinales] = await Promise.all([
+            prisma.liquidacionSueldo.findMany({
+                where: {
+                    fechaGeneracion: {
+                        gte: fechaInicio,
+                        lte: fechaFin
+                    },
+                    estado: 'pagado'
                 },
-                estado: 'pagado'
-            },
-            include: {
-                empleado: true,
-                items: true
-            },
-            orderBy: [
-                { empleado: { nombre: 'asc'} },
-                { fechaGeneracion: 'asc' }
-            ]
-        })
+                include: {
+                    empleado: true,
+                    items: true
+                },
+                orderBy: [
+                    { empleado: { nombre: 'asc'} },
+                    { fechaGeneracion: 'asc' }
+                ]
+            }),
+            prisma.liquidacionFinal.findMany({
+                where: {
+                    fechaEgreso: {
+                        gte: fechaInicio,
+                        lte: fechaFin
+                    }
+                },
+                include: {
+                    empleado: true
+                },
+                orderBy: {
+                    fechaEgreso: 'asc'
+                }
+            })
+        ])
 
         // Map the data for easier consumption in the frontend
-        const reporte = liquidaciones.map(liq => {
+        const reporteSueldos = liquidaciones.map(liq => {
             const totalEgresos = liq.descuentosPrestamos
             const montoAdicionales = liq.items.reduce((acc, item) => acc + item.montoCalculado, 0)
             const soloSueldoBase = liq.sueldoProporcional + liq.montoHorasNormales + liq.montoHorasFeriado
@@ -61,6 +77,40 @@ export async function GET(request: Request) {
                 totalNeto: liq.totalNeto
             }
         })
+
+        const reporteFinales = liquidacionesFinales.map(liq => {
+            return {
+                id: liq.id,
+                tipo: 'FINAL',
+                manualData: { 
+                    esLiquidacionFinal: true,
+                    tipoEgreso: liq.tipoEgreso,
+                    antiguedadAnios: liq.antiguedadAnios,
+                    conceptos: liq.detalleConceptos
+                },
+                empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
+                empleadoDatos: {
+                    nombre: liq.empleado.nombre,
+                    apellido: liq.empleado.apellido,
+                    dni: liq.empleado.dni
+                },
+                periodo: `Liquidación Final (${liq.tipoEgreso})`,
+                fechaGeneracion: liq.fechaEgreso,
+                horasExtras: 0,
+                montoHorasExtras: 0,
+                sueldoProporcional: 0,
+                montoHorasNormales: 0,
+                montoHorasFeriado: 0,
+                montoAdicionales: 0,
+                totalBruto: liq.totalHaberes,
+                descuentos: liq.totalDescuentos,
+                totalNeto: liq.totalNeto
+            }
+        })
+
+        const reporte = [...reporteSueldos, ...reporteFinales].sort((a, b) => 
+            new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()
+        )
 
         return NextResponse.json(reporte)
     } catch (error) {

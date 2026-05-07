@@ -234,6 +234,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             const isVacaciones = liq.tipo === 'VACACIONES' || 
                                 liq.manualData?.esVacaciones === true || 
                                 liq.periodo.toLowerCase().includes('vacaciones')
+            
+            const isFinal = liq.tipo === 'FINAL' || liq.manualData?.esLiquidacionFinal === true
 
             const manualData = liq.manualData || {}
             const goceInicio = manualData.fechaInicioGoce ? manualData.fechaInicioGoce.split('-').reverse().join('/') : '___'
@@ -241,7 +243,59 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             const diasVacas = manualData.diasTrabajados || '___'
 
             let textoHtml = ''
-            if (isVacaciones) {
+            if (isFinal) {
+                const conceptos = manualData.conceptos || []
+                textoHtml = `
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="text-decoration: underline; margin-bottom: 5px;">Liquidación Final de Haberes</h2>
+                        <p style="font-size: 11pt; margin-top: 0;">Ley de Contrato de Trabajo N° 20.744</p>
+                    </div>
+                    <p style="margin-bottom: 15px;">
+                        Certifico haber recibido de la firma la suma de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
+                        (pesos ${totalLetras}), en concepto de liquidación final por <span class="data-label">${manualData.tipoEgreso || 'Egreso'}</span>, 
+                        con una antigüedad de <span class="data-label">${manualData.antiguedadAnios || 0}</span> años, según el siguiente detalle:
+                    </p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12pt; margin-bottom: 20px; border: 1px solid #000;">
+                        <thead>
+                            <tr style="background-color: #f2f2f2;">
+                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">Concepto</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: right;">Haberes ($)</th>
+                                <th style="border: 1px solid #000; padding: 5px; text-align: right;">Descuentos ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${conceptos.map((c: any) => `
+                                <tr>
+                                    <td style="border: 1px solid #000; padding: 5px;">
+                                        ${c.nombre}
+                                        <div style="font-size: 9pt; color: #555;">${c.metodologia || ''}</div>
+                                    </td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: right;">
+                                        ${c.monto > 0 ? c.monto.toLocaleString() : '-'}
+                                    </td>
+                                    <td style="border: 1px solid #000; padding: 5px; text-align: right;">
+                                        ${c.monto < 0 ? Math.abs(c.monto).toLocaleString() : '-'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr style="font-weight: bold;">
+                                <td style="border: 1px solid #000; padding: 8px; text-align: right;">TOTALES:</td>
+                                <td style="border: 1px solid #000; padding: 8px; text-align: right;">$${(liq.totalBruto || 0).toLocaleString()}</td>
+                                <td style="border: 1px solid #000; padding: 8px; text-align: right;">$${(liq.descuentos || 0).toLocaleString()}</td>
+                            </tr>
+                            <tr style="font-weight: bold; font-size: 14pt; background-color: #eee;">
+                                <td colspan="2" style="border: 1px solid #000; padding: 10px; text-align: right;">NETO A PERCIBIR:</td>
+                                <td style="border: 1px solid #000; padding: 10px; text-align: right;">$${(liq.totalNeto || 0).toLocaleString()}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <p style="font-size: 10pt; font-style: italic; margin-top: 10px;">
+                        Con la percepción del importe neto arriba indicado, el empleado manifiesta que no tiene nada más que reclamar a la empresa por ningún concepto derivado de la relación laboral que los unió y que hoy queda definitivamente extinguida.
+                    </p>
+                `
+            } else if (isVacaciones) {
                 textoHtml = `
                     <div style="text-align: center; margin-bottom: 30px;">
                         <h2 style="text-decoration: underline;">Vacaciones anuales</h2>
@@ -369,6 +423,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                         {d.periodo}
                                                         {(d.tipo === 'VACACIONES' || d.manualData?.esVacaciones || d.periodo.toLowerCase().includes('vacaciones')) && (
                                                             <span style={{ backgroundColor: 'var(--color-success-light)', color: 'var(--color-success)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>VACACIONES</span>
+                                                        )}
+                                                        {d.tipo === 'FINAL' && (
+                                                            <span style={{ backgroundColor: 'var(--color-danger-light)', color: 'var(--color-danger)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>FINAL</span>
                                                         )}
                                                     </div>
                                                 </td>
