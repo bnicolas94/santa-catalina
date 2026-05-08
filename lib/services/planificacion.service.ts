@@ -166,32 +166,46 @@ export class PlanificacionService {
             }
         })
 
-        // 6. Obtener lo que ya está en producción hoy
+        // 6. Obtener lo que ya está en producción (hoy y acumulado de días anteriores)
+        const sesentaDiasAtras = new Date(startOfDay.getTime() - (60 * 24 * 60 * 60 * 1000))
         const enProduccionRaw = await prisma.lote.findMany({
             where: {
-                fechaProduccion: { gte: startOfDay, lte: endOfDay },
+                fechaProduccion: { gte: sesentaDiasAtras, lte: endOfDay },
                 estado: 'en_produccion'
             },
             include: { producto: { include: { presentaciones: { orderBy: { cantidad: 'desc' } } } } }
         })
 
-        const enProduccion: Record<string, number> = {}
+        const enProduccion: Record<string, { total: number, detalles: { fecha: string, cantidad: number }[] }> = {}
+        
+        const registerProduccion = (key: string, fecha: Date, units: number) => {
+            if (!enProduccion[key]) {
+                enProduccion[key] = { total: 0, detalles: [] }
+            }
+            enProduccion[key].total += units
+            
+            const fechaStr = fecha.toISOString().split('T')[0]
+            const existing = enProduccion[key].detalles.find(d => d.fecha === fechaStr)
+            if (existing) {
+                existing.cantidad += units
+            } else {
+                enProduccion[key].detalles.push({ fecha: fechaStr, cantidad: units })
+            }
+        }
+
         enProduccionRaw.forEach(l => {
             if (l.distribucion && Array.isArray(l.distribucion)) {
-                // Si el lote tiene distribución detallada, la usamos
                 const dist = l.distribucion as any[]
                 dist.forEach(d => {
                     const pres = l.producto.presentaciones.find(p => p.id === d.presentacionId)
                     const size = pres?.cantidad || 48
                     const key = `${l.productoId}_${d.presentacionId}`
-                    enProduccion[key] = (enProduccion[key] || 0) + (Number(d.cantidad) * size)
+                    registerProduccion(key, l.fechaProduccion, Number(d.cantidad) * size)
                 })
             } else {
-                // Unidades por paquete: usamos la presentación más grande del producto como estándar
-                // o 48 si no tiene presentaciones definidas
                 const size = l.producto.presentaciones[0]?.cantidad || 48
                 const key = `${l.productoId}_${l.producto.presentaciones[0]?.id || 'null'}`
-                enProduccion[key] = (enProduccion[key] || 0) + (l.unidadesProducidas * size)
+                registerProduccion(key, l.fechaProduccion, l.unidadesProducidas * size)
             }
         })
 
@@ -236,7 +250,6 @@ export class PlanificacionService {
 
         // --- NUEVO: CÁLCULO DE PENDIENTES ANTERIORES (Cumulative Stock Projection) ---
         // Buscamos requerimientos de los últimos 60 días que NO hayan sido descontados
-        const sesentaDiasAtras = new Date(startOfDay.getTime() - (60 * 24 * 60 * 60 * 1000))
         
         // 1. Obtener todos los descuentos de los últimos 60 días
         // @ts-ignore

@@ -916,7 +916,8 @@ export default function ProduccionPage() {
                                                         return fab + loc
                                                     })()
 
-                                                    const enProcUnits = planning?.enProduccion?.[key] || 0
+                                                    const enProcInfo = planning?.enProduccion?.[key]
+                                                    const enProcUnits = enProcInfo?.total || 0
                                                     
                                                     // --- CORRECCIÓN EN TOTALES ---
                                                     // 1. Pendientes de días anteriores
@@ -975,8 +976,15 @@ export default function ProduccionPage() {
                                                                     {stockSource === 'fabrica' ? 'Solo Fábrica' : stockSource === 'local' ? 'Solo Local' : 'Stock Total'}
                                                                 </div>
                                                             </td>
-                                                            <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                                {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
+                                                            <td 
+                                                                style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px', cursor: enProcUnits > 0 ? 'help' : 'default' }}
+                                                                title={enProcInfo?.detalles?.length ? `Lotes en Producción:\n${enProcInfo.detalles.map((d: any) => `• ${formatDateOnly(d.fecha)}: ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
+                                                            >
+                                                                {enProcUnits > 0 ? (
+                                                                    <span style={{ borderBottom: '1px dotted #F39C12' }}>
+                                                                        {enProcPaq} paq
+                                                                    </span>
+                                                                ) : (prodInfo?.isPrimary ? '—' : '')}
                                                             </td>
                                                             <td 
                                                                 style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
@@ -1072,7 +1080,8 @@ export default function ProduccionPage() {
                                                 return fab + loc
                                             })()
 
-                                            const enProcUnits = planning?.enProduccion?.[key] || 0
+                                            const enProcInfo = planning?.enProduccion?.[key]
+                                            const enProcUnits = enProcInfo?.total || 0
                                             
                                             // --- CÁLCULO ACUMULATIVO ---
                                             // 1. Pendientes de días anteriores
@@ -1134,8 +1143,15 @@ export default function ProduccionPage() {
                                                             <td style={{ textAlign: 'center', color: stockUnits < totalUnits ? 'var(--color-danger)' : 'var(--color-success)', fontSize: '12px' }}>
                                                                 {stockPaq} paq
                                                             </td>
-                                                            <td style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px' }}>
-                                                                {enProcUnits > 0 ? `${enProcPaq} paq` : (prodInfo?.isPrimary ? '—' : '')}
+                                                            <td 
+                                                                style={{ textAlign: 'center', color: '#F39C12', fontSize: '12px', cursor: enProcUnits > 0 ? 'help' : 'default' }}
+                                                                title={enProcInfo?.detalles?.length ? `Lotes en Producción:\n${enProcInfo.detalles.map((d: any) => `• ${formatDateOnly(d.fecha)}: ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
+                                                            >
+                                                                {enProcUnits > 0 ? (
+                                                                    <span style={{ borderBottom: '1px dotted #F39C12' }}>
+                                                                        {enProcPaq} paq
+                                                                    </span>
+                                                                ) : (prodInfo?.isPrimary ? '—' : '')}
                                                             </td>
                                                             <td 
                                                                 style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
