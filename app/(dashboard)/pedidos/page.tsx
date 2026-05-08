@@ -546,22 +546,25 @@ export default function PedidosPage() {
                     <h4 style={{ margin: '0 0 var(--space-3)', color: 'var(--color-primary-dark)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span>🥪</span> Planchas de Elegidos a Producir (según filtros actuales)
                     </h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
                         {Object.entries(stats.planchasPorTurno).map(([turno, sabores]) => (
                             <div key={turno} style={{ 
                                 backgroundColor: 'white', 
                                 padding: 'var(--space-4)', 
                                 borderRadius: 'var(--radius-md)', 
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                minWidth: '220px',
+                                width: 'fit-content',
+                                flex: '0 1 auto'
                             }}>
                                 <div style={{ fontSize: '13px', color: 'var(--color-primary-dark)', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 'var(--space-3)', borderBottom: '1px solid var(--color-gray-200)', paddingBottom: '4px' }}>
                                     Turno {turno}
                                 </div>
                                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
                                     {Object.entries(sabores).map(([sabor, planchas]) => (
-                                        <li key={sabor} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                        <li key={sabor} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-8)', alignItems: 'center', fontSize: '12px' }}>
                                             <span style={{ fontWeight: 'bold', color: 'var(--color-gray-700)' }}>ELE - {sabor}</span>
-                                            <span style={{ fontWeight: '900', color: 'var(--color-primary)' }}>
+                                            <span style={{ fontWeight: '900', color: 'var(--color-primary)', textAlign: 'right' }}>
                                                 {planchas} <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 'normal' }}>planchas</span>
                                             </span>
                                         </li>
