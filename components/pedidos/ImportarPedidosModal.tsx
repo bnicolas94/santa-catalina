@@ -37,6 +37,7 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
     const [previewData, setPreviewData] = useState<PreviewRowResult[] | null>(null);
     const [batchMedioPago, setBatchMedioPago] = useState<'efectivo' | 'transferencia'>('efectivo');
     const [summary, setSummary] = useState({ verdes: 0, amarillos: 0, rojos: 0, totalRows: 0 });
+    const [planchasPorTurno, setPlanchasPorTurno] = useState<Record<string, number>>({});
 
     if (!isOpen) return null;
 
@@ -182,6 +183,7 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
 
             setPreviewData(result.results);
             setSummary({ verdes: result.verdes, amarillos: result.amarillos, rojos: result.rojos, totalRows: result.totalRows });
+            setPlanchasPorTurno(result.planchasPorTurno || {});
             setStep('preview');
         } catch (err: any) {
             setError(err.message);
@@ -396,6 +398,42 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
                                     </tbody>
                                 </table>
                             </div>
+
+                            {/* Sub-módulo: Resumen de Producción (Planchas) */}
+                            {Object.keys(planchasPorTurno).length > 0 && (
+                                <div style={{ 
+                                    padding: 'var(--space-4)', 
+                                    backgroundColor: 'var(--color-primary-light)', 
+                                    borderRadius: 'var(--radius-lg)', 
+                                    margin: '0 -var(--space-6) var(--space-4)',
+                                    border: '1px solid var(--color-primary)'
+                                }}>
+                                    <h4 style={{ margin: '0 0 var(--space-3)', color: 'var(--color-primary-dark)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>🥪</span> Resumen de Producción - Planchas Elegidos
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
+                                        {Object.entries(planchasPorTurno).map(([turno, planchas]) => (
+                                            <div key={turno} style={{ 
+                                                backgroundColor: 'white', 
+                                                padding: 'var(--space-3)', 
+                                                borderRadius: 'var(--radius-md)', 
+                                                textAlign: 'center',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                            }}>
+                                                <div style={{ fontSize: '11px', color: 'var(--color-gray-500)', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                                    {turno}
+                                                </div>
+                                                <div style={{ fontSize: '18px', fontWeight: '900', color: 'var(--color-primary)' }}>
+                                                    {planchas} <span style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--color-gray-400)' }}>pl.</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{ marginTop: 'var(--space-3)', fontSize: '11px', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
+                                        * Valores aproximados para el armado de comandas de este lote de pedidos.
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Selector de Medio de Pago para el Lote */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-lg)', margin: '0 -var(--space-6) var(--space-4)' }}>

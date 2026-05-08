@@ -114,18 +114,31 @@ export async function POST(req: NextRequest) {
             };
         });
 
-        // Calcular total de planchas de Elegidos (ELE)
+        // Calcular total de planchas de Elegidos (ELE) agrupado por turno
         let totalPlanchasElegidos = 0;
+        const planchasPorTurno: Record<string, number> = {};
+
         previewResults.forEach(res => {
             res.orderMatch.detalles.forEach(det => {
                 const pres = presentacionesDB.find(p => p.id === det.presentacionId);
                 if (pres?.producto.codigoInterno === 'ELE') {
                     const planchasPorPaquete = pres.producto.planchasPorPaquete || 6;
                     const unidadesPorPlancha = 48 / planchasPorPaquete; // Asumimos 48 como base de pack
-                    totalPlanchasElegidos += (det.cantidad * pres.cantidad) / unidadesPorPlancha;
+                    const planchas = (det.cantidad * pres.cantidad) / unidadesPorPlancha;
+                    
+                    totalPlanchasElegidos += planchas;
+
+                    const turno = res.original.turno || 'Sin Turno';
+                    const normalizedTurno = turno.charAt(0).toUpperCase() + turno.slice(1).toLowerCase(); // Mañana, Siesta, Tarde...
+                    planchasPorTurno[normalizedTurno] = (planchasPorTurno[normalizedTurno] || 0) + planchas;
                 }
             });
         });
+
+        // Redondear los valores por turno a 1 decimal
+        for (const t in planchasPorTurno) {
+            planchasPorTurno[t] = Math.round(planchasPorTurno[t] * 10) / 10;
+        }
 
         return NextResponse.json({
             success: true,
@@ -134,6 +147,7 @@ export async function POST(req: NextRequest) {
             amarillos: previewResults.filter((r) => r.status === "amarillo").length,
             rojos: previewResults.filter((r) => r.status === "rojo").length,
             totalPlanchasElegidos: Math.round(totalPlanchasElegidos * 10) / 10,
+            planchasPorTurno,
             results: previewResults,
         });
 
