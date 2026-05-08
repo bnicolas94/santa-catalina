@@ -114,9 +114,9 @@ export async function POST(req: NextRequest) {
             };
         });
 
-        // Calcular total de planchas de Elegidos (ELE) agrupado por turno
+        // Calcular total de planchas de Elegidos (ELE) agrupado por turno y sabor
         let totalPlanchasElegidos = 0;
-        const planchasPorTurno: Record<string, number> = {};
+        const planchasPorTurno: Record<string, Record<string, number>> = {};
 
         previewResults.forEach(res => {
             res.orderMatch.detalles.forEach(det => {
@@ -130,14 +130,22 @@ export async function POST(req: NextRequest) {
 
                     const turno = res.original.turno || 'Sin Turno';
                     const normalizedTurno = turno.charAt(0).toUpperCase() + turno.slice(1).toLowerCase(); // Mañana, Siesta, Tarde...
-                    planchasPorTurno[normalizedTurno] = (planchasPorTurno[normalizedTurno] || 0) + planchas;
+                    
+                    const sabor = (det.observaciones || 'Surtido').trim().toUpperCase();
+
+                    if (!planchasPorTurno[normalizedTurno]) {
+                        planchasPorTurno[normalizedTurno] = {};
+                    }
+                    planchasPorTurno[normalizedTurno][sabor] = (planchasPorTurno[normalizedTurno][sabor] || 0) + planchas;
                 }
             });
         });
 
         // Redondear los valores por turno a 1 decimal
         for (const t in planchasPorTurno) {
-            planchasPorTurno[t] = Math.round(planchasPorTurno[t] * 10) / 10;
+            for (const s in planchasPorTurno[t]) {
+                planchasPorTurno[t][s] = Math.round(planchasPorTurno[t][s] * 10) / 10;
+            }
         }
 
         return NextResponse.json({

@@ -37,7 +37,7 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
     const [previewData, setPreviewData] = useState<PreviewRowResult[] | null>(null);
     const [batchMedioPago, setBatchMedioPago] = useState<'efectivo' | 'transferencia'>('efectivo');
     const [summary, setSummary] = useState({ verdes: 0, amarillos: 0, rojos: 0, totalRows: 0 });
-    const [planchasPorTurno, setPlanchasPorTurno] = useState<Record<string, number>>({});
+    const [planchasPorTurno, setPlanchasPorTurno] = useState<Record<string, Record<string, number>>>({});
 
     if (!isOpen) return null;
 
@@ -411,21 +411,27 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
                                     <h4 style={{ margin: '0 0 var(--space-3)', color: 'var(--color-primary-dark)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <span>🥪</span> Resumen de Producción - Planchas Elegidos
                                     </h4>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
-                                        {Object.entries(planchasPorTurno).map(([turno, planchas]) => (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-4)' }}>
+                                        {Object.entries(planchasPorTurno).map(([turno, sabores]) => (
                                             <div key={turno} style={{ 
                                                 backgroundColor: 'white', 
-                                                padding: 'var(--space-3)', 
+                                                padding: 'var(--space-4)', 
                                                 borderRadius: 'var(--radius-md)', 
-                                                textAlign: 'center',
                                                 boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
                                             }}>
-                                                <div style={{ fontSize: '11px', color: 'var(--color-gray-500)', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                                    {turno}
+                                                <div style={{ fontSize: '13px', color: 'var(--color-primary-dark)', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 'var(--space-3)', borderBottom: '1px solid var(--color-gray-200)', paddingBottom: '4px' }}>
+                                                    Turno {turno}
                                                 </div>
-                                                <div style={{ fontSize: '18px', fontWeight: '900', color: 'var(--color-primary)' }}>
-                                                    {planchas} <span style={{ fontSize: '10px', fontWeight: 'bold', color: 'var(--color-gray-400)' }}>pl.</span>
-                                                </div>
+                                                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
+                                                    {Object.entries(sabores).map(([sabor, planchas]) => (
+                                                        <li key={sabor} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                                            <span style={{ fontWeight: 'bold', color: 'var(--color-gray-700)' }}>ELE - {sabor}</span>
+                                                            <span style={{ fontWeight: '900', color: 'var(--color-primary)' }}>
+                                                                {planchas} <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 'normal' }}>planchas</span>
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
                                         ))}
                                     </div>
