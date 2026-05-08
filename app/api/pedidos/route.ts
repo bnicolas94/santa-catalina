@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
         else if (sortField === 'totalImporte') orderBy = { totalImporte: sortDir }
         else if (sortField === 'turno') orderBy = { turno: sortDir }
 
-        // Consultas en paralelo: pedidos paginados + total + stats
-        const [pedidos, total, stats] = await Promise.all([
+        // Consultas en paralelo: pedidos paginados + total + stats + detalles ELE
+        const [pedidos, total, stats, detallesELE] = await Promise.all([
             prisma.pedido.findMany({
                 where,
                 orderBy,
@@ -68,7 +68,51 @@ export async function GET(request: NextRequest) {
                 _sum: { totalImporte: true, totalUnidades: true, totalPacks: true },
                 _count: true,
             }),
+            prisma.detallePedido.findMany({
+                where: {
+                    pedido: where,
+                    presentacion: {
+                        producto: { codigoInterno: 'ELE' }
+                    }
+                },
+                include: {
+                    presentacion: {
+                        include: {
+                            producto: { select: { planchasPorPaquete: true } }
+                        }
+                    },
+                    pedido: {
+                        select: { turno: true }
+                    }
+                }
+            })
         ])
+
+        // Calcular planchas de Elegidos agrupadas por turno y sabor
+        const planchasPorTurno: Record<string, Record<string, number>> = {};
+        
+        detallesELE.forEach(det => {
+            const planchasPorPaquete = det.presentacion.producto.planchasPorPaquete || 6;
+            const unidadesPorPlancha = 48 / planchasPorPaquete;
+            const planchas = (det.cantidad * det.presentacion.cantidad) / unidadesPorPlancha;
+            
+            const turnoRaw = det.pedido.turno || 'Sin Turno';
+            const normalizedTurno = turnoRaw.charAt(0).toUpperCase() + turnoRaw.slice(1).toLowerCase();
+            
+            const sabor = (det.observaciones || 'Surtido').trim().toUpperCase();
+
+            if (!planchasPorTurno[normalizedTurno]) {
+                planchasPorTurno[normalizedTurno] = {};
+            }
+            planchasPorTurno[normalizedTurno][sabor] = (planchasPorTurno[normalizedTurno][sabor] || 0) + planchas;
+        });
+
+        // Redondear a 1 decimal
+        for (const t in planchasPorTurno) {
+            for (const s in planchasPorTurno[t]) {
+                planchasPorTurno[t][s] = Math.round(planchasPorTurno[t][s] * 10) / 10;
+            }
+        }
 
         return NextResponse.json({
             pedidos,
@@ -83,6 +127,7 @@ export async function GET(request: NextRequest) {
                 totalImporte: stats._sum.totalImporte || 0,
                 totalUnidades: stats._sum.totalUnidades || 0,
                 totalPacks: stats._sum.totalPacks || 0,
+                planchasPorTurno,
             },
         })
     } catch (error) {

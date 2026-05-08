@@ -69,7 +69,13 @@ export default function PedidosPage() {
     const ITEMS_PER_PAGE = 20
 
     // Stats de proyección
-    const [stats, setStats] = useState({ totalPedidos: 0, totalImporte: 0, totalUnidades: 0, totalPacks: 0 })
+    const [stats, setStats] = useState<{
+        totalPedidos: number;
+        totalImporte: number;
+        totalUnidades: number;
+        totalPacks: number;
+        planchasPorTurno?: Record<string, Record<string, number>>;
+    }>({ totalPedidos: 0, totalImporte: 0, totalUnidades: 0, totalPacks: 0 })
 
     // Sorting
     const [sortField, setSortField] = useState<SortField | ''>('')
@@ -527,6 +533,45 @@ export default function PedidosPage() {
                     </button>
                 ))}
             </div>
+
+            {/* Sub-módulo de Resumen de Planchas de Elegidos */}
+            {stats.planchasPorTurno && Object.keys(stats.planchasPorTurno).length > 0 && (
+                <div style={{ 
+                    padding: 'var(--space-4)', 
+                    backgroundColor: 'var(--color-primary-light)', 
+                    borderRadius: 'var(--radius-lg)', 
+                    marginBottom: 'var(--space-6)',
+                    border: '1px solid var(--color-primary)'
+                }}>
+                    <h4 style={{ margin: '0 0 var(--space-3)', color: 'var(--color-primary-dark)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🥪</span> Planchas de Elegidos a Producir (según filtros actuales)
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+                        {Object.entries(stats.planchasPorTurno).map(([turno, sabores]) => (
+                            <div key={turno} style={{ 
+                                backgroundColor: 'white', 
+                                padding: 'var(--space-4)', 
+                                borderRadius: 'var(--radius-md)', 
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            }}>
+                                <div style={{ fontSize: '13px', color: 'var(--color-primary-dark)', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 'var(--space-3)', borderBottom: '1px solid var(--color-gray-200)', paddingBottom: '4px' }}>
+                                    Turno {turno}
+                                </div>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
+                                    {Object.entries(sabores).map(([sabor, planchas]) => (
+                                        <li key={sabor} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                            <span style={{ fontWeight: 'bold', color: 'var(--color-gray-700)' }}>ELE - {sabor}</span>
+                                            <span style={{ fontWeight: '900', color: 'var(--color-primary)' }}>
+                                                {planchas} <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 'normal' }}>planchas</span>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
 
             <div className="table-container">
