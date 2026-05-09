@@ -41,6 +41,7 @@ export interface ResumenSemanal {
     montoHorasPendientes: number
     totalNeto: number
     desglosePorDia: DiaTrabajado[]
+    _debug?: string
 }
 
 export interface LiquidacionInput {
