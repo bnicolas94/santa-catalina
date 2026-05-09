@@ -164,6 +164,7 @@ export class PayrollService {
 
         // 3. Procesar Fichadas
         const fichadas = empleado.fichadas
+        console.log(`[Payroll] ${empleado.nombre}: ${fichadas.length} fichadas encontradas en DB para el periodo`);
         const gruposPorDia = agruparFichadasPorDia(fichadas)
 
         // Generar rango de fechas
@@ -189,7 +190,7 @@ export class PayrollService {
                     const [hH, hM] = empleado.horarioEntrada.split(':').map(Number)
                     const dMarca = new Date(m.fechaHora)
                     const dConfig = new Date(dMarca)
-                    dConfig.setHours(hH, hM, 0, 0)
+                    dConfig.setUTCHours(hH, hM, 0, 0)
 
                     if (dMarca < dConfig) {
                         return { ...m, fechaHora: dConfig.toISOString() }
