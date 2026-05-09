@@ -71,14 +71,14 @@ export function agruparFichadasPorDia(fichadas: any[]): Record<string, any[]> {
 
     fichadas.forEach(f => {
         const d = new Date(f.fechaHora);
-        // Usamos métodos UTC para evitar desfases de zona horaria del servidor
-        const year = d.getUTCFullYear();
-        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(d.getUTCDate()).padStart(2, '0');
-        const fechaUTC = `${year}-${month}-${day}`;
+        // Construimos YYYY-MM-DD manual en local para evitar el salto de toISOString()
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const fechaLocal = `${year}-${month}-${day}`;
 
-        if (!grupos[fechaUTC]) grupos[fechaUTC] = [];
-        grupos[fechaUTC].push(f);
+        if (!grupos[fechaLocal]) grupos[fechaLocal] = [];
+        grupos[fechaLocal].push(f);
     });
 
     // Ordenamos las marcas dentro de cada día cronológicamente
