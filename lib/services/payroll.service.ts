@@ -78,8 +78,8 @@ export class PayrollService {
                 fichadas: {
                     where: {
                         fechaHora: {
-                            gte: new Date(fechaInicio + 'T00:00:00'),
-                            lte: new Date(fechaFin + 'T23:59:59')
+                            gte: new Date(fechaInicio + 'T00:00:00Z'),
+                            lte: new Date(fechaFin + 'T23:59:59Z')
                         }
                     },
                     include: { tipoLicencia: true }
@@ -87,8 +87,8 @@ export class PayrollService {
                 inasistencias: {
                     where: {
                         fecha: {
-                            gte: new Date(fechaInicio + 'T00:00:00'),
-                            lte: new Date(fechaFin + 'T23:59:59')
+                            gte: new Date(fechaInicio + 'T00:00:00Z'),
+                            lte: new Date(fechaFin + 'T23:59:59Z')
                         }
                     }
                 },
@@ -104,8 +104,8 @@ export class PayrollService {
         const feriados = await prisma.feriado.findMany({
             where: {
                 fecha: {
-                    gte: new Date(fechaInicio + 'T00:00:00'),
-                    lte: new Date(fechaFin + 'T23:59:59')
+                    gte: new Date(fechaInicio + 'T00:00:00Z'),
+                    lte: new Date(fechaFin + 'T23:59:59Z')
                 }
             }
         })
@@ -168,15 +168,15 @@ export class PayrollService {
         const [startYear, startMonth, startDay] = fechaInicio.split('-').map(Number)
         const [endYear, endMonth, endDay] = fechaFin.split('-').map(Number)
 
-        let current = new Date(startYear, startMonth - 1, startDay)
-        const end = new Date(endYear, endMonth - 1, endDay)
+        let current = new Date(Date.UTC(startYear, startMonth - 1, startDay))
+        const end = new Date(Date.UTC(endYear, endMonth - 1, endDay))
 
         const nombresDias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
         while (current <= end) {
-            const year = current.getFullYear()
-            const month = String(current.getMonth() + 1).padStart(2, '0')
-            const day = String(current.getDate()).padStart(2, '0')
+            const year = current.getUTCFullYear()
+            const month = String(current.getUTCMonth() + 1).padStart(2, '0')
+            const day = String(current.getUTCDate()).padStart(2, '0')
             const fechaStr = `${year}-${month}-${day}`
             const marcasRaw = gruposPorDia[fechaStr] || []
 
