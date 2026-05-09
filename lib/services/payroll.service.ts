@@ -278,7 +278,7 @@ export class PayrollService {
                 tipoInasistencia: inasistencia?.tipo
             })
 
-            current.setDate(current.getDate() + 1)
+            current.setUTCDate(current.getUTCDate() + 1)
         }
 
         // 4. Buscar Préstamos/Cuotas del período
