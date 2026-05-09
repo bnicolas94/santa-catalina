@@ -143,6 +143,8 @@ export class PayrollService {
             jornalBase = montoBase / 6
         }
 
+        console.log(`[Payroll] ${empleado.nombre}: montoBase=${montoBase}, ciclo=${cicloStr}, jornalBase=${jornalBase}`);
+
         const hsJornada = (empleado.horasTrabajoDiarias || 8)
         let valorHora = hsJornada > 0 ? jornalBase / hsJornada : 0
 
@@ -195,7 +197,11 @@ export class PayrollService {
                 return m
             })
 
+            console.log(`[Payroll] Procesando ${fechaStr} para ${empleado.nombre}: ${marcas.length} marcas`);
             const resumen = calcularResumenDia(marcas, hsJornada)
+            if (marcas.length > 0) {
+                console.log(`[Payroll] Resumen ${fechaStr}: ${resumen.horasTrabajadas}hs trabajadas, ${resumen.horasExtras}hs extras`);
+            }
 
             // Cálculo de Tardanza para compensar horas extras
             let minutosTardanza = 0
@@ -324,7 +330,8 @@ export class PayrollService {
             horasPendientes: horasPendientesTotales,
             montoHorasPendientes,
             totalNeto,
-            desglosePorDia
+            desglosePorDia,
+            _debug: "v2-utc-fix"
         }
     }
 
