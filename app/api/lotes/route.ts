@@ -3,6 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import fs from 'fs'
+import path from 'path'
+
+function logError(error: any) {
+    try {
+        const logPath = path.join(process.cwd(), 'lotes_error.log')
+        const logEntry = `[${new Date().toISOString()}] Error: ${error?.message || error}\nStack: ${error?.stack}\n\n`
+        fs.appendFileSync(logPath, logEntry)
+    } catch (e) {
+        console.error('Failed to log to file:', e)
+    }
+}
 
 // GET /api/lotes
 export async function GET() {
@@ -99,7 +111,7 @@ export async function POST(request: Request) {
                 empleado: { select: { nombre: true, apellido: true } },
                 concepto: { select: { nombre: true } }
             }
-        }).then((asigs: any[]) => asigs.map(a => `${a.empleado.nombre} (${a.concepto.nombre})`).join(', '))
+        }).then((asigs: any[]) => asigs.map(a => `${a.empleado?.nombre || 'S/N'} (${a.concepto?.nombre || 'S/C'})`).join(', '))
 
         const lote = await prisma.$transaction(async (tx) => {
             const nuevoLote = await tx.lote.create({
@@ -176,9 +188,9 @@ export async function POST(request: Request) {
 
         return NextResponse.json(lote, { status: 201 })
     } catch (error: any) {
+        logError(error)
         console.error('Error creating lote:', error)
         const message = error?.message || 'Error al crear lote'
-        // Return a more descriptive error for debugging
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }
