@@ -67,14 +67,26 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
         }
 
-        const countHoy = await prisma.lote.count({
+        // Buscar el número más alto existente para este producto+día para evitar colisiones
+        const prefix = `SC-${yyyymmdd}-${producto.codigoInterno}-`
+        const existingLotes = await prisma.lote.findMany({
             where: {
-                productoId,
-                fechaProduccion: { gte: startOfProdDay, lte: endOfProdDay },
+                id: { startsWith: prefix }
             },
+            select: { id: true },
+            orderBy: { id: 'desc' },
+            take: 1
         })
+        
+        let nextNum = 1
+        if (existingLotes.length > 0) {
+            const lastId = existingLotes[0].id
+            const lastNumStr = lastId.replace(prefix, '')
+            const lastNum = parseInt(lastNumStr) || 0
+            nextNum = lastNum + 1
+        }
 
-        const loteId = `SC-${yyyymmdd}-${producto.codigoInterno}-${String(countHoy + 1).padStart(2, '0')}`
+        const loteId = `${prefix}${String(nextNum).padStart(2, '0')}`
         const qtyPaquetes = parseInt(unidadesProducidas)
 
         // Obtener posicionamiento para el día
@@ -163,8 +175,10 @@ export async function POST(request: Request) {
         })
 
         return NextResponse.json(lote, { status: 201 })
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error creating lote:', error)
-        return NextResponse.json({ error: 'Error al crear lote' }, { status: 500 })
+        const message = error?.message || 'Error al crear lote'
+        // Return a more descriptive error for debugging
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }
