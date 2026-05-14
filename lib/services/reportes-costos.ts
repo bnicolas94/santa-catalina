@@ -96,13 +96,15 @@ export async function getCostosReport(
             where: {
                 fechaGeneracion: { gte: startOfCurrent, lte: endOfCurrent },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
-            }
+            },
+            include: { empleado: { select: { nombre: true, apellido: true } } }
         }),
         // Mantenimientos actuales
         prisma.mantenimientoVehiculo.findMany({
             where: {
                 fecha: { gte: startOfCurrent, lte: endOfCurrent }
-            }
+            },
+            include: { vehiculo: { select: { patente: true, marca: true, modelo: true } } }
         }),
         // Totales periodo anterior
         prisma.gastoOperativo.aggregate({
@@ -159,6 +161,52 @@ export async function getCostosReport(
         gastosPorCategoria[catMant].monto += mantsTotalActual
         gastosPorCategoria[catMant].count += mants.length
     }
+
+    // ── 2b. Detalle unificado de TODOS los gastos operativos ──
+    const gastosDetalle: any[] = []
+
+    // Gastos manuales
+    for (const g of gastos) {
+        gastosDetalle.push({
+            id: g.id,
+            fecha: g.fecha,
+            categoria: (g.categoria as any)?.nombre || 'Sin categoría',
+            descripcion: g.descripcion,
+            monto: g.monto,
+            recurrente: g.recurrente,
+            origen: 'manual'
+        })
+    }
+
+    // Liquidaciones de sueldos
+    for (const l of liqs) {
+        gastosDetalle.push({
+            id: l.id,
+            fecha: l.fechaGeneracion,
+            categoria: 'Sueldos',
+            descripcion: `${(l as any).empleado?.nombre || ''} ${(l as any).empleado?.apellido || ''} — ${l.periodo}`,
+            monto: l.totalNeto,
+            recurrente: true,
+            origen: 'liquidacion'
+        })
+    }
+
+    // Mantenimientos de vehículos
+    for (const m of mants) {
+        const veh = (m as any).vehiculo
+        gastosDetalle.push({
+            id: m.id,
+            fecha: m.fecha,
+            categoria: 'Mantenimiento',
+            descripcion: `${m.tipo} — ${veh?.patente || ''} ${veh?.marca || ''} ${veh?.modelo || ''} ${m.taller ? '(' + m.taller + ')' : ''}`.trim(),
+            monto: m.costo,
+            recurrente: false,
+            origen: 'mantenimiento'
+        })
+    }
+
+    // Ordenar por fecha desc
+    gastosDetalle.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
 
     // ── 3. Costo unitario por producto (basado en fichas técnicas) ──
     const productos = await prisma.producto.findMany({
@@ -381,7 +429,8 @@ export async function getCostosReport(
         evolucion,
         rankingInsumos,
         gastoPorProveedor,
-        comprasDetalle: comprasFormateadas
+        comprasDetalle: comprasFormateadas,
+        gastosDetalle
     }
 }
 

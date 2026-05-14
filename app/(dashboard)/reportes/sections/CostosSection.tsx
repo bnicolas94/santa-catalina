@@ -13,7 +13,7 @@ interface Props {
     incluirTodo?: boolean
 }
 
-type SubTab = 'resumen' | 'insumos' | 'proveedores' | 'compras' | 'margenes'
+type SubTab = 'resumen' | 'insumos' | 'gastos' | 'proveedores' | 'compras' | 'margenes'
 
 export default function CostosSection({ rango, ubicacionId, incluirTodo = false }: Props) {
     const [data, setData] = useState<any>(null)
@@ -57,6 +57,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
     const subTabs: { key: SubTab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
         { key: 'insumos', label: 'Insumos', icon: '🥩' },
+        { key: 'gastos', label: 'Gastos Op.', icon: '💸' },
         { key: 'proveedores', label: 'Proveedores', icon: '🏪' },
         { key: 'compras', label: 'Facturas/Remitos', icon: '🧾' },
         { key: 'margenes', label: 'Resultado', icon: '📈' },
@@ -141,9 +142,9 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                 ))}
             </div>
 
-            {/* Content por sub-tab */}
             {subTab === 'resumen' && <ResumenView data={data} rango={rango} />}
             {subTab === 'insumos' && <InsumosView data={data} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
+            {subTab === 'gastos' && <GastosDetalleView data={data} rango={rango} />}
             {subTab === 'proveedores' && <ProveedoresView data={data} rango={rango} />}
             {subTab === 'compras' && <ComprasView data={data} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
             {subTab === 'margenes' && <MargenesView data={data} rango={rango} />}
@@ -410,7 +411,133 @@ function ComprasView({ data, rango, filtro, onFiltroChange }: { data: any; rango
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SUB-TAB: MÁRGENES (Análisis de margen por producto)
+// SUB-TAB: GASTOS OPERATIVOS (Desglose completo)
+// ═══════════════════════════════════════════════════════════════
+function GastosDetalleView({ data, rango }: { data: any; rango: RangoFechas }) {
+    const [filtroGasto, setFiltroGasto] = useState('')
+    const [filtroCat, setFiltroCat] = useState('')
+
+    const filteredGastos = useMemo(() => {
+        let items = data.gastosDetalle || []
+        if (filtroCat) {
+            items = items.filter((g: any) => g.categoria === filtroCat)
+        }
+        if (filtroGasto) {
+            const lower = filtroGasto.toLowerCase()
+            items = items.filter((g: any) =>
+                g.descripcion.toLowerCase().includes(lower) ||
+                g.categoria.toLowerCase().includes(lower)
+            )
+        }
+        return items
+    }, [data.gastosDetalle, filtroGasto, filtroCat])
+
+    const totalGastos = (data.gastosDetalle || []).reduce((acc: number, g: any) => acc + g.monto, 0)
+
+    // Categorías únicas para filtro
+    const categorias = useMemo(() => {
+        const cats = new Set<string>()
+        for (const g of (data.gastosDetalle || [])) cats.add(g.categoria)
+        return Array.from(cats).sort()
+    }, [data.gastosDetalle])
+
+    const origenBadge = (origen: string) => {
+        const styles: Record<string, { bg: string; label: string }> = {
+            manual: { bg: '#3498DB22', label: 'Manual' },
+            liquidacion: { bg: '#9B59B622', label: 'Liquidación' },
+            mantenimiento: { bg: '#E67E2222', label: 'Flota' }
+        }
+        const s = styles[origen] || { bg: '#ccc', label: origen }
+        return (
+            <span style={{
+                fontSize: 'var(--text-xs)',
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: s.bg,
+                fontWeight: 600
+            }}>
+                {s.label}
+            </span>
+        )
+    }
+
+    const gastosColumns = [
+        { key: 'fecha', label: 'Fecha', sortable: true, width: '90px', format: (v: string) => formatDate(v) },
+        { key: 'categoria', label: 'Categoría', sortable: true, width: '110px' },
+        { key: 'descripcion', label: 'Descripción', sortable: true },
+        {
+            key: 'origen', label: 'Origen', sortable: true, width: '90px',
+            format: (v: string) => origenBadge(v)
+        },
+        { key: 'monto', label: 'Monto', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
+        {
+            key: 'participacion', label: '% Part.', align: 'right' as const, sortable: false,
+            format: (_v: number, row: any) => {
+                const pct = totalGastos > 0 ? (row.monto / totalGastos) * 100 : 0
+                return formatPercent(pct)
+            }
+        }
+    ]
+
+    return (
+        <>
+            {/* Gráfico por categoría */}
+            {data.gastosPorCategoria.length > 0 && (
+                <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+                    <TrendChart
+                        title="Distribución de Gastos Operativos"
+                        labels={data.gastosPorCategoria.map((g: any) => g.nombre)}
+                        datasets={[{
+                            label: 'Monto',
+                            data: data.gastosPorCategoria.map((g: any) => g.monto)
+                        }]}
+                        formatTooltip={(v: number) => formatCurrency(v)}
+                        showLegend={false}
+                    />
+                </div>
+            )}
+
+            {/* Tabla detallada */}
+            <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                    <h3 style={{
+                        fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
+                        fontFamily: 'var(--font-heading)', letterSpacing: '0.03em', margin: 0
+                    }}>
+                        Desglose Completo de Gastos Operativos
+                    </h3>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <select
+                            className="form-input"
+                            value={filtroCat}
+                            onChange={e => setFiltroCat(e.target.value)}
+                            style={{ fontSize: 'var(--text-xs)', padding: '4px 8px', minWidth: 140 }}
+                        >
+                            <option value="">Todas las categorías</option>
+                            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <input
+                            type="text"
+                            className="form-input"
+                            placeholder="🔍 Buscar descripción..."
+                            value={filtroGasto}
+                            onChange={e => setFiltroGasto(e.target.value)}
+                            style={{ maxWidth: 240, fontSize: 'var(--text-xs)', padding: '4px 10px' }}
+                        />
+                    </div>
+                </div>
+                <DataTable
+                    columns={gastosColumns}
+                    data={filteredGastos}
+                    showTotals={true}
+                    totalColumns={['monto']}
+                    exportFilename={`Gastos_Operativos_Detalle_${rango.label.replace(/\s+/g, "_")}`}
+                    maxHeight="600px"
+                />
+            </div>
+        </>
+    )
+}
 // ═══════════════════════════════════════════════════════════════
 function MargenesView({ data, rango }: { data: any; rango: RangoFechas }) {
     const k = data.kpis
