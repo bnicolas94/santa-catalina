@@ -25,6 +25,9 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
     const [insumoSeleccionado, setInsumoSeleccionado] = useState('')
     const [proveedorSeleccionado, setProveedorSeleccionado] = useState('')
     const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('')
+    
+    // Conceptos de caja a incluir/excluir
+    const [conceptosExcluidos, setConceptosExcluidos] = useState<string[]>([])
 
     useEffect(() => {
         async function fetchData() {
@@ -37,7 +40,12 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     ...(incluirTodo && { todos: 'true' })
                 })
                 const res = await fetch(`/api/reportes/costos?${params}`)
-                if (res.ok) setData(await res.json())
+                if (res.ok) {
+                    const json = await res.json()
+                    setData(json)
+                    // Resetear exclusiones al cambiar de periodo/ubicación si se desea
+                    // setConceptosExcluidos([]) 
+                }
             } catch (err) {
                 console.error('Error fetching costos:', err)
             } finally {
@@ -47,15 +55,66 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
         fetchData()
     }, [rango.desde.toISOString(), rango.hasta.toISOString(), ubicacionId, incluirTodo])
 
-    if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando costos...</p></div>
-    if (!data) return <div className="empty-state"><p>No hay datos disponibles.</p></div>
+    // Extraer conceptos de caja disponibles en el periodo
+    const availableCajaConcepts = useMemo(() => {
+        if (!data) return []
+        const concepts = new Set<string>()
+        data.gastosDetalle.forEach((g: any) => {
+            if (g.origen === 'caja') {
+                concepts.add(g.categoria.replace('Caja: ', ''))
+            }
+        })
+        return Array.from(concepts).sort()
+    }, [data])
 
-    const k = data.kpis
-    const deltaCostoTotal = formatDelta(k.costoTotal, k.costoTotalAnterior, { invertColor: true })
-    const deltaInsumos = formatDelta(k.costoInsumosActual, k.costoInsumosAnterior, { invertColor: true })
-    const deltaGastos = formatDelta(k.gastosTotalActual, k.gastosTotalAnterior, { invertColor: true })
-    const deltaGanancia = formatDelta(k.gananciaActual, k.gananciaAnterior)
-    const deltaVentas = formatDelta(k.ventasTotalActual, k.ventasTotalAnterior)
+    // Procesar datos filtrando por conceptos excluidos
+    const processedData = useMemo(() => {
+        if (!data) return null
+
+        // 1. Filtrar detalle de gastos
+        const filteredGastosDetalle = data.gastosDetalle.filter((g: any) => {
+            if (g.origen !== 'caja') return true
+            const concepto = g.categoria.replace('Caja: ', '')
+            return !conceptosExcluidos.includes(concepto)
+        })
+
+        // 2. Recalcular Gastos por Categoría
+        const gCat: Record<string, { nombre: string; monto: number; count: number }> = {}
+        filteredGastosDetalle.forEach((g: any) => {
+            if (!gCat[g.categoria]) gCat[g.categoria] = { nombre: g.categoria, monto: 0, count: 0 }
+            gCat[g.categoria].monto += g.monto
+            gCat[g.categoria].count++
+        })
+
+        // 3. Recalcular KPIs
+        const gastosTotalActual = filteredGastosDetalle.reduce((acc: number, g: any) => acc + g.monto, 0)
+        const costoTotal = data.kpis.costoInsumosActual + gastosTotalActual
+        const gananciaActual = data.kpis.ventasTotalActual - costoTotal
+        const margenReal = data.kpis.ventasTotalActual > 0 ? (gananciaActual / data.kpis.ventasTotalActual) * 100 : 0
+
+        return {
+            ...data,
+            gastosDetalle: filteredGastosDetalle,
+            gastosPorCategoria: Object.values(gCat).sort((a: any, b: any) => b.monto - a.monto),
+            kpis: {
+                ...data.kpis,
+                gastosTotalActual,
+                costoTotal,
+                gananciaActual,
+                margenReal
+            }
+        }
+    }, [data, conceptosExcluidos])
+
+    if (loading) return <div className="empty-state"><div className="spinner" /><p>Calculando costos...</p></div>
+    if (!data || !processedData) return <div className="empty-state"><p>No hay datos disponibles.</p></div>
+
+    const k = processedData.kpis
+    const deltaCostoTotal = formatDelta(k.costoTotal, data.kpis.costoTotalAnterior, { invertColor: true })
+    const deltaInsumos = formatDelta(k.costoInsumosActual, data.kpis.costoInsumosAnterior, { invertColor: true })
+    const deltaGastos = formatDelta(k.gastosTotalActual, data.kpis.gastosTotalAnterior, { invertColor: true })
+    const deltaGanancia = formatDelta(k.gananciaActual, data.kpis.gananciaAnterior)
+    const deltaVentas = formatDelta(k.ventasTotalActual, data.kpis.ventasTotalAnterior)
 
     const esGanancia = k.gananciaActual >= 0
 
@@ -73,8 +132,70 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
         setSubTab('gastos')
     }
 
+    function toggleConcept(concept: string) {
+        setConceptosExcluidos(prev => 
+            prev.includes(concept) 
+                ? prev.filter(c => c !== concept) 
+                : [...prev, concept]
+        )
+    }
+
     return (
         <div className="fade-in">
+            {/* Control de conceptos de caja (solo si hay conceptos) */}
+            {availableCajaConcepts.length > 0 && (
+                <div className="card" style={{ 
+                    padding: 'var(--space-4) var(--space-6)', 
+                    marginBottom: 'var(--space-6)',
+                    backgroundColor: 'var(--color-primary-50)',
+                    border: '1px dashed var(--color-primary-200)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-6)',
+                    flexWrap: 'wrap'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <span style={{ fontSize: '18px' }}>⚙️</span>
+                        <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-primary-700)', margin: 0 }}>
+                            Configurar Egresos de Caja
+                        </h4>
+                    </div>
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        {availableCajaConcepts.map(concept => {
+                            const isExcluded = conceptosExcluidos.includes(concept)
+                            return (
+                                <label 
+                                    key={concept} 
+                                    style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: 'var(--space-2)', 
+                                        fontSize: 'var(--text-xs)', 
+                                        cursor: 'pointer',
+                                        padding: '4px 8px',
+                                        borderRadius: 'var(--radius-md)',
+                                        backgroundColor: isExcluded ? 'var(--color-gray-100)' : 'white',
+                                        border: `1px solid ${isExcluded ? 'var(--color-gray-200)' : 'var(--color-primary-200)'}`,
+                                        opacity: isExcluded ? 0.7 : 1,
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    <input 
+                                        type="checkbox" 
+                                        checked={!isExcluded} 
+                                        onChange={() => toggleConcept(concept)}
+                                    />
+                                    <span style={{ fontWeight: isExcluded ? 400 : 600 }}>{concept}</span>
+                                </label>
+                            )
+                        })}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', maxWidth: 200 }}>
+                        Deselecciona conceptos que ya estén registrados manualmente para evitar duplicar costos.
+                    </div>
+                </div>
+            )}
+
             {/* KPIs */}
             <div style={{
                 display: 'grid',
@@ -157,10 +278,10 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                 ))}
             </div>
 
-            {subTab === 'resumen' && <ResumenView data={data} rango={rango} onSelectCategory={handleSelectCategory} />}
+            {subTab === 'resumen' && <ResumenView data={processedData} rango={rango} onSelectCategory={handleSelectCategory} />}
             {subTab === 'insumos' && (
                 <InsumosView 
-                    data={data} 
+                    data={processedData} 
                     rango={rango} 
                     filtro={filtroInsumo} 
                     onFiltroChange={setFiltroInsumo} 
@@ -170,7 +291,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
             )}
             {subTab === 'gastos' && (
                 <GastosDetalleView 
-                    data={data} 
+                    data={processedData} 
                     rango={rango} 
                     seleccionado={categoriaSeleccionada}
                     onSeleccionChange={setCategoriaSeleccionada}
@@ -178,14 +299,14 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
             )}
             {subTab === 'proveedores' && (
                 <ProveedoresView 
-                    data={data} 
+                    data={processedData} 
                     rango={rango} 
                     seleccionado={proveedorSeleccionado}
                     onSeleccionChange={setProveedorSeleccionado}
                 />
             )}
-            {subTab === 'compras' && <ComprasView data={data} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
-            {subTab === 'margenes' && <MargenesView data={data} rango={rango} />}
+            {subTab === 'compras' && <ComprasView data={processedData} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
+            {subTab === 'margenes' && <MargenesView data={processedData} rango={rango} />}
         </div>
     )
 }
