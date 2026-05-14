@@ -76,6 +76,7 @@ export default function InsumosPage() {
     const [familiaForm, setFamiliaForm] = useState({ nombre: '', color: COLORES_FAMILIA[0] })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const [historialInsumoId, setHistorialInsumoId] = useState<string | null>(null)
 
     useEffect(() => {
         fetchData()
@@ -411,6 +412,9 @@ export default function InsumosPage() {
                                         <td>{ins.diasReposicion} días</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                <button className="btn btn-ghost btn-sm" onClick={() => setHistorialInsumoId(ins.id)} title="Ver historial">
+                                                    📊
+                                                </button>
                                                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(ins)}>
                                                     Editar
                                                 </button>
@@ -688,6 +692,275 @@ export default function InsumosPage() {
                     </div>
                 </div>
             )}
+            {/* Modal Historial Insumo */}
+            {historialInsumoId && (
+                <HistorialInsumoModal
+                    insumoId={historialInsumoId}
+                    onClose={() => setHistorialInsumoId(null)}
+                />
+            )}
+        </div>
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL: Historial completo de un insumo
+// ═══════════════════════════════════════════════════════════════
+function HistorialInsumoModal({ insumoId, onClose }: { insumoId: string; onClose: () => void }) {
+    const [data, setData] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+    const [filtro, setFiltro] = useState('')
+    const [soloEntradas, setSoloEntradas] = useState(false)
+
+    useEffect(() => {
+        async function fetchHistorial() {
+            setLoading(true)
+            try {
+                const res = await fetch(`/api/insumos/${insumoId}/historial`)
+                if (res.ok) setData(await res.json())
+            } catch (err) {
+                console.error('Error fetching historial:', err)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchHistorial()
+    }, [insumoId])
+
+    const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('es-AR')
+    const formatCurrencyDec = (v: number) => '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const formatDate = (d: string) => new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const formatNum = (v: number) => v.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+
+    const filteredMovimientos = data?.movimientos?.filter((m: any) => {
+        if (soloEntradas && m.tipo !== 'entrada') return false
+        if (!filtro) return true
+        const lower = filtro.toLowerCase()
+        return m.proveedor.toLowerCase().includes(lower) ||
+            m.factura.toLowerCase().includes(lower) ||
+            m.observaciones.toLowerCase().includes(lower)
+    }) || []
+
+    return (
+        <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 1000, width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                <div className="modal-header">
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        📊 Historial: {data?.insumo?.nombre || 'Cargando...'}
+                        {data?.insumo?.familia && (
+                            <span className="badge" style={{
+                                backgroundColor: `${data.insumo.familia.color || '#607D8B'}20`,
+                                color: data.insumo.familia.color || '#607D8B',
+                                fontSize: 'var(--text-xs)'
+                            }}>
+                                {data.insumo.familia.nombre}
+                            </span>
+                        )}
+                    </h2>
+                    <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+                </div>
+
+                <div className="modal-body" style={{ overflow: 'auto', flex: 1 }}>
+                    {loading ? (
+                        <div className="empty-state"><div className="spinner" /><p>Cargando historial...</p></div>
+                    ) : !data ? (
+                        <div className="empty-state"><p>Error al cargar</p></div>
+                    ) : (
+                        <>
+                            {/* KPIs */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                                gap: 'var(--space-3)',
+                                marginBottom: 'var(--space-6)'
+                            }}>
+                                {[
+                                    { label: 'Total Gastado', value: formatCurrency(data.resumen.totalGastado), color: 'var(--color-danger)' },
+                                    { label: 'Cant. Comprada', value: `${formatNum(data.resumen.totalCantidadComprada)} ${data.insumo.unidadMedida}`, color: 'var(--color-info)' },
+                                    { label: 'Precio Prom.', value: formatCurrencyDec(data.resumen.precioPromedio) + '/' + data.insumo.unidadMedida, color: 'var(--color-warning)' },
+                                    { label: 'Precio Actual', value: formatCurrencyDec(data.resumen.precioActual) + '/' + data.insumo.unidadMedida, color: 'var(--color-primary)' },
+                                    { label: 'Facturas', value: String(data.resumen.totalFacturas), color: 'var(--color-secondary)' },
+                                    { label: 'Movimientos', value: String(data.resumen.totalMovimientos), color: 'var(--color-gray-500)' },
+                                ].map((kpi, i) => (
+                                    <div key={i} style={{
+                                        padding: 'var(--space-3)',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid var(--color-gray-100)',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginBottom: 2, textTransform: 'uppercase', fontWeight: 600 }}>{kpi.label}</div>
+                                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Gasto mensual - barras simples */}
+                            {data.gastoMensual.some((m: any) => m.gasto > 0) && (
+                                <div style={{ marginBottom: 'var(--space-6)', padding: 'var(--space-4)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)' }}>
+                                    <h4 style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', fontWeight: 700 }}>
+                                        Gasto Mensual (12 meses)
+                                    </h4>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 120 }}>
+                                        {(() => {
+                                            const maxGasto = Math.max(...data.gastoMensual.map((m: any) => m.gasto), 1)
+                                            return data.gastoMensual.map((m: any, i: number) => (
+                                                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <div
+                                                        style={{
+                                                            width: '100%',
+                                                            height: `${Math.max((m.gasto / maxGasto) * 100, m.gasto > 0 ? 4 : 0)}px`,
+                                                            backgroundColor: m.gasto > 0 ? '#E74C3C' : 'var(--color-gray-200)',
+                                                            borderRadius: '4px 4px 0 0',
+                                                            transition: 'height 0.3s ease'
+                                                        }}
+                                                        title={`${m.label}: ${formatCurrency(m.gasto)}`}
+                                                    />
+                                                    <span style={{ fontSize: '9px', color: 'var(--color-gray-400)', marginTop: 2 }}>{m.label}</span>
+                                                </div>
+                                            ))
+                                        })()}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Evolución de precios */}
+                            {data.evolucionPrecios.length > 1 && (
+                                <div style={{ marginBottom: 'var(--space-6)', padding: 'var(--space-4)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)' }}>
+                                    <h4 style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', fontWeight: 700 }}>
+                                        Evolución de Precio por {data.insumo.unidadMedida}
+                                    </h4>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 80 }}>
+                                        {(() => {
+                                            const precios = data.evolucionPrecios.slice(-20)
+                                            const maxP = Math.max(...precios.map((p: any) => p.precioUnitario), 1)
+                                            const minP = Math.min(...precios.map((p: any) => p.precioUnitario))
+                                            return precios.map((p: any, i: number) => (
+                                                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                    <div
+                                                        style={{
+                                                            width: '100%',
+                                                            height: `${Math.max(((p.precioUnitario - minP * 0.8) / (maxP - minP * 0.8 + 0.01)) * 70, 4)}px`,
+                                                            backgroundColor: i === precios.length - 1 ? '#3498DB' : '#3498DB88',
+                                                            borderRadius: '4px 4px 0 0',
+                                                        }}
+                                                        title={`${formatDate(p.fecha)}: ${formatCurrencyDec(p.precioUnitario)}/${data.insumo.unidadMedida} - ${p.proveedor}`}
+                                                    />
+                                                    <span style={{ fontSize: '8px', color: 'var(--color-gray-400)', marginTop: 1 }}>
+                                                        {new Date(p.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric' })}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        })()}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Por proveedor */}
+                            {data.porProveedor.length > 0 && (
+                                <div style={{ marginBottom: 'var(--space-6)' }}>
+                                    <h4 style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginBottom: 'var(--space-3)', textTransform: 'uppercase', fontWeight: 700 }}>
+                                        Compras por Proveedor
+                                    </h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                        {data.porProveedor.map((p: any, i: number) => {
+                                            const pct = data.resumen.totalGastado > 0 ? (p.gasto / data.resumen.totalGastado) * 100 : 0
+                                            return (
+                                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                                    <span style={{ minWidth: 120, fontSize: 'var(--text-sm)', fontWeight: 600 }}>{p.nombre}</span>
+                                                    <div style={{ flex: 1, height: 20, backgroundColor: 'var(--color-gray-100)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                                                        <div style={{ width: `${pct}%`, height: '100%', backgroundColor: '#F39C12', borderRadius: 'var(--radius-sm)', transition: 'width 0.5s ease' }} />
+                                                    </div>
+                                                    <span style={{ minWidth: 100, textAlign: 'right', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{formatCurrency(p.gasto)}</span>
+                                                    <span style={{ minWidth: 50, textAlign: 'right', fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>{p.compras} fc</span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tabla de movimientos */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                                    <h4 style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, margin: 0 }}>
+                                        Movimientos ({filteredMovimientos.length})
+                                    </h4>
+                                    <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+                                        <label style={{ fontSize: 'var(--text-xs)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={soloEntradas} onChange={e => setSoloEntradas(e.target.checked)} />
+                                            Solo compras
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            placeholder="🔍 Buscar proveedor, factura..."
+                                            value={filtro}
+                                            onChange={e => setFiltro(e.target.value)}
+                                            style={{ maxWidth: 220, fontSize: 'var(--text-xs)', padding: '4px 8px' }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="table-container" style={{ maxHeight: 350, overflow: 'auto' }}>
+                                    <table className="table" style={{ fontSize: 'var(--text-sm)' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1 }}>Fecha</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1 }}>Tipo</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1, textAlign: 'right' }}>Cantidad</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1, textAlign: 'right' }}>$/Ud.</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1, textAlign: 'right' }}>Costo Total</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1 }}>Proveedor</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1 }}>FC/Remito</th>
+                                                <th style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-gray-50)', zIndex: 1 }}>Pago</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredMovimientos.length === 0 ? (
+                                                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>Sin movimientos</td></tr>
+                                            ) : (
+                                                filteredMovimientos.map((m: any) => (
+                                                    <tr key={m.id}>
+                                                        <td>{formatDate(m.fecha)}</td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontSize: 'var(--text-xs)',
+                                                                padding: '2px 8px',
+                                                                borderRadius: 'var(--radius-full)',
+                                                                backgroundColor: m.tipo === 'entrada' ? '#2ECC7122' : '#E74C3C22',
+                                                                color: m.tipo === 'entrada' ? '#2ECC71' : '#E74C3C',
+                                                                fontWeight: 600
+                                                            }}>
+                                                                {m.tipo === 'entrada' ? '📥 Entrada' : '📤 Salida'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ textAlign: 'right' }}>{formatNum(m.cantidad)} {data.insumo.unidadMedida}</td>
+                                                        <td style={{ textAlign: 'right' }}>{m.precioUnitario > 0 ? formatCurrencyDec(m.precioUnitario) : '—'}</td>
+                                                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{m.costoTotal > 0 ? formatCurrency(m.costoTotal) : '—'}</td>
+                                                        <td>{m.proveedor}</td>
+                                                        <td style={{ fontSize: 'var(--text-xs)' }}>{m.factura}</td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontSize: 'var(--text-xs)',
+                                                                padding: '2px 6px',
+                                                                borderRadius: 'var(--radius-full)',
+                                                                backgroundColor: m.estadoPago === 'pagado' ? '#2ECC7122' : '#F39C1222',
+                                                                color: m.estadoPago === 'pagado' ? '#2ECC71' : '#F39C12',
+                                                                fontWeight: 600
+                                                            }}>
+                                                                {m.estadoPago}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
         </div>
     )
 }
