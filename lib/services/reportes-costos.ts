@@ -82,12 +82,15 @@ export async function getCostosReport(
     const ventasTotalAnterior = ventasAnterior._sum.totalImporte || 0
 
     // ── 2. Gastos operativos, Sueldos y Mantenimientos ──
+    // IMPORTANTE: Excluir gastos que ya están contabilizados como compras de insumos
+    // (los GastoOperativo que tienen un MovimientoStock vinculado)
     const [gastos, liqs, mants, gastosAnterior, liqsAnterior, mantsAnterior] = await Promise.all([
-        // Gastos operativos actuales
+        // Gastos operativos actuales (excluyendo los vinculados a movimientos de stock)
         prisma.gastoOperativo.findMany({
             where: {
                 fecha: { gte: startOfCurrent, lte: endOfCurrent },
-                ...(ubicacionId ? { ubicacionId } : {})
+                ...(ubicacionId ? { ubicacionId } : {}),
+                movimientosStock: { none: {} }
             },
             include: { categoria: true }
         }),
@@ -106,11 +109,12 @@ export async function getCostosReport(
             },
             include: { vehiculo: { select: { patente: true, marca: true, modelo: true } } }
         }),
-        // Totales periodo anterior
+        // Totales periodo anterior (también excluyendo los vinculados a insumos)
         prisma.gastoOperativo.aggregate({
             where: {
                 fecha: { gte: startAnterior, lte: endAnterior },
-                ...(ubicacionId ? { ubicacionId } : {})
+                ...(ubicacionId ? { ubicacionId } : {}),
+                movimientosStock: { none: {} }
             },
             _sum: { monto: true }
         }),
@@ -280,7 +284,7 @@ export async function getCostosReport(
                 _sum: { costoTotal: true }
             }),
             prisma.gastoOperativo.aggregate({
-                where: { fecha: { gte: s, lte: e }, ...(ubicacionId ? { ubicacionId } : {}) },
+                where: { fecha: { gte: s, lte: e }, ...(ubicacionId ? { ubicacionId } : {}), movimientosStock: { none: {} } },
                 _sum: { monto: true }
             }),
             prisma.liquidacionSueldo.aggregate({

@@ -118,14 +118,16 @@ export async function detectarDesvios(
             prisma.gastoOperativo.aggregate({
                 where: {
                     fecha: { gte: startActual, lte: endActual },
-                    ...(ubicacionId ? { ubicacionId } : {})
+                    ...(ubicacionId ? { ubicacionId } : {}),
+                    movimientosStock: { none: {} }
                 },
                 _sum: { monto: true }
             }),
             prisma.gastoOperativo.aggregate({
                 where: {
                     fecha: { gte: start3Periodos, lte: end3Periodos },
-                    ...(ubicacionId ? { ubicacionId } : {})
+                    ...(ubicacionId ? { ubicacionId } : {}),
+                    movimientosStock: { none: {} }
                 },
                 _sum: { monto: true }
             })
