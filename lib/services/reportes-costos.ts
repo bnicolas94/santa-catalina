@@ -52,6 +52,35 @@ export async function getCostosReport(
     const costoInsumosActual = comprasActual._sum.costoTotal || 0
     const costoInsumosAnterior = comprasAnterior._sum.costoTotal || 0
 
+    // ── 1b. Ventas del período (para calcular margen real) ──
+    const estadoVentas = incluirTodo
+        ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] as string[] }
+        : 'entregado' as any
+
+    const [ventasActual, ventasAnterior] = await Promise.all([
+        prisma.pedido.aggregate({
+            where: {
+                estado: estadoVentas,
+                fechaEntrega: { gte: startOfCurrent, lte: endOfCurrent },
+                ...(ubicacionId ? { ubicacionId } : {})
+            },
+            _sum: { totalImporte: true },
+            _count: true
+        }),
+        prisma.pedido.aggregate({
+            where: {
+                estado: estadoVentas,
+                fechaEntrega: { gte: startAnterior, lte: endAnterior },
+                ...(ubicacionId ? { ubicacionId } : {})
+            },
+            _sum: { totalImporte: true },
+            _count: true
+        })
+    ])
+
+    const ventasTotalActual = ventasActual._sum.totalImporte || 0
+    const ventasTotalAnterior = ventasAnterior._sum.totalImporte || 0
+
     // ── 2. Gastos operativos, Sueldos y Mantenimientos ──
     const [gastos, liqs, mants, gastosAnterior, liqsAnterior, mantsAnterior] = await Promise.all([
         // Gastos operativos actuales
@@ -333,8 +362,16 @@ export async function getCostosReport(
             gastosTotalAnterior,
             costoTotal: costoInsumosActual + gastosTotalActual,
             costoTotalAnterior: costoInsumosAnterior + gastosTotalAnterior,
-            margenPromedioProductos: costoPorProducto.length > 0
-                ? costoPorProducto.reduce((acc, p) => acc + p.margenPct, 0) / costoPorProducto.length
+            // Margen real: ventas vs costos totales
+            ventasTotalActual,
+            ventasTotalAnterior,
+            gananciaActual: ventasTotalActual - (costoInsumosActual + gastosTotalActual),
+            gananciaAnterior: ventasTotalAnterior - (costoInsumosAnterior + gastosTotalAnterior),
+            margenReal: ventasTotalActual > 0
+                ? ((ventasTotalActual - (costoInsumosActual + gastosTotalActual)) / ventasTotalActual) * 100
+                : 0,
+            margenRealAnterior: ventasTotalAnterior > 0
+                ? ((ventasTotalAnterior - (costoInsumosAnterior + gastosTotalAnterior)) / ventasTotalAnterior) * 100
                 : 0,
             totalCompras: comprasDetalle.length,
             totalProveedores: gastoPorProveedor.length

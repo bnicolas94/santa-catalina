@@ -49,13 +49,17 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
     const deltaCostoTotal = formatDelta(k.costoTotal, k.costoTotalAnterior, { invertColor: true })
     const deltaInsumos = formatDelta(k.costoInsumosActual, k.costoInsumosAnterior, { invertColor: true })
     const deltaGastos = formatDelta(k.gastosTotalActual, k.gastosTotalAnterior, { invertColor: true })
+    const deltaGanancia = formatDelta(k.gananciaActual, k.gananciaAnterior)
+    const deltaVentas = formatDelta(k.ventasTotalActual, k.ventasTotalAnterior)
+
+    const esGanancia = k.gananciaActual >= 0
 
     const subTabs: { key: SubTab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
         { key: 'insumos', label: 'Insumos', icon: '🥩' },
         { key: 'proveedores', label: 'Proveedores', icon: '🏪' },
         { key: 'compras', label: 'Facturas/Remitos', icon: '🧾' },
-        { key: 'margenes', label: 'Márgenes', icon: '📈' },
+        { key: 'margenes', label: 'Resultado', icon: '📈' },
     ]
 
     return (
@@ -63,10 +67,18 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
             {/* KPIs */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
                 gap: 'var(--space-4)',
                 marginBottom: 'var(--space-6)'
             }}>
+                <KpiCardEnhanced
+                    label="Ventas"
+                    value={formatCurrency(k.ventasTotalActual)}
+                    icon="💰"
+                    color="var(--color-success)"
+                    delta={deltaVentas}
+                    previousLabel="período ant."
+                />
                 <KpiCardEnhanced
                     label="Costo Total"
                     value={formatCurrency(k.costoTotal)}
@@ -74,6 +86,15 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     color="var(--color-danger)"
                     delta={deltaCostoTotal}
                     previousLabel="período ant."
+                />
+                <KpiCardEnhanced
+                    label={esGanancia ? 'Ganancia' : 'Pérdida'}
+                    value={formatCurrency(Math.abs(k.gananciaActual))}
+                    icon={esGanancia ? '✅' : '🔻'}
+                    color={esGanancia ? 'var(--color-success)' : 'var(--color-danger)'}
+                    delta={deltaGanancia}
+                    previousLabel="período ant."
+                    footer={`Margen: ${formatPercent(k.margenReal)}`}
                 />
                 <KpiCardEnhanced
                     label="Compra Insumos"
@@ -90,19 +111,6 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     color="var(--color-info)"
                     delta={deltaGastos}
                     previousLabel="período ant."
-                />
-                <KpiCardEnhanced
-                    label="Margen Prom."
-                    value={formatPercent(k.margenPromedioProductos)}
-                    icon="📈"
-                    color={k.margenPromedioProductos >= 30 ? 'var(--color-success)' : 'var(--color-warning)'}
-                />
-                <KpiCardEnhanced
-                    label="Facturas/Remitos"
-                    value={formatNumber(k.totalCompras)}
-                    icon="🧾"
-                    color="var(--color-secondary)"
-                    footer={`${formatNumber(k.totalProveedores)} proveedores`}
                 />
             </div>
 
@@ -405,12 +413,25 @@ function ComprasView({ data, rango, filtro, onFiltroChange }: { data: any; rango
 // SUB-TAB: MÁRGENES (Análisis de margen por producto)
 // ═══════════════════════════════════════════════════════════════
 function MargenesView({ data, rango }: { data: any; rango: RangoFechas }) {
+    const k = data.kpis
+    const esGanancia = k.gananciaActual >= 0
+    const costoTotal = k.costoTotal
+
+    // Líneas del P&L
+    const plRows = [
+        { label: 'Ventas', monto: k.ventasTotalActual, color: 'var(--color-success)', bold: true },
+        { label: 'Compra de Insumos', monto: -k.costoInsumosActual, color: 'var(--color-danger)', bold: false },
+        { label: 'Gastos Operativos', monto: -k.gastosTotalActual, color: 'var(--color-danger)', bold: false },
+        { label: 'divider', monto: 0, color: '', bold: false },
+        { label: esGanancia ? '✅ GANANCIA' : '🔻 PÉRDIDA', monto: k.gananciaActual, color: esGanancia ? 'var(--color-success)' : 'var(--color-danger)', bold: true },
+    ]
+
     const productoColumns = [
         { key: 'nombre', label: 'Producto', sortable: true },
         { key: 'costoUnitario', label: 'Costo/u', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
         { key: 'cantidadPresentacion', label: 'Cant.', align: 'right' as const, sortable: true },
         { key: 'precioVenta', label: 'Precio Vta.', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
-        { key: 'costoTotal', label: 'Costo Total', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
+        { key: 'costoTotal', label: 'Costo Pres.', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
         { key: 'margenBruto', label: 'Margen $', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
         {
             key: 'margenPct', label: 'Margen %', align: 'right' as const, sortable: true,
@@ -423,31 +444,74 @@ function MargenesView({ data, rango }: { data: any; rango: RangoFechas }) {
 
     return (
         <>
-            {/* Gráfico de márgenes */}
-            {data.costoPorProducto.length > 0 && (
-                <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
-                    <TrendChart
-                        title="Margen por Producto (%)"
-                        labels={data.costoPorProducto.map((p: any) => p.nombre)}
-                        datasets={[{
-                            label: 'Margen %',
-                            data: data.costoPorProducto.map((p: any) => p.margenPct),
-                            color: '#2ECC71'
-                        }]}
-                        formatTooltip={(v: number) => formatPercent(v)}
-                        showLegend={false}
-                    />
+            {/* P&L Summary */}
+            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+                <h3 style={{
+                    fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
+                    marginBottom: 'var(--space-4)', fontFamily: 'var(--font-heading)',
+                    letterSpacing: '0.03em'
+                }}>
+                    Estado de Resultados del Período
+                </h3>
+                <div style={{ maxWidth: 500 }}>
+                    {plRows.map((row, i) => {
+                        if (row.label === 'divider') {
+                            return <hr key={i} style={{ border: 'none', borderTop: '2px solid var(--color-gray-200)', margin: '8px 0' }} />
+                        }
+                        return (
+                            <div key={i} style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 0',
+                                fontWeight: row.bold ? 700 : 400,
+                                fontSize: row.bold ? 'var(--text-base)' : 'var(--text-sm)',
+                                borderBottom: !row.bold ? '1px solid var(--color-gray-50)' : undefined
+                            }}>
+                                <span>{row.label}</span>
+                                <span style={{ color: row.color, fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>
+                                    {row.monto < 0 ? '-' : ''}{formatCurrency(Math.abs(row.monto))}
+                                </span>
+                            </div>
+                        )
+                    })}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '4px 0',
+                        fontSize: 'var(--text-xs)',
+                        color: 'var(--color-gray-500)'
+                    }}>
+                        <span>Margen neto</span>
+                        <span style={{ fontWeight: 600 }}>{formatPercent(k.margenReal)}</span>
+                    </div>
                 </div>
-            )}
+            </div>
 
-            {/* Tabla de márgenes */}
+            {/* Visual comparison chart */}
+            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+                <TrendChart
+                    title="Ventas vs Costos"
+                    labels={['Ventas', 'Insumos', 'Gastos Op.', 'Resultado']}
+                    datasets={[{
+                        label: 'Monto',
+                        data: [k.ventasTotalActual, k.costoInsumosActual, k.gastosTotalActual, Math.abs(k.gananciaActual)],
+                        color: esGanancia ? '#2ECC71' : '#E74C3C'
+                    }]}
+                    formatTooltip={(v: number) => formatCurrency(v)}
+                    showLegend={false}
+                />
+            </div>
+
+            {/* Tabla margen teórico por producto */}
             <div className="card" style={{ padding: 'var(--space-6)' }}>
                 <h3 style={{
                     fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
                     marginBottom: 'var(--space-4)', fontFamily: 'var(--font-heading)',
                     letterSpacing: '0.03em'
                 }}>
-                    Análisis de Margen por Producto
+                    Margen Teórico por Producto (según Ficha Técnica)
                 </h3>
                 <DataTable
                     columns={productoColumns}
