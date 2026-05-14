@@ -16,6 +16,7 @@ interface DataTableProps {
     data: any[]
     onRowClick?: (row: any) => void
     selectedId?: string | number | null
+    renderExpansion?: (row: any) => React.ReactNode
     showTotals?: boolean
     totalColumns?: string[]    // keys de columnas a sumar
     maxHeight?: string
@@ -28,6 +29,7 @@ export default function DataTable({
     data,
     onRowClick,
     selectedId,
+    renderExpansion,
     showTotals = false,
     totalColumns = [],
     maxHeight = '400px',
@@ -139,24 +141,44 @@ export default function DataTable({
                     </thead>
                     <tbody>
                         {sortedData.map((row, i) => {
+                            const rowId = row.id || row.nombre || i
                             const isSelected = selectedId != null && (row.id === selectedId || row.nombre === selectedId)
+                            
                             return (
-                                <tr
-                                    key={row.id || i}
-                                    onClick={() => onRowClick?.(row)}
-                                    style={{ 
-                                        cursor: onRowClick ? 'pointer' : 'default',
-                                        backgroundColor: isSelected ? 'var(--color-primary-50)' : undefined,
-                                        fontWeight: isSelected ? 600 : undefined,
-                                        boxShadow: isSelected ? 'inset 4px 0 0 var(--color-primary)' : undefined
-                                    }}
-                                >
-                                    {columns.map(col => (
-                                        <td key={col.key} style={{ textAlign: col.align || 'left' }}>
-                                            {col.format ? col.format(row[col.key], row) : row[col.key] ?? '—'}
-                                        </td>
-                                    ))}
-                                </tr>
+                                <React.Fragment key={rowId}>
+                                    <tr
+                                        onClick={() => onRowClick?.(row)}
+                                        style={{ 
+                                            cursor: onRowClick ? 'pointer' : 'default',
+                                            backgroundColor: isSelected ? 'var(--color-primary-50)' : undefined,
+                                            fontWeight: isSelected ? 600 : undefined,
+                                            boxShadow: isSelected ? 'inset 4px 0 0 var(--color-primary)' : undefined,
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                        className={isSelected ? 'row-selected' : ''}
+                                    >
+                                        {columns.map(col => (
+                                            <td key={col.key} style={{ textAlign: col.align || 'left' }}>
+                                                {col.format ? col.format(row[col.key], row) : row[col.key] ?? '—'}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                    {isSelected && renderExpansion && (
+                                        <tr className="expansion-row">
+                                            <td colSpan={columns.length} style={{ padding: 0, border: 'none' }}>
+                                                <div className="fade-in" style={{ 
+                                                    backgroundColor: 'var(--color-gray-50)', 
+                                                    padding: 'var(--space-4)',
+                                                    borderLeft: '4px solid var(--color-primary)',
+                                                    borderBottom: '1px solid var(--color-gray-200)',
+                                                    animation: 'slideDown 0.3s ease-out'
+                                                }}>
+                                                    {renderExpansion(row)}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
                             )
                         })}
                     </tbody>
@@ -179,6 +201,12 @@ export default function DataTable({
                     )}
                 </table>
             </div>
+            <style jsx>{`
+                @keyframes slideDown {
+                    from { opacity: 0; transform: translateY(-10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </div>
     )
 }

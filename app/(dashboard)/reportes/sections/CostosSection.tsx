@@ -374,65 +374,29 @@ function InsumosView({ data, rango, filtro, onFiltroChange, seleccionado, onSele
                 <DataTable
                     columns={insumoColumns}
                     data={filteredInsumos}
-                    onRowClick={row => onSeleccionChange(row.nombre)}
+                    onRowClick={row => onSeleccionChange(row.nombre === seleccionado ? '' : row.nombre)}
                     selectedId={seleccionado}
                     showTotals={true}
                     totalColumns={['costoTotal']}
                     exportFilename={`Costos_Insumos_Detalle_${rango.label.replace(/\s+/g, "_")}`}
                     maxHeight="500px"
+                    renderExpansion={() => (
+                        <div style={{ padding: 'var(--space-2)' }}>
+                            <DataTable 
+                                columns={[
+                                    { key: 'fecha', label: 'Fecha', format: (v) => formatDate(v) },
+                                    { key: 'factura', label: 'Factura/Remito' },
+                                    { key: 'costoTotal', label: 'Monto', align: 'right', format: (v) => formatCurrency(v) }
+                                ]}
+                                data={comprasDelInsumo}
+                                showTotals={true}
+                                totalColumns={['costoTotal']}
+                                maxHeight="250px"
+                            />
+                        </div>
+                    )}
                 />
             </div>
-
-            {/* Detalle de compras del insumo seleccionado */}
-            {seleccionado && (
-                <div className="card" style={{
-                    padding: 'var(--space-6)',
-                    border: '2px solid var(--color-primary)',
-                    borderRadius: 'var(--radius-lg)',
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                        <div>
-                            <h3 style={{
-                                fontSize: 'var(--text-sm)', color: 'var(--color-primary)',
-                                fontFamily: 'var(--font-heading)', letterSpacing: '0.03em', margin: 0,
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-                            }}>
-                                📋 Facturas/Remitos de: {seleccionado}
-                            </h3>
-                            {insumoInfo && (
-                                <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
-                                    <span>📦 {formatDecimal(insumoInfo.cantidadComprada, 1)} {insumoInfo.unidad} comprados</span>
-                                    <span>💰 {formatCurrency(insumoInfo.costoTotal)} total</span>
-                                    <span>📄 {comprasDelInsumo.length} registros</span>
-                                    <span>💲 Prom. {formatCurrencyDecimals(insumoInfo.precioPromedio)}/{insumoInfo.unidad}</span>
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => onSeleccionChange('')}
-                            style={{ fontSize: 'var(--text-xs)' }}
-                        >
-                            ✕ Cerrar
-                        </button>
-                    </div>
-
-                    {comprasDelInsumo.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-gray-400)' }}>
-                            No hay facturas/remitos para este insumo en el período seleccionado
-                        </div>
-                    ) : (
-                        <DataTable
-                            columns={detalleColumns}
-                            data={comprasDelInsumo}
-                            showTotals={true}
-                            totalColumns={['costoTotal', 'cantidad']}
-                            exportFilename={`Costos_${seleccionado.replace(/\s+/g, "_")}_${rango.label.replace(/\s+/g, "_")}`}
-                            maxHeight="400px"
-                        />
-                    )}
-                </div>
-            )}
         </>
     )
 }
@@ -510,57 +474,29 @@ function ProveedoresView({ data, rango, seleccionado, onSeleccionChange }: { dat
                 <DataTable
                     columns={proveedorColumns}
                     data={data.gastoPorProveedor}
-                    onRowClick={row => onSeleccionChange(row.nombre)}
+                    onRowClick={row => onSeleccionChange(row.nombre === seleccionado ? '' : row.nombre)}
                     selectedId={seleccionado}
                     showTotals={true}
                     totalColumns={['costoTotal', 'compras']}
                     exportFilename={`Costos_Proveedores_${rango.label.replace(/\s+/g, "_")}`}
                     maxHeight="400px"
+                    renderExpansion={() => (
+                        <div style={{ padding: 'var(--space-2)' }}>
+                            <DataTable 
+                                columns={[
+                                    { key: 'fecha', label: 'Fecha', format: (v) => formatDate(v) },
+                                    { key: 'factura', label: 'Factura/Remito' },
+                                    { key: 'costoTotal', label: 'Monto', align: 'right', format: (v) => formatCurrency(v) }
+                                ]}
+                                data={comprasDelProveedor}
+                                showTotals={true}
+                                totalColumns={['costoTotal']}
+                                maxHeight="250px"
+                            />
+                        </div>
+                    )}
                 />
             </div>
-
-            {/* Detalle de compras del proveedor seleccionado */}
-            {seleccionado && (
-                <div className="card" style={{
-                    padding: 'var(--space-6)',
-                    border: '2px solid var(--color-primary)',
-                    borderRadius: 'var(--radius-lg)',
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                        <div>
-                            <h3 style={{
-                                fontSize: 'var(--text-sm)', color: 'var(--color-primary)',
-                                fontFamily: 'var(--font-heading)', letterSpacing: '0.03em', margin: 0,
-                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-                            }}>
-                                📋 Detalle de Facturación: {seleccionado}
-                            </h3>
-                            {proveedorInfo && (
-                                <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
-                                    <span>💰 {formatCurrency(proveedorInfo.costoTotal)} facturado</span>
-                                    <span>📄 {comprasDelProveedor.length} comprobantes</span>
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => onSeleccionChange('')}
-                            style={{ fontSize: 'var(--text-xs)' }}
-                        >
-                            ✕ Cerrar
-                        </button>
-                    </div>
-
-                    <DataTable
-                        columns={detalleColumns}
-                        data={comprasDelProveedor}
-                        showTotals={true}
-                        totalColumns={['costoTotal']}
-                        exportFilename={`Costos_Proveedor_${seleccionado.replace(/\s+/g, "_")}_${rango.label.replace(/\s+/g, "_")}`}
-                        maxHeight="400px"
-                    />
-                </div>
-            )}
         </>
     )
 }
@@ -654,7 +590,8 @@ function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange }: { d
         const styles: Record<string, { bg: string; label: string }> = {
             manual: { bg: '#3498DB22', label: 'Manual' },
             liquidacion: { bg: '#9B59B622', label: 'Liquidación' },
-            mantenimiento: { bg: '#E67E2222', label: 'Flota' }
+            mantenimiento: { bg: '#E67E2222', label: 'Flota' },
+            caja: { bg: '#27AE6022', label: 'Caja' }
         }
         const s = styles[origen] || { bg: '#ccc', label: origen }
         return (

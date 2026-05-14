@@ -81,10 +81,10 @@ export async function getCostosReport(
     const ventasTotalActual = ventasActual._sum.totalImporte || 0
     const ventasTotalAnterior = ventasAnterior._sum.totalImporte || 0
 
-    // ── 2. Gastos operativos, Sueldos y Mantenimientos ──
+    // ── 2. Gastos operativos, Sueldos, Mantenimientos y Caja ──
     // IMPORTANTE: Excluir gastos que ya están contabilizados como compras de insumos
     // (los GastoOperativo que tienen un MovimientoStock vinculado)
-    const [gastos, liqs, mants, gastosAnterior, liqsAnterior, mantsAnterior] = await Promise.all([
+    const [gastos, liqs, mants, egresosCaja, gastosAnterior, liqsAnterior, mantsAnterior, egresosCajaAnterior] = await Promise.all([
         // Gastos operativos actuales (excluyendo los vinculados a movimientos de stock)
         prisma.gastoOperativo.findMany({
             where: {
@@ -109,7 +109,16 @@ export async function getCostosReport(
             },
             include: { vehiculo: { select: { patente: true, marca: true, modelo: true } } }
         }),
-        // Totales periodo anterior (también excluyendo los vinculados a insumos)
+        // Egresos de Caja actuales (no vinculados a gastos manuales ni rendiciones)
+        prisma.movimientoCaja.findMany({
+            where: {
+                tipo: 'egreso',
+                fecha: { gte: startOfCurrent, lte: endOfCurrent },
+                gastoId: null,
+                rendicionId: null
+            }
+        }),
+        // Totales periodo anterior
         prisma.gastoOperativo.aggregate({
             where: {
                 fecha: { gte: startAnterior, lte: endAnterior },
@@ -130,15 +139,30 @@ export async function getCostosReport(
                 fecha: { gte: startAnterior, lte: endAnterior }
             },
             _sum: { costo: true }
+        }),
+        prisma.movimientoCaja.aggregate({
+            where: {
+                tipo: 'egreso',
+                fecha: { gte: startAnterior, lte: endAnterior },
+                gastoId: null,
+                rendicionId: null
+            },
+            _sum: { monto: true }
         })
     ])
 
     const gastosTotalActualBase = gastos.reduce((acc, g) => acc + g.monto, 0)
     const liqsTotalActual = liqs.reduce((acc, l) => acc + l.totalNeto, 0)
     const mantsTotalActual = mants.reduce((acc, m) => acc + m.costo, 0)
-    const gastosTotalActual = gastosTotalActualBase + liqsTotalActual + mantsTotalActual
+    const egresosCajaTotalActual = egresosCaja.reduce((acc, e) => acc + e.monto, 0)
+    
+    const gastosTotalActual = gastosTotalActualBase + liqsTotalActual + mantsTotalActual + egresosCajaTotalActual
 
-    const gastosTotalAnterior = (gastosAnterior._sum.monto || 0) + (liqsAnterior._sum.totalNeto || 0) + (mantsAnterior._sum.costo || 0)
+    const gastosTotalAnterior = 
+        (gastosAnterior._sum.monto || 0) + 
+        (liqsAnterior._sum.totalNeto || 0) + 
+        (mantsAnterior._sum.costo || 0) +
+        (egresosCajaAnterior._sum.monto || 0)
 
     const gastosPorCategoria: Record<string, { nombre: string; monto: number; count: number }> = {}
 
@@ -164,6 +188,14 @@ export async function getCostosReport(
         if (!gastosPorCategoria[catMant]) gastosPorCategoria[catMant] = { nombre: catMant, monto: 0, count: 0 }
         gastosPorCategoria[catMant].monto += mantsTotalActual
         gastosPorCategoria[catMant].count += mants.length
+    }
+
+    // Integrar Egresos de Caja en categorías según concepto
+    for (const e of egresosCaja) {
+        const cat = `Caja: ${e.concepto}`
+        if (!gastosPorCategoria[cat]) gastosPorCategoria[cat] = { nombre: cat, monto: 0, count: 0 }
+        gastosPorCategoria[cat].monto += e.monto
+        gastosPorCategoria[cat].count++
     }
 
     // ── 2b. Detalle unificado de TODOS los gastos operativos ──
@@ -206,6 +238,20 @@ export async function getCostosReport(
             monto: m.costo,
             recurrente: false,
             origen: 'mantenimiento'
+        })
+    }
+
+    // Egresos de Caja
+    for (const e of egresosCaja) {
+        gastosDetalle.push({
+            id: e.id,
+            fecha: e.fecha,
+            categoria: `Caja: ${e.concepto}`,
+            descripcion: e.descripcion || e.concepto,
+            monto: e.monto,
+            recurrente: false,
+            origen: 'caja',
+            medioPago: e.medioPago
         })
     }
 
