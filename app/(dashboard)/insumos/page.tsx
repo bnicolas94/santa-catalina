@@ -712,11 +712,63 @@ function HistorialInsumoModal({ insumoId, onClose }: { insumoId: string; onClose
     const [filtro, setFiltro] = useState('')
     const [soloEntradas, setSoloEntradas] = useState(false)
 
+    // Date filter state
+    const [fechaDesde, setFechaDesde] = useState('')
+    const [fechaHasta, setFechaHasta] = useState('')
+    const [presetActivo, setPresetActivo] = useState('todo')
+
+    function aplicarPreset(preset: string) {
+        const hoy = new Date()
+        let desde = ''
+        let hasta = ''
+
+        switch (preset) {
+            case 'mes': {
+                const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+                desde = inicio.toISOString().split('T')[0]
+                hasta = hoy.toISOString().split('T')[0]
+                break
+            }
+            case 'mes_ant': {
+                const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)
+                const fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0)
+                desde = inicio.toISOString().split('T')[0]
+                hasta = fin.toISOString().split('T')[0]
+                break
+            }
+            case '3meses': {
+                const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 2, 1)
+                desde = inicio.toISOString().split('T')[0]
+                hasta = hoy.toISOString().split('T')[0]
+                break
+            }
+            case 'anio': {
+                const inicio = new Date(hoy.getFullYear(), 0, 1)
+                desde = inicio.toISOString().split('T')[0]
+                hasta = hoy.toISOString().split('T')[0]
+                break
+            }
+            case 'todo':
+            default:
+                desde = ''
+                hasta = ''
+                break
+        }
+
+        setPresetActivo(preset)
+        setFechaDesde(desde)
+        setFechaHasta(hasta)
+    }
+
     useEffect(() => {
         async function fetchHistorial() {
             setLoading(true)
             try {
-                const res = await fetch(`/api/insumos/${insumoId}/historial`)
+                const params = new URLSearchParams()
+                if (fechaDesde) params.set('desde', new Date(fechaDesde + 'T00:00:00').toISOString())
+                if (fechaHasta) params.set('hasta', new Date(fechaHasta + 'T23:59:59').toISOString())
+                const qs = params.toString() ? `?${params.toString()}` : ''
+                const res = await fetch(`/api/insumos/${insumoId}/historial${qs}`)
                 if (res.ok) setData(await res.json())
             } catch (err) {
                 console.error('Error fetching historial:', err)
@@ -725,7 +777,7 @@ function HistorialInsumoModal({ insumoId, onClose }: { insumoId: string; onClose
             }
         }
         fetchHistorial()
-    }, [insumoId])
+    }, [insumoId, fechaDesde, fechaHasta])
 
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('es-AR')
     const formatCurrencyDec = (v: number) => '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -744,20 +796,58 @@ function HistorialInsumoModal({ insumoId, onClose }: { insumoId: string; onClose
     return (
         <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 }}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 1000, width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-                <div className="modal-header">
-                    <h2 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                        📊 Historial: {data?.insumo?.nombre || 'Cargando...'}
-                        {data?.insumo?.familia && (
-                            <span className="badge" style={{
-                                backgroundColor: `${data.insumo.familia.color || '#607D8B'}20`,
-                                color: data.insumo.familia.color || '#607D8B',
-                                fontSize: 'var(--text-xs)'
-                            }}>
-                                {data.insumo.familia.nombre}
-                            </span>
-                        )}
-                    </h2>
-                    <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+                <div className="modal-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 'var(--space-3)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', margin: 0 }}>
+                            📊 Historial: {data?.insumo?.nombre || 'Cargando...'}
+                            {data?.insumo?.familia && (
+                                <span className="badge" style={{
+                                    backgroundColor: `${data.insumo.familia.color || '#607D8B'}20`,
+                                    color: data.insumo.familia.color || '#607D8B',
+                                    fontSize: 'var(--text-xs)'
+                                }}>
+                                    {data.insumo.familia.nombre}
+                                </span>
+                            )}
+                        </h2>
+                        <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+                    </div>
+
+                    {/* Date filter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        {[
+                            { key: 'mes', label: 'Este mes' },
+                            { key: 'mes_ant', label: 'Mes anterior' },
+                            { key: '3meses', label: 'Últimos 3 meses' },
+                            { key: 'anio', label: 'Este año' },
+                            { key: 'todo', label: 'Todo' },
+                        ].map(p => (
+                            <button
+                                key={p.key}
+                                className={`btn btn-sm ${presetActivo === p.key ? 'btn-primary' : 'btn-ghost'}`}
+                                onClick={() => aplicarPreset(p.key)}
+                                style={{ fontSize: 'var(--text-xs)', padding: '4px 10px', borderRadius: 'var(--radius-full)' }}
+                            >
+                                {p.label}
+                            </button>
+                        ))}
+                        <span style={{ color: 'var(--color-gray-300)', margin: '0 4px' }}>|</span>
+                        <input
+                            type="date"
+                            className="form-input"
+                            value={fechaDesde}
+                            onChange={e => { setFechaDesde(e.target.value); setPresetActivo('') }}
+                            style={{ fontSize: 'var(--text-xs)', padding: '4px 6px', width: 130 }}
+                        />
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)' }}>a</span>
+                        <input
+                            type="date"
+                            className="form-input"
+                            value={fechaHasta}
+                            onChange={e => { setFechaHasta(e.target.value); setPresetActivo('') }}
+                            style={{ fontSize: 'var(--text-xs)', padding: '4px 6px', width: 130 }}
+                        />
+                    </div>
                 </div>
 
                 <div className="modal-body" style={{ overflow: 'auto', flex: 1 }}>

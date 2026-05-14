@@ -20,6 +20,16 @@ export async function GET(
 
         const { id } = await params
 
+        // Parse optional date filters
+        const url = new URL(request.url)
+        const desdeParam = url.searchParams.get('desde')
+        const hastaParam = url.searchParams.get('hasta')
+
+        const fechaFilter: any = {}
+        if (desdeParam) fechaFilter.gte = new Date(desdeParam)
+        if (hastaParam) fechaFilter.lte = new Date(hastaParam)
+        const hasFechaFilter = Object.keys(fechaFilter).length > 0
+
         // Datos del insumo
         const insumo = await prisma.insumo.findUnique({
             where: { id },
@@ -42,9 +52,12 @@ export async function GET(
             return NextResponse.json({ error: 'Insumo no encontrado' }, { status: 404 })
         }
 
-        // Todos los movimientos de este insumo, ordenados cronológicamente
+        // Movimientos de este insumo, con filtro de fecha opcional
         const movimientos = await prisma.movimientoStock.findMany({
-            where: { insumoId: id },
+            where: {
+                insumoId: id,
+                ...(hasFechaFilter ? { fecha: fechaFilter } : {})
+            },
             select: {
                 id: true,
                 tipo: true,
