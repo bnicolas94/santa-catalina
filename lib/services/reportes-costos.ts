@@ -227,8 +227,8 @@ export async function getCostosReport(
         })
     }
 
-    // ── 5. Top insumos más costosos ──
-    const topInsumos = await prisma.movimientoStock.groupBy({
+    // ── 5. Ranking COMPLETO de insumos por costo (sin límite) ──
+    const allInsumos = await prisma.movimientoStock.groupBy({
         by: ['insumoId'],
         where: {
             tipo: 'entrada',
@@ -237,26 +237,92 @@ export async function getCostosReport(
         },
         _sum: { costoTotal: true, cantidad: true },
         _count: true,
-        orderBy: { _sum: { costoTotal: 'desc' } },
-        take: 10
+        orderBy: { _sum: { costoTotal: 'desc' } }
     })
 
-    const insumoIds = topInsumos.map(t => t.insumoId)
+    const insumoIds = allInsumos.map(t => t.insumoId)
     const insumos = await prisma.insumo.findMany({
         where: { id: { in: insumoIds } },
-        select: { id: true, nombre: true, unidadMedida: true }
+        select: { id: true, nombre: true, unidadMedida: true, familia: { select: { nombre: true } } }
     })
 
-    const rankingInsumos = topInsumos.map(t => {
+    const rankingInsumos = allInsumos.map(t => {
         const insumo = insumos.find(i => i.id === t.insumoId)
+        const costoTotal = t._sum.costoTotal || 0
+        const cantidadTotal = t._sum.cantidad || 0
         return {
+            id: t.insumoId,
             nombre: insumo?.nombre || 'Desconocido',
+            familia: insumo?.familia?.nombre || 'Sin familia',
             unidad: insumo?.unidadMedida || '',
-            costoTotal: t._sum.costoTotal || 0,
-            cantidadComprada: t._sum.cantidad || 0,
+            costoTotal,
+            cantidadComprada: cantidadTotal,
+            precioPromedio: cantidadTotal > 0 ? costoTotal / cantidadTotal : 0,
             compras: t._count
         }
     })
+
+    // ── 6. Gasto por Proveedor ──
+    const comprasProveedor = await prisma.movimientoStock.groupBy({
+        by: ['proveedorId'],
+        where: {
+            tipo: 'entrada',
+            fecha: { gte: startOfCurrent, lte: endOfCurrent },
+            proveedorId: { not: null },
+            ...whereUbi
+        },
+        _sum: { costoTotal: true },
+        _count: true,
+        orderBy: { _sum: { costoTotal: 'desc' } }
+    })
+
+    const proveedorIds = comprasProveedor.map(c => c.proveedorId!).filter(Boolean)
+    const proveedores = await prisma.proveedor.findMany({
+        where: { id: { in: proveedorIds } },
+        select: { id: true, nombre: true }
+    })
+
+    const gastoPorProveedor = comprasProveedor.map(c => {
+        const prov = proveedores.find(p => p.id === c.proveedorId)
+        return {
+            nombre: prov?.nombre || 'Sin proveedor',
+            costoTotal: c._sum.costoTotal || 0,
+            compras: c._count
+        }
+    })
+
+    // ── 7. Detalle de compras (facturas/remitos individuales) ──
+    const comprasDetalle = await prisma.movimientoStock.findMany({
+        where: {
+            tipo: 'entrada',
+            fecha: { gte: startOfCurrent, lte: endOfCurrent },
+            ...whereUbi
+        },
+        select: {
+            id: true,
+            fecha: true,
+            cantidad: true,
+            costoTotal: true,
+            numeroFactura: true,
+            observaciones: true,
+            insumo: { select: { nombre: true, unidadMedida: true } },
+            proveedor: { select: { nombre: true } }
+        },
+        orderBy: { fecha: 'desc' }
+    })
+
+    const comprasFormateadas = comprasDetalle.map(c => ({
+        id: c.id,
+        fecha: c.fecha,
+        insumo: c.insumo.nombre,
+        unidad: c.insumo.unidadMedida,
+        cantidad: c.cantidad,
+        costoTotal: c.costoTotal || 0,
+        precioUnitario: c.cantidad > 0 && c.costoTotal ? c.costoTotal / c.cantidad : 0,
+        proveedor: c.proveedor?.nombre || '—',
+        factura: c.numeroFactura || '—',
+        observaciones: c.observaciones || ''
+    }))
 
     return {
         desde: desdeIso, hasta: hastaIso,
@@ -269,11 +335,16 @@ export async function getCostosReport(
             costoTotalAnterior: costoInsumosAnterior + gastosTotalAnterior,
             margenPromedioProductos: costoPorProducto.length > 0
                 ? costoPorProducto.reduce((acc, p) => acc + p.margenPct, 0) / costoPorProducto.length
-                : 0
+                : 0,
+            totalCompras: comprasDetalle.length,
+            totalProveedores: gastoPorProveedor.length
         },
         gastosPorCategoria: Object.values(gastosPorCategoria).sort((a, b) => b.monto - a.monto),
         costoPorProducto,
         evolucion,
-        rankingInsumos
+        rankingInsumos,
+        gastoPorProveedor,
+        comprasDetalle: comprasFormateadas
     }
 }
+
