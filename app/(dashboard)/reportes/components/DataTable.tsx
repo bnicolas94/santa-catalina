@@ -15,6 +15,7 @@ interface DataTableProps {
     columns: DataTableColumn[]
     data: any[]
     onRowClick?: (row: any) => void
+    selectedId?: string | number | null
     showTotals?: boolean
     totalColumns?: string[]    // keys de columnas a sumar
     maxHeight?: string
@@ -26,6 +27,7 @@ export default function DataTable({
     columns,
     data,
     onRowClick,
+    selectedId,
     showTotals = false,
     totalColumns = [],
     maxHeight = '400px',
@@ -136,19 +138,27 @@ export default function DataTable({
                         </tr>
                     </thead>
                     <tbody>
-                        {sortedData.map((row, i) => (
-                            <tr
-                                key={row.id || i}
-                                onClick={() => onRowClick?.(row)}
-                                style={{ cursor: onRowClick ? 'pointer' : 'default' }}
-                            >
-                                {columns.map(col => (
-                                    <td key={col.key} style={{ textAlign: col.align || 'left' }}>
-                                        {col.format ? col.format(row[col.key], row) : row[col.key] ?? '—'}
-                                    </td>
-                                ))}
-                            </tr>
-                        ))}
+                        {sortedData.map((row, i) => {
+                            const isSelected = selectedId != null && (row.id === selectedId || row.nombre === selectedId)
+                            return (
+                                <tr
+                                    key={row.id || i}
+                                    onClick={() => onRowClick?.(row)}
+                                    style={{ 
+                                        cursor: onRowClick ? 'pointer' : 'default',
+                                        backgroundColor: isSelected ? 'var(--color-primary-50)' : undefined,
+                                        fontWeight: isSelected ? 600 : undefined,
+                                        boxShadow: isSelected ? 'inset 4px 0 0 var(--color-primary)' : undefined
+                                    }}
+                                >
+                                    {columns.map(col => (
+                                        <td key={col.key} style={{ textAlign: col.align || 'left' }}>
+                                            {col.format ? col.format(row[col.key], row) : row[col.key] ?? '—'}
+                                        </td>
+                                    ))}
+                                </tr>
+                            )
+                        })}
                     </tbody>
                     {totals && (
                         <tfoot>

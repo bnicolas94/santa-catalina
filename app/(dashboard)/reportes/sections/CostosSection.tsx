@@ -20,6 +20,11 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
     const [loading, setLoading] = useState(true)
     const [subTab, setSubTab] = useState<SubTab>('resumen')
     const [filtroInsumo, setFiltroInsumo] = useState('')
+    
+    // Drill-down states
+    const [insumoSeleccionado, setInsumoSeleccionado] = useState('')
+    const [proveedorSeleccionado, setProveedorSeleccionado] = useState('')
+    const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('')
 
     useEffect(() => {
         async function fetchData() {
@@ -56,12 +61,17 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
 
     const subTabs: { key: SubTab; label: string; icon: string }[] = [
         { key: 'resumen', label: 'Resumen', icon: '📊' },
-        { key: 'insumos', label: 'Insumos', icon: '🥩' },
+        { key: 'insumos', label: 'Insumos', icon: '🍎' },
         { key: 'gastos', label: 'Gastos Op.', icon: '💸' },
         { key: 'proveedores', label: 'Proveedores', icon: '🏪' },
         { key: 'compras', label: 'Facturas/Remitos', icon: '🧾' },
         { key: 'margenes', label: 'Resultado', icon: '📈' },
     ]
+
+    function handleSelectCategory(cat: string) {
+        setCategoriaSeleccionada(cat)
+        setSubTab('gastos')
+    }
 
     return (
         <div className="fade-in">
@@ -79,14 +89,16 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     color="var(--color-success)"
                     delta={deltaVentas}
                     previousLabel="período ant."
+                    onClick={() => setSubTab('margenes')}
                 />
                 <KpiCardEnhanced
                     label="Costo Total"
                     value={formatCurrency(k.costoTotal)}
-                    icon="💸"
+                    icon="📉"
                     color="var(--color-danger)"
                     delta={deltaCostoTotal}
                     previousLabel="período ant."
+                    onClick={() => setSubTab('resumen')}
                 />
                 <KpiCardEnhanced
                     label={esGanancia ? 'Ganancia' : 'Pérdida'}
@@ -96,22 +108,25 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     delta={deltaGanancia}
                     previousLabel="período ant."
                     footer={`Margen: ${formatPercent(k.margenReal)}`}
+                    onClick={() => setSubTab('margenes')}
                 />
                 <KpiCardEnhanced
                     label="Compra Insumos"
                     value={formatCurrency(k.costoInsumosActual)}
-                    icon="🥩"
+                    icon="🍎"
                     color="var(--color-warning)"
                     delta={deltaInsumos}
                     previousLabel="período ant."
+                    onClick={() => setSubTab('insumos')}
                 />
                 <KpiCardEnhanced
                     label="Gastos Operativos"
                     value={formatCurrency(k.gastosTotalActual)}
-                    icon="🏭"
+                    icon="💸"
                     color="var(--color-info)"
                     delta={deltaGastos}
                     previousLabel="período ant."
+                    onClick={() => setSubTab('gastos')}
                 />
             </div>
 
@@ -142,10 +157,33 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                 ))}
             </div>
 
-            {subTab === 'resumen' && <ResumenView data={data} rango={rango} />}
-            {subTab === 'insumos' && <InsumosView data={data} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
-            {subTab === 'gastos' && <GastosDetalleView data={data} rango={rango} />}
-            {subTab === 'proveedores' && <ProveedoresView data={data} rango={rango} />}
+            {subTab === 'resumen' && <ResumenView data={data} rango={rango} onSelectCategory={handleSelectCategory} />}
+            {subTab === 'insumos' && (
+                <InsumosView 
+                    data={data} 
+                    rango={rango} 
+                    filtro={filtroInsumo} 
+                    onFiltroChange={setFiltroInsumo} 
+                    seleccionado={insumoSeleccionado}
+                    onSeleccionChange={setInsumoSeleccionado}
+                />
+            )}
+            {subTab === 'gastos' && (
+                <GastosDetalleView 
+                    data={data} 
+                    rango={rango} 
+                    seleccionado={categoriaSeleccionada}
+                    onSeleccionChange={setCategoriaSeleccionada}
+                />
+            )}
+            {subTab === 'proveedores' && (
+                <ProveedoresView 
+                    data={data} 
+                    rango={rango} 
+                    seleccionado={proveedorSeleccionado}
+                    onSeleccionChange={setProveedorSeleccionado}
+                />
+            )}
             {subTab === 'compras' && <ComprasView data={data} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
             {subTab === 'margenes' && <MargenesView data={data} rango={rango} />}
         </div>
@@ -155,7 +193,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
 // ═══════════════════════════════════════════════════════════════
 // SUB-TAB: RESUMEN
 // ═══════════════════════════════════════════════════════════════
-function ResumenView({ data, rango }: { data: any; rango: RangoFechas }) {
+function ResumenView({ data, rango, onSelectCategory }: { data: any; rango: RangoFechas; onSelectCategory: (cat: string) => void }) {
     const gastoCatColumns = [
         { key: 'nombre', label: 'Categoría', sortable: true },
         { key: 'count', label: 'Registros', align: 'right' as const, sortable: true },
@@ -217,6 +255,7 @@ function ResumenView({ data, rango }: { data: any; rango: RangoFechas }) {
                     data={data.gastosPorCategoria}
                     showTotals={true}
                     totalColumns={['monto', 'count']}
+                    onRowClick={(row) => onSelectCategory(row.nombre)}
                     exportFilename={`Costos_Gastos_${rango.label.replace(/\s+/g, "_")}`}
                     maxHeight="300px"
                 />
@@ -228,7 +267,7 @@ function ResumenView({ data, rango }: { data: any; rango: RangoFechas }) {
 // ═══════════════════════════════════════════════════════════════
 // SUB-TAB: INSUMOS (Desglose completo por insumo)
 // ═══════════════════════════════════════════════════════════════
-function InsumosView({ data, rango, filtro, onFiltroChange }: { data: any; rango: RangoFechas; filtro: string; onFiltroChange: (v: string) => void }) {
+function InsumosView({ data, rango, filtro, onFiltroChange, seleccionado, onSeleccionChange }: { data: any; rango: RangoFechas; filtro: string; onFiltroChange: (v: string) => void; seleccionado: string; onSeleccionChange: (v: string) => void }) {
     const filteredInsumos = useMemo(() => {
         if (!filtro) return data.rankingInsumos
         const lower = filtro.toLowerCase()
@@ -239,6 +278,19 @@ function InsumosView({ data, rango, filtro, onFiltroChange }: { data: any; rango
     }, [data.rankingInsumos, filtro])
 
     const totalInsumos = data.rankingInsumos.reduce((acc: number, i: any) => acc + i.costoTotal, 0)
+
+    // FC/Remitos filtradas por el insumo seleccionado
+    const comprasDelInsumo = useMemo(() => {
+        if (!seleccionado) return []
+        return (data.comprasDetalle || []).filter(
+            (c: any) => c.insumo === seleccionado
+        )
+    }, [data.comprasDetalle, seleccionado])
+
+    const insumoInfo = useMemo(() => {
+        if (!seleccionado) return null
+        return data.rankingInsumos.find((i: any) => i.nombre === seleccionado)
+    }, [data.rankingInsumos, seleccionado])
 
     const insumoColumns = [
         { key: 'nombre', label: 'Insumo', sortable: true },
@@ -255,6 +307,16 @@ function InsumosView({ data, rango, filtro, onFiltroChange }: { data: any; rango
                 return formatPercent(pct)
             }
         }
+    ]
+
+    const detalleColumns = [
+        { key: 'fecha', label: 'Fecha', sortable: true, width: '90px', format: (v: string) => formatDate(v) },
+        { key: 'cantidad', label: 'Cantidad', align: 'right' as const, sortable: true, format: (v: number) => formatDecimal(v, 1) },
+        { key: 'unidad', label: 'Ud.', width: '50px' },
+        { key: 'precioUnitario', label: '$/Ud.', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
+        { key: 'costoTotal', label: 'Total', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
+        { key: 'proveedor', label: 'Proveedor', sortable: true },
+        { key: 'factura', label: 'FC/Remito', sortable: true, width: '110px' },
     ]
 
     return (
@@ -277,7 +339,7 @@ function InsumosView({ data, rango, filtro, onFiltroChange }: { data: any; rango
             )}
 
             {/* Tabla completa de insumos */}
-            <div className="card" style={{ padding: 'var(--space-6)' }}>
+            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                     <h3 style={{
                         fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
@@ -285,24 +347,92 @@ function InsumosView({ data, rango, filtro, onFiltroChange }: { data: any; rango
                     }}>
                         Desglose Completo por Insumo
                     </h3>
-                    <input
-                        type="text"
-                        className="form-input"
-                        placeholder="🔍 Buscar insumo o familia..."
-                        value={filtro}
-                        onChange={e => onFiltroChange(e.target.value)}
-                        style={{ maxWidth: 260, fontSize: 'var(--text-xs)', padding: '4px 10px' }}
-                    />
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <select
+                            className="form-input"
+                            value={seleccionado}
+                            onChange={e => onSeleccionChange(e.target.value)}
+                            style={{ fontSize: 'var(--text-xs)', padding: '4px 8px', minWidth: 180 }}
+                        >
+                            <option value="">Seleccionar insumo...</option>
+                            {data.rankingInsumos.map((i: any) => (
+                                <option key={i.nombre} value={i.nombre}>
+                                    {i.nombre} ({formatCurrency(i.costoTotal)})
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            type="text"
+                            className="form-input"
+                            placeholder="🔍 Buscar insumo o familia..."
+                            value={filtro}
+                            onChange={e => onFiltroChange(e.target.value)}
+                            style={{ maxWidth: 220, fontSize: 'var(--text-xs)', padding: '4px 10px' }}
+                        />
+                    </div>
                 </div>
                 <DataTable
                     columns={insumoColumns}
                     data={filteredInsumos}
+                    onRowClick={row => onSeleccionChange(row.nombre)}
+                    selectedId={seleccionado}
                     showTotals={true}
                     totalColumns={['costoTotal']}
                     exportFilename={`Costos_Insumos_Detalle_${rango.label.replace(/\s+/g, "_")}`}
                     maxHeight="500px"
                 />
             </div>
+
+            {/* Detalle de compras del insumo seleccionado */}
+            {seleccionado && (
+                <div className="card" style={{
+                    padding: 'var(--space-6)',
+                    border: '2px solid var(--color-primary)',
+                    borderRadius: 'var(--radius-lg)',
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                        <div>
+                            <h3 style={{
+                                fontSize: 'var(--text-sm)', color: 'var(--color-primary)',
+                                fontFamily: 'var(--font-heading)', letterSpacing: '0.03em', margin: 0,
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
+                            }}>
+                                📋 Facturas/Remitos de: {seleccionado}
+                            </h3>
+                            {insumoInfo && (
+                                <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                    <span>📦 {formatDecimal(insumoInfo.cantidadComprada, 1)} {insumoInfo.unidad} comprados</span>
+                                    <span>💰 {formatCurrency(insumoInfo.costoTotal)} total</span>
+                                    <span>📄 {comprasDelInsumo.length} registros</span>
+                                    <span>💲 Prom. {formatCurrencyDecimals(insumoInfo.precioPromedio)}/{insumoInfo.unidad}</span>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => onSeleccionChange('')}
+                            style={{ fontSize: 'var(--text-xs)' }}
+                        >
+                            ✕ Cerrar
+                        </button>
+                    </div>
+
+                    {comprasDelInsumo.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-gray-400)' }}>
+                            No hay facturas/remitos para este insumo en el período seleccionado
+                        </div>
+                    ) : (
+                        <DataTable
+                            columns={detalleColumns}
+                            data={comprasDelInsumo}
+                            showTotals={true}
+                            totalColumns={['costoTotal', 'cantidad']}
+                            exportFilename={`Costos_${seleccionado.replace(/\s+/g, "_")}_${rango.label.replace(/\s+/g, "_")}`}
+                            maxHeight="400px"
+                        />
+                    )}
+                </div>
+            )}
         </>
     )
 }
@@ -310,11 +440,32 @@ function InsumosView({ data, rango, filtro, onFiltroChange }: { data: any; rango
 // ═══════════════════════════════════════════════════════════════
 // SUB-TAB: PROVEEDORES
 // ═══════════════════════════════════════════════════════════════
-function ProveedoresView({ data, rango }: { data: any; rango: RangoFechas }) {
+function ProveedoresView({ data, rango, seleccionado, onSeleccionChange }: { data: any; rango: RangoFechas; seleccionado: string; onSeleccionChange: (v: string) => void }) {
+    const comprasDelProveedor = useMemo(() => {
+        if (!seleccionado) return []
+        return (data.comprasDetalle || []).filter(
+            (c: any) => c.proveedor === seleccionado
+        )
+    }, [data.comprasDetalle, seleccionado])
+
+    const proveedorInfo = useMemo(() => {
+        if (!seleccionado) return null
+        return data.gastoPorProveedor.find((p: any) => p.nombre === seleccionado)
+    }, [data.gastoPorProveedor, seleccionado])
+
     const proveedorColumns = [
         { key: 'nombre', label: 'Proveedor', sortable: true },
         { key: 'compras', label: 'FC/Remitos', align: 'right' as const, sortable: true },
         { key: 'costoTotal', label: 'Total Facturado', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
+    ]
+
+    const detalleColumns = [
+        { key: 'fecha', label: 'Fecha', sortable: true, width: '90px', format: (v: string) => formatDate(v) },
+        { key: 'insumo', label: 'Insumo', sortable: true },
+        { key: 'cantidad', label: 'Cantidad', align: 'right' as const, sortable: true, format: (v: number) => formatDecimal(v, 1) },
+        { key: 'precioUnitario', label: '$/Ud.', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
+        { key: 'costoTotal', label: 'Total', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
+        { key: 'factura', label: 'FC/Remito', sortable: true, width: '110px' },
     ]
 
     return (
@@ -334,23 +485,82 @@ function ProveedoresView({ data, rango }: { data: any; rango: RangoFechas }) {
                 </div>
             )}
 
-            <div className="card" style={{ padding: 'var(--space-6)' }}>
-                <h3 style={{
-                    fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
-                    marginBottom: 'var(--space-4)', fontFamily: 'var(--font-heading)',
-                    letterSpacing: '0.03em'
-                }}>
-                    Ranking de Proveedores
-                </h3>
+            <div className="card" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                    <h3 style={{
+                        fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
+                        fontFamily: 'var(--font-heading)', letterSpacing: '0.03em', margin: 0
+                    }}>
+                        Ranking de Proveedores
+                    </h3>
+                    <select
+                        className="form-input"
+                        value={seleccionado}
+                        onChange={e => onSeleccionChange(e.target.value)}
+                        style={{ fontSize: 'var(--text-xs)', padding: '4px 8px', maxWidth: 220 }}
+                    >
+                        <option value="">Seleccionar proveedor...</option>
+                        {data.gastoPorProveedor.map((p: any) => (
+                            <option key={p.nombre} value={p.nombre}>
+                                {p.nombre} ({formatCurrency(p.costoTotal)})
+                            </option>
+                        ))}
+                    </select>
+                </div>
                 <DataTable
                     columns={proveedorColumns}
                     data={data.gastoPorProveedor}
+                    onRowClick={row => onSeleccionChange(row.nombre)}
+                    selectedId={seleccionado}
                     showTotals={true}
                     totalColumns={['costoTotal', 'compras']}
                     exportFilename={`Costos_Proveedores_${rango.label.replace(/\s+/g, "_")}`}
                     maxHeight="400px"
                 />
             </div>
+
+            {/* Detalle de compras del proveedor seleccionado */}
+            {seleccionado && (
+                <div className="card" style={{
+                    padding: 'var(--space-6)',
+                    border: '2px solid var(--color-primary)',
+                    borderRadius: 'var(--radius-lg)',
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                        <div>
+                            <h3 style={{
+                                fontSize: 'var(--text-sm)', color: 'var(--color-primary)',
+                                fontFamily: 'var(--font-heading)', letterSpacing: '0.03em', margin: 0,
+                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
+                            }}>
+                                📋 Detalle de Facturación: {seleccionado}
+                            </h3>
+                            {proveedorInfo && (
+                                <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-2)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                    <span>💰 {formatCurrency(proveedorInfo.costoTotal)} facturado</span>
+                                    <span>📄 {comprasDelProveedor.length} comprobantes</span>
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => onSeleccionChange('')}
+                            style={{ fontSize: 'var(--text-xs)' }}
+                        >
+                            ✕ Cerrar
+                        </button>
+                    </div>
+
+                    <DataTable
+                        columns={detalleColumns}
+                        data={comprasDelProveedor}
+                        showTotals={true}
+                        totalColumns={['costoTotal']}
+                        exportFilename={`Costos_Proveedor_${seleccionado.replace(/\s+/g, "_")}_${rango.label.replace(/\s+/g, "_")}`}
+                        maxHeight="400px"
+                    />
+                </div>
+            )}
         </>
     )
 }
@@ -413,14 +623,13 @@ function ComprasView({ data, rango, filtro, onFiltroChange }: { data: any; rango
 // ═══════════════════════════════════════════════════════════════
 // SUB-TAB: GASTOS OPERATIVOS (Desglose completo)
 // ═══════════════════════════════════════════════════════════════
-function GastosDetalleView({ data, rango }: { data: any; rango: RangoFechas }) {
+function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange }: { data: any; rango: RangoFechas; seleccionado: string; onSeleccionChange: (v: string) => void }) {
     const [filtroGasto, setFiltroGasto] = useState('')
-    const [filtroCat, setFiltroCat] = useState('')
 
     const filteredGastos = useMemo(() => {
         let items = data.gastosDetalle || []
-        if (filtroCat) {
-            items = items.filter((g: any) => g.categoria === filtroCat)
+        if (seleccionado) {
+            items = items.filter((g: any) => g.categoria === seleccionado)
         }
         if (filtroGasto) {
             const lower = filtroGasto.toLowerCase()
@@ -430,7 +639,7 @@ function GastosDetalleView({ data, rango }: { data: any; rango: RangoFechas }) {
             )
         }
         return items
-    }, [data.gastosDetalle, filtroGasto, filtroCat])
+    }, [data.gastosDetalle, filtroGasto, seleccionado])
 
     const totalGastos = (data.gastosDetalle || []).reduce((acc: number, g: any) => acc + g.monto, 0)
 
@@ -509,8 +718,8 @@ function GastosDetalleView({ data, rango }: { data: any; rango: RangoFechas }) {
                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                         <select
                             className="form-input"
-                            value={filtroCat}
-                            onChange={e => setFiltroCat(e.target.value)}
+                            value={seleccionado}
+                            onChange={e => onSeleccionChange(e.target.value)}
                             style={{ fontSize: 'var(--text-xs)', padding: '4px 8px', minWidth: 140 }}
                         >
                             <option value="">Todas las categorías</option>
