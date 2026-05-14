@@ -413,24 +413,28 @@ function ProveedoresView({ data, rango, seleccionado, onSeleccionChange }: { dat
         )
     }, [data.comprasDetalle, seleccionado])
 
-    const proveedorInfo = useMemo(() => {
-        if (!seleccionado) return null
-        return data.gastoPorProveedor.find((p: any) => p.nombre === seleccionado)
-    }, [data.gastoPorProveedor, seleccionado])
+    const comprasAgrupadas = useMemo(() => {
+        const groups: Record<string, any> = {}
+        comprasDelProveedor.forEach((c: any) => {
+            // Agrupar por fecha y factura
+            const key = `${formatDate(c.fecha)}_${c.factura}`
+            if (!groups[key]) {
+                groups[key] = { 
+                    ...c, 
+                    costoTotal: 0, 
+                    items: [] 
+                }
+            }
+            groups[key].costoTotal += c.costoTotal
+            groups[key].items.push(`${c.insumo} (${formatDecimal(c.cantidad, 1)})`)
+        })
+        return Object.values(groups).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+    }, [comprasDelProveedor])
 
     const proveedorColumns = [
         { key: 'nombre', label: 'Proveedor', sortable: true },
         { key: 'compras', label: 'FC/Remitos', align: 'right' as const, sortable: true },
         { key: 'costoTotal', label: 'Total Facturado', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
-    ]
-
-    const detalleColumns = [
-        { key: 'fecha', label: 'Fecha', sortable: true, width: '90px', format: (v: string) => formatDate(v) },
-        { key: 'insumo', label: 'Insumo', sortable: true },
-        { key: 'cantidad', label: 'Cantidad', align: 'right' as const, sortable: true, format: (v: number) => formatDecimal(v, 1) },
-        { key: 'precioUnitario', label: '$/Ud.', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
-        { key: 'costoTotal', label: 'Total', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
-        { key: 'factura', label: 'FC/Remito', sortable: true, width: '110px' },
     ]
 
     return (
@@ -483,16 +487,28 @@ function ProveedoresView({ data, rango, seleccionado, onSeleccionChange }: { dat
                     maxHeight="400px"
                     renderExpansion={() => (
                         <div style={{ padding: 'var(--space-2)' }}>
+                            <div style={{ padding: 'var(--space-3) var(--space-4)', backgroundColor: 'var(--color-gray-50)', borderBottom: '1px solid var(--color-gray-200)', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-gray-600)' }}>
+                                Desglose por Comprobante (Subtotales)
+                            </div>
                             <DataTable 
                                 columns={[
-                                    { key: 'fecha', label: 'Fecha', format: (v) => formatDate(v) },
-                                    { key: 'factura', label: 'Factura/Remito' },
-                                    { key: 'costoTotal', label: 'Monto', align: 'right', format: (v) => formatCurrency(v) }
+                                    { key: 'fecha', label: 'Fecha', width: '100px', format: (v) => formatDate(v) },
+                                    { key: 'factura', label: 'Factura/Remito', width: '130px' },
+                                    { 
+                                        key: 'items', 
+                                        label: 'Detalle Items', 
+                                        format: (v: string[]) => (
+                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                                {v.join(', ')}
+                                            </span>
+                                        ) 
+                                    },
+                                    { key: 'costoTotal', label: 'Subtotal', align: 'right', width: '120px', format: (v) => formatCurrency(v) }
                                 ]}
-                                data={comprasDelProveedor}
+                                data={comprasAgrupadas}
                                 showTotals={true}
                                 totalColumns={['costoTotal']}
-                                maxHeight="250px"
+                                maxHeight="300px"
                             />
                         </div>
                     )}
