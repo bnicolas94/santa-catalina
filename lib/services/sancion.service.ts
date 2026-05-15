@@ -106,7 +106,7 @@ export class SancionService {
             },
             include: {
                 empleado: {
-                    select: { nombre: true, apellido: true, rol: true }
+                    select: { nombre: true, apellido: true, rol: true, dni: true }
                 }
             },
             orderBy: { fecha: 'desc' }
