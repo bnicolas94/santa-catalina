@@ -101,6 +101,29 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
                 setShowAlertaForm(false)
                 setEditingAlerta(null)
                 fetchConfig()
+            } else {
+                const err = await res.json()
+                alert('Error al guardar: ' + err.error)
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Error de conexión al servidor')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDeleteAlerta = async (id: string) => {
+        if (!confirm('¿Seguro que deseas eliminar esta regla de sanción?')) return
+        setLoading(true)
+        try {
+            const res = await fetch(`/api/empleados/inasistencias/alertas/${id}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                fetchConfig()
+            } else {
+                alert('Error al eliminar')
             }
         } catch (error) {
             console.error(error)
@@ -354,18 +377,26 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
                                                 <td>{a.autoSancionar ? '✅ SI' : '❌ NO'}</td>
                                                 <td>{a.autoSancionar ? a.tipoSancionAuto : 'Solo Alerta'}</td>
                                                 <td>
-                                                    <button className="btn btn-ghost btn-sm" onClick={() => {
-                                                        setEditingAlerta(a)
-                                                        setAlertaForm({
-                                                            tipoInasistencia: a.tipoInasistencia,
-                                                            limiteMaximo: a.limiteMaximo,
-                                                            periodoDias: a.periodoDias,
-                                                            accionSugerida: a.accionSugerida || '',
-                                                            autoSancionar: a.autoSancionar || false,
-                                                            tipoSancionAuto: a.tipoSancionAuto || 'APERCIBIMIENTO'
-                                                        })
-                                                        setShowAlertaForm(true)
-                                                    }}>✏️</button>
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => {
+                                                            setEditingAlerta(a)
+                                                            setAlertaForm({
+                                                                tipoInasistencia: a.tipoInasistencia,
+                                                                limiteMaximo: a.limiteMaximo,
+                                                                periodoDias: a.periodoDias,
+                                                                accionSugerida: a.accionSugerida || '',
+                                                                autoSancionar: a.autoSancionar || false,
+                                                                tipoSancionAuto: a.tipoSancionAuto || 'APERCIBIMIENTO'
+                                                            })
+                                                            setShowAlertaForm(true)
+                                                        }} title="Editar">✏️</button>
+                                                        <button 
+                                                            className="btn btn-ghost btn-sm" 
+                                                            style={{ color: 'var(--color-danger)' }}
+                                                            onClick={() => handleDeleteAlerta(a.id)}
+                                                            title="Eliminar"
+                                                        >🗑️</button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
