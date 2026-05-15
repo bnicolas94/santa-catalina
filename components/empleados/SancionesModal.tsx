@@ -132,6 +132,85 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
         }
     }
 
+    const handlePrintSancion = (sancion: any) => {
+        const dImp = new Date(sancion.fecha)
+        const dia = dImp.getDate()
+        const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        const mesNombre = meses[dImp.getMonth()]
+        const anio = dImp.getFullYear()
+
+        const html = `
+            <html>
+            <head>
+                <title>Documento de ${sancion.tipo}</title>
+                <style>
+                    @page { size: A4 portrait; margin: 25mm; }
+                    body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; color: #000; font-size: 12pt; }
+                    .header { text-align: center; margin-bottom: 40px; border-bottom: 1px solid #000; padding-bottom: 20px; }
+                    .logo { font-size: 20pt; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
+                    .doc-title { font-size: 16pt; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin-top: 20px; }
+                    .content { margin-top: 40px; text-align: justify; }
+                    .date { text-align: right; margin-bottom: 40px; }
+                    .signature-section { margin-top: 100px; display: flex; justify-content: space-between; }
+                    .signature-box { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 10px; }
+                    .footer { margin-top: 60px; font-size: 10pt; color: #555; border-top: 1px dashed #ccc; padding-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="logo">SANTA CATALINA</div>
+                    <div style="font-size: 10pt;">Gestión de Recursos Humanos</div>
+                    <div class="doc-title">${sancion.tipo}</div>
+                </div>
+
+                <div class="date">
+                    Berazategui, ${dia} de ${mesNombre} de ${anio}
+                </div>
+
+                <div class="content">
+                    <p>Por medio de la presente, se notifica formalmente al Sr./Sra. <strong>${sancion.empleado.nombre} ${sancion.empleado.apellido || ''}</strong>, 
+                    con DNI <strong>${sancion.empleado.dni || '________'}</strong>, que se ha resuelto aplicar la siguiente medida disciplinaria: 
+                    <strong>${sancion.tipo}</strong>.</p>
+
+                    <p><strong>Motivo de la medida:</strong><br/>
+                    ${sancion.motivo}</p>
+
+                    ${sancion.observaciones ? `<p><strong>Observaciones adicionales:</strong><br/>${sancion.observaciones}</p>` : ''}
+
+                    <p>Se le recuerda que el cumplimiento de las normas internas de la empresa es fundamental para el buen funcionamiento del equipo y que la reiteración de conductas similares podrá dar lugar a medidas de mayor severidad, conforme a la normativa legal vigente y el convenio colectivo aplicable.</p>
+                </div>
+
+                <div class="signature-section">
+                    <div class="signature-box">
+                        Firma del Empleador / Responsable
+                    </div>
+                    <div class="signature-box">
+                        Firma del Empleado<br/>
+                        <span style="font-size: 9pt; font-weight: normal;">(Notificación fehaciente)</span>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    Documento interno generado por el sistema administrativo Santa Catalina.<br/>
+                    ID de Registro: ${sancion.id}
+                </div>
+
+                <script>
+                    window.onload = () => {
+                        window.print();
+                        setTimeout(() => window.close(), 500);
+                    }
+                </script>
+            </body>
+            </html>
+        `
+        const win = window.open('', '_blank')
+        if (win) {
+            win.document.write(html)
+            win.document.close()
+        }
+    }
+
     if (!isOpen) return null
 
     return (
@@ -246,11 +325,16 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
                                                     </span>
                                                 </td>
                                                 <td style={{ fontSize: '13px' }}>{s.motivo}</td>
-                                                <td>
+                                                <td style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <button 
+                                                        className="btn btn-ghost btn-sm" 
+                                                        onClick={() => handlePrintSancion(s)}
+                                                        title="Imprimir para firma"
+                                                    >🖨️</button>
                                                     {s.alertaId ? (
-                                                        <span title={s.observaciones} style={{ color: 'var(--color-primary)', fontSize: '11px', fontWeight: 600 }}>⚙️ AUTOMÁTICO</span>
+                                                        <span title={s.observaciones} style={{ color: 'var(--color-primary)', fontSize: '11px', fontWeight: 600 }}>⚙️ AUTO</span>
                                                     ) : (
-                                                        <span style={{ color: 'var(--color-gray-400)', fontSize: '11px' }}>👤 MANUAL</span>
+                                                        <span style={{ color: 'var(--color-gray-400)', fontSize: '11px' }}>👤 MAN</span>
                                                     )}
                                                 </td>
                                             </tr>
