@@ -19,6 +19,7 @@ import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalariales
 import { VacacionesSACModal } from '@/components/empleados/VacacionesSACModal'
 import { ReporteVacacionesModal } from '@/components/empleados/ReporteVacacionesModal'
 import { InasistenciasModal } from '@/components/empleados/InasistenciasModal'
+import { SancionesModal } from '@/components/empleados/SancionesModal'
 import LiquidacionFinalModal from '@/components/empleados/LiquidacionFinalModal'
 import Link from 'next/link'
 
@@ -59,6 +60,7 @@ function EmpleadosContent() {
     const [vacacionesSacOpen, setVacacionesSacOpen] = useState(false)
     const [showReporteVacaciones, setShowReporteVacaciones] = useState(false)
     const [showInasistenciasModal, setShowInasistenciasModal] = useState(false)
+    const [showSancionesModal, setShowSancionesModal] = useState(false)
     const [showLiquidacionFinalModal, setShowLiquidacionFinalModal] = useState(false)
 
     const fetchEmpleados = async () => {
@@ -104,6 +106,7 @@ function EmpleadosContent() {
         if (openParam === 'conceptos') setShowConceptosModal(true)
         if (openParam === 'licencias') setShowLicenciasModal(true)
         if (openParam === 'inasistencias') setShowInasistenciasModal(true)
+        if (openParam === 'sanciones') setShowSancionesModal(true)
         if (openParam === 'liquidacion-final') setShowLiquidacionFinalModal(true)
         if (openParam === 'new') handleOpenDialog()
         if (openParam === 'import') handleImportarClic()
@@ -129,6 +132,7 @@ function EmpleadosContent() {
         setDialogOpen(false)
         setExpressLiquidationOpen(false)
         setShowInasistenciasModal(false)
+        setShowSancionesModal(false)
         setShowLiquidacionFinalModal(false)
     }
 
@@ -664,6 +668,13 @@ function EmpleadosContent() {
             {showInasistenciasModal && (
                 <InasistenciasModal
                     isOpen={showInasistenciasModal}
+                    onClose={closeModal}
+                    empleados={empleados}
+                />
+            )}
+            {showSancionesModal && (
+                <SancionesModal
+                    isOpen={showSancionesModal}
                     onClose={closeModal}
                     empleados={empleados}
                 />

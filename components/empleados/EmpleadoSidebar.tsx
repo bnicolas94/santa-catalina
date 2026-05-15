@@ -57,6 +57,12 @@ const menuItems: MenuItem[] = [
         openModal: 'liquidacion-final'
     },
     {
+        label: 'Sanciones / Apercibimientos',
+        href: '/empleados?open=sanciones',
+        icon: '⚖️',
+        openModal: 'sanciones'
+    },
+    {
         label: 'Reportes',
         href: '#',
         icon: '📊',
