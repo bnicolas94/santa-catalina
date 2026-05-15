@@ -59,6 +59,7 @@ model Empleado {
   prestamos            PrestamoEmpleado[]
   rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
   rutasChofer          Ruta[]               @relation("ChoferRuta")
+  sanciones            Sancion[]
 
   @@map("empleados")
 }
@@ -823,6 +824,21 @@ model Inasistencia {
   @@map("inasistencias_empleado")
 }
 
+model Sancion {
+  id            String   @id @default(uuid())
+  empleadoId    String   @map("id_empleado")
+  fecha         DateTime @default(now())
+  tipo          String   // e.g., "SANCION", "APERCIBIMIENTO", "SUSPENSION"
+  motivo        String
+  observaciones String?
+  alertaId      String?  @map("id_alerta") // Referencia opcional a la alerta que lo disparó
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  empleado      Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("sanciones_empleado")
+}
+
 model AlertaAusentismo {
   id               String  @id @default(uuid())
   tipoInasistencia String  @map("tipo_inasistencia")
@@ -830,6 +846,8 @@ model AlertaAusentismo {
   periodoDias      Int     @default(30) @map("periodo_dias")
   accionSugerida   String? @map("accion_sugerida")
   activo           Boolean @default(true)
+  autoSancionar    Boolean @default(false) @map("auto_sancionar")
+  tipoSancionAuto  String? @map("tipo_sancion_auto")
 
   @@map("alertas_ausentismo")
 }

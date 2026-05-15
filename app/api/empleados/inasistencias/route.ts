@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { SancionService } from '@/lib/services/sancion.service'
 
 export async function GET(request: Request) {
     try {
@@ -40,7 +41,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { empleadoId, fecha, fechaHasta, tipo, motivo, tieneCertificado, observaciones } = body
+        const { 
+            empleadoId, 
+            fecha, 
+            fechaHasta, 
+            tipo, 
+            motivo, 
+            tieneCertificado, 
+            observaciones,
+            minutosRetraso 
+        } = body
 
         if (!empleadoId || !fecha || !tipo) {
             return NextResponse.json({ error: 'Faltan campos obligatorios' }, { status: 400 })
@@ -60,11 +70,20 @@ export async function POST(request: Request) {
                     tipo,
                     motivo,
                     tieneCertificado: !!tieneCertificado,
-                    observaciones
+                    observaciones,
+                    minutosRetraso: minutosRetraso ? parseInt(String(minutosRetraso)) : null
                 }
             })
             results.push(inasistencia)
             current.setDate(current.getDate() + 1)
+        }
+
+        // Al finalizar, disparamos el chequeo de alertas
+        try {
+            await SancionService.checkAndApplyAlerts(empleadoId)
+        } catch (alertaError) {
+            console.error('Error al procesar alertas tras inasistencia:', alertaError)
+            // No bloqueamos la respuesta principal por error en alertas
         }
 
         return NextResponse.json(results)

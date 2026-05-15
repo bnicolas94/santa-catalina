@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
+import { SancionService } from './sancion.service'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -120,6 +121,8 @@ export class AsistenciaService {
                                     }
                                 })
                             }
+                            // Disparar chequeo de alertas para posibles sanciones automáticas
+                            await SancionService.checkAndApplyAlerts(empleadoId)
                         }
                     }
                 }
@@ -212,6 +215,8 @@ export class AsistenciaService {
                             observaciones: `Llegada tarde registrada manualmente (${mins} min de retraso).`
                         }
                     })
+                    // Disparar chequeo de alertas para posibles sanciones automáticas
+                    await SancionService.checkAndApplyAlerts(params.empleadoId)
                 }
             }
         }
