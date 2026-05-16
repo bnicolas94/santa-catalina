@@ -31,20 +31,6 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN', 'COORD_PROD', 'OPERARIO'],
         permissionKey: 'permisoProduccion',
     },
-    {
-        label: 'Posicionamiento',
-        href: '/produccion/posicionamiento',
-        icon: '📍',
-        roles: ['ADMIN', 'COORD_PROD'],
-        permissionKey: 'permisoProduccion',
-    },
-    {
-        label: 'Historial Pos.',
-        href: '/produccion/historial',
-        icon: '📜',
-        roles: ['ADMIN', 'COORD_PROD'],
-        permissionKey: 'permisoProduccion',
-    },
 
     {
         label: 'Productos',
