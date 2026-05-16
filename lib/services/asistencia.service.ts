@@ -340,6 +340,21 @@ export class AsistenciaService {
             }
         }
 
-        return creados
+    /**
+     * Procesa ausencias para un rango de fechas.
+     */
+    static async procesarAusenciasRango(desde: string, hasta: string) {
+        let totalCreados = 0
+        let current = new Date(`${desde}T12:00:00`)
+        const end = new Date(`${hasta}T12:00:00`)
+
+        while (current <= end) {
+            const fechaStr = current.toISOString().split('T')[0]
+            const creados = await this.procesarAusenciasAutomaticas(fechaStr)
+            totalCreados += creados
+            current.setDate(current.getDate() + 1)
+        }
+
+        return totalCreados
     }
 }

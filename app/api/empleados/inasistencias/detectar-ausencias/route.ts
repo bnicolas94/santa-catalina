@@ -3,17 +3,20 @@ import { AsistenciaService } from '@/lib/services/asistencia.service'
 
 export async function POST(request: Request) {
     try {
-        const { fecha } = await request.json()
+        const { fecha, desde, hasta } = await request.json()
         
-        if (!fecha) {
-            return NextResponse.json({ error: 'Fecha requerida (YYYY-MM-DD)' }, { status: 400 })
+        let creados = 0
+        if (desde && hasta) {
+            creados = await AsistenciaService.procesarAusenciasRango(desde, hasta)
+        } else if (fecha) {
+            creados = await AsistenciaService.procesarAusenciasAutomaticas(fecha)
+        } else {
+            return NextResponse.json({ error: 'Fecha o rango (desde/hasta) requerido' }, { status: 400 })
         }
 
-        const creados = await AsistenciaService.procesarAusenciasAutomaticas(fecha)
-        
         return NextResponse.json({ 
             success: true, 
-            mensaje: `Se registraron ${creados} ausencias automáticamente para la fecha ${fecha}.` 
+            mensaje: `Se procesaron y registraron ${creados} ausencias en el periodo indicado.` 
         })
     } catch (error) {
         console.error('Error detectando ausencias:', error)

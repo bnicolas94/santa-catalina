@@ -120,6 +120,34 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
             setLoading(false)
         }
     }
+    const handleSyncSemana = async () => {
+        const hasta = new Date()
+        hasta.setDate(hasta.getDate() - 1)
+        const desde = new Date()
+        desde.setDate(desde.getDate() - 7)
+        
+        const desdeStr = desde.toISOString().split('T')[0]
+        const hastaStr = hasta.toISOString().split('T')[0]
+        
+        if (!confirm(`¿Deseas sincronizar y detectar ausencias de la última semana (${desdeStr} al ${hastaStr})? Esto regularizará el historial.`)) return
+        
+        setLoading(true)
+        try {
+            const res = await fetch('/api/empleados/inasistencias/detectar-ausencias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ desde: desdeStr, hasta: hastaStr })
+            })
+            const data = await res.json()
+            alert(data.mensaje || data.error)
+            fetchInasistencias()
+            fetchResumen()
+        } catch (error) {
+            console.error(error)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     // Alertas form state
     const [showAlertaForm, setShowAlertaForm] = useState(false)
@@ -188,8 +216,11 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                                 <h3>Historial de Ausencias</h3>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button className="btn btn-outline" onClick={handleDetectarAusencias} disabled={loading}>
-                                        🔍 Detectar Ausencias (Ayer)
+                                    <button className="btn btn-outline" onClick={handleDetectarAusencias} disabled={loading} title="Detectar ausencias de ayer">
+                                        🔍 Ayer
+                                    </button>
+                                    <button className="btn btn-outline" onClick={handleSyncSemana} disabled={loading} title="Detectar ausencias de los últimos 7 días">
+                                        🔄 Sincronizar Semana
                                     </button>
                                     <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
                                         {showForm ? 'Cancelar' : '➕ Registrar Inasistencia'}
