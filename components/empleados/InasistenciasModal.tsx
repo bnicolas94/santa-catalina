@@ -19,6 +19,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
     
     // Form state
     const [showForm, setShowForm] = useState(false)
+    const [file, setFile] = useState<File | null>(null)
     const [newInasistencia, setNewInasistencia] = useState({
         empleadoId: '',
         fecha: new Date().toISOString().split('T')[0],
@@ -26,7 +27,8 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
         tipo: 'INJUSTIFICADA',
         motivo: '',
         tieneCertificado: false,
-        observaciones: ''
+        observaciones: '',
+        minutosRetraso: ''
     })
 
     useEffect(() => {
@@ -59,13 +61,21 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
         e.preventDefault()
         setLoading(true)
         try {
+            const formData = new FormData()
+            Object.entries(newInasistencia).forEach(([key, value]) => {
+                formData.append(key, value.toString())
+            })
+            if (file) {
+                formData.append('file', file)
+            }
+
             const res = await fetch('/api/empleados/inasistencias', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newInasistencia)
+                body: formData
             })
             if (res.ok) {
                 setShowForm(false)
+                setFile(null)
                 fetchInasistencias()
                 fetchResumen()
                 setNewInasistencia({
@@ -75,9 +85,35 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                     tipo: 'INJUSTIFICADA',
                     motivo: '',
                     tieneCertificado: false,
-                    observaciones: ''
+                    observaciones: '',
+                    minutosRetraso: ''
                 })
             }
+        } catch (error) {
+            console.error(error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDetectarAusencias = async () => {
+        const ayer = new Date()
+        ayer.setDate(ayer.getDate() - 1)
+        const fechaStr = ayer.toISOString().split('T')[0]
+        
+        if (!confirm(`¿Deseas detectar y registrar ausencias automáticamente para el día de ayer (${fechaStr})?`)) return
+        
+        setLoading(true)
+        try {
+            const res = await fetch('/api/empleados/inasistencias/detectar-ausencias', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fecha: fechaStr })
+            })
+            const data = await res.json()
+            alert(data.mensaje || data.error)
+            fetchInasistencias()
+            fetchResumen()
         } catch (error) {
             console.error(error)
         } finally {
@@ -151,9 +187,14 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                                 <h3>Historial de Ausencias</h3>
-                                <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-                                    {showForm ? 'Cancelar' : '➕ Registrar Inasistencia'}
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn btn-outline" onClick={handleDetectarAusencias} disabled={loading}>
+                                        🔍 Detectar Ausencias (Ayer)
+                                    </button>
+                                    <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+                                        {showForm ? 'Cancelar' : '➕ Registrar Inasistencia'}
+                                    </button>
+                                </div>
                             </div>
 
                             {showForm && (
@@ -214,6 +255,17 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                                 Presentó Certificado Médico
                                             </label>
                                         </div>
+                                        {newInasistencia.tieneCertificado && (
+                                            <div className="form-group">
+                                                <label className="form-label">Subir Certificado (PDF/Imagen)</label>
+                                                <input 
+                                                    type="file" 
+                                                    className="form-input" 
+                                                    onChange={e => setFile(e.target.files?.[0] || null)}
+                                                    accept="image/*,.pdf"
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Motivo / Observaciones</label>
@@ -254,7 +306,12 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                                         {i.tipo.replace(/_/g, ' ')}
                                                     </span>
                                                 </td>
-                                                <td style={{ textAlign: 'center' }}>{i.tieneCertificado ? '✅' : '❌'}</td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    {i.tieneCertificado ? '✅' : '❌'}
+                                                    {i.archivoUrl && (
+                                                        <a href={i.archivoUrl} target="_blank" rel="noreferrer" style={{ marginLeft: '4px', fontSize: '14px' }} title="Ver Documento">📄</a>
+                                                    )}
+                                                </td>
                                                 <td style={{ fontSize: '12px', color: 'var(--color-gray-500)' }}>{i.observaciones}</td>
                                             </tr>
                                         ))}

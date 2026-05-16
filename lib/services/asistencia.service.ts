@@ -281,10 +281,51 @@ export class AsistenciaService {
 
         const idsConFichada = new Set(fichadasDelDia.map(f => f.empleadoId))
 
-        // Los que no tienen fichada, y que tienen un horario esperado
+    // Los que no tienen fichada, y que tienen un horario esperado
         return empleadosActivos.filter(e => {
             const tieneHorario = e.turno?.horaInicio || e.horarioEntrada
             return !idsConFichada.has(e.id) && tieneHorario
         })
+    }
+
+    /**
+     * Detecta ausencias para una fecha y crea registros de Inasistencia INJUSTIFICADA.
+     * Retorna el número de ausencias registradas.
+     */
+    static async procesarAusenciasAutomaticas(fecha: string) {
+        const ausentes = await this.detectarAusencias(fecha)
+        let creados = 0
+
+        const targetDate = new Date(`${fecha}T12:00:00`) // Hora mediodía para evitar problemas TZ
+
+        for (const emp of ausentes) {
+            // Verificar si ya existe un registro de inasistencia para ese día
+            const start = new Date(`${fecha}T00:00:00`)
+            const end = new Date(`${fecha}T23:59:59`)
+            
+            const existe = await prisma.inasistencia.findFirst({
+                where: {
+                    empleadoId: emp.id,
+                    fecha: { gte: start, lte: end }
+                }
+            })
+
+            if (!existe) {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId: emp.id,
+                        fecha: targetDate,
+                        tipo: 'INJUSTIFICADA',
+                        motivo: 'Ausencia detectada automáticamente por falta de fichada.',
+                        observaciones: 'Generado automáticamente por el sistema.'
+                    }
+                })
+                creados++
+                // Disparar chequeo de alertas
+                await SancionService.checkAndApplyAlerts(emp.id)
+            }
+        }
+
+        return creados
     }
 }

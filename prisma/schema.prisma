@@ -819,6 +819,7 @@ model Inasistencia {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   minutosRetraso   Int?     @map("minutos_retraso")
+  archivoUrl       String?  @map("archivo_url")
   empleado         Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("inasistencias_empleado")
