@@ -219,7 +219,8 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                 <div class="recibo-container">
                     <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
                     
-                    <div class="header">
+                    <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <img src="${window.location.origin}/logo.png" style="height: 60px;" />
                         <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
 
