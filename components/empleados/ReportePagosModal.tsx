@@ -109,10 +109,13 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                 </style>
             </head>
             <body>
-                <div class="header">
-                    <div class="title">REPORTE DE PAGOS (LIQUIDACIONES)</div>
-                    <div class="subtitle">Período de emisión: ${fDesdeStr} al ${fHastaStr}</div>
-                    <div style="font-size: 9pt; margin-top: 5px;">Generado el ${dImp.toLocaleString('es-AR')}</div>
+                <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start; text-align: left;">
+                    <img src="${window.location.origin}/logo.png" style="height: 60px;" />
+                    <div style="text-align: right;">
+                        <div class="title">REPORTE DE PAGOS</div>
+                        <div class="subtitle">Período: ${fDesdeStr} al ${fHastaStr}</div>
+                        <div style="font-size: 9pt;">Generado el ${dImp.toLocaleString('es-AR')}</div>
+                    </div>
                 </div>
 
                 <table>
@@ -327,9 +330,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             allHtml += `
                 <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
                     <img src="/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
-                    <div class="header">
-                        <img src="/logo-watermark.png" class="header-logo" alt="Logo" />
-                        <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
+                    <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <img src="/logo.png" style="height: 60px;" />
+                        <p style="margin: 0;">Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
                     <div class="texto">
                         ${textoHtml}
