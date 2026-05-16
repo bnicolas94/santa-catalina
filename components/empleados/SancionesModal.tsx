@@ -144,16 +144,16 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
             <head>
                 <title>Documento de ${sancion.tipo}</title>
                 <style>
-                    @page { size: A4 portrait; margin: 25mm; }
-                    body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; color: #000; font-size: 12pt; }
-                    .header { text-align: center; margin-bottom: 40px; border-bottom: 1px solid #000; padding-bottom: 20px; }
+                    @page { size: A4 portrait; margin: 15mm; }
+                    body { font-family: 'Times New Roman', Times, serif; line-height: 1.4; color: #000; font-size: 12pt; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 15px; }
                     .logo { font-size: 20pt; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
-                    .doc-title { font-size: 16pt; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin-top: 20px; }
-                    .content { margin-top: 40px; text-align: justify; }
-                    .date { text-align: right; margin-bottom: 40px; }
-                    .signature-section { margin-top: 100px; display: flex; justify-content: space-between; }
+                    .doc-title { font-size: 16pt; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin-top: 10px; }
+                    .content { margin-top: 20px; text-align: justify; }
+                    .date { text-align: right; margin-bottom: 20px; }
+                    .signature-section { margin-top: 60px; display: flex; justify-content: space-between; }
                     .signature-box { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 10px; }
-                    .footer { margin-top: 60px; font-size: 10pt; color: #555; border-top: 1px dashed #ccc; padding-top: 10px; }
+                    .footer { margin-top: 40px; font-size: 10pt; color: #555; border-top: 1px dashed #ccc; padding-top: 10px; }
                 </style>
             </head>
             <body>
