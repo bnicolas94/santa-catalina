@@ -22,12 +22,13 @@ export async function POST(req: Request) {
         // Validación de ubicación
         const userRol = (session?.user as any)?.rol
         if (userRol !== 'ADMIN') {
-            const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-            if (ubicacionTipo === 'LOCAL') {
-                if (origen !== 'local' && destino !== 'local') {
+            const uType = (session?.user as any)?.ubicacionTipo?.toUpperCase()
+            if (uType === 'LOCAL') {
+                const localBoxes = ['local', 'caja_chica_local']
+                if (!localBoxes.includes(origen) && !localBoxes.includes(destino)) {
                     return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
                 }
-            } else if (ubicacionTipo === 'FABRICA') {
+            } else if (uType === 'FABRICA') {
                 const fabricBoxes = ['caja_madre', 'caja_chica']
                 if (!fabricBoxes.includes(origen) && !fabricBoxes.includes(destino)) {
                     return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })

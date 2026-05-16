@@ -27,7 +27,7 @@ export async function GET() {
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
         const config = await readConfig()
-        const userUbicacionTipo = (session?.user as any)?.ubicacionTipo || 'LOCAL'
+        const userUbicacionTipo = ((session?.user as any)?.ubicacionTipo || 'LOCAL').toUpperCase()
         const userRol = (session?.user as any)?.rol
 
         if (userRol === 'ADMIN') {

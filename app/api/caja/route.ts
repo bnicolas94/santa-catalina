@@ -8,19 +8,25 @@ import { CajaService } from '@/lib/services/caja.service'
 
 function getAllowedBoxes(userRol: string, ubicacionTipo: string): string[] | undefined {
     if (userRol === 'ADMIN') return undefined // Sin restricción
-    if (ubicacionTipo === 'LOCAL') return ['local']
-    if (ubicacionTipo === 'FABRICA') return ['caja_madre', 'caja_chica']
+    const uType = ubicacionTipo?.toUpperCase()
+    if (uType === 'LOCAL') return ['local', 'caja_chica_local']
+    if (uType === 'FABRICA') return ['caja_madre', 'caja_chica']
     return []
 }
 
 function validateCajaAccess(userRol: string, ubicacionTipo: string, cajaOrigen: string): string | null {
     if (userRol?.toUpperCase() === 'ADMIN') return null
     const cajaLower = cajaOrigen.toLowerCase()
+    const uType = ubicacionTipo?.toUpperCase()
 
-    if (ubicacionTipo === 'LOCAL') {
-        if (cajaLower !== 'local') return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación LOCAL`
-    } else if (ubicacionTipo === 'FABRICA') {
-        if (!['caja_madre', 'caja_chica'].includes(cajaLower)) return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación FABRICA`
+    if (uType === 'LOCAL') {
+        if (cajaLower !== 'local' && cajaLower !== 'caja_chica_local') {
+            return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación LOCAL`
+        }
+    } else if (uType === 'FABRICA') {
+        if (!['caja_madre', 'caja_chica'].includes(cajaLower)) {
+            return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación FABRICA`
+        }
     } else {
         return 'Tu usuario no tiene una ubicación asignada para operar en caja'
     }
