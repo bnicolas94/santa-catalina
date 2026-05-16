@@ -19,12 +19,14 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
     
     // Form state
     const [showForm, setShowForm] = useState(false)
+    const [editingId, setEditingId] = useState<string | null>(null)
     const [file, setFile] = useState<File | null>(null)
     const [newInasistencia, setNewInasistencia] = useState({
         empleadoId: '',
         fecha: new Date().toISOString().split('T')[0],
         fechaHasta: '',
         tipo: 'INJUSTIFICADA',
+        tipoPersonalizado: '',
         motivo: '',
         tieneCertificado: false,
         observaciones: '',
@@ -63,18 +65,26 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
         try {
             const formData = new FormData()
             Object.entries(newInasistencia).forEach(([key, value]) => {
-                formData.append(key, value.toString())
+                if (key === 'tipo' && value === 'OTRO') {
+                    formData.append(key, newInasistencia.tipoPersonalizado)
+                } else {
+                    formData.append(key, value.toString())
+                }
             })
             if (file) {
                 formData.append('file', file)
             }
 
-            const res = await fetch('/api/empleados/inasistencias', {
-                method: 'POST',
+            const url = editingId ? `/api/empleados/inasistencias/${editingId}` : '/api/empleados/inasistencias'
+            const method = editingId ? 'PUT' : 'POST'
+
+            const res = await fetch(url, {
+                method: method,
                 body: formData
             })
             if (res.ok) {
                 setShowForm(false)
+                setEditingId(null)
                 setFile(null)
                 fetchInasistencias()
                 fetchResumen()
@@ -83,6 +93,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                     fecha: new Date().toISOString().split('T')[0],
                     fechaHasta: '',
                     tipo: 'INJUSTIFICADA',
+                    tipoPersonalizado: '',
                     motivo: '',
                     tieneCertificado: false,
                     observaciones: '',
@@ -93,6 +104,32 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
             console.error(error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleEditInasistencia = (i: any) => {
+        setNewInasistencia({
+            empleadoId: i.empleadoId,
+            fecha: new Date(i.fecha).toISOString().split('T')[0],
+            fechaHasta: '',
+            tipo: ['INJUSTIFICADA', 'CON_AVISO_INJUSTIFICADA', 'JUSTIFICADA_PAGA', 'JUSTIFICADA_NO_PAGA', 'TARDANZA'].includes(i.tipo) ? i.tipo : 'OTRO',
+            tipoPersonalizado: ['INJUSTIFICADA', 'CON_AVISO_INJUSTIFICADA', 'JUSTIFICADA_PAGA', 'JUSTIFICADA_NO_PAGA', 'TARDANZA'].includes(i.tipo) ? '' : i.tipo,
+            motivo: i.motivo || '',
+            tieneCertificado: i.tieneCertificado,
+            observaciones: i.observaciones || '',
+            minutosRetraso: i.minutosRetraso?.toString() || ''
+        })
+        setEditingId(i.id)
+        setShowForm(true)
+    }
+
+    const handleDeleteInasistencia = async (id: string) => {
+        if (!confirm('¿Seguro que quieres eliminar este registro?')) return
+        try {
+            const res = await fetch(`/api/empleados/inasistencias/${id}`, { method: 'DELETE' })
+            if (res.ok) fetchInasistencias()
+        } catch (error) {
+            console.error(error)
         }
     }
 
@@ -264,18 +301,33 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                             />
                                         </div>
                                         <div className="form-group">
-                                            <label className="form-label">Tipo de Inasistencia</label>
-                                            <select 
-                                                className="form-select" 
-                                                value={newInasistencia.tipo}
-                                                onChange={e => setNewInasistencia({...newInasistencia, tipo: e.target.value})}
-                                            >
-                                                <option value="INJUSTIFICADA">Injustificada (Sin Aviso)</option>
-                                                <option value="CON_AVISO_INJUSTIFICADA">Con Aviso - Injustificada</option>
-                                                <option value="JUSTIFICADA_PAGA">Justificada (Paga)</option>
-                                                <option value="JUSTIFICADA_NO_PAGA">Justificada (No Paga)</option>
-                                            </select>
-                                        </div>
+                                             <label className="form-label">Tipo de Inasistencia</label>
+                                             <select 
+                                                 className="form-select" 
+                                                 value={newInasistencia.tipo}
+                                                 onChange={e => setNewInasistencia({...newInasistencia, tipo: e.target.value})}
+                                             >
+                                                 <option value="INJUSTIFICADA">Injustificada (Sin Aviso)</option>
+                                                 <option value="CON_AVISO_INJUSTIFICADA">Con Aviso - Injustificada</option>
+                                                 <option value="JUSTIFICADA_PAGA">Justificada (Paga)</option>
+                                                 <option value="JUSTIFICADA_NO_PAGA">Justificada (No Paga)</option>
+                                                 <option value="TARDANZA">Tardanza</option>
+                                                 <option value="OTRO">Otro (Personalizado...)</option>
+                                             </select>
+                                         </div>
+                                         {newInasistencia.tipo === 'OTRO' && (
+                                            <div className="form-group">
+                                                <label className="form-label">Nombre del Motivo</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="form-input" 
+                                                    value={newInasistencia.tipoPersonalizado}
+                                                    onChange={e => setNewInasistencia({...newInasistencia, tipoPersonalizado: e.target.value.toUpperCase()})}
+                                                    placeholder="Ej: SUSPENSION, FALTA_POR_PARO..."
+                                                    required
+                                                />
+                                            </div>
+                                         )}
                                         <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '24px' }}>
                                             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                                                 <input 
@@ -325,6 +377,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                             <th>Tipo</th>
                                             <th>Certif.</th>
                                             <th>Observaciones</th>
+                                            <th>Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -344,6 +397,12 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                                     )}
                                                 </td>
                                                 <td style={{ fontSize: '12px', color: 'var(--color-gray-500)' }}>{i.observaciones}</td>
+                                                <td>
+                                                     <div style={{ display: 'flex', gap: '5px' }}>
+                                                         <button className="btn btn-outline btn-sm" onClick={() => handleEditInasistencia(i)}>✏️</button>
+                                                         <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteInasistencia(i.id)}>🗑️</button>
+                                                     </div>
+                                                 </td>
                                             </tr>
                                         ))}
                                     </tbody>
