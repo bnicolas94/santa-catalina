@@ -340,6 +340,9 @@ export class AsistenciaService {
             }
         }
 
+        return creados
+    }
+
     /**
      * Procesa ausencias para un rango de fechas.
      */
