@@ -134,6 +134,20 @@ export class AsistenciaService {
         // Evento de dominio
         if (importados > 0) {
             eventBus.emit('fichadas:imported', { importados, errores: errores.length })
+            
+            // AUTO-DETECCIÓN DE AUSENCIAS PARA LOS DÍAS IMPORTADOS (SOLO DÍAS PASADOS)
+            try {
+                const fechasUnicas = [...new Set(registros.map(r => r.fechaHora.split('T')[0]))]
+                const hoyStr = new Date().toISOString().split('T')[0]
+                
+                for (const fecha of fechasUnicas) {
+                    if (fecha < hoyStr) {
+                        await this.procesarAusenciasAutomaticas(fecha)
+                    }
+                }
+            } catch (autoErr) {
+                console.error('Error en auto-detección de ausencias tras importación:', autoErr)
+            }
         }
  
         return {
