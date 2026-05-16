@@ -51,22 +51,20 @@ export class SancionService {
         for (const alerta of alertas) {
             const fechaLimite = subDays(new Date(), alerta.periodoDias)
             
-            // Contar inasistencias/tardanzas del tipo específico en el periodo
-            const countRecent = await prisma.inasistencia.count({
+            // Buscar las inasistencias/tardanzas para obtener las fechas
+            const recentEvents = await prisma.inasistencia.findMany({
                 where: {
                     empleadoId,
                     tipo: alerta.tipoInasistencia,
                     fecha: { gte: fechaLimite }
-                }
+                },
+                orderBy: { fecha: 'asc' },
+                select: { fecha: true }
             })
 
+            const countRecent = recentEvents.length
+
             if (countRecent >= alerta.limiteMaximo) {
-                // Verificar si ya se aplicó una sanción automática por esta alerta recientemente
-                // para evitar duplicados en el mismo periodo si no ha cambiado el contador significativamente
-                // REGLA: Solo sancionamos si el contador es EXACTAMENTE el límite o múltiplo? 
-                // Mejor: Verificamos si ya existe una sanción vinculada a esta alerta y este empleado
-                // que cubra el mismo "incidente" (mismo conteo).
-                
                 const yaSancionado = await prisma.sancion.findFirst({
                     where: {
                         empleadoId,
@@ -77,13 +75,14 @@ export class SancionService {
 
                 if (!yaSancionado) {
                     const tipoSancion = alerta.tipoSancionAuto || 'APERCIBIMIENTO'
+                    const fechasStr = recentEvents.map(e => new Date(e.fecha).toLocaleDateString('es-AR')).join(', ')
                     const motivo = `Automático por alerta: ${alerta.tipoInasistencia} (Límite: ${alerta.limiteMaximo}, Actual: ${countRecent})`
                     
                     await this.create({
                         empleadoId,
                         tipo: tipoSancion,
                         motivo,
-                        observaciones: `Sanción generada automáticamente por sistema de alertas. ID Alerta: ${alerta.id}, conteo: ${countRecent}`,
+                        observaciones: `Sanción generada automáticamente por sistema de alertas. Fechas de los hechos: ${fechasStr}. (conteo: ${countRecent})`,
                         alertaId: alerta.id
                     })
                     

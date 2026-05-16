@@ -175,7 +175,12 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
                     <p><strong>Motivo de la medida:</strong><br/>
                     ${sancion.motivo}</p>
 
-                    ${sancion.observaciones ? `<p><strong>Observaciones adicionales:</strong><br/>${sancion.observaciones}</p>` : ''}
+                    ${sancion.observaciones ? `
+                        <div style="background-color: #f9f9f9; padding: 10px; border: 1px solid #eee; margin: 20px 0;">
+                            <strong>Detalle / Observaciones:</strong><br/>
+                            ${sancion.observaciones.replace('Fechas de los hechos:', '<strong>Fechas de los hechos:</strong>')}
+                        </div>
+                    ` : ''}
 
                     <p>Se le recuerda que el cumplimiento de las normas internas de la empresa es fundamental para el buen funcionamiento del equipo y que la reiteración de conductas similares podrá dar lugar a medidas de mayor severidad, conforme a la normativa legal vigente y el convenio colectivo aplicable.</p>
                 </div>
