@@ -281,7 +281,8 @@ export class AsistenciaService {
                 nombre: true, 
                 apellido: true, 
                 horarioEntrada: true,
-                turno: { select: { horaInicio: true } }
+                turno: { select: { horaInicio: true } },
+                diasTrabajoSemana: true
             }
         })
 
@@ -295,10 +296,22 @@ export class AsistenciaService {
 
         const idsConFichada = new Set(fichadasDelDia.map(f => f.empleadoId))
 
-    // Los que no tienen fichada, y que tienen un horario esperado
+        const targetDate = new Date(`${fecha}T12:00:00Z`)
+        const dayOfWeek = targetDate.getUTCDay() // 0: Domingo, 6: Sábado
+
         return empleadosActivos.filter(e => {
             const tieneHorario = e.turno?.horaInicio || e.horarioEntrada
-            return !idsConFichada.has(e.id) && tieneHorario
+            if (!tieneHorario || idsConFichada.has(e.id)) return false
+
+            const diasStr = (e.diasTrabajoSemana || "Lunes a Viernes").toLowerCase()
+
+            // Si es Domingo (0) y su configuración no incluye "domingo", es franco
+            if (dayOfWeek === 0 && !diasStr.includes('domingo')) return false
+
+            // Si es Sábado (6) y su configuración es "lunes a viernes", es franco
+            if (dayOfWeek === 6 && diasStr.includes('lunes a viernes')) return false
+
+            return true
         })
     }
 
