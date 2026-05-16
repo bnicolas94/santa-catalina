@@ -36,20 +36,33 @@ export async function GET() {
             // Verificar alertas
             for (const alerta of alertas) {
                 const fechaLimite = subDays(new Date(), alerta.periodoDias)
-                const countRecent = await prisma.inasistencia.count({
+                
+                const recentEvents = await prisma.inasistencia.findMany({
                     where: {
                         empleadoId: emp.id,
                         tipo: alerta.tipoInasistencia,
                         fecha: { gte: fechaLimite }
-                    }
+                    },
+                    orderBy: { fecha: 'desc' },
+                    take: 5,
+                    select: { fecha: true, minutosRetraso: true, observaciones: true }
                 })
+
+                const countRecent = recentEvents.length
 
                 if (countRecent >= alerta.limiteMaximo) {
                     stats.alertasDisparadas.push({
+                        alertaId: alerta.id,
                         tipo: alerta.tipoInasistencia,
                         actual: countRecent,
                         limite: alerta.limiteMaximo,
-                        accion: alerta.accionSugerida
+                        accion: alerta.accionSugerida,
+                        periodoDias: alerta.periodoDias,
+                        detalles: recentEvents.map(e => ({
+                            fecha: e.fecha,
+                            minutos: e.minutosRetraso,
+                            obs: e.observaciones
+                        }))
                     })
                 }
             }

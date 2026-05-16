@@ -412,31 +412,79 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                     )}
 
                     {activeTab === 'resumen' && (
-                        <div>
-                            <h3 style={{ marginBottom: 'var(--space-4)' }}>Status de Ausentismo y Alertas</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-4)' }}>
+                        <div className="resumen-container">
+                            <div className="resumen-header">
+                                <h3>Status de Ausentismo y Alertas Críticas</h3>
+                                <p>Empleados que superaron umbrales de inasistencias en los periodos configurados.</p>
+                            </div>
+                            
+                            <div className="resumen-grid">
                                 {resumen.filter(r => r.alertasDisparadas.length > 0).map(r => (
-                                    <div key={r.id} className="card shadow-sm" style={{ borderLeft: '4px solid var(--color-danger)', padding: 'var(--space-4)' }}>
-                                        <h4 style={{ margin: 0 }}>{r.nombre}</h4>
-                                        <div style={{ marginTop: 'var(--space-3)' }}>
-                                            {r.alertasDisparadas.map((a: any, idx: number) => (
-                                                <div key={idx} style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 'var(--space-2)', borderRadius: '4px', marginBottom: '8px' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--color-danger)' }}>
-                                                        <span>🚨 {a.tipo.replace(/_/g, ' ')}</span>
-                                                        <span>{a.actual} / {a.limite}</span>
+                                    <div key={r.id} className="empleado-alert-card">
+                                        <div className="card-header">
+                                            <div className="emp-info">
+                                                <div className="emp-avatar">{r.nombre.charAt(0)}</div>
+                                                <h4>{r.nombre}</h4>
+                                            </div>
+                                            <span className="total-badge">Total: {r.inasistenciasTotales}</span>
+                                        </div>
+                                        
+                                        <div className="alertas-list">
+                                            {r.alertasDisparadas.map((a: any, idx: number) => {
+                                                const isCritical = a.actual > a.limite;
+                                                return (
+                                                    <div key={idx} className={`alert-item ${isCritical ? 'critical' : 'warning'}`}>
+                                                        <div className="alert-top">
+                                                            <div className="alert-type">
+                                                                <span className="icon">🚨</span>
+                                                                <div className="type-label">
+                                                                    <strong>{a.tipo.replace(/_/g, ' ')}</strong>
+                                                                    <span>Últimos {a.periodoDias} días</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="alert-ratio">
+                                                                <span className="current">{a.actual}</span>
+                                                                <span className="limit">/ {a.limite}</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="alert-details">
+                                                            <div className="detail-label">Fechas de los hechos:</div>
+                                                            <div className="dates-row">
+                                                                {a.detalles.map((d: any, didx: number) => (
+                                                                    <div key={didx} className="date-tag" title={d.obs || 'Sin observaciones'}>
+                                                                        {format(new Date(d.fecha), 'dd/MM')}
+                                                                        {d.minutos && <span className="min-tag">-{d.minutos}m</span>}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {a.accion && (
+                                                            <div className="alert-action-suggestion">
+                                                                <strong>Sugerencia:</strong> {a.accion}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#B91C1C', fontWeight: 600 }}>
-                                                        Sugerencia: {a.accion || 'Sin acción configurada'}
-                                                    </p>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
+                                        </div>
+                                        
+                                        <div className="card-footer">
+                                            <button className="btn btn-ghost btn-sm" onClick={() => {
+                                                setNewInasistencia({...newInasistencia, empleadoId: r.id})
+                                                setActiveTab('lista')
+                                            }}>Ver Historial Completo</button>
                                         </div>
                                     </div>
                                 ))}
                             </div>
+                            
                             {resumen.filter(r => r.alertasDisparadas.length > 0).length === 0 && (
-                                <div style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-gray-400)' }}>
-                                    ✅ No hay empleados que superen los límites de ausentismo configurados.
+                                <div className="empty-state">
+                                    <div className="empty-icon">✅</div>
+                                    <h4>Todo bajo control</h4>
+                                    <p>No hay empleados que superen los límites de ausentismo configurados actualmente.</p>
                                 </div>
                             )}
                         </div>
@@ -592,6 +640,206 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                     }
                     .tab-btn:hover {
                         background-color: var(--color-gray-50);
+                    }
+
+                    /* Nuevos estilos premium */
+                    .resumen-container {
+                        padding: var(--space-2);
+                    }
+                    .resumen-header {
+                        margin-bottom: var(--space-6);
+                    }
+                    .resumen-header h3 {
+                        font-size: 1.5rem;
+                        color: var(--color-gray-900);
+                        margin: 0;
+                    }
+                    .resumen-header p {
+                        color: var(--color-gray-500);
+                        margin: var(--space-1) 0 0 0;
+                    }
+
+                    .resumen-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                        gap: var(--space-6);
+                    }
+
+                    .empleado-alert-card {
+                        background: white;
+                        border-radius: 16px;
+                        border: 1px solid var(--color-gray-200);
+                        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+                        overflow: hidden;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+                    .empleado-alert-card:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+                    }
+
+                    .card-header {
+                        padding: var(--space-4);
+                        background: var(--color-gray-50);
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        border-bottom: 1px solid var(--color-gray-100);
+                    }
+                    .emp-info {
+                        display: flex;
+                        align-items: center;
+                        gap: var(--space-3);
+                    }
+                    .emp-avatar {
+                        width: 32px;
+                        height: 32px;
+                        background: var(--color-primary);
+                        color: white;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        font-size: 0.8rem;
+                    }
+                    .emp-info h4 {
+                        margin: 0;
+                        font-size: 1.1rem;
+                        font-weight: 700;
+                    }
+                    .total-badge {
+                        font-size: 0.75rem;
+                        padding: 2px 8px;
+                        background: var(--color-gray-200);
+                        border-radius: 12px;
+                        color: var(--color-gray-700);
+                        font-weight: 600;
+                    }
+
+                    .alertas-list {
+                        padding: var(--space-4);
+                        display: flex;
+                        flex-direction: column;
+                        gap: var(--space-4);
+                    }
+                    .alert-item {
+                        padding: var(--space-4);
+                        border-radius: 12px;
+                        position: relative;
+                        border: 1px solid transparent;
+                    }
+                    .alert-item.critical {
+                        background: #FEF2F2;
+                        border-color: #FEE2E2;
+                    }
+                    .alert-item.warning {
+                        background: #FFFBEB;
+                        border-color: #FEF3C7;
+                    }
+
+                    .alert-top {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
+                        margin-bottom: var(--space-3);
+                    }
+                    .alert-type {
+                        display: flex;
+                        gap: var(--space-2);
+                    }
+                    .type-label strong {
+                        display: block;
+                        font-size: 0.9rem;
+                        color: #991B1B;
+                        text-transform: uppercase;
+                    }
+                    .type-label span {
+                        font-size: 0.75rem;
+                        color: #B91C1C;
+                        opacity: 0.7;
+                    }
+                    .alert-ratio {
+                        text-align: right;
+                    }
+                    .alert-ratio .current {
+                        font-size: 1.25rem;
+                        font-weight: 800;
+                        color: #991B1B;
+                    }
+                    .alert-ratio .limit {
+                        font-size: 0.9rem;
+                        color: #B91C1C;
+                        opacity: 0.6;
+                    }
+
+                    .alert-details {
+                        margin-top: var(--space-2);
+                    }
+                    .detail-label {
+                        font-size: 0.7rem;
+                        font-weight: 700;
+                        color: #991B1B;
+                        margin-bottom: 4px;
+                        text-transform: uppercase;
+                    }
+                    .dates-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 4px;
+                    }
+                    .date-tag {
+                        font-size: 0.75rem;
+                        padding: 2px 6px;
+                        background: white;
+                        border: 1px solid rgba(153, 27, 27, 0.1);
+                        border-radius: 4px;
+                        color: #991B1B;
+                        font-weight: 600;
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                    }
+                    .min-tag {
+                        background: #991B1B;
+                        color: white;
+                        padding: 0 3px;
+                        border-radius: 2px;
+                        font-size: 0.65rem;
+                    }
+
+                    .alert-action-suggestion {
+                        margin-top: var(--space-3);
+                        padding-top: var(--space-2);
+                        border-top: 1px dashed rgba(153, 27, 27, 0.2);
+                        font-size: 0.8rem;
+                        color: #991B1B;
+                    }
+
+                    .card-footer {
+                        padding: var(--space-3);
+                        background: var(--color-gray-50);
+                        text-align: center;
+                    }
+
+                    .empty-state {
+                        text-align: center;
+                        padding: 80px 20px;
+                        background: white;
+                        border-radius: 16px;
+                        border: 2px dashed var(--color-gray-200);
+                    }
+                    .empty-icon {
+                        font-size: 3rem;
+                        margin-bottom: var(--space-4);
+                    }
+                    .empty-state h4 {
+                        font-size: 1.25rem;
+                        margin: 0;
+                        color: var(--color-gray-900);
+                    }
+                    .empty-state p {
+                        color: var(--color-gray-500);
                     }
                 `}</style>
             </div>
