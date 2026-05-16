@@ -176,9 +176,9 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
                     ${sancion.motivo}</p>
 
                     ${sancion.observaciones ? `
-                        <div style="background-color: #f9f9f9; padding: 10px; border: 1px solid #eee; margin: 20px 0;">
+                        <div style="background-color: #f9f9f9; padding: 10px; border: 1px solid #eee; margin: 20px 0; white-space: pre-wrap;">
                             <strong>Detalle / Observaciones:</strong><br/>
-                            ${sancion.observaciones.replace('Fechas de los hechos:', '<strong>Fechas de los hechos:</strong>')}
+                            ${sancion.observaciones}
                         </div>
                     ` : ''}
 
