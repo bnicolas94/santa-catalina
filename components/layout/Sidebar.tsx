@@ -31,6 +31,20 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN', 'COORD_PROD', 'OPERARIO'],
         permissionKey: 'permisoProduccion',
     },
+    {
+        label: 'Posicionamiento',
+        href: '/produccion/posicionamiento',
+        icon: '📍',
+        roles: ['ADMIN', 'COORD_PROD'],
+        permissionKey: 'permisoProduccion',
+    },
+    {
+        label: 'Historial Pos.',
+        href: '/produccion/historial',
+        icon: '📜',
+        roles: ['ADMIN', 'COORD_PROD'],
+        permissionKey: 'permisoProduccion',
+    },
 
     {
         label: 'Productos',
@@ -139,11 +153,17 @@ export default function Sidebar() {
     }, [pathname])
 
     const userRol = (session?.user as any)?.rol
+    const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
     const permisos = (session?.user as any)?.permisos || {}
 
     const filteredItems = menuItems.filter(item => {
         // ADMIN siempre ve todo
         if (userRol === 'ADMIN') return true
+
+        // Ocultar Posicionamiento para usuarios de LOCAL (aunque tengan permiso de producción)
+        if (ubicacionTipo === 'LOCAL' && (item.label === 'Posicionamiento' || item.label === 'Historial Pos.')) {
+            return false
+        }
 
         // Si tiene un permiso específico para esta sección, y está activo, lo dejamos pasar
         if (item.permissionKey && permisos[item.permissionKey]) {
