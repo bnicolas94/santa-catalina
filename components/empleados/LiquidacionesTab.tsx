@@ -295,19 +295,25 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                     </div>
                 </div>
                 <script>
-                    let printed = false;
-                    const doPrint = () => {
-                        if (printed) return;
-                        printed = true;
-                        window.print();
-                    };
-                    const img = document.querySelector('.watermark');
-                    if (img && !img.complete) {
-                        img.onload = doPrint;
-                        img.onerror = doPrint;
-                        setTimeout(doPrint, 1500);
-                    } else {
-                        doPrint();
+                    window.onload = () => {
+                        const images = document.querySelectorAll('img');
+                        let loaded = 0;
+                        if (images.length === 0) return window.print();
+                        images.forEach(img => {
+                            if (img.complete) {
+                                loaded++;
+                                if (loaded === images.length) window.print();
+                            } else {
+                                img.addEventListener('load', () => {
+                                    loaded++;
+                                    if (loaded === images.length) window.print();
+                                });
+                                img.addEventListener('error', () => {
+                                    loaded++;
+                                    if (loaded === images.length) window.print();
+                                });
+                            }
+                        });
                     }
                 </script>
             </body>

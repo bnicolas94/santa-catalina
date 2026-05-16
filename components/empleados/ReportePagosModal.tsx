@@ -154,7 +154,24 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
                 <script>
                     window.onload = () => {
-                        window.print();
+                        const images = document.querySelectorAll('img');
+                        let loaded = 0;
+                        if (images.length === 0) return window.print();
+                        images.forEach(img => {
+                            if (img.complete) {
+                                loaded++;
+                                if (loaded === images.length) window.print();
+                            } else {
+                                img.addEventListener('load', () => {
+                                    loaded++;
+                                    if (loaded === images.length) window.print();
+                                });
+                                img.addEventListener('error', () => {
+                                    loaded++;
+                                    if (loaded === images.length) window.print();
+                                });
+                            }
+                        });
                     }
                 </script>
             </body>
@@ -349,6 +366,26 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         allHtml += `
                 <script>
                     window.onload = () => {
+                        const images = document.querySelectorAll('img');
+                        let loaded = 0;
+                        if (images.length === 0) return triggerPrint();
+                        images.forEach(img => {
+                            if (img.complete) {
+                                loaded++;
+                                if (loaded === images.length) triggerPrint();
+                            } else {
+                                img.addEventListener('load', () => {
+                                    loaded++;
+                                    if (loaded === images.length) triggerPrint();
+                                });
+                                img.addEventListener('error', () => {
+                                    loaded++;
+                                    if (loaded === images.length) triggerPrint();
+                                });
+                            }
+                        });
+                    }
+                    function triggerPrint() {
                         window.print();
                         setTimeout(() => window.close(), 100);
                     }

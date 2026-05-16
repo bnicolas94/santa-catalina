@@ -202,6 +202,27 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
 
                 <script>
                     window.onload = () => {
+                        const images = document.querySelectorAll('img');
+                        let loaded = 0;
+                        if (images.length === 0) return triggerPrint();
+                        
+                        images.forEach(img => {
+                            if (img.complete) {
+                                loaded++;
+                                if (loaded === images.length) triggerPrint();
+                            } else {
+                                img.addEventListener('load', () => {
+                                    loaded++;
+                                    if (loaded === images.length) triggerPrint();
+                                });
+                                img.addEventListener('error', () => {
+                                    loaded++;
+                                    if (loaded === images.length) triggerPrint();
+                                });
+                            }
+                        });
+                    }
+                    function triggerPrint() {
                         window.print();
                         setTimeout(() => window.close(), 500);
                     }
