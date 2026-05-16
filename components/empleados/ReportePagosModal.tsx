@@ -329,9 +329,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
             allHtml += `
                 <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
-                    <img src="/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
+                    <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
                     <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <img src="/logo.png" style="height: 60px;" />
+                        <img src="${window.location.origin}/logo.png" style="height: 60px;" />
                         <p style="margin: 0;">Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
                     <div class="texto">
