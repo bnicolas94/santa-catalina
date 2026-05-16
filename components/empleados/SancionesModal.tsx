@@ -158,7 +158,7 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
             </head>
             <body>
                 <div class="header">
-                    <div class="logo">SANTA CATALINA</div>
+                    <img src="/logo.png" style="height: 60px; margin-bottom: 10px;" />
                     <div style="font-size: 10pt;">Gestión de Recursos Humanos</div>
                     <div class="doc-title">${sancion.tipo}</div>
                 </div>
