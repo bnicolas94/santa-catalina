@@ -29,6 +29,7 @@ interface RentabilidadData {
     hasta: string
     ingresosTotales: number
     costoMercaderiaVendida: number
+    isCmvFallback?: boolean
     margenBruto: number
     totalGastos: number
     rentabilidadNeta: number

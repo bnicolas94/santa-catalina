@@ -77,6 +77,7 @@ export default function DashboardSection({ rango, ubicacionId,
                     value={r ? formatCurrency(r.costoMercaderiaVendida) : '—'}
                     icon="📦"
                     color="var(--color-warning)"
+                    footer={r?.isCmvFallback ? "Compras reales (sin recetas)" : undefined}
                     loading={loading && !r}
                 />
                 <KpiCardEnhanced

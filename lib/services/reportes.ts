@@ -109,6 +109,7 @@ export const getRentabilidadReport = unstable_cache(
 
         let ingresosTotales = 0
         let costoMercaderiaVendida = 0
+        let isCmvFallback = false
 
         for (const ped of pedidos) {
             ingresosTotales += ped.totalImporte
@@ -123,6 +124,21 @@ export const getRentabilidadReport = unstable_cache(
                     costoMercaderiaVendida += costoPorSandwich * det.presentacion.cantidad * det.cantidad
                 }
             }
+        }
+
+        // FALLBACK: Si no hay costo de mercadería vendida calculado (porque no hay recetas/costos históricos cargados),
+        // usamos el costo de las compras reales de insumos registradas en el stock para el período y ubicación.
+        if (costoMercaderiaVendida === 0) {
+            const comprasActual = await prisma.movimientoStock.aggregate({
+                where: {
+                    tipo: 'entrada',
+                    fecha: { gte: startOfMonth, lte: endOfMonth },
+                    ...(ubicacionId ? { ubicacionId } : {})
+                },
+                _sum: { costoTotal: true }
+            })
+            costoMercaderiaVendida = comprasActual._sum.costoTotal || 0
+            isCmvFallback = true
         }
 
         const margenBruto = ingresosTotales - costoMercaderiaVendida
@@ -155,6 +171,7 @@ export const getRentabilidadReport = unstable_cache(
             ubicacionId,
             ingresosTotales,
             costoMercaderiaVendida,
+            isCmvFallback,
             margenBruto,
             totalGastos,
             rentabilidadNeta,
