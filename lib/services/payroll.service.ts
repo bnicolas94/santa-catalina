@@ -468,7 +468,9 @@ export class PayrollService {
         const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales + montoHorasPendientes - deduccionCuotas
 
         const cuotasAfectadas: string[] = []
-        if (!manualData && !calculatedData) {
+        const debeDescontarPrestamos = (!manualData && !calculatedData) || (calculatedData && calculatedData.descuentoPrestamos > 0)
+        
+        if (debeDescontarPrestamos) {
             empleado.prestamos.forEach((prestamo: any) => {
                 const primeraPendiente = prestamo.cuotas[0]
                 if (primeraPendiente) {
@@ -511,17 +513,7 @@ export class PayrollService {
         })
 
         // Marcar cuotas como pagadas
-        const finalCuotasAfectadas = [...cuotasAfectadas]
-        if (calculatedData && calculatedData.descuentoPrestamos > 0) {
-            const cp = await prisma.cuotaPrestamo.findMany({
-                where: { prestamo: { empleadoId }, estado: 'pendiente' },
-                orderBy: { numeroCuota: 'asc' },
-                take: 1
-            })
-            if (cp[0]) finalCuotasAfectadas.push(cp[0].id)
-        }
-
-        for (const cuotaId of finalCuotasAfectadas) {
+        for (const cuotaId of cuotasAfectadas) {
             await prisma.cuotaPrestamo.update({
                 where: { id: cuotaId },
                 data: {

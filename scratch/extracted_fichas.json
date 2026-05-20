@@ -1,0 +1,30 @@
+[
+  {
+    "id": "2544d883-bcf3-4ef6-9a83-cd3517dde9c2",
+    "cantidad_por_unidad": 2,
+    "unidad_medida": "u",
+    "id_producto": "2abf134b-53d2-4bd4-bf9d-d6c3d5fb4028",
+    "id_insumo": "a6855d84-5304-4503-a40e-0f9ad9c831f8"
+  },
+  {
+    "id": "9be8f732-fef9-40ae-90f0-c683f10016c4",
+    "cantidad_por_unidad": 0.035,
+    "unidad_medida": "kg",
+    "id_producto": "2abf134b-53d2-4bd4-bf9d-d6c3d5fb4028",
+    "id_insumo": "7bcf461f-0275-45a0-a7a9-0c13e07abd78"
+  },
+  {
+    "id": "bb8859e6-0174-4fd2-834d-9df81171f9e8",
+    "cantidad_por_unidad": 0.025,
+    "unidad_medida": "kg",
+    "id_producto": "2abf134b-53d2-4bd4-bf9d-d6c3d5fb4028",
+    "id_insumo": "fd579ff0-f9c8-41b6-95a2-59f82f1278ad"
+  },
+  {
+    "id": "27ddcc41-6a56-45a5-a63e-d50ae54fa0ce",
+    "cantidad_por_unidad": 0.01,
+    "unidad_medida": "kg",
+    "id_producto": "2abf134b-53d2-4bd4-bf9d-d6c3d5fb4028",
+    "id_insumo": "0fa1bd22-cb60-4217-a489-267f3acf5bce"
+  }
+]
