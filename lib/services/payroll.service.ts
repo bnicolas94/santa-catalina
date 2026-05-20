@@ -513,8 +513,9 @@ export class PayrollService {
         })
 
         // Marcar cuotas como pagadas
+        const prestamosAfectados = new Set<string>()
         for (const cuotaId of cuotasAfectadas) {
-            await prisma.cuotaPrestamo.update({
+            const cuota = await prisma.cuotaPrestamo.update({
                 where: { id: cuotaId },
                 data: {
                     estado: 'pagada',
@@ -522,6 +523,20 @@ export class PayrollService {
                     liquidacionId: liquidacion.id
                 }
             })
+            prestamosAfectados.add(cuota.prestamoId)
+        }
+
+        // Verificar si algún préstamo quedó totalmente saldado
+        for (const prestamoId of prestamosAfectados) {
+            const pendientes = await prisma.cuotaPrestamo.count({
+                where: { prestamoId, estado: 'pendiente' }
+            })
+            if (pendientes === 0) {
+                await prisma.prestamoEmpleado.update({
+                    where: { id: prestamoId },
+                    data: { estado: 'saldado' }
+                })
+            }
         }
 
         // Registro en Caja
