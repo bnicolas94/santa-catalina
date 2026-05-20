@@ -270,10 +270,10 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                    <span className={`badge ${p.estado === 'pagado' ? 'badge-success' : 'badge-warning'}`}>
-                                        {p.estado === 'pagado' ? 'Saldado' : 'Activo'}
+                                    <span className={`badge ${(p.estado === 'pagado' || p.estado === 'saldado') ? 'badge-success' : 'badge-warning'}`}>
+                                        {(p.estado === 'pagado' || p.estado === 'saldado') ? 'Saldado' : 'Activo'}
                                     </span>
-                                    {p.estado !== 'pagado' && (
+                                    {p.estado !== 'pagado' && p.estado !== 'saldado' && (
                                         <button 
                                             onClick={() => handleDelete(p.id)}
                                             style={{ 
