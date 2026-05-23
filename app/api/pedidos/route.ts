@@ -294,25 +294,60 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Error al crear pedido' }, { status: 500 })
     }
 }
-// DELETE /api/pedidos — Borrado masivo por IDs
+// DELETE /api/pedidos — Borrado masivo por IDs o por filtros
 export async function DELETE(request: Request) {
     try {
         const body = await request.json()
-        const { ids } = body
+        const { ids, fechaDesde, fechaHasta, estado, turno, search } = body
 
-        if (!ids || !Array.isArray(ids) || ids.length === 0) {
-            return NextResponse.json({ error: 'Se requiere un array de IDs' }, { status: 400 })
+        let targetIds: string[] = []
+
+        if (ids && Array.isArray(ids) && ids.length > 0) {
+            // Modo legacy: borrar por IDs explícitos
+            targetIds = ids
+        } else if (fechaDesde || fechaHasta) {
+            // Modo filtros: construir el where y obtener todos los IDs
+            const where: any = {}
+            if (fechaDesde || fechaHasta) {
+                where.fechaEntrega = {}
+                if (fechaDesde) where.fechaEntrega.gte = new Date(fechaDesde + 'T00:00:00.000Z')
+                if (fechaHasta) where.fechaEntrega.lte = new Date(fechaHasta + 'T23:59:59.999Z')
+            }
+            if (estado) where.estado = estado
+            if (turno) where.turno = turno
+            if (search) {
+                where.cliente = { nombreComercial: { contains: search, mode: 'insensitive' } }
+            }
+
+            const pedidos = await prisma.pedido.findMany({
+                where,
+                select: { id: true }
+            })
+            targetIds = pedidos.map(p => p.id)
+        } else {
+            return NextResponse.json({ error: 'Se requiere un array de IDs o filtros de fecha' }, { status: 400 })
         }
 
-        // Ejecutar borrado en transacción para asegurar consistencia
-        await prisma.$transaction([
-            prisma.movimientoCaja.deleteMany({ where: { pedidoId: { in: ids } } }),
-            prisma.entrega.deleteMany({ where: { pedidoId: { in: ids } } }),
-            prisma.detallePedido.deleteMany({ where: { pedidoId: { in: ids } } }),
-            prisma.pedido.deleteMany({ where: { id: { in: ids } } }),
-        ])
+        if (targetIds.length === 0) {
+            return NextResponse.json({ success: true, count: 0 })
+        }
 
-        return NextResponse.json({ success: true, count: ids.length })
+        // Borrar en lotes de 500 para evitar timeouts con transacciones muy grandes
+        const BATCH_SIZE = 500
+        let deleted = 0
+
+        for (let i = 0; i < targetIds.length; i += BATCH_SIZE) {
+            const batch = targetIds.slice(i, i + BATCH_SIZE)
+            await prisma.$transaction([
+                prisma.movimientoCaja.deleteMany({ where: { pedidoId: { in: batch } } }),
+                prisma.entrega.deleteMany({ where: { pedidoId: { in: batch } } }),
+                prisma.detallePedido.deleteMany({ where: { pedidoId: { in: batch } } }),
+                prisma.pedido.deleteMany({ where: { id: { in: batch } } }),
+            ])
+            deleted += batch.length
+        }
+
+        return NextResponse.json({ success: true, count: deleted })
     } catch (error) {
         console.error('Error in bulk delete pedidos:', error)
         return NextResponse.json({ error: 'Error al eliminar pedidos de forma masiva' }, { status: 500 })

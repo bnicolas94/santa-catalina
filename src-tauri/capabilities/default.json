@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Capacidades por defecto - modo shell seguro",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-title"
+  ]
+}

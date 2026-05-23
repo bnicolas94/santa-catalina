@@ -1,0 +1,38 @@
+{
+  "productName": "Santa Catalina ERP",
+  "version": "1.0.0",
+  "identifier": "ar.com.santacatalina.erp",
+  "build": {
+    "frontendDist": "../out",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "echo Shell mode - no frontend build needed"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Santa Catalina ERP",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1280,
+        "minHeight": 720,
+        "maximized": true,
+        "url": "https://app.santacatalina.online/"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png"
+    ]
+  }
+}

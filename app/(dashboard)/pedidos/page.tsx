@@ -297,7 +297,7 @@ export default function PedidosPage() {
     }
 
     async function handleLimpiarPedidos() {
-        if (filtered.length === 0) return;
+        if (totalRecords === 0) return;
         const fechaLabel = fechaDesde === fechaHasta && fechaDesde
             ? new Date(fechaDesde + 'T12:00:00').toLocaleDateString('es-AR')
             : fechaDesde && fechaHasta
@@ -309,32 +309,22 @@ export default function PedidosPage() {
 
         try {
             setLoading(true);
-            // Eliminamos solo los pedidos de la vista actual (filtrados por fecha/estado)
-            const ids = filtered.map(p => p.id);
-            
-            // Si hay más páginas, hay que traer TODOS los ids del filtro actual
-            let allIds = ids;
-            if (totalRecords > filtered.length) {
-                const params = new URLSearchParams()
-                params.set('page', '1')
-                params.set('limit', String(totalRecords))
-                if (filterEstado) params.set('estado', filterEstado)
-                if (filterTurno) params.set('turno', filterTurno)
-                if (fechaDesde) params.set('fechaDesde', fechaDesde)
-                if (fechaHasta) params.set('fechaHasta', fechaHasta)
-                if (searchTerm) params.set('search', searchTerm)
-                const allRes = await fetch(`/api/pedidos?${params.toString()}`)
-                const allData = await allRes.json()
-                allIds = allData.pedidos?.map((p: any) => p.id) || ids
-            }
+            // Enviar los filtros al backend para que borre todo server-side sin límite de paginación
+            const deleteBody: any = {};
+            if (fechaDesde) deleteBody.fechaDesde = fechaDesde;
+            if (fechaHasta) deleteBody.fechaHasta = fechaHasta;
+            if (filterEstado) deleteBody.estado = filterEstado;
+            if (filterTurno) deleteBody.turno = filterTurno;
+            if (searchTerm) deleteBody.search = searchTerm;
 
             const res = await fetch('/api/pedidos', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: allIds }),
+                body: JSON.stringify(deleteBody),
             });
-            if (!res.ok) throw new Error();
-            setSuccess(`${allIds.length} pedidos eliminados`);
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || 'Error al eliminar');
+            setSuccess(`${result.count} pedidos eliminados`);
             fetchData();
             setTimeout(() => setSuccess(''), 3000);
         } catch { 
