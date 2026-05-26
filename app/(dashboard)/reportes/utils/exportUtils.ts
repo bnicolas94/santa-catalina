@@ -103,7 +103,7 @@ function exportVentas(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
         ['Métrica', 'Actual', 'Mes Anterior'],
         ['Facturación Total', k.facturacionTotal, k.facturacionAnterior],
         ['Pedidos Entregados', k.pedidoCount, k.pedidoCountAnterior],
-        ['Unidades Vendidas', k.unidadesTotales, k.unidadesAnterior],
+        ['Planchas Vendidas', k.planchasTotales, k.planchasAnterior],
         ['Ticket Promedio', k.ticketPromedio, k.ticketPromedioAnterior],
     ]
     const wsResumen = XLSX.utils.aoa_to_sheet(resumen)
@@ -112,14 +112,16 @@ function exportVentas(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
 
     // Hoja 2: Ranking Productos
     const prods = [
-        ['#', 'Producto', 'Código', 'Unidades', 'Facturado', '% Participación'],
+        ['#', 'Producto', 'Código', 'Planchas', 'Paquetes', 'Var. % Paq (MoM)', 'Facturado', '% Participación'],
         ...data.rankingProductos.map((p: any) => [
-            p.ranking, p.nombre, p.codigo, p.cantidad, p.importe,
+            p.ranking, p.nombre, p.codigo, p.planchas, p.paquetes,
+            p.cambioPct != null ? p.cambioPct.toFixed(1).replace('.', ',') + '%' : '—',
+            p.importe,
             (p.participacion || 0).toFixed(1) + '%'
         ])
     ]
     const wsProds = XLSX.utils.aoa_to_sheet(prods)
-    setColumnWidths(wsProds, [5, 30, 12, 12, 14, 14])
+    setColumnWidths(wsProds, [5, 35, 12, 12, 12, 18, 14, 14])
     XLSX.utils.book_append_sheet(wb, wsProds, 'Productos')
 
     // Hoja 3: Ranking Clientes
@@ -137,8 +139,8 @@ function exportVentas(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
     // Hoja 4: Tendencia diaria
     if (data.tendenciaDiaria?.length > 0) {
         const daily = [
-            ['Fecha', 'Facturación', 'Pedidos', 'Unidades'],
-            ...data.tendenciaDiaria.map((d: any) => [d.fecha, d.importe, d.pedidos, d.unidades])
+            ['Fecha', 'Facturación', 'Pedidos', 'Planchas'],
+            ...data.tendenciaDiaria.map((d: any) => [d.fecha, d.importe, d.pedidos, d.unidades / 8])
         ]
         const wsDaily = XLSX.utils.aoa_to_sheet(daily)
         setColumnWidths(wsDaily, [14, 14, 10, 12])

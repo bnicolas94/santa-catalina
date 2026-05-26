@@ -37,7 +37,7 @@ export async function getVentasReport(
     }
     if (ubicacionId) whereAnterior.ubicacionId = ubicacionId
 
-    // ── Pedidos del mes actual con detalles ──
+    // ── Pedidos del mes actual y del período anterior con detalles ──
     const [pedidos, pedidosAnterior] = await Promise.all([
         prisma.pedido.findMany({
             where: whereBase,
@@ -52,10 +52,17 @@ export async function getVentasReport(
                 }
             }
         }),
-        prisma.pedido.aggregate({
+        prisma.pedido.findMany({
             where: whereAnterior,
-            _sum: { totalImporte: true, totalUnidades: true },
-            _count: true
+            include: {
+                detalles: {
+                    include: {
+                        presentacion: {
+                            include: { producto: { select: { id: true, nombre: true, codigoInterno: true } } }
+                        }
+                    }
+                }
+            }
         })
     ])
 
@@ -67,7 +74,7 @@ export async function getVentasReport(
     // ── Desglose por producto ──
     const porProducto: Record<string, {
         nombre: string; codigo: string;
-        cantidad: number; importe: number; pedidos: number
+        cantidad: number; paquetes: number; importe: number; pedidos: number
     }> = {}
 
     // ── Desglose por cliente ──
@@ -125,10 +132,14 @@ export async function getVentasReport(
                 porProducto[groupKey] = {
                     nombre: esAgrupado ? prod.nombre : `${prod.nombre} x${det.presentacion.cantidad}`,
                     codigo: prod.codigoInterno,
-                    cantidad: 0, importe: 0, pedidos: 0
+                    cantidad: 0,
+                    paquetes: 0,
+                    importe: 0,
+                    pedidos: 0
                 }
             }
             porProducto[groupKey].cantidad += det.cantidad * det.presentacion.cantidad
+            porProducto[groupKey].paquetes += det.cantidad
             porProducto[groupKey].importe += det.cantidad * det.precioUnitario
             porProducto[groupKey].pedidos++
 
@@ -139,20 +150,52 @@ export async function getVentasReport(
 
     const ticketPromedio = pedidoCount > 0 ? facturacionTotal / pedidoCount : 0
 
-    // ── Período anterior para deltas ──
-    const facturacionAnterior = pedidosAnterior._sum.totalImporte || 0
-    const pedidoCountAnterior = pedidosAnterior._count || 0
-    const unidadesAnterior = pedidosAnterior._sum.totalUnidades || 0
+    // ── KPIs Período Anterior ──
+    let facturacionAnterior = 0
+    let unidadesAnterior = 0
+    const pedidoCountAnterior = pedidosAnterior.length
+
+    for (const ped of pedidosAnterior) {
+        facturacionAnterior += ped.totalImporte
+        unidadesAnterior += ped.totalUnidades
+    }
     const ticketPromedioAnterior = pedidoCountAnterior > 0 ? facturacionAnterior / pedidoCountAnterior : 0
 
+    // ── Desglose por producto del período anterior para variación MoM ──
+    const porProductoAnterior: Record<string, { paquetes: number }> = {}
+    for (const ped of pedidosAnterior) {
+        for (const det of ped.detalles) {
+            const prod = det.presentacion.producto
+            const presId = det.presentacion.id
+            const esAgrupado = ['PRE', 'ELE'].includes(prod.codigoInterno)
+            const groupKey = esAgrupado ? prod.id : presId
+
+            if (!porProductoAnterior[groupKey]) {
+                porProductoAnterior[groupKey] = { paquetes: 0 }
+            }
+            porProductoAnterior[groupKey].paquetes += det.cantidad
+        }
+    }
+
     // ── Ordenar y formatear rankings ──
-    const rankingProductos = Object.values(porProducto)
-        .sort((a, b) => b.importe - a.importe)
-        .map((p, i) => ({
-            ...p,
-            ranking: i + 1,
-            participacion: facturacionTotal > 0 ? (p.importe / facturacionTotal) * 100 : 0
-        }))
+    const rankingProductos = Object.entries(porProducto)
+        .sort(([, a], [, b]) => b.importe - a.importe)
+        .map(([groupKey, p], i) => {
+            const ant = porProductoAnterior[groupKey]
+            const paquetesAnterior = ant ? ant.paquetes : 0
+            const cambioPct = paquetesAnterior > 0
+                ? ((p.paquetes - paquetesAnterior) / paquetesAnterior) * 100
+                : null
+
+            return {
+                ...p,
+                planchas: p.cantidad / 8,
+                paquetesAnterior,
+                cambioPct,
+                ranking: i + 1,
+                participacion: facturacionTotal > 0 ? (p.importe / facturacionTotal) * 100 : 0
+            }
+        })
 
     const rankingClientes = Object.values(porCliente)
         .sort((a, b) => b.importe - a.importe)
@@ -191,7 +234,10 @@ export async function getVentasReport(
             facturacionAnterior,
             unidadesAnterior,
             pedidoCountAnterior,
-            ticketPromedioAnterior
+            ticketPromedioAnterior,
+            // Planchas
+            planchasTotales: unidadesTotales / 8,
+            planchasAnterior: unidadesAnterior / 8
         },
         rankingProductos,
         rankingClientes,

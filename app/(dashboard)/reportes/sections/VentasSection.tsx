@@ -5,7 +5,7 @@ import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import DataTable from '../components/DataTable'
-import { formatCurrency, formatPercent, formatNumber, formatDelta } from '../utils/formatters'
+import { formatCurrency, formatPercent, formatNumber, formatDelta, formatDecimal } from '../utils/formatters'
 
 interface Props {
     rango: RangoFechas
@@ -44,14 +44,47 @@ export default function VentasSection({ rango, ubicacionId, incluirTodo = false 
     const k = data.kpis
     const deltaFacturacion = formatDelta(k.facturacionTotal, k.facturacionAnterior)
     const deltaPedidos = formatDelta(k.pedidoCount, k.pedidoCountAnterior)
-    const deltaUnidades = formatDelta(k.unidadesTotales, k.unidadesAnterior)
+    const deltaPlanchas = formatDelta(k.planchasTotales, k.planchasAnterior)
     const deltaTicket = formatDelta(k.ticketPromedio, k.ticketPromedioAnterior)
+
+    const formatPlanchas = (v: number) => v % 1 === 0 ? formatNumber(v) : formatDecimal(v, 1)
 
     const productoColumns = [
         { key: 'ranking', label: '#', width: '40px', sortable: false },
         { key: 'nombre', label: 'Producto', sortable: true },
         { key: 'codigo', label: 'Código', sortable: true, width: '90px' },
-        { key: 'cantidad', label: 'Unidades', align: 'right' as const, sortable: true, format: (v: number) => formatNumber(v) },
+        { key: 'planchas', label: 'Planchas', align: 'right' as const, sortable: true, format: (v: number) => formatPlanchas(v) },
+        { key: 'paquetes', label: 'Paquetes', align: 'right' as const, sortable: true, format: (v: number) => formatNumber(v) },
+        { 
+            key: 'cambioPct', 
+            label: 'Var. % Paq', 
+            align: 'right' as const, 
+            sortable: true, 
+            format: (v: number | null, row: any) => {
+                const prev = row.paquetesAnterior ?? 0
+                const curr = row.paquetes ?? 0
+                if (prev === 0) {
+                    if (curr > 0) {
+                        return <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>▲ +100%</span>
+                    }
+                    return <span style={{ color: 'var(--color-gray-400)' }}>—</span>
+                }
+                const pct = ((curr - prev) / prev) * 100
+                const isPositive = pct > 0
+                const isNeutral = Math.abs(pct) < 0.1
+                if (isNeutral) {
+                    return <span style={{ color: 'var(--color-gray-400)' }}>≈ 0%</span>
+                }
+                return (
+                    <span style={{ 
+                        color: isPositive ? 'var(--color-success)' : 'var(--color-danger)',
+                        fontWeight: 600
+                    }}>
+                        {isPositive ? '▲' : '▼'} {isPositive ? '+' : ''}{pct.toFixed(1).replace('.', ',')}%
+                    </span>
+                )
+            }
+        },
         { key: 'importe', label: 'Facturado', align: 'right' as const, sortable: true, format: (v: number) => formatCurrency(v) },
         { key: 'participacion', label: '% Part.', align: 'right' as const, sortable: true, format: (v: number) => formatPercent(v) },
     ]
@@ -91,11 +124,11 @@ export default function VentasSection({ rango, ubicacionId, incluirTodo = false 
                     previousLabel="período ant."
                 />
                 <KpiCardEnhanced
-                    label="Unidades Vendidas"
-                    value={formatNumber(k.unidadesTotales)}
+                    label="Planchas Vendidas"
+                    value={formatPlanchas(k.planchasTotales)}
                     icon="📦"
                     color="var(--color-success)"
-                    delta={deltaUnidades}
+                    delta={deltaPlanchas}
                     previousLabel="período ant."
                 />
                 <KpiCardEnhanced
@@ -172,7 +205,7 @@ export default function VentasSection({ rango, ubicacionId, incluirTodo = false 
                         columns={productoColumns}
                         data={data.rankingProductos}
                         showTotals={true}
-                        totalColumns={['cantidad', 'importe']}
+                        totalColumns={['planchas', 'paquetes', 'importe']}
                         exportFilename={`Ventas_Productos_${rango.label.replace(/\s+/g, "_")}`}
                         maxHeight="350px"
                     />
