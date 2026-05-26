@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { unstable_cache } from 'next/cache'
+import { getLiquidacionDateRange } from './reportes-costos'
 
 /**
  * SERVICIOS DE CONFIGURACIÓN Y METADATA
@@ -330,9 +331,11 @@ export const getReporteDetalle = async (
 
         // Integrate Payroll (Liquidaciones)
         if (!categoriaId || categoriaId === ID_SUELDOS) {
+            // Ajustar rango de fechas para liquidaciones (día 7 al día 6 del mes siguiente)
+            const { liqStart, liqEnd } = getLiquidacionDateRange(startOfMonth, endOfMonth)
             const liqs = await prisma.liquidacionSueldo.findMany({
                 where: {
-                    fechaGeneracion: { gte: startOfMonth, lte: endOfMonth },
+                    fechaGeneracion: { gte: liqStart, lte: liqEnd },
                     estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
                 },
                 include: { empleado: true },

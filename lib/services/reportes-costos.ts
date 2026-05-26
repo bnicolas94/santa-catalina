@@ -305,6 +305,7 @@ export async function getCostosReport(
 
         const s = new Date(y, mAjustado - 1, 1)
         const e = new Date(y, mAjustado, 0, 23, 59, 59, 999)
+        const { liqStart: liqS, liqEnd: liqE } = getLiquidacionDateRange(s, e)
 
         const [compras, gast, liqsM, mantsM] = await Promise.all([
             prisma.movimientoStock.aggregate({
@@ -316,7 +317,7 @@ export async function getCostosReport(
                 _sum: { monto: true }
             }),
             prisma.liquidacionSueldo.aggregate({
-                where: { fechaGeneracion: { gte: s, lte: e }, estado: 'pagado' },
+                where: { fechaGeneracion: { gte: liqS, lte: liqE }, estado: 'pagado' },
                 _sum: { totalNeto: true }
             }),
             prisma.mantenimientoVehiculo.aggregate({
