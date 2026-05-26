@@ -144,6 +144,18 @@ export default function CajaPage() {
         ? ['caja_madre', 'local', 'caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani'] 
         : (ubicacionTipo === 'LOCAL' ? ['local', 'caja_chica_local'] : ['caja_madre', 'caja_chica'])
 
+    const getBoxSaldo = (boxKey: string) => {
+        const saldos: Record<string, number> = {
+            'caja_madre': saldoMadre,
+            'caja_chica': saldoChica,
+            'local': saldoLocal,
+            'caja_chica_local': saldoChicaLocal,
+            'mercado_pago': saldoMercadoPago,
+            'mercado_pago_juani': saldoMercadoPagoJuani,
+        };
+        return saldos[boxKey] ?? 0;
+    };
+
     const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
         // Filtro por Tipo
         if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;
@@ -1222,6 +1234,9 @@ export default function CajaPage() {
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
+                                        <div style={{ fontSize: '0.75rem', marginTop: '4px', fontWeight: 600, color: 'var(--color-primary)' }}>
+                                            Saldo: {formatCurrency(getBoxSaldo(transfForm.origen), showMontos)}
+                                        </div>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Hacia</label>
@@ -1230,6 +1245,9 @@ export default function CajaPage() {
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
+                                        <div style={{ fontSize: '0.75rem', marginTop: '4px', fontWeight: 600, color: 'var(--color-primary)' }}>
+                                            Saldo: {formatCurrency(getBoxSaldo(transfForm.destino), showMontos)}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="form-group">
@@ -1237,11 +1255,16 @@ export default function CajaPage() {
                                     <input type="number" step="0.01" min="0.01" className="form-input" placeholder="0.00" value={transfForm.monto}
                                         onChange={(e) => setTransfForm({ ...transfForm, monto: e.target.value })} required 
                                         style={{ fontSize: '1.2rem', textAlign: 'center', fontWeight: 700 }} />
+                                    {parseFloat(transfForm.monto) > getBoxSaldo(transfForm.origen) && (
+                                        <div style={{ color: '#E74C3C', fontSize: '0.8rem', marginTop: '4px', fontWeight: 600, textAlign: 'center' }}>
+                                            ⚠️ El monto supera el saldo disponible
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowTransferModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Realizar Transferencia</button>
+                                <button type="submit" className="btn btn-primary" disabled={parseFloat(transfForm.monto) > getBoxSaldo(transfForm.origen) || !transfForm.monto || parseFloat(transfForm.monto) <= 0}>Realizar Transferencia</button>
                             </div>
                         </form>
                     </div>

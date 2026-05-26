@@ -216,6 +216,15 @@ export class CajaService {
         const ingresoMedio = (destino === 'mercado_pago' || destino === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
 
         return prisma.$transaction(async (tx) => {
+            // Validar saldo suficiente en caja de origen
+            const saldoRecord = await (tx as any).saldoCaja.findUnique({
+                where: { tipo: origen }
+            })
+            const saldoActual = saldoRecord?.saldo ?? 0
+            if (saldoActual < monto) {
+                throw new Error(`Saldo insuficiente. Disponible: $${saldoActual.toLocaleString('es-AR')}`)
+            }
+
             const egreso = await (tx as any).movimientoCaja.create({
                 data: {
                     tipo: 'egreso',
