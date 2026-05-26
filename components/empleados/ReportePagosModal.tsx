@@ -1,6 +1,7 @@
 "use client"
 
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
+import { getPrintLogos } from '@/lib/utils/printLogos'
 import { useState, useEffect, useMemo } from 'react'
 
 interface ReportePagosModalProps {
@@ -81,10 +82,12 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
     const totalGeneral = datos.reduce((acc, curr) => acc + curr.totalNeto, 0)
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
         const dImp = new Date()
         const fDesdeStr = fechaDesde.split('-').reverse().join('/')
         const fHastaStr = fechaHasta.split('-').reverse().join('/')
+
+        const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
 
         const html = `
             <html>
@@ -110,7 +113,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             </head>
             <body>
                 <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start; text-align: left;">
-                    <img src="${window.location.origin}/logo.png" style="height: 60px;" />
+                    <img src="${logoBase64}" style="height: 60px;" />
                     <div style="text-align: right;">
                         <div class="title">REPORTE DE PAGOS</div>
                         <div class="subtitle">Período: ${fDesdeStr} al ${fHastaStr}</div>
@@ -184,10 +187,12 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         }
     }
 
-    const handlePrintReceipts = () => {
+    const handlePrintReceipts = async () => {
         if (selectedIds.size === 0) return
 
         const selectedLiquidaciones = datos.filter(d => selectedIds.has(d.id))
+
+        const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
         
         let allHtml = `
             <html>
@@ -346,9 +351,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
             allHtml += `
                 <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
-                    <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
+                    <img src="${watermarkBase64}" class="watermark" alt="Logo Santa Catalina" />
                     <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <img src="${window.location.origin}/logo.png" style="height: 60px;" />
+                        <img src="${logoBase64}" style="height: 60px;" />
                         <p style="margin: 0;">Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
                     <div class="texto">

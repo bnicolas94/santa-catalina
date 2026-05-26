@@ -137,7 +137,7 @@ export async function POST(request: Request) {
                             const nuevoIns = await tx.insumo.create({
                                 data: {
                                     nombre: item.insumoNombre,
-                                    unidadMedida: 'unidades',
+                                    unidadMedida: item.unidadMedida || 'unidades',
                                     proveedorId: finalProveedorId || null
                                 }
                             })

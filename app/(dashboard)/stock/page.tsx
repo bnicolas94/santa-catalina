@@ -27,7 +27,7 @@ function StockContent() {
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
     const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[], montoPagado: '' })
-    const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+    const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
     const [isManualInsumo, setIsManualInsumo] = useState(false)
@@ -156,12 +156,12 @@ function StockContent() {
             ...tempItem, 
             cantidad: finalCantidad,
             insumoNombre: isManualInsumo ? tempItem.insumoNombre : insData?.nombre,
-            unidadMedida: insData?.unidadMedida || 'u',
+            unidadMedida: isManualInsumo ? (tempItem.unidadMedida || 'unidades') : (insData?.unidadMedida || 'u'),
             unidadSecundaria: insData?.unidadSecundaria
         }
 
         setFacturaForm({ ...facturaForm, items: [...facturaForm.items, itemToAdd] })
-        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
         setIsManualInsumo(false)
     }
 
@@ -363,7 +363,7 @@ function StockContent() {
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
                         setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
-                        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '' })
+                        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
                         setIsManualInsumo(false)
@@ -1064,19 +1064,30 @@ function StockContent() {
                                                     <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', color: 'var(--color-primary)' }}>
                                                         <input type="checkbox" checked={isManualInsumo} onChange={(e) => {
                                                             setIsManualInsumo(e.target.checked);
-                                                            setTempItem({ ...tempItem, insumoId: '', insumoNombre: '' })
+                                                            setTempItem({ ...tempItem, insumoId: '', insumoNombre: '', unidadMedida: 'unidades' })
                                                         }} />
                                                         Manual
                                                     </label>
                                                 </div>
                                             </div>
                                             {isManualInsumo ? (
-                                                <input className="form-input" placeholder="Nombre (Ej: Escoba)" value={tempItem.insumoNombre || ''} onChange={(e) => setTempItem({ ...tempItem, insumoNombre: e.target.value })} />
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <input className="form-input" style={{ flex: 2 }} placeholder="Nombre (Ej: Escoba)" value={tempItem.insumoNombre || ''} onChange={(e) => setTempItem({ ...tempItem, insumoNombre: e.target.value })} />
+                                                    <select className="form-select" style={{ flex: 1 }} value={tempItem.unidadMedida || 'unidades'} onChange={(e) => setTempItem({ ...tempItem, unidadMedida: e.target.value })}>
+                                                        <option value="unidades">unidades</option>
+                                                        <option value="kg">kg</option>
+                                                        <option value="g">g</option>
+                                                        <option value="L">L</option>
+                                                        <option value="ml">ml</option>
+                                                        <option value="m">m</option>
+                                                        <option value="m2">m2</option>
+                                                    </select>
+                                                </div>
                                             ) : (
                                                 <select className="form-select" value={tempItem.insumoId} onChange={(e) => {
                                                     const id = e.target.value;
                                                     const ins = insumos.find(i => i.id === id);
-                                                    setTempItem({ ...tempItem, insumoId: id, useBultos: false, bultos: '', unidadesPorBulto: '', cantidad: '', cantidadSecundaria: '' });
+                                                    setTempItem({ ...tempItem, insumoId: id, useBultos: false, bultos: '', unidadesPorBulto: '', cantidad: '', cantidadSecundaria: '', unidadMedida: ins?.unidadMedida || 'unidades' });
                                                 }}>
                                                     <option value="">Seleccionar insumo...</option>
                                                     {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
@@ -1101,7 +1112,7 @@ function StockContent() {
                                             <div style={{ display: 'grid', gridTemplateColumns: tempItem.insumoId && insumos.find(i => i.id === tempItem.insumoId)?.unidadSecundaria ? '1fr 1fr' : '1fr', gap: 'var(--space-2)' }}>
                                                 <div className="form-group" style={{ marginBottom: 0 }}>
                                                     <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>
-                                                        Cant. ({!isManualInsumo && tempItem.insumoId ? insumos.find(i => i.id === tempItem.insumoId)?.unidadMedida : 'unid'})
+                                                        Cant. ({!isManualInsumo && tempItem.insumoId ? insumos.find(i => i.id === tempItem.insumoId)?.unidadMedida : (tempItem.unidadMedida || 'unidades')})
                                                     </label>
                                                     <input 
                                                         type="number" 

@@ -1,6 +1,30 @@
 import { prisma } from '@/lib/prisma'
 
 /**
+ * Ajusta el rango de fechas para consultas de liquidaciones de sueldos.
+ * Regla de negocio: Si la fecha de pago (fechaGeneracion) de una liquidación cae
+ * dentro de los primeros 6 días de un mes, se atribuye al mes anterior.
+ * 
+ * Esto significa que para el reporte de un mes M:
+ * - Se incluyen liquidaciones desde el día 7 del mes M
+ * - Hasta el día 6 del mes M+1 (inclusive)
+ * 
+ * Ejemplo: Para el reporte de Abril (1/4 - 30/4):
+ * - Se toman liquidaciones del 7/4 al 6/5
+ * - Una liquidación del 3/5 se cuenta como gasto de Abril
+ * - Una liquidación del 3/4 se cuenta como gasto de Marzo (no Abril)
+ */
+export function getLiquidacionDateRange(periodStart: Date, periodEnd: Date) {
+    // Inicio: día 7 del mes del inicio del período
+    const liqStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), 7, 0, 0, 0, 0)
+
+    // Fin: día 6 del mes siguiente al fin del período
+    const liqEnd = new Date(periodEnd.getFullYear(), periodEnd.getMonth() + 1, 6, 23, 59, 59, 999)
+
+    return { liqStart, liqEnd }
+}
+
+/**
  * Servicio de reportes de costos.
  * Analiza: costo por producto, margen bruto, evolución de precios de insumos, gastos operativos.
  */
@@ -84,6 +108,10 @@ export async function getCostosReport(
     // ── 2. Gastos operativos, Sueldos y Mantenimientos ──
     // IMPORTANTE: Excluir gastos que ya están contabilizados como compras de insumos
     // (los GastoOperativo que tienen un MovimientoStock vinculado)
+    // Ajustar rango de fechas para liquidaciones (día 7 al día 6 del mes siguiente)
+    const { liqStart: liqStartActual, liqEnd: liqEndActual } = getLiquidacionDateRange(startOfCurrent, endOfCurrent)
+    const { liqStart: liqStartAnterior, liqEnd: liqEndAnterior } = getLiquidacionDateRange(startAnterior, endAnterior)
+
     const [gastos, liqs, mants, gastosAnterior, liqsAnterior, mantsAnterior] = await Promise.all([
         // Gastos operativos actuales (excluyendo los vinculados a movimientos de stock)
         prisma.gastoOperativo.findMany({
@@ -94,10 +122,10 @@ export async function getCostosReport(
             },
             include: { categoria: true }
         }),
-        // Liquidaciones actuales
+        // Liquidaciones actuales (rango ajustado: día 7 del mes → día 6 del mes siguiente)
         prisma.liquidacionSueldo.findMany({
             where: {
-                fechaGeneracion: { gte: startOfCurrent, lte: endOfCurrent },
+                fechaGeneracion: { gte: liqStartActual, lte: liqEndActual },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
             },
             include: { empleado: { select: { nombre: true, apellido: true } } }
@@ -120,7 +148,7 @@ export async function getCostosReport(
         }),
         prisma.liquidacionSueldo.aggregate({
             where: {
-                fechaGeneracion: { gte: startAnterior, lte: endAnterior },
+                fechaGeneracion: { gte: liqStartAnterior, lte: liqEndAnterior },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
             },
             _sum: { totalNeto: true }

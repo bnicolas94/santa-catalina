@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { getPrintLogos } from '@/lib/utils/printLogos'
 
 interface SancionesModalProps {
     isOpen: boolean
@@ -132,12 +133,14 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
         }
     }
 
-    const handlePrintSancion = (sancion: any) => {
+    const handlePrintSancion = async (sancion: any) => {
         const dImp = new Date(sancion.fecha)
         const dia = dImp.getDate()
         const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
         const mesNombre = meses[dImp.getMonth()]
         const anio = dImp.getFullYear()
+
+        const { logo: logoBase64 } = await getPrintLogos()
 
         const html = `
             <html>
@@ -158,7 +161,7 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
             </head>
             <body>
                 <div class="header">
-                    <img src="${window.location.origin}/logo.png" style="height: 60px; margin-bottom: 10px;" />
+                    <img src="${logoBase64}" style="height: 60px; margin-bottom: 10px;" />
                     <div style="font-size: 10pt;">Gestión de Recursos Humanos</div>
                     <div class="doc-title">${sancion.tipo}</div>
                 </div>

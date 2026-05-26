@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
+import { getPrintLogos } from '@/lib/utils/printLogos'
 
 interface ExpressLiquidationModalProps {
     empleado: any
@@ -165,7 +166,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         }
     }
 
-    const printRecibo = (liq: any) => {
+    const printRecibo = async (liq: any) => {
         const dImp = new Date(fechaImpresion + 'T12:00:00')
         const dia = dImp.getDate()
         const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -179,6 +180,8 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         const montoHsExtrasLetras = formatCurrencyToWords(valExtras)
         const totalBruto = valSueldo + valExtras
         const totalLetras = formatCurrencyToWords(totalBruto)
+
+        const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
 
         const licenciaActiva = tiposLicencias.find(l => l.id === licenciaId)
         const textoLicencia = licenciaActiva ? ` Asimismo, se contemplan días correspondientes a licencia por ${licenciaActiva.nombre}.` : ''
@@ -217,10 +220,10 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
             </head>
             <body>
                 <div class="recibo-container">
-                    <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
+                    <img src="${watermarkBase64}" class="watermark" alt="Logo Santa Catalina" />
                     
                     <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <img src="${window.location.origin}/logo.png" style="height: 60px;" />
+                        <img src="${logoBase64}" style="height: 60px;" />
                         <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
 

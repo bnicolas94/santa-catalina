@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Empleado } from '@prisma/client'
 import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
+import { getPrintLogos } from '@/lib/utils/printLogos'
 
 
 export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: string, empleadoDatos: any }) {
@@ -205,7 +206,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
         }
     }
 
-    const printRecibo = (liq: any) => {
+    const printRecibo = async (liq: any) => {
         const dImp = new Date(liq.fechaGeneracion || new Date())
         const dia = dImp.getDate()
         const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -236,6 +237,8 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
         // El usuario solicitó que el texto del recibo indique el importe íntegro de sueldo + extras antes de descuentos
         const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0)
         const totalLetras = formatCurrencyToWords(totalBruto)
+
+        const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
 
         const html = `
             <html>
@@ -271,10 +274,10 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
             </head>
             <body>
                 <div class="recibo-container">
-                    <img src="${window.location.origin}/logo-watermark.png" class="watermark" alt="Logo Santa Catalina" />
+                    <img src="${watermarkBase64}" class="watermark" alt="Logo Santa Catalina" />
                     
                     <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <img src="${window.location.origin}/logo.png" style="height: 60px;" />
+                        <img src="${logoBase64}" style="height: 60px;" />
                         <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
 
