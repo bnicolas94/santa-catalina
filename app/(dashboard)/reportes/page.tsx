@@ -16,6 +16,7 @@ import VentasSection from './sections/VentasSection'
 import CostosSection from './sections/CostosSection'
 import DesperdicioSection from './sections/DesperdicioSection'
 import PerformanceSection from './sections/PerformanceSection'
+import CajaSection from './sections/CajaSection'
 
 import { exportReportToExcel } from './utils/exportUtils'
 import { useSession } from 'next-auth/react'
@@ -281,6 +282,11 @@ export default function ReportesPage() {
                 const res = await fetch(`/api/reportes/performance?${params}`)
                 if (res.ok) exportReportToExcel(await res.json(), 'performance', mesTag, anioTag)
             } catch (err) { console.error('Error exporting performance:', err) }
+        } else if (activeSection === 'caja') {
+            try {
+                const res = await fetch(`/api/reportes/caja?${params}`)
+                if (res.ok) exportReportToExcel(await res.json(), 'caja', mesTag, anioTag)
+            } catch (err) { console.error('Error exporting caja:', err) }
         }
     }
 
@@ -343,6 +349,10 @@ export default function ReportesPage() {
 
                     {activeSection === 'performance' && (
                         <PerformanceSection rango={rangoFechas} ubicacionId={ubicacionId} incluirTodo={incluirTodosLosEstados} />
+                    )}
+
+                    {activeSection === 'caja' && (
+                        <CajaSection rango={rangoFechas} ubicacionId={ubicacionId} />
                     )}
                 </>
             )}

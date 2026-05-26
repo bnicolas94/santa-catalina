@@ -5,7 +5,7 @@ import { MESES, GranularidadTemporal, RangoFechas, getDateRange } from '../utils
 
 const InclusionToggleBorder = (active: boolean) => active ? '1px solid var(--color-warning)' : '1px solid var(--color-gray-200)'
 
-export type SeccionReporte = 'dashboard' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance'
+export type SeccionReporte = 'dashboard' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
 
 interface Ubicacion {
     id: string
@@ -39,6 +39,7 @@ const SECCIONES: { key: SeccionReporte; label: string; icon: string }[] = [
     { key: 'costos', label: 'Costos', icon: '📉' },
     { key: 'desperdicio', label: 'Desperdicio', icon: '🗑️' },
     { key: 'performance', label: 'Performance', icon: '⚡' },
+    { key: 'caja', label: 'Flujo de Caja', icon: '💸' },
 ]
 
 export default function PeriodoSelector({

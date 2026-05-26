@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx'
  */
 export async function exportReportToExcel(
     data: any,
-    tipo: 'economico' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance',
+    tipo: 'economico' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja',
     mes: string,
     anio: string
 ) {
@@ -30,6 +30,9 @@ export async function exportReportToExcel(
             break
         case 'performance':
             exportPerformance(wb, data, mes, anio)
+            break
+        case 'caja':
+            exportCaja(wb, data, mes, anio)
             break
     }
 
@@ -268,6 +271,57 @@ function exportPerformance(wb: XLSX.WorkBook, data: any, mes: string, anio: stri
         setColumnWidths(wsChoferes, [25, 8, 10, 14, 10, 12])
         XLSX.utils.book_append_sheet(wb, wsChoferes, 'Choferes')
     }
+}
+
+function exportCaja(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
+    const k = data.kpis
+    // Hoja 1: Resumen de Caja
+    const resumen = [
+        ['Reporte de Flujo de Caja — Santa Catalina', `${mes}/${anio}`],
+        [''],
+        ['Métrica', 'Efectivo', 'Transferencia', 'Total'],
+        ['Ingresos Totales', k.ingresosEfectivo, k.ingresosTransferencia, k.ingresosTotal],
+        ['Egresos Totales', k.egresosEfectivo, k.egresosTransferencia, k.egresosTotal],
+        ['Flujo Neto', k.flujoNetoEfectivo, k.flujoNetoTransferencia, k.flujoNetoTotal],
+    ]
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumen)
+    setColumnWidths(wsResumen, [25, 15, 15, 15])
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Caja')
+
+    // Hoja 2: Desglose por Concepto
+    const conceptosHeaders = ['Concepto', 'Efectivo', 'Transferencia', 'Total']
+    const conceptosRows = []
+    
+    conceptosRows.push(['INGRESOS'])
+    data.ingresosDesglose.forEach((c: any) => {
+        conceptosRows.push([c.nombre, c.efectivo, c.transferencia, c.total])
+    })
+    conceptosRows.push([''])
+    conceptosRows.push(['EGRESOS'])
+    data.egresosDesglose.forEach((c: any) => {
+        conceptosRows.push([c.nombre, c.efectivo, c.transferencia, c.total])
+    })
+
+    const wsConceptos = XLSX.utils.aoa_to_sheet([conceptosHeaders, ...conceptosRows])
+    setColumnWidths(wsConceptos, [30, 15, 15, 15])
+    XLSX.utils.book_append_sheet(wb, wsConceptos, 'Conceptos')
+
+    // Hoja 3: Movimientos Detallados
+    const movimientos = [
+        ['Fecha', 'Tipo', 'Concepto', 'Descripción', 'Caja Origen', 'Medio de Pago', 'Monto'],
+        ...data.movimientosDetalle.map((m: any) => [
+            new Date(m.fecha).toLocaleDateString('es-AR'),
+            m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso',
+            m.concepto,
+            m.descripcion,
+            m.cajaOrigen,
+            m.medioPago === 'transferencia' ? 'Transferencia' : 'Efectivo',
+            m.monto
+        ])
+    ]
+    const wsMovimientos = XLSX.utils.aoa_to_sheet(movimientos)
+    setColumnWidths(wsMovimientos, [12, 10, 25, 45, 15, 15, 12])
+    XLSX.utils.book_append_sheet(wb, wsMovimientos, 'Detalle Movimientos')
 }
 
 /**
