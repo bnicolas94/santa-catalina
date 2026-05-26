@@ -316,11 +316,12 @@ export default function CajaPage() {
 
     function startEdit(m: MovCaja) {
         setEditingMov(m)
+        const isMP = m.cajaOrigen === 'mercado_pago' || m.cajaOrigen === 'mercado_pago_juani';
         setForm({
             tipo: m.tipo,
             concepto: m.concepto,
             monto: String(m.monto),
-            medioPago: m.medioPago,
+            medioPago: isMP ? 'transferencia' : m.medioPago,
             descripcion: m.descripcion || '',
             cajaOrigen: m.cajaOrigen || 'caja_madre',
             choferId: m.rendicion ? m.rendicion.chofer.id : '',
@@ -972,7 +973,14 @@ export default function CajaPage() {
                                             const color = boxColors[boxKey] || 'var(--color-primary)';
                                             return (
                                                 <button key={boxKey} type="button" className="btn btn-sm"
-                                                    onClick={() => setForm({ ...form, cajaOrigen: boxKey })}
+                                                    onClick={() => {
+                                                        const isMP = boxKey === 'mercado_pago' || boxKey === 'mercado_pago_juani';
+                                                        setForm({ 
+                                                            ...form, 
+                                                            cajaOrigen: boxKey,
+                                                            medioPago: isMP ? 'transferencia' : form.medioPago
+                                                        });
+                                                    }}
                                                     style={{ 
                                                         flex: '1 1 120px', 
                                                         backgroundColor: form.cajaOrigen === boxKey ? color : `${color}18`, 
@@ -1027,11 +1035,13 @@ export default function CajaPage() {
                                 <div className="form-group">
                                     <label className="form-label">Medio de Pago</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-                                        <button type="button" className="btn btn-sm"
-                                            onClick={() => setForm({ ...form, medioPago: 'efectivo' })}
-                                            style={{ flex: 1, backgroundColor: form.medioPago === 'efectivo' ? '#27AE60' : '#27AE6018', color: form.medioPago === 'efectivo' ? '#fff' : '#27AE60', border: '2px solid #27AE60', fontWeight: 600 }}>
-                                            💵 Efectivo
-                                        </button>
+                                        {form.cajaOrigen !== 'mercado_pago' && form.cajaOrigen !== 'mercado_pago_juani' && (
+                                            <button type="button" className="btn btn-sm"
+                                                onClick={() => setForm({ ...form, medioPago: 'efectivo' })}
+                                                style={{ flex: 1, backgroundColor: form.medioPago === 'efectivo' ? '#27AE60' : '#27AE6018', color: form.medioPago === 'efectivo' ? '#fff' : '#27AE60', border: '2px solid #27AE60', fontWeight: 600 }}>
+                                                💵 Efectivo
+                                            </button>
+                                        )}
                                         <button type="button" className="btn btn-sm"
                                             onClick={() => setForm({ ...form, medioPago: 'transferencia' })}
                                             style={{ flex: 1, backgroundColor: form.medioPago === 'transferencia' ? '#2980B9' : '#2980B918', color: form.medioPago === 'transferencia' ? '#fff' : '#2980B9', border: '2px solid #2980B9', fontWeight: 600 }}>

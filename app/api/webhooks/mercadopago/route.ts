@@ -136,7 +136,7 @@ export async function POST(req: Request) {
             tipo: 'ingreso',
             concepto: displayDesc,
             monto: montoNeto,
-            medioPago: 'mercado_pago',
+            medioPago: 'transferencia',
             cajaOrigen: 'mercado_pago',
             descripcion: `PAGO #${paymentInfo.id} | ${payerName}`,
             fecha: paymentInfo.date_approved ? new Date(paymentInfo.date_approved) : new Date(),

@@ -107,13 +107,18 @@ export class CajaService {
      * movimientos de caja dentro de su propia transacción).
      */
     static async createMovimiento(input: CreateMovimientoInput, tx?: TxClient) {
+        let finalMedioPago = input.medioPago || 'efectivo'
+        if (input.cajaOrigen === 'mercado_pago' || input.cajaOrigen === 'mercado_pago_juani') {
+            finalMedioPago = 'transferencia'
+        }
+
         const execute = async (client: TxClient) => {
             const mov = await (client as any).movimientoCaja.create({
                 data: {
                     tipo: input.tipo,
                     concepto: input.concepto,
                     monto: input.monto,
-                    medioPago: input.medioPago || 'efectivo',
+                    medioPago: finalMedioPago,
                     cajaOrigen: input.cajaOrigen || null,
                     descripcion: input.descripcion || null,
                     pedidoId: input.pedidoId || null,
@@ -147,6 +152,13 @@ export class CajaService {
             const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!oldMov) throw new Error('Movimiento no encontrado')
 
+            const finalCajaOrigen = input.cajaOrigen !== undefined ? input.cajaOrigen : oldMov.cajaOrigen
+            let finalMedioPago = input.medioPago !== undefined ? input.medioPago : oldMov.medioPago
+
+            if (finalCajaOrigen === 'mercado_pago' || finalCajaOrigen === 'mercado_pago_juani') {
+                finalMedioPago = 'transferencia'
+            }
+
             // 1. Revertir impacto viejo
             if (oldMov.cajaOrigen) {
                 await revertirImpactoSaldo(tx, oldMov.cajaOrigen, oldMov.tipo, oldMov.monto)
@@ -159,7 +171,7 @@ export class CajaService {
                     ...(input.tipo && { tipo: input.tipo }),
                     ...(input.concepto && { concepto: input.concepto }),
                     ...(input.monto !== undefined && { monto: input.monto }),
-                    ...(input.medioPago && { medioPago: input.medioPago }),
+                    medioPago: finalMedioPago,
                     ...(input.cajaOrigen !== undefined && { cajaOrigen: input.cajaOrigen || null }),
                     ...(input.descripcion !== undefined && { descripcion: input.descripcion || null }),
                     ...(input.fecha && { fecha: normalizeFecha(input.fecha) }),
@@ -200,6 +212,8 @@ export class CajaService {
      */
     static async transferir(origen: string, destino: string, monto: number, fecha?: Date | string | null) {
         const customDate = normalizeFecha(fecha)
+        const egresoMedio = (origen === 'mercado_pago' || origen === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
+        const ingresoMedio = (destino === 'mercado_pago' || destino === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
 
         return prisma.$transaction(async (tx) => {
             const egreso = await (tx as any).movimientoCaja.create({
@@ -207,7 +221,7 @@ export class CajaService {
                     tipo: 'egreso',
                     concepto: 'transferencia_interna',
                     monto,
-                    medioPago: 'efectivo',
+                    medioPago: egresoMedio,
                     cajaOrigen: origen,
                     descripcion: `Transferencia hacia ${destino}`,
                     fecha: customDate,
@@ -219,7 +233,7 @@ export class CajaService {
                     tipo: 'ingreso',
                     concepto: 'transferencia_interna',
                     monto,
-                    medioPago: 'efectivo',
+                    medioPago: ingresoMedio,
                     cajaOrigen: destino,
                     descripcion: `Transferencia desde ${origen}`,
                     fecha: customDate,

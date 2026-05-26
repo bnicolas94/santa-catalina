@@ -96,7 +96,7 @@ export async function GET(req: Request) {
                     tipo: 'egreso',
                     concepto: p.description || `Egreso ${p.operation_type}`,
                     monto: neto,
-                    medioPago: 'mercado_pago',
+                    medioPago: 'transferencia',
                     cajaOrigen: 'mercado_pago',
                     descripcion: `AUTO-RETIRO | ${p.description || p.operation_type} | #${p.id}`,
                     fecha: p.date_approved ? new Date(p.date_approved) : new Date(p.date_created),
