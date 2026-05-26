@@ -28,6 +28,17 @@ function formatConceptLabel(concept: string): string {
         .replace(/\b\w/g, c => c.toUpperCase())
 }
 
+function isInternalTransfer(concept: string): boolean {
+    const conceptLower = concept.toLowerCase()
+    return (
+        conceptLower === 'transferencia_interna' ||
+        conceptLower.includes('depósito diario') ||
+        conceptLower.includes('deposito diario') ||
+        conceptLower.includes('transferencia entre cajas') ||
+        conceptLower.includes('transferencias internas')
+    )
+}
+
 /**
  * Servicio de reportes de flujo de caja.
  * Analiza ingresos, egresos y saldos netos agrupados por medio de pago (efectivo/transferencia) y concepto.
@@ -112,6 +123,12 @@ export async function getCajaReport(
         const val = m.monto
         const mp = m.medioPago === 'transferencia' ? 'transferencia' : 'efectivo'
         const label = formatConceptLabel(m.concepto)
+        const isInternal = isInternalTransfer(m.concepto)
+
+        // Si es una transferencia o depósito interno, no lo sumamos a los KPIs ni a los desgloses de ingresos/egresos reales
+        if (isInternal) {
+            continue
+        }
 
         // Acumular totales globales
         if (m.tipo === 'ingreso') {
