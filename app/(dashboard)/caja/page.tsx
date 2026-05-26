@@ -156,6 +156,8 @@ export default function CajaPage() {
         return saldos[boxKey] ?? 0;
     };
 
+    const saldosBoxes = allowedBoxes.filter(bk => bk !== 'mercado_pago_juani');
+
     const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
         // Filtro por Tipo
         if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;
@@ -490,17 +492,17 @@ export default function CajaPage() {
                             💰 Dinero Disponible Global (Todas las Cajas)
                         </div>
                         <div style={{ fontSize: '3rem', fontWeight: 800, color: '#10b981', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoChicaLocal + saldoMercadoPago + saldoMercadoPagoJuani, showMontos)}
+                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoChicaLocal + saldoMercadoPago, showMontos)}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
-                            Suma de Madre + Chica Fabrica + Local + Chica Local + MP + MP Juani
+                            Suma de Madre + Chica Fabrica + Local + Chica Local + MP
                         </div>
                     </div>
                 </div>
             )}
 
             {/* ═══ Saldos de Caja ═══ */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allowedBoxes.length}, 1fr)`, gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${saldosBoxes.length}, 1fr)`, gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 {/* Caja Madre */}
                 {allowedBoxes.includes('caja_madre') && (
                     <div className="card" style={{ borderTop: '3px solid #8E44AD' }}>
@@ -705,7 +707,7 @@ export default function CajaPage() {
                     </div>
                 )}
                 {/* Mercado Pago Juani */}
-                {allowedBoxes.includes('mercado_pago_juani') && (
+                {saldosBoxes.includes('mercado_pago_juani') && (
                     <div className="card" style={{ borderTop: '3px solid #00BFA5' }}>
                         <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
@@ -961,7 +963,14 @@ export default function CajaPage() {
                                     <label className="form-label">Tipo</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                                         <button type="button" className="btn btn-sm"
-                                            onClick={() => setForm({ ...form, tipo: 'ingreso' })}
+                                            onClick={() => {
+                                                const defaultBox = ubicacionTipo === 'LOCAL' ? 'caja_chica_local' : 'caja_chica';
+                                                setForm({ 
+                                                    ...form, 
+                                                    tipo: 'ingreso',
+                                                    cajaOrigen: form.cajaOrigen === 'mercado_pago_juani' ? defaultBox : form.cajaOrigen 
+                                                });
+                                            }}
                                             style={{ flex: 1, backgroundColor: form.tipo === 'ingreso' ? '#27AE60' : '#27AE6018', color: form.tipo === 'ingreso' ? '#fff' : '#27AE60', border: '2px solid #27AE60', fontWeight: 600 }}>
                                             ⬆️ Ingreso
                                         </button>
@@ -975,7 +984,7 @@ export default function CajaPage() {
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                        {allowedBoxes.filter(bk => bk !== 'caja_madre' && bk !== 'local').map((boxKey) => {
+                                        {allowedBoxes.filter(bk => bk !== 'caja_madre' && bk !== 'local').filter(bk => bk !== 'mercado_pago_juani' || form.tipo === 'egreso').map((boxKey) => {
                                             const boxColors: Record<string, string> = {
                                                 'caja_chica': '#E67E22',
                                                 'caja_chica_local': '#F39C12',
@@ -1230,7 +1239,7 @@ export default function CajaPage() {
                                     <div className="form-group">
                                         <label className="form-label">Desde</label>
                                         <select className="form-select" value={transfForm.origen} onChange={(e) => setTransfForm({ ...transfForm, origen: e.target.value })}>
-                                            {allowedBoxes.map(box => (
+                                            {allowedBoxes.filter(b => b !== 'mercado_pago_juani').map(box => (
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
@@ -1241,7 +1250,7 @@ export default function CajaPage() {
                                     <div className="form-group">
                                         <label className="form-label">Hacia</label>
                                         <select className="form-select" value={transfForm.destino} onChange={(e) => setTransfForm({ ...transfForm, destino: e.target.value })}>
-                                            {allowedBoxes.map(box => (
+                                            {allowedBoxes.filter(b => b !== 'mercado_pago_juani').map(box => (
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
@@ -1359,7 +1368,7 @@ export default function CajaPage() {
                                             onChange={(e) => setSelectedDepositTarget(e.target.value)}
                                             style={{ backgroundColor: '#f9f9f9', fontWeight: 600 }}
                                         >
-                                            {allowedBoxes.map(box => (
+                                            {allowedBoxes.filter(b => b !== 'mercado_pago_juani').map(box => (
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
@@ -1420,7 +1429,7 @@ export default function CajaPage() {
                                                     value={allConfigs[tipo]?.cajaDepositoId}
                                                     onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
                                                 >
-                                                    {allowedBoxes.map(box => (
+                                                    {allowedBoxes.filter(b => b !== 'mercado_pago_juani').map(box => (
                                                         <option key={box} value={box}>{getBoxLabel(box)}</option>
                                                     ))}
                                                     <option value="caja_fuerte_local">🔒 Caja Fuerte Local (v2)</option>
