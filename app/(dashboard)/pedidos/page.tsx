@@ -15,11 +15,17 @@ interface DetallePedido {
     presentacion: Presentacion
     nroPack?: number | null
 }
+interface CanalStats {
+    pedidos: number;
+    importe: number;
+    unidades: number;
+    packs: number;
+}
 interface Pedido {
     id: string; fechaPedido: string; fechaEntrega: string; estado: string
     medioPago: string | null; totalUnidades: number; totalImporte: number
     totalPacks: number; cliente: Cliente; detalles: DetallePedido[]; abonado: boolean
-    turno: string | null
+    turno: string | null; esRetiro: boolean
 }
 
 type SortField = 'cliente' | 'fechaEntrega' | 'totalUnidades' | 'totalImporte' | 'turno'
@@ -75,6 +81,8 @@ export default function PedidosPage() {
         totalUnidades: number;
         totalPacks: number;
         planchasPorTurno?: Record<string, Record<string, number>>;
+        local?: CanalStats;
+        reparto?: CanalStats;
     }>({ totalPedidos: 0, totalImporte: 0, totalUnidades: 0, totalPacks: 0 })
 
     // Sorting
@@ -417,27 +425,72 @@ export default function PedidosPage() {
             </div>
 
             {/* --- CUADRO DE PROYECCIÓN DE INGRESOS --- */}
-            <div style={{
-                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)',
-                marginBottom: 'var(--space-6)', padding: 'var(--space-4)',
-                background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
-                borderRadius: 'var(--radius-xl)', border: '1px solid #667eea25',
-            }}>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Pedidos</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#667eea', fontFamily: 'var(--font-heading)' }}>{stats.totalPedidos}</div>
+            <div style={{ marginBottom: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                {/* Fila principal: Total unificado */}
+                <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)',
+                    padding: 'var(--space-4)',
+                    background: 'linear-gradient(135deg, #667eea15 0%, #764ba215 100%)',
+                    borderRadius: 'var(--radius-xl)', border: '1px solid #667eea25',
+                }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Pedidos</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#667eea', fontFamily: 'var(--font-heading)' }}>{stats.totalPedidos}</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Ingresos Totales</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#27AE60', fontFamily: 'var(--font-heading)' }}>${stats.totalImporte.toLocaleString('es-AR')}</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Sándwiches</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#E67E22', fontFamily: 'var(--font-heading)' }}>{stats.totalUnidades.toLocaleString('es-AR')}</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Bultos</div>
+                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#9B59B6', fontFamily: 'var(--font-heading)' }}>{stats.totalPacks.toLocaleString('es-AR')}</div>
+                    </div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Ingresos Proyectados</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#27AE60', fontFamily: 'var(--font-heading)' }}>${stats.totalImporte.toLocaleString('es-AR')}</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Sándwiches</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#E67E22', fontFamily: 'var(--font-heading)' }}>{stats.totalUnidades.toLocaleString('es-AR')}</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-gray-500)', letterSpacing: '0.5px' }}>Bultos</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#9B59B6', fontFamily: 'var(--font-heading)' }}>{stats.totalPacks.toLocaleString('es-AR')}</div>
+
+                {/* Fila secundaria: Local vs Reparto */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                    {/* LOCAL */}
+                    <div style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: 'linear-gradient(135deg, #2ECC7108 0%, #27AE6012 100%)',
+                        border: '1px solid #27AE6030',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '18px' }}>🏪</span>
+                            <div>
+                                <div style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, color: '#27AE60', letterSpacing: '0.5px' }}>Local</div>
+                                <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{stats.local?.pedidos || 0} pedidos · {stats.local?.unidades || 0} uds</div>
+                            </div>
+                        </div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#27AE60', fontFamily: 'var(--font-heading)' }}>
+                            ${(stats.local?.importe || 0).toLocaleString('es-AR')}
+                        </div>
+                    </div>
+                    {/* REPARTO */}
+                    <div style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: 'linear-gradient(135deg, #3498DB08 0%, #2980B912 100%)',
+                        border: '1px solid #2980B930',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '18px' }}>🚚</span>
+                            <div>
+                                <div style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, color: '#2980B9', letterSpacing: '0.5px' }}>Reparto</div>
+                                <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{stats.reparto?.pedidos || 0} pedidos · {stats.reparto?.unidades || 0} uds</div>
+                            </div>
+                        </div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#2980B9', fontFamily: 'var(--font-heading)' }}>
+                            ${(stats.reparto?.importe || 0).toLocaleString('es-AR')}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -597,7 +650,19 @@ export default function PedidosPage() {
                             const transitions = nextStates[ped.estado] || []
                             return (
                                 <tr key={ped.id}>
-                                    <td style={{ fontWeight: 600 }}>{ped.cliente.nombreComercial}</td>
+                                    <td style={{ fontWeight: 600 }}>
+                                        {ped.cliente.nombreComercial}
+                                        <span style={{
+                                            display: 'inline-block', marginLeft: '6px',
+                                            fontSize: '9px', fontWeight: 700, padding: '1px 5px',
+                                            borderRadius: '4px', verticalAlign: 'middle',
+                                            backgroundColor: ped.esRetiro ? '#27AE6018' : '#2980B918',
+                                            color: ped.esRetiro ? '#27AE60' : '#2980B9',
+                                            border: `1px solid ${ped.esRetiro ? '#27AE6035' : '#2980B935'}`,
+                                        }}>
+                                            {ped.esRetiro ? '🏪 Local' : '🚚 Reparto'}
+                                        </span>
+                                    </td>
                                     <td>{new Date(ped.fechaPedido).toLocaleDateString('es-AR')}</td>
                                     <td>{new Date(ped.fechaEntrega).toLocaleDateString('es-AR')}</td>
                                     <td>

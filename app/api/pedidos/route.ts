@@ -42,8 +42,8 @@ export async function GET(request: NextRequest) {
         else if (sortField === 'totalImporte') orderBy = { totalImporte: sortDir }
         else if (sortField === 'turno') orderBy = { turno: sortDir }
 
-        // Consultas en paralelo: pedidos paginados + total + stats + detalles ELE
-        const [pedidos, total, stats, detallesELE] = await Promise.all([
+        // Consultas en paralelo: pedidos paginados + total + stats + stats por canal + detalles ELE
+        const [pedidos, total, stats, statsLocal, statsReparto, detallesELE] = await Promise.all([
             prisma.pedido.findMany({
                 where,
                 orderBy,
@@ -65,6 +65,18 @@ export async function GET(request: NextRequest) {
             prisma.pedido.count({ where }),
             prisma.pedido.aggregate({
                 where,
+                _sum: { totalImporte: true, totalUnidades: true, totalPacks: true },
+                _count: true,
+            }),
+            // Stats LOCAL (esRetiro = true)
+            prisma.pedido.aggregate({
+                where: { ...where, esRetiro: true },
+                _sum: { totalImporte: true, totalUnidades: true, totalPacks: true },
+                _count: true,
+            }),
+            // Stats REPARTO (esRetiro = false)
+            prisma.pedido.aggregate({
+                where: { ...where, esRetiro: false },
                 _sum: { totalImporte: true, totalUnidades: true, totalPacks: true },
                 _count: true,
             }),
@@ -128,6 +140,18 @@ export async function GET(request: NextRequest) {
                 totalUnidades: stats._sum.totalUnidades || 0,
                 totalPacks: stats._sum.totalPacks || 0,
                 planchasPorTurno,
+                local: {
+                    pedidos: statsLocal._count,
+                    importe: statsLocal._sum.totalImporte || 0,
+                    unidades: statsLocal._sum.totalUnidades || 0,
+                    packs: statsLocal._sum.totalPacks || 0,
+                },
+                reparto: {
+                    pedidos: statsReparto._count,
+                    importe: statsReparto._sum.totalImporte || 0,
+                    unidades: statsReparto._sum.totalUnidades || 0,
+                    packs: statsReparto._sum.totalPacks || 0,
+                },
             },
         })
     } catch (error) {
