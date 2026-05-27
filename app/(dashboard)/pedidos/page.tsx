@@ -55,6 +55,7 @@ export default function PedidosPage() {
     const [showModal, setShowModal] = useState(false)
     const [filterEstado, setFilterEstado] = useState('')
     const [filterTurno, setFilterTurno] = useState('')
+    const [filterCanal, setFilterCanal] = useState<'' | 'local' | 'reparto'>('')
     const [detalles, setDetalles] = useState<{ presentacionId: string; cantidad: string }[]>([{ presentacionId: '', cantidad: '1' }])
     const [form, setForm] = useState({ clienteId: '', fechaEntrega: '', medioPago: 'efectivo' })
     const [error, setError] = useState('')
@@ -89,7 +90,7 @@ export default function PedidosPage() {
     const [sortField, setSortField] = useState<SortField | ''>('')
     const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, filterTurno, fechaDesde, fechaHasta, sortField, sortDir])
+    useEffect(() => { fetchPedidos() }, [currentPage, filterEstado, filterTurno, filterCanal, fechaDesde, fechaHasta, sortField, sortDir])
     useEffect(() => { fetchCatalogos() }, [])
 
     // Debounce para búsqueda
@@ -124,6 +125,7 @@ export default function PedidosPage() {
             if (fechaDesde) params.set('fechaDesde', fechaDesde)
             if (fechaHasta) params.set('fechaHasta', fechaHasta)
             if (searchTerm) params.set('search', searchTerm)
+            if (filterCanal) params.set('canal', filterCanal)
             if (sortField) { params.set('sortField', sortField); params.set('sortDir', sortDir) }
 
             const res = await fetch(`/api/pedidos?${params.toString()}`)
@@ -573,6 +575,31 @@ export default function PedidosPage() {
                                 transition: 'all 0.2s'
                             }}>
                         {t.icon} {t.label}
+                    </button>
+                ))}
+                {/* Separador */}
+                <span style={{ width: '1px', height: '24px', backgroundColor: 'var(--color-gray-300)', alignSelf: 'center', margin: '0 4px' }} />
+                {/* Filtros de Canal */}
+                <button className={`btn btn-sm ${filterCanal === '' ? 'btn-secondary' : 'btn-ghost'}`}
+                        onClick={() => { setFilterCanal(''); setCurrentPage(1) }}
+                        style={{ borderRadius: 'var(--radius-lg)', fontWeight: 700 }}>
+                    Todos
+                </button>
+                {[
+                    { value: 'local' as const, label: 'Local', icon: '🏪', color: '#27AE60' },
+                    { value: 'reparto' as const, label: 'Reparto', icon: '🚚', color: '#2980B9' }
+                ].map((c) => (
+                    <button key={c.value} className="btn btn-sm"
+                            onClick={() => { setFilterCanal(filterCanal === c.value ? '' : c.value); setCurrentPage(1) }}
+                            style={{
+                                backgroundColor: filterCanal === c.value ? c.color : `${c.color}15`,
+                                color: filterCanal === c.value ? '#fff' : c.color,
+                                border: `2px solid ${c.color}`,
+                                fontWeight: 700,
+                                borderRadius: 'var(--radius-lg)',
+                                transition: 'all 0.2s'
+                            }}>
+                        {c.icon} {c.label}
                     </button>
                 ))}
             </div>

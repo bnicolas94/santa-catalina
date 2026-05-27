@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
         const estado = searchParams.get('estado')
         const turno = searchParams.get('turno')
         const search = searchParams.get('search')
+        const canal = searchParams.get('canal') // 'local' | 'reparto'
 
         // Construir filtros dinámicos
         const where: any = {}
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
 
         if (estado) where.estado = estado
         if (turno) where.turno = turno
+        if (canal === 'local') where.esRetiro = true
+        else if (canal === 'reparto') where.esRetiro = false
 
         if (search) {
             where.cliente = {
