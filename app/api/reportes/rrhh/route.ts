@@ -309,6 +309,7 @@ export async function GET(request: Request) {
             // KPIs acumulados
             const totalNetoHistorico = todasLiquidaciones.reduce((acc, l) => acc + l.totalNeto, 0)
             const totalHsExtrasHistorico = todasLiquidaciones.reduce((acc, l) => acc + (l.horasExtras || 0), 0)
+            const totalMontoHsExtrasHistorico = todasLiquidaciones.reduce((acc, l) => acc + (l.montoHorasExtras || 0), 0)
             const totalDescuentosHistorico = todasLiquidaciones.reduce((acc, l) => acc + (l.descuentosPrestamos || 0), 0)
             const totalDiasAusentes = historialSemanas.reduce((acc, s) => acc + s.diasAusentes, 0)
             const totalDiasTrabajados = historialSemanas.reduce((acc, s) => acc + s.diasTrabajados, 0)
@@ -333,6 +334,7 @@ export async function GET(request: Request) {
                 kpis: {
                     totalNeto: totalNetoHistorico,
                     totalHsExtras: parseFloat(totalHsExtrasHistorico.toFixed(2)),
+                    totalMontoHsExtras: totalMontoHsExtrasHistorico,
                     totalDescuentos: totalDescuentosHistorico,
                     totalDiasTrabajados,
                     totalDiasAusentes,

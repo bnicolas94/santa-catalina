@@ -109,6 +109,23 @@ export default function RRHHAnalyticsPage() {
         }]
     }
 
+    // Top 8 employees by extra hours cost
+    const topExtrasEmployees = [...(data.nomina?.detalle || [])]
+        .filter((l: any) => l.hsExtras > 0)
+        .sort((a, b) => b.montoExtras - a.montoExtras)
+        .slice(0, 8)
+
+    const extrasChartData = {
+        labels: topExtrasEmployees.map((l: any) => l.empleado),
+        datasets: [{
+            label: 'Costo Horas Extras ($)',
+            data: topExtrasEmployees.map((l: any) => l.montoExtras),
+            backgroundColor: 'rgba(139, 92, 246, 0.5)',
+            borderColor: '#8b5cf6',
+            borderWidth: 1
+        }]
+    }
+
     return (
         <div className="analytics-container fade-in" style={{ padding: 'var(--space-6)' }}>
             <div className="header-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-8)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
@@ -181,7 +198,10 @@ export default function RRHHAnalyticsPage() {
                         </div>
                         <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #f59e0b' }}>
                             <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Hs Extras Totales</div>
-                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#f59e0b' }}>{data.historico.kpis.totalHsExtras}</div>
+                            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#f59e0b' }}>{data.historico.kpis.totalHsExtras} hs</div>
+                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>
+                                Acumulado: ${data.historico.kpis.totalMontoHsExtras?.toLocaleString() || 0}
+                            </div>
                         </div>
                         <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #ef4444' }}>
                             <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Días Ausentes</div>
@@ -289,6 +309,15 @@ export default function RRHHAnalyticsPage() {
                     </div>
                     <div style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)', color: 'var(--color-gray-400)' }}>{data.asistencia.ausencias} ausencias registradas</div>
                 </div>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-6)', borderLeft: '4px solid #8b5cf6' }}>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Horas Extras Pagadas</div>
+                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: '#8b5cf6' }}>
+                        {data.nomina.totalHsExtras.toLocaleString()} hs
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', marginTop: 'var(--space-2)', color: 'var(--color-gray-400)' }}>
+                        Inversión: ${data.nomina.totalMontoHsExtras.toLocaleString()}
+                    </div>
+                </div>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)', borderLeft: '4px solid #10b981' }}>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Inversión Periodo</div>
                     <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: 'var(--color-success)' }}>
@@ -369,7 +398,14 @@ export default function RRHHAnalyticsPage() {
                                             </button>
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{l.empleado}</td>
-                                        <td>{l.hsExtras} hs</td>
+                                        <td>
+                                            <div style={{ fontWeight: 600 }}>{l.hsExtras} hs</div>
+                                            {l.montoExtras > 0 && (
+                                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
+                                                    ${l.montoExtras.toLocaleString()}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td style={{ color: 'var(--color-success)', fontWeight: 600 }}>${l.ingresos.toLocaleString()}</td>
                                         <td style={{ color: 'var(--color-danger)' }}>-${l.descuentos.toLocaleString()}</td>
                                         <td style={{ fontWeight: 700 }}>${l.neto.toLocaleString()}</td>
@@ -397,6 +433,66 @@ export default function RRHHAnalyticsPage() {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            {/* Análisis de Inversión y Horas Extras */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--space-6)', marginTop: 'var(--space-8)' }}>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                    <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>💰 Inversión Salarial por Área</h3>
+                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
+                        {data.nomina.porArea && data.nomina.porArea.length > 0 ? (
+                            <Bar 
+                                data={payrollChartData} 
+                                options={{ 
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: { display: false }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: (value: any) => '$' + value.toLocaleString()
+                                            }
+                                        }
+                                    }
+                                }} 
+                            />
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)' }}>
+                                No hay datos de inversión para el período seleccionado.
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+                    <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>⚡ Top Empleados - Costo Horas Extras</h3>
+                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
+                        {topExtrasEmployees.length > 0 ? (
+                            <Bar 
+                                data={extrasChartData} 
+                                options={{ 
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: { display: false }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: (value: any) => '$' + value.toLocaleString()
+                                            }
+                                        }
+                                    }
+                                }} 
+                            />
+                        ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)' }}>
+                                No hay horas extras registradas en este periodo.
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
