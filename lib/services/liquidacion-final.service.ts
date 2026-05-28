@@ -107,13 +107,13 @@ export class LiquidacionFinalService {
                 nombre: `Vacaciones No Gozadas (${vacacionesData.dias.toFixed(2)} días)`, 
                 monto: this.redondear(vacacionesData.monto), 
                 tipo: 'NO_REMUNERATIVO',
-                metodologia: `(Días Totales / 365) * Días trabajados en el año. Pagado con plus vacacional (Sueldo / 25).`
+                metodologia: ''
             },
             { 
                 nombre: 'SAC sobre Vacaciones No Gozadas', 
                 monto: this.redondear(vacacionesData.monto / 12), 
                 tipo: 'NO_REMUNERATIVO',
-                metodologia: `1/12 del monto de Vacaciones No Gozadas.`
+                metodologia: ''
             }
         ]
 

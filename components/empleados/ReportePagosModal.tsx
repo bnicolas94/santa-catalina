@@ -290,11 +290,13 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                             </tr>
                         </thead>
                         <tbody>
-                            ${conceptos.map((c: any) => `
+                            ${conceptos.map((c: any) => {
+                                const showMetodologia = c.metodologia && !c.nombre.toLowerCase().includes('vacaciones no gozadas');
+                                return `
                                 <tr>
                                     <td style="border: 1px solid #000; padding: 5px;">
                                         ${c.nombre}
-                                        <div style="font-size: 9pt; color: #555;">${c.metodologia || ''}</div>
+                                        ${showMetodologia ? `<div style="font-size: 9pt; color: #555;">${c.metodologia}</div>` : ''}
                                     </td>
                                     <td style="border: 1px solid #000; padding: 5px; text-align: right;">
                                         ${c.monto > 0 ? c.monto.toLocaleString() : '-'}
@@ -303,7 +305,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                         ${c.monto < 0 ? Math.abs(c.monto).toLocaleString() : '-'}
                                     </td>
                                 </tr>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </tbody>
                         <tfoot>
                             <tr style="font-weight: bold;">
