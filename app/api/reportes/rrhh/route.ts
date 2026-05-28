@@ -17,7 +17,7 @@ export async function GET(request: Request) {
         // Lista de empleados activos para el selector
         const empleadosActivos = await prisma.empleado.findMany({
             where: { activo: true },
-            select: { id: true, nombre: true, apellido: true },
+            select: { id: true, nombre: true, apellido: true, fechaIngreso: true, jornal: true },
             orderBy: [{ nombre: 'asc' }]
         })
 
@@ -59,9 +59,11 @@ export async function GET(request: Request) {
             include: {
                 empleado: {
                     select: {
+                        id: true,
                         nombre: true,
                         apellido: true,
                         horarioEntrada: true,
+                        jornal: true,
                         turno: {
                             select: {
                                 horaInicio: true,
@@ -75,15 +77,27 @@ export async function GET(request: Request) {
 
         const totalFichadas = fichadas.length
         
-        // Cálculo de tardanzas dinámico
+        // Cálculo de tardanzas dinámico + índice de puntualidad por empleado
         let tardanzas = 0
         const detalleTardanzas: any[] = []
+        const puntualidadPorEmpleado: Record<string, { nombre: string, entradas: number, puntuales: number }> = {}
 
         fichadas.forEach(f => {
             if (f.tipo !== 'entrada') return
             
+            const empId = f.empleadoId
+            const empNombre = f.empleado ? `${f.empleado.nombre} ${f.empleado.apellido || ''}`.trim() : 'Empleado'
+            
+            if (!puntualidadPorEmpleado[empId]) {
+                puntualidadPorEmpleado[empId] = { nombre: empNombre, entradas: 0, puntuales: 0 }
+            }
+            puntualidadPorEmpleado[empId].entradas++
+
             const horaObjetivo = f.empleado?.turno?.horaInicio || f.empleado?.horarioEntrada
-            if (!horaObjetivo) return
+            if (!horaObjetivo) {
+                puntualidadPorEmpleado[empId].puntuales++
+                return
+            }
 
             const [h, m] = horaObjetivo.split(':').map(Number)
             const limiteTolerancia = f.empleado?.turno?.toleranciaMinutos ?? 10
@@ -101,16 +115,46 @@ export async function GET(request: Request) {
 
                 detalleTardanzas.push({
                     empleadoId: f.empleadoId,
-                    empleadoNombre: (f as any).empleado?.nombre ? `${(f as any).empleado.nombre} ${(f as any).empleado.apellido || ''}` : 'Empleado',
+                    empleadoNombre: empNombre,
                     fecha: f.fechaHora,
                     horaFichada: f.fechaHora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
                     horaEsperada: horaObjetivo,
                     minutosRetraso
                 })
+            } else {
+                puntualidadPorEmpleado[empId].puntuales++
             }
         })
 
         const ausencias = fichadas.filter(f => f.tipo === 'ausencia').length
+
+        // Índice de puntualidad y ranking
+        const indicePuntualidad = Object.entries(puntualidadPorEmpleado)
+            .map(([id, p]) => ({
+                empleadoId: id,
+                nombre: p.nombre,
+                entradas: p.entradas,
+                puntuales: p.puntuales,
+                porcentaje: p.entradas > 0 ? parseFloat(((p.puntuales / p.entradas) * 100).toFixed(1)) : 100
+            }))
+            .sort((a, b) => b.porcentaje - a.porcentaje)
+
+        const rankingMejores = indicePuntualidad.slice(0, 5)
+        const rankingPeores = [...indicePuntualidad].sort((a, b) => a.porcentaje - b.porcentaje).slice(0, 5)
+
+        // Costo del ausentismo
+        const jornalPromedio = empleadosActivos.length > 0 
+            ? empleadosActivos.reduce((acc, e) => acc + (e.jornal || 0), 0) / empleadosActivos.length 
+            : 0
+        const costoAusentismo = ausencias * jornalPromedio
+
+        // Sanciones del período
+        let sancionesCount = 0
+        try {
+            sancionesCount = await prisma.sancion.count({
+                where: { fecha: { gte: desde, lte: hasta } }
+            })
+        } catch { /* table may not exist yet */ }
 
         // 4. Masa Salarial (Liquidaciones en el periodo)
         const liquidaciones = await prisma.liquidacionSueldo.findMany({
@@ -138,7 +182,32 @@ export async function GET(request: Request) {
         const totalMasaSalarial = liquidaciones.reduce((acc, l) => acc + l.totalNeto, 0)
         const totalHorasExtras = liquidaciones.reduce((acc, l) => acc + (l.horasExtras || 0), 0)
         const totalMontoHorasExtras = liquidaciones.reduce((acc, l) => acc + (l.montoHorasExtras || 0), 0)
+        const totalHorasNormales = liquidaciones.reduce((acc, l) => acc + (l.horasNormales || 0), 0)
+        const totalMontoFeriados = liquidaciones.reduce((acc, l) => acc + (l.montoHorasFeriado || 0), 0)
+        const totalHorasFeriado = liquidaciones.reduce((acc, l) => acc + (l.horasFeriado || 0), 0)
+        const totalSueldoBase = liquidaciones.reduce((acc, l) => acc + (l.sueldoProporcional || 0), 0)
+        const totalDescuentosPrestamos = liquidaciones.reduce((acc, l) => acc + (l.descuentosPrestamos || 0), 0)
         
+        // KPIs de inversión
+        const inversionBruta = totalSueldoBase + totalMontoHorasExtras + totalMontoFeriados
+        const ratioExtrasBase = inversionBruta > 0 ? (totalMontoHorasExtras / inversionBruta) * 100 : 0
+        const costoHoraEfectiva = totalHorasNormales > 0 ? totalMasaSalarial / totalHorasNormales : 0
+        const costoPromedioEmpleado = activos > 0 ? totalMasaSalarial / activos : 0
+
+        // Tendencia semanal (agrupar liquidaciones por periodo)
+        const tendenciaPorPeriodo: Record<string, { periodo: string, totalNeto: number, montoExtras: number, montoFeriados: number, count: number }> = {}
+        liquidaciones.forEach(l => {
+            const periodo = l.periodo
+            if (!tendenciaPorPeriodo[periodo]) {
+                tendenciaPorPeriodo[periodo] = { periodo, totalNeto: 0, montoExtras: 0, montoFeriados: 0, count: 0 }
+            }
+            tendenciaPorPeriodo[periodo].totalNeto += l.totalNeto
+            tendenciaPorPeriodo[periodo].montoExtras += (l.montoHorasExtras || 0)
+            tendenciaPorPeriodo[periodo].montoFeriados += (l.montoHorasFeriado || 0)
+            tendenciaPorPeriodo[periodo].count++
+        })
+        const tendenciaSemanal = Object.values(tendenciaPorPeriodo).sort((a, b) => a.periodo.localeCompare(b.periodo))
+
         // Agrupar masa salarial por área
         const masaPorArea: Record<string, number> = {}
         liquidaciones.forEach(l => {
@@ -170,6 +239,9 @@ export async function GET(request: Request) {
             fecha: l.fechaGeneracion,
             hsExtras: l.horasExtras || 0,
             montoExtras: l.montoHorasExtras || 0,
+            hsFeriado: l.horasFeriado || 0,
+            montoFeriado: l.montoHorasFeriado || 0,
+            sueldoBase: l.sueldoProporcional || 0,
             ingresos: l.totalNeto + (l.descuentosPrestamos || 0),
             descuentos: l.descuentosPrestamos || 0,
             neto: l.totalNeto,
@@ -251,12 +323,32 @@ export async function GET(request: Request) {
 
         const totalDeudaActiva = resumenPrestamos.reduce((acc, p) => acc + p.saldo, 0)
 
-        // 6. Datos Históricos por Empleado (si se filtra)
+        // KPIs de préstamos
+        const porcentajeNominaPrestamos = totalMasaSalarial > 0 ? (totalDescuentosPrestamos / totalMasaSalarial) * 100 : 0
+        const promedioDescuentoSemanal = tendenciaSemanal.length > 0 
+            ? totalDescuentosPrestamos / tendenciaSemanal.length 
+            : 0
+        const semanasRecupero = promedioDescuentoSemanal > 0 ? Math.ceil(totalDeudaActiva / promedioDescuentoSemanal) : 0
+
+        // 6. Estructura - Antigüedad
+        const antiguedades = empleadosActivos
+            .filter(e => e.fechaIngreso)
+            .map(e => {
+                const diff = ahora.getTime() - new Date(e.fechaIngreso!).getTime()
+                return diff / (1000 * 60 * 60 * 24 * 30) // meses
+            })
+        const antiguedadPromedio = antiguedades.length > 0 
+            ? parseFloat((antiguedades.reduce((a, b) => a + b, 0) / antiguedades.length).toFixed(1)) 
+            : 0
+        const antiguedadMaxima = antiguedades.length > 0 ? parseFloat(Math.max(...antiguedades).toFixed(1)) : 0
+        const antiguedadMinima = antiguedades.length > 0 ? parseFloat(Math.min(...antiguedades).toFixed(1)) : 0
+
+        // 7. Datos Históricos por Empleado (si se filtra)
         let historico = null
         if (empleadoId) {
             const empleadoInfo = await prisma.empleado.findUnique({
                 where: { id: empleadoId },
-                select: { id: true, nombre: true, apellido: true, fechaIngreso: true, rol: true, activo: true }
+                select: { id: true, nombre: true, apellido: true, fechaIngreso: true, rol: true, activo: true, jornal: true }
             })
 
             // Todas las liquidaciones del empleado (sin filtro de fecha)
@@ -315,6 +407,20 @@ export async function GET(request: Request) {
             const totalDiasTrabajados = historialSemanas.reduce((acc, s) => acc + s.diasTrabajados, 0)
             const totalDiasJustificados = historialSemanas.reduce((acc, s) => acc + s.diasJustificados, 0)
 
+            // Puntualidad individual
+            const puntInd = puntualidadPorEmpleado[empleadoId]
+            const puntualidadIndividual = puntInd 
+                ? parseFloat(((puntInd.puntuales / puntInd.entradas) * 100).toFixed(1))
+                : 100
+
+            // Sanciones individuales
+            let sancionesIndividuales = 0
+            try {
+                sancionesIndividuales = await prisma.sancion.count({
+                    where: { empleadoId }
+                })
+            } catch { /* table may not exist */ }
+
             // Préstamos del empleado
             const prestamosEmpleado = await prisma.prestamoEmpleado.findMany({
                 where: { empleadoId },
@@ -341,7 +447,9 @@ export async function GET(request: Request) {
                     totalDiasJustificados,
                     cantidadLiquidaciones: todasLiquidaciones.length,
                     promedioNetoPorLiquidacion: todasLiquidaciones.length > 0 ? Math.round(totalNetoHistorico / todasLiquidaciones.length) : 0,
-                    deudaPendiente: deudaEmpleado
+                    deudaPendiente: deudaEmpleado,
+                    puntualidad: puntualidadIndividual,
+                    sanciones: sancionesIndividuales
                 },
                 semanas: historialSemanas
             }
@@ -366,19 +474,41 @@ export async function GET(request: Request) {
                 detalleTardanzas: detalleTardanzas.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()),
                 ausencias,
                 porcentajeTardanzas: totalFichadas > 0 ? (tardanzas / totalFichadas) * 100 : 0,
-                porcentajeAusentismo: totalFichadas > 0 ? (ausencias / totalFichadas) * 100 : 0
+                porcentajeAusentismo: totalFichadas > 0 ? (ausencias / totalFichadas) * 100 : 0,
+                indicePuntualidad,
+                rankingMejores,
+                rankingPeores,
+                costoAusentismo: parseFloat(costoAusentismo.toFixed(0)),
+                sancionesCount
             },
             nomina: {
                 total: totalMasaSalarial,
                 totalHsExtras: totalHorasExtras,
                 totalMontoHsExtras: totalMontoHorasExtras,
+                totalHorasFeriado,
+                totalMontoFeriados: totalMontoFeriados,
+                totalSueldoBase,
                 porArea: masaPorAreaConNombre,
                 detalle: detallePlanilla,
                 conceptos: Array.from(conceptosUnicos).sort()
             },
+            inversion: {
+                ratioExtrasBase: parseFloat(ratioExtrasBase.toFixed(1)),
+                costoHoraEfectiva: parseFloat(costoHoraEfectiva.toFixed(0)),
+                costoPromedioEmpleado: parseFloat(costoPromedioEmpleado.toFixed(0)),
+                tendenciaSemanal
+            },
             prestamos: {
                 totalDeuda: totalDeudaActiva,
+                descuentosPeriodo: totalDescuentosPrestamos,
+                porcentajeNomina: parseFloat(porcentajeNominaPrestamos.toFixed(1)),
+                semanasRecupero,
                 detalle: resumenPrestamos
+            },
+            estructura: {
+                antiguedadPromedio,
+                antiguedadMaxima,
+                antiguedadMinima
             },
             historico
         })
