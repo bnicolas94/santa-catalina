@@ -17,33 +17,26 @@ let cachedLogoBase64: string | null = null
 let cachedWatermarkBase64: string | null = null
 
 async function imageToBase64(url: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.onload = () => {
-            const canvas = document.createElement('canvas')
-            canvas.width = img.naturalWidth
-            canvas.height = img.naturalHeight
-            const ctx = canvas.getContext('2d')
-            if (!ctx) {
-                reject(new Error('No se pudo crear contexto de canvas'))
-                return
+    try {
+        const res = await fetch(url)
+        if (!res.ok) {
+            throw new Error(`Failed to fetch image: ${res.statusText}`)
+        }
+        const blob = await res.blob()
+        return new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                resolve(reader.result as string)
             }
-            ctx.drawImage(img, 0, 0)
-            try {
-                const dataUrl = canvas.toDataURL('image/png')
-                resolve(dataUrl)
-            } catch (e) {
-                // Fallback: devolver la URL original si canvas está tainted
+            reader.onerror = () => {
                 resolve(url)
             }
-        }
-        img.onerror = () => {
-            // Fallback: devolver la URL original
-            resolve(url)
-        }
-        img.src = url
-    })
+            reader.readAsDataURL(blob)
+        })
+    } catch (e) {
+        console.error('Error converting image to base64:', e)
+        return url
+    }
 }
 
 /**
