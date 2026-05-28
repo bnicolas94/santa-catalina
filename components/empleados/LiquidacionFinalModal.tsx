@@ -17,9 +17,11 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
     const [causaEgreso, setCausaEgreso] = useState<'RENUNCIA' | 'DESPIDO_SIN_CAUSA' | 'DESPIDO_CON_CAUSA' | 'FIN_CONTRATO'>('RENUNCIA')
     const [omitirPreaviso, setOmitirPreaviso] = useState(true)
     const [loading, setLoading] = useState(false)
-    const [calculo, setCalculo] = useState<any>(null)
+        const [calculo, setCalculo] = useState<any>(null)
     const [itemsEditables, setItemsEditables] = useState<DetalleConcepto[]>([])
     const [confirmando, setConfirmando] = useState(false)
+    const [sueldoReferencia, setSueldoReferencia] = useState<number>(0)
+    const [recalculando, setRecalculando] = useState(false)
 
     useEffect(() => {
         if (selectedEmpleadoId) {
@@ -28,6 +30,50 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
             setEmpleadoId(empleado.id)
         }
     }, [selectedEmpleadoId, empleado?.id])
+
+    // Real-time recalculation when sueldoReferencia changes
+    useEffect(() => {
+        if (!calculo || !sueldoReferencia || sueldoReferencia <= 0 || sueldoReferencia === calculo.sueldoReferencia) return
+
+        setRecalculando(true)
+        const delayDebounceFn = setTimeout(async () => {
+            try {
+                const res = await fetch('/api/liquidaciones-finales', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        isPreview: true,
+                        input: {
+                            empleadoId,
+                            fechaEgreso,
+                            causaEgreso,
+                            omitirPreaviso,
+                            sueldoReferencia
+                        }
+                    })
+                })
+
+                if (res.ok) {
+                    const data = await res.json()
+                    setCalculo(data)
+                    
+                    // Merge manual adjustments / manual concepts with the new calculated auto concepts
+                    const manualItems = itemsEditables.filter(item => item.metodologia === 'Carga manual')
+                    const newAutoItems = data.items.filter((item: any) => item.metodologia !== 'Carga manual')
+                    setItemsEditables([...newAutoItems, ...manualItems])
+                }
+            } catch (error) {
+                console.error('Error al recalcular liquidación:', error)
+            } finally {
+                setRecalculando(false)
+            }
+        }, 500)
+
+        return () => {
+            clearTimeout(delayDebounceFn)
+            setRecalculando(false)
+        }
+    }, [sueldoReferencia, calculo, itemsEditables, empleadoId, fechaEgreso, causaEgreso, omitirPreaviso])
 
     const handleCalcular = async () => {
         if (!empleadoId) return alert('Seleccione un empleado')
@@ -55,6 +101,7 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
 
             const data = await res.json()
             setCalculo(data)
+            setSueldoReferencia(data.sueldoReferencia)
             setItemsEditables(data.items)
         } catch (error: any) {
             alert(error.message)
@@ -96,7 +143,8 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                         empleadoId,
                         fechaEgreso,
                         causaEgreso,
-                        omitirPreaviso
+                        omitirPreaviso,
+                        sueldoReferencia
                     },
                     itemsFinales: itemsEditables
                 })
@@ -182,9 +230,35 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                                     <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)' }}>ANTIGÜEDAD</div>
                                     <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>{calculo.antiguedadAnios} años</div>
                                 </div>
-                                <div className="card" style={{ padding: 'var(--space-3)', textAlign: 'center', borderTop: '4px solid var(--color-gray-400)' }}>
-                                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)' }}>SUELDO REF.</div>
-                                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>${calculo.sueldoReferencia.toLocaleString()}</div>
+                                <div className="card" style={{ padding: 'var(--space-3)', textAlign: 'center', borderTop: '4px solid var(--color-gray-400)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)', marginBottom: '4px' }}>SUELDO REF. ✏️</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', gap: '2px' }}>
+                                        <span style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-gray-500)' }}>$</span>
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            className="form-input"
+                                            value={sueldoReferencia || ''}
+                                            onChange={e => setSueldoReferencia(parseFloat(e.target.value) || 0)}
+                                            style={{
+                                                fontSize: 'var(--text-lg)',
+                                                fontWeight: 800,
+                                                textAlign: 'left',
+                                                padding: '2px 4px',
+                                                width: '100%',
+                                                maxWidth: '120px',
+                                                height: '32px',
+                                                border: '1px solid var(--color-gray-300)',
+                                                borderRadius: 'var(--radius-md)',
+                                                outline: 'none',
+                                                backgroundColor: 'white',
+                                                color: 'var(--color-gray-800)',
+                                                fontFamily: 'inherit'
+                                            }}
+                                            placeholder="Monto"
+                                            title="Editar sueldo de referencia para recalcular"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="card" style={{ padding: 'var(--space-3)', textAlign: 'center', borderTop: '4px solid var(--color-success)' }}>
                                     <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)' }}>HABERES</div>
@@ -267,7 +341,7 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
 
                             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                                 <button className="btn btn-outline btn-sm" onClick={handleAddItem}>➕ Añadir Concepto</button>
-                                <button className="btn btn-ghost btn-sm" onClick={() => setCalculo(null)}>🔄 Resetear</button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => { setCalculo(null); setSueldoReferencia(0); }}>🔄 Resetear</button>
                             </div>
                         </div>
                     )}
@@ -276,8 +350,8 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                 <div className="modal-footer">
                     <button className="btn btn-outline" onClick={onClose} disabled={confirmando}>Cancelar</button>
                     {calculo && (
-                        <button className="btn btn-primary" onClick={handleConfirmar} disabled={confirmando}>
-                            {confirmando ? <div className="spinner"></div> : '✅ Confirmar Liquidación'}
+                        <button className="btn btn-primary" onClick={handleConfirmar} disabled={confirmando || recalculando}>
+                            {confirmando ? <div className="spinner"></div> : recalculando ? 'Recalculando...' : '✅ Confirmar Liquidación'}
                         </button>
                     )}
                 </div>

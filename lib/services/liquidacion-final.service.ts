@@ -6,6 +6,7 @@ export interface LiquidacionFinalInput {
     fechaEgreso: string
     causaEgreso: 'RENUNCIA' | 'DESPIDO_SIN_CAUSA' | 'DESPIDO_CON_CAUSA' | 'FIN_CONTRATO'
     omitirPreaviso?: boolean
+    sueldoReferencia?: number
 }
 
 export interface DetalleConcepto {
@@ -41,9 +42,9 @@ export class LiquidacionFinalService {
         }
         
         // Determinar el sueldo base para el cálculo (Mensual o Jornal * 30)
-        let sueldoBase = empleado.sueldoBaseMensual || 0
+        let sueldoBase = input.sueldoReferencia !== undefined ? input.sueldoReferencia : (empleado.sueldoBaseMensual || 0)
         
-        if (sueldoBase === 0) {
+        if (sueldoBase === 0 && input.sueldoReferencia === undefined) {
             const jornal = empleado.jornal || empleado.rolRel?.jornal || 0
             if (jornal > 0) {
                 sueldoBase = jornal * 30
