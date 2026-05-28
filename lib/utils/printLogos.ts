@@ -47,10 +47,10 @@ export async function getPrintLogos(): Promise<{ logo: string; watermark: string
     const origin = window.location.origin
 
     if (!cachedLogoBase64) {
-        cachedLogoBase64 = await imageToBase64(`${origin}/logo.png`)
+        cachedLogoBase64 = await imageToBase64(`${origin}/images/logo.png`)
     }
     if (!cachedWatermarkBase64) {
-        cachedWatermarkBase64 = await imageToBase64(`${origin}/logo-watermark.png`)
+        cachedWatermarkBase64 = await imageToBase64(`${origin}/images/logo-watermark.png`)
     }
 
     return {
