@@ -143,8 +143,8 @@ export function PlanillaUniformesModal({ onClose }: Props) {
                                                 <td>
                                                     <input 
                                                         type="text" 
-                                                        className="input input-sm" 
-                                                        style={{ width: '80px' }}
+                                                        className="form-input" 
+                                                        style={{ width: '80px', minHeight: '36px', padding: '4px 8px', fontSize: '14px' }}
                                                         placeholder="Talle"
                                                         value={state.remeraTalle}
                                                         onChange={(e) => handleRowChange(emp.id, 'remeraTalle', e.target.value)}
@@ -153,8 +153,8 @@ export function PlanillaUniformesModal({ onClose }: Props) {
                                                 <td>
                                                     <input 
                                                         type="number" 
-                                                        className="input input-sm" 
-                                                        style={{ width: '70px' }}
+                                                        className="form-input" 
+                                                        style={{ width: '70px', minHeight: '36px', padding: '4px 8px', fontSize: '14px', textAlign: 'center' }}
                                                         min="0"
                                                         value={state.remeraCant}
                                                         onChange={(e) => handleRowChange(emp.id, 'remeraCant', parseInt(e.target.value) || 0)}
@@ -163,8 +163,8 @@ export function PlanillaUniformesModal({ onClose }: Props) {
                                                 <td>
                                                     <input 
                                                         type="text" 
-                                                        className="input input-sm" 
-                                                        style={{ width: '80px' }}
+                                                        className="form-input" 
+                                                        style={{ width: '80px', minHeight: '36px', padding: '4px 8px', fontSize: '14px' }}
                                                         placeholder="Talle"
                                                         value={state.buzoTalle}
                                                         onChange={(e) => handleRowChange(emp.id, 'buzoTalle', e.target.value)}
@@ -173,8 +173,8 @@ export function PlanillaUniformesModal({ onClose }: Props) {
                                                 <td>
                                                     <input 
                                                         type="number" 
-                                                        className="input input-sm" 
-                                                        style={{ width: '70px' }}
+                                                        className="form-input" 
+                                                        style={{ width: '70px', minHeight: '36px', padding: '4px 8px', fontSize: '14px', textAlign: 'center' }}
                                                         min="0"
                                                         value={state.buzoCant}
                                                         onChange={(e) => handleRowChange(emp.id, 'buzoCant', parseInt(e.target.value) || 0)}
@@ -185,7 +185,7 @@ export function PlanillaUniformesModal({ onClose }: Props) {
                                                         type="checkbox" 
                                                         checked={fueImpreso}
                                                         readOnly
-                                                        style={{ width: '20px', height: '20px', cursor: 'default' }}
+                                                        style={{ width: '20px', height: '20px', cursor: 'default', accentColor: 'var(--color-primary)' }}
                                                     />
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
