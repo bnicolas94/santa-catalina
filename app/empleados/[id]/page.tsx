@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { FichadasTab } from '@/components/empleados/FichadasTab'
 import { PrestamosTab } from '@/components/empleados/PrestamosTab'
 import { LiquidacionesTab } from '@/components/empleados/LiquidacionesTab'
+import { UniformesTab } from '@/components/empleados/UniformesTab'
 
 export default function EmpleadoDetailPage() {
     const params = useParams()
@@ -152,6 +153,23 @@ export default function EmpleadoDetailPage() {
                 >
                     Recibos de Sueldo
                 </button>
+                <button
+                    onClick={() => setActiveTab('uniformes')}
+                    style={{
+                        padding: 'var(--space-3) var(--space-6)',
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 600,
+                        borderBottom: activeTab === 'uniformes' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                        color: activeTab === 'uniformes' ? 'var(--color-primary)' : 'var(--color-gray-500)',
+                        background: 'none',
+                        borderTop: 'none',
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        cursor: 'pointer'
+                    }}
+                >
+                    Uniformes
+                </button>
             </div>
 
             {/* Contenido de Tabs */}
@@ -207,6 +225,10 @@ export default function EmpleadoDetailPage() {
 
                     {activeTab === 'liquidaciones' && (
                         <LiquidacionesTab empleadoId={empleado.id} empleadoDatos={empleado} />
+                    )}
+
+                    {activeTab === 'uniformes' && (
+                        <UniformesTab empleadoId={empleado.id} />
                     )}
                 </div>
             </div>

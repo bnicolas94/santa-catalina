@@ -60,6 +60,8 @@ model Empleado {
   rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
   rutasChofer          Ruta[]               @relation("ChoferRuta")
   sanciones            Sancion[]
+  talleUniforme        TalleUniforme?
+  entregasUniforme     EntregaUniforme[]    @relation("EmpleadoEntregasUniforme")
 
   @@map("empleados")
 }
@@ -981,4 +983,30 @@ enum CicloPago {
   DIARIO
   SEMANAL
   MENSUAL
+}
+
+model TalleUniforme {
+  id          String   @id @default(uuid())
+  empleadoId  String   @unique @map("id_empleado")
+  remera      String?
+  buzo        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("talles_uniforme")
+}
+
+model EntregaUniforme {
+  id          String   @id @default(uuid())
+  empleadoId  String   @map("id_empleado")
+  fecha       DateTime @default(now())
+  remera      Int      @default(0)
+  buzo        Int      @default(0)
+  observaciones String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  empleado    Empleado @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@map("entregas_uniforme")
 }
