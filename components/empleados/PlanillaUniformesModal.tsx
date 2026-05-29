@@ -106,7 +106,7 @@ export function PlanillaUniformesModal({ onClose }: Props) {
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content" style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal" style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
                 <div className="modal-header">
                     <h2>👕 Planilla Centralizada de Uniformes</h2>
                     <button onClick={onClose} className="btn-close">&times;</button>
