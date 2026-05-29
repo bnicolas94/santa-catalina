@@ -4,10 +4,12 @@ import { useState, Fragment } from 'react'
 
 interface TabLegajoProps {
     data: any
+    onRefresh?: () => void
 }
 
-export default function TabLegajo({ data }: TabLegajoProps) {
+export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
     const [expandedHistorico, setExpandedHistorico] = useState<string | null>(null)
+    const [updatingDate, setUpdatingDate] = useState<string | null>(null)
 
     if (!data.historico) {
         return (
@@ -21,6 +23,107 @@ export default function TabLegajo({ data }: TabLegajoProps) {
 
     const h = data.historico
     const kpis = h.kpis
+    const asistenciaDiaria = h.asistenciaDiaria || []
+
+    const formatFecha = (fechaStr: string) => {
+        if (!fechaStr) return ''
+        const parts = fechaStr.split('-')
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`
+        }
+        return fechaStr
+    }
+
+    const mapStatusText = (status: string) => {
+        switch (status) {
+            case 'TRABAJO': return 'Trabajó'
+            case 'FRANCO': return 'Franco'
+            case 'FERIADO': return 'Feriado'
+            case 'ENFERMEDAD': return 'Enfermedad'
+            case 'SIN_AVISO': return 'Ausente Sin Aviso'
+            case 'CON_AVISO': return 'Ausente Con Aviso'
+            default: return status
+        }
+    }
+
+    const getStatusStyle = (status: string) => {
+        switch (status) {
+            case 'TRABAJO':
+                return { backgroundColor: '#e6f4ea', color: '#137333', border: '1px solid #ceead6' }
+            case 'FRANCO':
+                return { backgroundColor: '#f1f3f4', color: '#5f6368', border: '1px solid #dadce0' }
+            case 'FERIADO':
+                return { backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }
+            case 'ENFERMEDAD':
+                return { backgroundColor: '#f3e8ff', color: '#6b21a8', border: '1px solid #e9d5ff' }
+            case 'SIN_AVISO':
+                return { backgroundColor: '#fce8e6', color: '#c5221f', border: '1px solid #fad2cf' }
+            case 'CON_AVISO':
+                return { backgroundColor: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }
+            default:
+                return { backgroundColor: '#f1f3f4', color: '#5f6368', border: '1px solid #dadce0' }
+        }
+    }
+
+    const handleStatusChange = async (fecha: string, newStatus: string) => {
+        setUpdatingDate(fecha)
+        try {
+            const response = await fetch('/api/empleados/asistencia-diaria', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    empleadoId: h.empleado.id,
+                    fecha,
+                    status: newStatus,
+                }),
+            })
+
+            if (!response.ok) {
+                const errJson = await response.json()
+                throw new Error(errJson.error || 'Error al actualizar asistencia')
+            }
+
+            // Recargar datos principales del panel
+            if (onRefresh) {
+                await onRefresh()
+            }
+        } catch (error: any) {
+            alert('Error: ' + error.message)
+        } finally {
+            setUpdatingDate(null)
+        }
+    }
+
+    const exportToCSV = () => {
+        if (asistenciaDiaria.length === 0) return
+
+        const headers = ['Fecha', 'Dia', 'Estado', 'Entrada', 'Salida', 'Hs Trabajadas', 'Detalle/Motivo']
+        const rows = asistenciaDiaria.map((d: any) => [
+            formatFecha(d.fecha),
+            d.diaSemana,
+            mapStatusText(d.status),
+            d.entrada || '',
+            d.salida || '',
+            d.horasTrabajadas || '0',
+            d.nombreFeriado || d.motivoInasistencia || ''
+        ])
+
+        const csvContent = "\uFEFF" // UTF-8 BOM para soporte correcto de caracteres especiales en Excel en Español
+            + [headers.join(';'), ...rows.map((row: any[]) => row.map(val => `"${val.toString().replace(/"/g, '""')}"`).join(';'))].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        const nombreArchivo = `asistencia_${h.empleado?.nombre}_${h.empleado?.apellido || ''}_${new Date().toISOString().split('T')[0]}.csv`.toLowerCase()
+        link.setAttribute('href', url)
+        link.setAttribute('download', nombreArchivo)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
 
     return (
         <div>
@@ -67,6 +170,155 @@ export default function TabLegajo({ data }: TabLegajoProps) {
                         <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-danger)' }}>${kpis.deudaPendiente.toLocaleString()}</div>
                     </div>
                 )}
+            </div>
+
+            {/* Control de Asistencia Diario */}
+            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                    <div>
+                        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: '2px' }}>
+                            📅 Control de Asistencia Diario
+                        </h3>
+                        <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', margin: 0 }}>
+                            Habilitá el registro de justificaciones, enfermedades o ausencias día por día.
+                        </p>
+                    </div>
+                    <button
+                        className="btn btn-outline"
+                        onClick={exportToCSV}
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', padding: '6px 12px' }}
+                    >
+                        📥 Exportar Reporte Contador (CSV)
+                    </button>
+                </div>
+
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th>Fecha y Día</th>
+                                <th style={{ textAlign: 'center' }}>Horario Fichado</th>
+                                <th style={{ textAlign: 'center' }}>Horas Trab.</th>
+                                <th style={{ textAlign: 'left' }}>Detalle del Día</th>
+                                <th style={{ textAlign: 'center' }}>Estado Actual</th>
+                                <th style={{ textAlign: 'right' }}>Modificar Asistencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {asistenciaDiaria.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                        No hay registros de asistencia para el rango de fechas seleccionado.
+                                    </td>
+                                </tr>
+                            ) : (
+                                asistenciaDiaria.map((d: any) => {
+                                    const statusStyle = getStatusStyle(d.status)
+                                    return (
+                                        <tr key={d.fecha} style={{ verticalAlign: 'middle' }}>
+                                            <td style={{ fontWeight: 600 }}>
+                                                {d.diaSemana} {formatFecha(d.fecha)}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {d.entrada && d.salida ? (
+                                                    <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-700)' }}>
+                                                        {d.entrada} a {d.salida}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-xs)' }}>-- : --</span>
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'center', fontWeight: d.horasTrabajadas > 0 ? 600 : 'normal' }}>
+                                                {d.horasTrabajadas > 0 ? `${d.horasTrabajadas} hs` : '--'}
+                                            </td>
+                                            <td style={{ textAlign: 'left' }}>
+                                                {d.esFeriado && (
+                                                    <span style={{ color: '#b45309', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+                                                        🚩 Feriado: {d.nombreFeriado || 'Nacional'}
+                                                    </span>
+                                                )}
+                                                {d.status === 'FRANCO' && !d.esFeriado && (
+                                                    <span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>
+                                                        Día Franco
+                                                    </span>
+                                                )}
+                                                {d.status === 'ENFERMEDAD' && (
+                                                    <span style={{ color: '#6b21a8', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+                                                        🩹 Carpeta Médica (Justificado)
+                                                    </span>
+                                                )}
+                                                {d.status === 'CON_AVISO' && (
+                                                    <span style={{ color: '#c2410c', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+                                                        ✉️ Ausente con aviso
+                                                    </span>
+                                                )}
+                                                {d.status === 'SIN_AVISO' && (
+                                                    <span style={{ color: 'var(--color-danger)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
+                                                        🚨 Falta Injustificada
+                                                    </span>
+                                                )}
+                                                {d.status === 'TRABAJO' && !d.entrada && !d.esFeriado && !d.esFranco && (
+                                                    <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-xs)' }}>
+                                                        Día hábil sin fichadas
+                                                    </span>
+                                                )}
+                                                {d.status === 'TRABAJO' && d.entrada && (
+                                                    <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-xs)' }}>
+                                                        Jornada normal registrada
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span
+                                                    style={{
+                                                        display: 'inline-block',
+                                                        padding: '3px 8px',
+                                                        borderRadius: 'var(--radius-full)',
+                                                        fontSize: '11px',
+                                                        fontWeight: 600,
+                                                        textTransform: 'uppercase',
+                                                        ...statusStyle
+                                                    }}
+                                                >
+                                                    {mapStatusText(d.status)}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                {updatingDate === d.fecha ? (
+                                                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                                                        <span className="spinner-small"></span> Guardando...
+                                                    </span>
+                                                ) : (
+                                                    <select
+                                                        value={d.status}
+                                                        onChange={(e) => handleStatusChange(d.fecha, e.target.value)}
+                                                        className="form-select"
+                                                        style={{
+                                                            padding: '4px 8px',
+                                                            fontSize: 'var(--text-xs)',
+                                                            width: 'auto',
+                                                            display: 'inline-block',
+                                                            height: 'auto',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        <option value="TRABAJO">🟢 Trabajó / Presente</option>
+                                                        <option value="FRANCO">⚪ Franco</option>
+                                                        <option value="FERIADO">🚩 Feriado</option>
+                                                        <option value="ENFERMEDAD">🟣 Enfermedad</option>
+                                                        <option value="SIN_AVISO">🔴 Sin Aviso</option>
+                                                        <option value="CON_AVISO">🟠 Con Aviso</option>
+                                                    </select>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* Historial de Liquidaciones */}
@@ -136,6 +388,21 @@ export default function TabLegajo({ data }: TabLegajoProps) {
                     </table>
                 </div>
             </div>
+
+            <style jsx>{`
+                .spinner-small {
+                    display: inline-block;
+                    width: 12px;
+                    height: 12px;
+                    border: 2px solid rgba(0,0,0,.1);
+                    border-radius: 50%;
+                    border-top-color: var(--color-primary);
+                    animation: spin-anim 0.6s linear infinite;
+                }
+                @keyframes spin-anim {
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     )
 }

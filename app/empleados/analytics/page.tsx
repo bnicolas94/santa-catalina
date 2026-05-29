@@ -217,7 +217,7 @@ export default function RRHHAnalyticsPage() {
                 />
             )}
             {activeTab === 'prestamos' && <TabPrestamos data={data} />}
-            {activeTab === 'legajo' && <TabLegajo data={data} />}
+            {activeTab === 'legajo' && <TabLegajo data={data} onRefresh={fetchData} />}
 
             <style jsx>{`
                 .analytics-container {

@@ -348,12 +348,16 @@ export async function GET(request: Request) {
         if (empleadoId) {
             const empleadoInfo = await prisma.empleado.findUnique({
                 where: { id: empleadoId },
-                select: { id: true, nombre: true, apellido: true, fechaIngreso: true, rol: true, activo: true, jornal: true }
+                select: { id: true, nombre: true, apellido: true, fechaIngreso: true, rol: true, activo: true, jornal: true, diasTrabajoSemana: true }
             })
 
-            // Todas las liquidaciones del empleado (sin filtro de fecha)
+            // Todas las liquidaciones del empleado filtradas por fecha
             const todasLiquidaciones = await prisma.liquidacionSueldo.findMany({
-                where: { empleadoId, estado: { not: 'anulado' } },
+                where: { 
+                    empleadoId, 
+                    estado: { not: 'anulado' },
+                    fechaGeneracion: { gte: desde, lte: hasta }
+                },
                 orderBy: { fechaGeneracion: 'desc' },
                 include: {
                     items: { include: { concepto: true } }
@@ -435,6 +439,117 @@ export async function GET(request: Request) {
                     return acc + (p.montoTotal - pagado)
                 }, 0)
 
+            // Generar desglose de asistencia diaria para el período seleccionado
+            const diasAsistencia: any[] = []
+            
+            const inasistenciasRango = await prisma.inasistencia.findMany({
+                where: {
+                    empleadoId,
+                    fecha: { gte: desde, lte: hasta }
+                }
+            })
+
+            const fichadasRango = await prisma.fichadaEmpleado.findMany({
+                where: {
+                    empleadoId,
+                    fechaHora: { gte: desde, lte: hasta }
+                },
+                orderBy: { fechaHora: 'asc' }
+            })
+
+            const feriadosRango = await prisma.feriado.findMany({
+                where: {
+                    fecha: { gte: desde, lte: hasta }
+                }
+            })
+
+            const feriadosMap = new Map(feriadosRango.map(f => [
+                f.fecha.toISOString().split('T')[0],
+                f.nombre
+            ]))
+
+            const fichadasPorDia: Record<string, typeof fichadasRango> = {}
+            fichadasRango.forEach(f => {
+                const localDate = new Date(f.fechaHora.getTime() - f.fechaHora.getTimezoneOffset() * 60000)
+                const dateStr = localDate.toISOString().split('T')[0]
+                if (!fichadasPorDia[dateStr]) {
+                    fichadasPorDia[dateStr] = []
+                }
+                fichadasPorDia[dateStr].push(f)
+            })
+
+            const inasistenciasPorDia = new Map(inasistenciasRango.map(i => [
+                i.fecha.toISOString().split('T')[0],
+                i
+            ]))
+
+            let current = new Date(desde)
+            const end = new Date(hasta)
+            const nombresDias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+            while (current <= end) {
+                const year = current.getFullYear()
+                const month = String(current.getMonth() + 1).padStart(2, '0')
+                const day = String(current.getDate()).padStart(2, '0')
+                const fechaStr = `${year}-${month}-${day}`
+                const dayOfWeekNum = current.getDay()
+                const diaSemana = nombresDias[dayOfWeekNum]
+
+                const esFeriado = feriadosMap.has(fechaStr)
+                const nombreFeriado = feriadosMap.get(fechaStr) || null
+
+                const diasTrabajo = (empleadoInfo?.diasTrabajoSemana || 'Lunes a Viernes').toLowerCase()
+                let esFranco = false
+                if (dayOfWeekNum === 0 && !diasTrabajo.includes('domingo')) esFranco = true
+                if (dayOfWeekNum === 6 && diasTrabajo.includes('lunes a viernes')) esFranco = true
+
+                const inasistencia = inasistenciasPorDia.get(fechaStr)
+                const marcas = fichadasPorDia[fechaStr] || []
+                const primerEntrada = marcas.find(m => m.tipo === 'entrada')?.fechaHora || null
+                const ultimaSalida = [...marcas].reverse().find(m => m.tipo === 'salida')?.fechaHora || null
+
+                let horasTrabajadas = 0
+                if (primerEntrada && ultimaSalida && new Date(ultimaSalida) > new Date(primerEntrada)) {
+                    const diffMs = new Date(ultimaSalida).getTime() - new Date(primerEntrada).getTime()
+                    horasTrabajadas = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10
+                }
+
+                let status = 'TRABAJO'
+                if (inasistencia) {
+                    if (inasistencia.motivo === 'Enfermedad') {
+                        status = 'ENFERMEDAD'
+                    } else if (inasistencia.tipo === 'INJUSTIFICADA') {
+                        status = 'SIN_AVISO'
+                    } else {
+                        status = 'CON_AVISO'
+                    }
+                } else if (marcas.length === 0) {
+                    if (esFeriado) {
+                        status = 'FERIADO'
+                    } else if (esFranco) {
+                        status = 'FRANCO'
+                    } else {
+                        status = 'TRABAJO' // Hábil por defecto sin inasistencia ni fichadas
+                    }
+                }
+
+                diasAsistencia.push({
+                    fecha: fechaStr,
+                    diaSemana,
+                    esFeriado,
+                    nombreFeriado,
+                    esFranco,
+                    status,
+                    horasTrabajadas,
+                    entrada: primerEntrada ? new Date(primerEntrada).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null,
+                    salida: ultimaSalida ? new Date(ultimaSalida).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null,
+                    inasistenciaId: inasistencia?.id || null,
+                    motivoInasistencia: inasistencia?.motivo || null
+                })
+
+                current.setDate(current.getDate() + 1)
+            }
+
             historico = {
                 empleado: empleadoInfo,
                 kpis: {
@@ -451,7 +566,8 @@ export async function GET(request: Request) {
                     puntualidad: puntualidadIndividual,
                     sanciones: sancionesIndividuales
                 },
-                semanas: historialSemanas
+                semanas: historialSemanas,
+                asistenciaDiaria: diasAsistencia.reverse() // Mostrar el más reciente primero
             }
         }
 
