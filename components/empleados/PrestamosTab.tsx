@@ -249,6 +249,7 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                                 <option value="caja_chica_local">💼 Caja Chica Local</option>
                                 <option value="mercado_pago">💳 Mercado Pago</option>
                                 <option value="mercado_pago_juani">🔵 MP Juani</option>
+                                <option value="mercaderia">📦 Retiro de Paquetes (Mercadería)</option>
                             </select>
                         </div>
                         <div className="form-group" style={{ gridColumn: form.modoInicio === 'FECHA_ESPECIFICA' ? 'span 2' : 'span 1' }}>

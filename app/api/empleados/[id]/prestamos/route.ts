@@ -47,9 +47,9 @@ export async function POST(
             return NextResponse.json({ error: 'Monto y cantidad de cuotas son requeridos' }, { status: 400 })
         }
 
-        const validBoxes = ['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani']
+        const validBoxes = ['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani', 'mercaderia']
         if (!cajaOrigen || !validBoxes.includes(cajaOrigen)) {
-            return NextResponse.json({ error: 'Debe especificar una caja de origen válida (Caja Chica o Mercado Pago)' }, { status: 400 })
+            return NextResponse.json({ error: 'Debe especificar una caja de origen válida (Caja Chica, Mercado Pago o Retiro de Mercadería)' }, { status: 400 })
         }
 
         const montoCuota = parseFloat(montoTotal) / parseInt(cantidadCuotas)
@@ -92,14 +92,16 @@ export async function POST(
                 }
             })
 
-            // 2b. Registrar movimiento de caja
-            await CajaService.createMovimiento({
-                tipo: 'egreso',
-                concepto: 'prestamo_empleado',
-                monto: parseFloat(montoTotal),
-                cajaOrigen: cajaOrigen,
-                descripcion: `Préstamo a empleado: ${empleado.nombre} ${empleado.apellido || ''} (${cantidadCuotas} cuotas)${observaciones ? ` - ${observaciones}` : ''}`,
-            }, tx)
+            // 2b. Registrar movimiento de caja (si no es retiro de mercadería)
+            if (cajaOrigen !== 'mercaderia') {
+                await CajaService.createMovimiento({
+                    tipo: 'egreso',
+                    concepto: 'prestamo_empleado',
+                    monto: parseFloat(montoTotal),
+                    cajaOrigen: cajaOrigen,
+                    descripcion: `Préstamo a empleado: ${empleado.nombre} ${empleado.apellido || ''} (${cantidadCuotas} cuotas)${observaciones ? ` - ${observaciones}` : ''}`,
+                }, tx)
+            }
 
             // 3. Crear Cuotas
             for (let i = 1; i <= cantidadCuotas; i++) {
