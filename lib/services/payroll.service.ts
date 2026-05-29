@@ -22,6 +22,7 @@ export interface DiaTrabajado {
     totalDia: number
     esJustificado: boolean
     tipoInasistencia?: string
+    motivoInasistencia?: string | null
 }
 
 export interface ResumenSemanal {
@@ -267,7 +268,8 @@ export class PayrollService {
                 valorFeriado: Math.round(valorFeriado),
                 totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado),
                 esJustificado: marcas.some((m: any) => m.origen === 'justificada') || (!!inasistencia && inasistencia.tipo.startsWith('JUSTIFICADA')),
-                tipoInasistencia: inasistencia?.tipo
+                tipoInasistencia: inasistencia?.tipo,
+                motivoInasistencia: inasistencia?.motivo || null
             })
 
             current.setDate(current.getDate() + 1)

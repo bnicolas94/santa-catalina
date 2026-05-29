@@ -32,6 +32,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     const [borradorCargado, setBorradorCargado] = useState(false)
     const [empleadosExcluidos, setEmpleadosExcluidos] = useState<any[]>([])
     const [conceptos, setConceptos] = useState<any[]>([])
+    const [updatingStatusDate, setUpdatingStatusDate] = useState<string | null>(null)
 
     useEffect(() => {
         fetch('/api/conceptos').then(res => res.json()).then(setConceptos).catch(console.error)
@@ -285,6 +286,69 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             if (res.ok) await handleRecalcularEmpleado(empleadoId)
             else alert('Error al quitar justificación')
         } catch (error) { console.error(error) }
+    }
+
+    const handleStatusChange = async (empleadoId: string, fecha: string, newStatus: string) => {
+        setUpdatingStatusDate(`${empleadoId}-${fecha}`)
+        try {
+            const response = await fetch('/api/empleados/asistencia-diaria', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    empleadoId,
+                    fecha,
+                    status: newStatus,
+                }),
+            })
+
+            if (!response.ok) {
+                const errJson = await response.json()
+                throw new Error(errJson.error || 'Error al actualizar asistencia')
+            }
+
+            // Recalcular el sueldo del empleado en tiempo real en la pantalla
+            await handleRecalcularEmpleado(empleadoId)
+        } catch (error: any) {
+            alert('Error: ' + error.message)
+        } finally {
+            setUpdatingStatusDate(null)
+        }
+    }
+
+    const getDiaStatus = (dia: any) => {
+        if (dia.motivoInasistencia === 'Enfermedad') {
+            return 'ENFERMEDAD'
+        }
+        if (dia.motivoInasistencia === 'Franco' || dia.tipoInasistencia === 'FRANCO') {
+            return 'FRANCO'
+        }
+        if (dia.motivoInasistencia === 'Feriado' || dia.tipoInasistencia === 'FERIADO') {
+            return 'FERIADO'
+        }
+        if (dia.motivoInasistencia === 'Trabajó' || dia.tipoInasistencia === 'TRABAJO') {
+            return 'TRABAJO'
+        }
+        if (dia.tipoInasistencia === 'INJUSTIFICADA') {
+            return 'SIN_AVISO'
+        }
+        if (dia.tipoInasistencia === 'JUSTIFICADA') {
+            return 'CON_AVISO'
+        }
+        
+        if (dia.horasTrabajadas > 0) {
+            return 'TRABAJO'
+        }
+        if (dia.esFeriado) {
+            return 'FERIADO'
+        }
+        
+        // Calcular si es Domingo (Franco por defecto)
+        const dayOfWeekNum = new Date(`${dia.fecha}T12:00:00`).getDay()
+        if (dayOfWeekNum === 0) return 'FRANCO'
+        
+        return 'TRABAJO'
     }
 
     const handleAjusteChange = (empleadoId: string, value: string) => {
@@ -651,6 +715,28 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                             )}
                                                                             {dia.esJustificado && (
                                                                                 <button className="btn btn-ghost" title="Quitar justificación" onClick={() => handleQuitarJustificacion(r.empleadoId, dia.fecha)} style={{ padding: '2px', height: 'auto', fontSize: '14px', color: 'var(--color-danger)' }}>🔴</button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div style={{ marginTop: '4px', borderTop: '1px dashed var(--color-gray-200)', paddingTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '4px' }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                            <span style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>Estado:</span>
+                                                                            {updatingStatusDate === `${r.empleadoId}-${dia.fecha}` ? (
+                                                                                <span style={{ fontSize: '8px', color: 'var(--color-gray-400)' }}>Guardando...</span>
+                                                                            ) : (
+                                                                                <select
+                                                                                    value={getDiaStatus(dia)}
+                                                                                    onChange={(e) => handleStatusChange(r.empleadoId, dia.fecha, e.target.value)}
+                                                                                    className="form-select"
+                                                                                    style={{ padding: '0px 2px', fontSize: '9px', height: '16px', width: '80px', border: '1px solid var(--color-gray-200)', borderRadius: '2px', cursor: 'pointer' }}
+                                                                                >
+                                                                                    <option value="TRABAJO">🟢 Trabajó</option>
+                                                                                    <option value="FRANCO">⚪ Franco</option>
+                                                                                    <option value="FERIADO">🚩 Feriado</option>
+                                                                                    <option value="ENFERMEDAD">🟣 Enfermedad</option>
+                                                                                    <option value="SIN_AVISO">🔴 Sin Aviso</option>
+                                                                                    <option value="CON_AVISO">🟠 Con Aviso</option>
+                                                                                </select>
                                                                             )}
                                                                         </div>
                                                                     </div>
