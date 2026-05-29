@@ -518,6 +518,12 @@ export async function GET(request: Request) {
                 if (inasistencia) {
                     if (inasistencia.motivo === 'Enfermedad') {
                         status = 'ENFERMEDAD'
+                    } else if (inasistencia.motivo === 'Franco' || inasistencia.tipo === 'FRANCO') {
+                        status = 'FRANCO'
+                    } else if (inasistencia.motivo === 'Feriado' || inasistencia.tipo === 'FERIADO') {
+                        status = 'FERIADO'
+                    } else if (inasistencia.motivo === 'Trabajó' || inasistencia.tipo === 'TRABAJO') {
+                        status = 'TRABAJO'
                     } else if (inasistencia.tipo === 'INJUSTIFICADA') {
                         status = 'SIN_AVISO'
                     } else {

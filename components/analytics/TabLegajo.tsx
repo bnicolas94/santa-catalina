@@ -10,6 +10,11 @@ interface TabLegajoProps {
 export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
     const [expandedHistorico, setExpandedHistorico] = useState<string | null>(null)
     const [updatingDate, setUpdatingDate] = useState<string | null>(null)
+    
+    // Estados para selección múltiple
+    const [selectedDates, setSelectedDates] = useState<string[]>([])
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false)
+    const [bulkStatus, setBulkStatus] = useState('')
 
     if (!data.historico) {
         return (
@@ -65,6 +70,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
         }
     }
 
+    // Manejador para cambiar estado de un solo día
     const handleStatusChange = async (fecha: string, newStatus: string) => {
         setUpdatingDate(fecha)
         try {
@@ -93,6 +99,63 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
             alert('Error: ' + error.message)
         } finally {
             setUpdatingDate(null)
+        }
+    }
+
+    // Manejadores para selección múltiple
+    const handleSelectDate = (fecha: string) => {
+        setSelectedDates(prev => {
+            if (prev.includes(fecha)) {
+                return prev.filter(f => f !== fecha)
+            } else {
+                return [...prev, fecha]
+            }
+        })
+    }
+
+    const handleSelectAll = () => {
+        if (selectedDates.length === asistenciaDiaria.length) {
+            setSelectedDates([])
+        } else {
+            setSelectedDates(asistenciaDiaria.map((d: any) => d.fecha))
+        }
+    }
+
+    const handleBulkAction = async () => {
+        if (!bulkStatus) return
+        if (selectedDates.length === 0) return
+
+        setIsBulkUpdating(true)
+        try {
+            const response = await fetch('/api/empleados/asistencia-diaria', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    empleadoId: h.empleado.id,
+                    fechas: selectedDates,
+                    status: bulkStatus,
+                }),
+            })
+
+            if (!response.ok) {
+                const errJson = await response.json()
+                throw new Error(errJson.error || 'Error al aplicar cambios masivos')
+            }
+
+            // Limpiar selección y estado
+            setSelectedDates([])
+            setBulkStatus('')
+
+            // Recargar datos principales del panel
+            if (onRefresh) {
+                await onRefresh()
+            }
+        } catch (error: any) {
+            alert('Error al aplicar cambios masivos: ' + error.message)
+        } finally {
+            setIsBulkUpdating(false)
         }
     }
 
@@ -180,7 +243,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                             📅 Control de Asistencia Diario
                         </h3>
                         <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', margin: 0 }}>
-                            Habilitá el registro de justificaciones, enfermedades o ausencias día por día.
+                            Registrá justificaciones, enfermedades o ausencias de forma individual o masiva.
                         </p>
                     </div>
                     <button
@@ -192,10 +255,90 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                     </button>
                 </div>
 
+                {/* Barra de Acciones Masivas */}
+                {selectedDates.length > 0 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: '#eef2ff', // color primary light
+                        border: '1px solid #4f46e5', // color primary
+                        padding: '12px 16px',
+                        borderRadius: 'var(--radius-lg)',
+                        marginBottom: 'var(--space-4)',
+                        flexWrap: 'wrap',
+                        gap: 'var(--space-3)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#4f46e5' }}>
+                                🗹 {selectedDates.length} {selectedDates.length === 1 ? 'día seleccionado' : 'días seleccionados'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                            {isBulkUpdating ? (
+                                <span style={{ fontSize: 'var(--text-xs)', color: '#4f46e5', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                    <span className="spinner-small"></span> Aplicando cambios masivos...
+                                </span>
+                            ) : (
+                                <>
+                                    <select
+                                        value={bulkStatus}
+                                        onChange={(e) => setBulkStatus(e.target.value)}
+                                        className="form-select"
+                                        style={{
+                                            padding: '4px 8px',
+                                            fontSize: 'var(--text-xs)',
+                                            width: 'auto',
+                                            height: 'auto',
+                                            borderRadius: 'var(--radius-md)',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value="">-- Seleccionar estado a aplicar --</option>
+                                        <option value="TRABAJO">🟢 Trabajó / Presente</option>
+                                        <option value="FRANCO">⚪ Franco</option>
+                                        <option value="FERIADO">🚩 Feriado</option>
+                                        <option value="ENFERMEDAD">🟣 Enfermedad</option>
+                                        <option value="SIN_AVISO">🔴 Sin Aviso</option>
+                                        <option value="CON_AVISO">🟠 Con Aviso</option>
+                                    </select>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleBulkAction}
+                                        disabled={!bulkStatus}
+                                        style={{ padding: '6px 12px', fontSize: 'var(--text-xs)' }}
+                                    >
+                                        Aplicar Acción Masiva
+                                    </button>
+                                    <button
+                                        className="btn btn-outline"
+                                        onClick={() => {
+                                            setSelectedDates([])
+                                            setBulkStatus('')
+                                        }}
+                                        style={{ padding: '6px 12px', fontSize: 'var(--text-xs)' }}
+                                    >
+                                        Cancelar
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="table-container">
                     <table className="table">
                         <thead>
                             <tr>
+                                <th style={{ width: '40px', textAlign: 'center' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={asistenciaDiaria.length > 0 && selectedDates.length === asistenciaDiaria.length} 
+                                        onChange={handleSelectAll}
+                                        disabled={updatingDate !== null || isBulkUpdating}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                </th>
                                 <th>Fecha y Día</th>
                                 <th style={{ textAlign: 'center' }}>Horario Fichado</th>
                                 <th style={{ textAlign: 'center' }}>Horas Trab.</th>
@@ -207,15 +350,25 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                         <tbody>
                             {asistenciaDiaria.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                    <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
                                         No hay registros de asistencia para el rango de fechas seleccionado.
                                     </td>
                                 </tr>
                             ) : (
                                 asistenciaDiaria.map((d: any) => {
                                     const statusStyle = getStatusStyle(d.status)
+                                    const isChecked = selectedDates.includes(d.fecha)
                                     return (
-                                        <tr key={d.fecha} style={{ verticalAlign: 'middle' }}>
+                                        <tr key={d.fecha} style={{ verticalAlign: 'middle', backgroundColor: isChecked ? '#f8fafc' : 'transparent' }}>
+                                            <td style={{ width: '40px', textAlign: 'center' }}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isChecked} 
+                                                    onChange={() => handleSelectDate(d.fecha)}
+                                                    disabled={updatingDate !== null || isBulkUpdating}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                            </td>
                                             <td style={{ fontWeight: 600 }}>
                                                 {d.diaSemana} {formatFecha(d.fecha)}
                                             </td>
@@ -237,7 +390,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                         🚩 Feriado: {d.nombreFeriado || 'Nacional'}
                                                     </span>
                                                 )}
-                                                {d.status === 'FRANCO' && !d.esFeriado && (
+                                                {d.status === 'FRANCO' && (
                                                     <span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>
                                                         Día Franco
                                                     </span>
@@ -292,6 +445,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                     <select
                                                         value={d.status}
                                                         onChange={(e) => handleStatusChange(d.fecha, e.target.value)}
+                                                        disabled={isBulkUpdating}
                                                         className="form-select"
                                                         style={{
                                                             padding: '4px 8px',

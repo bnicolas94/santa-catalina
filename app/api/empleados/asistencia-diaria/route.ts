@@ -5,61 +5,98 @@ import { SancionService } from '@/lib/services/sancion.service'
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { empleadoId, fecha, status } = body
+        const { empleadoId, fecha, fechas, status } = body
 
-        if (!empleadoId || !fecha || !status) {
-            return NextResponse.json({ error: 'Faltan campos obligatorios (empleadoId, fecha, status)' }, { status: 400 })
+        if (!empleadoId || (!fecha && !fechas) || !status) {
+            return NextResponse.json({ error: 'Faltan campos obligatorios (empleadoId, fecha/fechas, status)' }, { status: 400 })
         }
 
-        // Normalizar fecha en UTC para evitar desfases de zona horaria
-        const startOfDay = new Date(`${fecha}T00:00:00.000Z`)
-        const endOfDay = new Date(`${fecha}T23:59:59.999Z`)
+        const targetDates = fechas && Array.isArray(fechas) ? fechas : [fecha]
 
-        // 1. Eliminar inasistencia previa en este rango de fecha
-        await prisma.inasistencia.deleteMany({
-            where: {
-                empleadoId,
-                fecha: {
-                    gte: startOfDay,
-                    lte: endOfDay
+        for (const targetDate of targetDates) {
+            // Normalizar fecha en UTC para evitar desfases de zona horaria
+            const startOfDay = new Date(`${targetDate}T00:00:00.000Z`)
+            const endOfDay = new Date(`${targetDate}T23:59:59.999Z`)
+
+            // 1. Eliminar inasistencia previa en este rango de fecha
+            await prisma.inasistencia.deleteMany({
+                where: {
+                    empleadoId,
+                    fecha: {
+                        gte: startOfDay,
+                        lte: endOfDay
+                    }
                 }
+            })
+
+            // 2. Si el estado es una inasistencia o override manual, registrarla
+            if (status === 'ENFERMEDAD') {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: startOfDay,
+                        tipo: 'JUSTIFICADA',
+                        motivo: 'Enfermedad',
+                        tieneCertificado: true,
+                        observaciones: 'Modificado desde Planilla de Asistencia Diaria'
+                    }
+                })
+            } else if (status === 'SIN_AVISO') {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: startOfDay,
+                        tipo: 'INJUSTIFICADA',
+                        motivo: 'Ausencia sin aviso',
+                        tieneCertificado: false,
+                        observaciones: 'Modificado desde Planilla de Asistencia Diaria'
+                    }
+                })
+            } else if (status === 'CON_AVISO') {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: startOfDay,
+                        tipo: 'JUSTIFICADA',
+                        motivo: 'Ausencia con aviso',
+                        tieneCertificado: false,
+                        observaciones: 'Modificado desde Planilla de Asistencia Diaria'
+                    }
+                })
+            } else if (status === 'FRANCO') {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: startOfDay,
+                        tipo: 'FRANCO',
+                        motivo: 'Franco',
+                        tieneCertificado: false,
+                        observaciones: 'Modificado desde Planilla de Asistencia Diaria'
+                    }
+                })
+            } else if (status === 'FERIADO') {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: startOfDay,
+                        tipo: 'FERIADO',
+                        motivo: 'Feriado',
+                        tieneCertificado: false,
+                        observaciones: 'Modificado desde Planilla de Asistencia Diaria'
+                    }
+                })
+            } else if (status === 'TRABAJO') {
+                await prisma.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: startOfDay,
+                        tipo: 'TRABAJO',
+                        motivo: 'Trabajó',
+                        tieneCertificado: false,
+                        observaciones: 'Modificado desde Planilla de Asistencia Diaria'
+                    }
+                })
             }
-        })
-
-        // 2. Si el estado es una inasistencia, registrarla
-        if (status === 'ENFERMEDAD') {
-            await prisma.inasistencia.create({
-                data: {
-                    empleadoId,
-                    fecha: startOfDay,
-                    tipo: 'JUSTIFICADA',
-                    motivo: 'Enfermedad',
-                    tieneCertificado: true,
-                    observaciones: 'Modificado desde Planilla de Asistencia Diaria'
-                }
-            })
-        } else if (status === 'SIN_AVISO') {
-            await prisma.inasistencia.create({
-                data: {
-                    empleadoId,
-                    fecha: startOfDay,
-                    tipo: 'INJUSTIFICADA',
-                    motivo: 'Ausencia sin aviso',
-                    tieneCertificado: false,
-                    observaciones: 'Modificado desde Planilla de Asistencia Diaria'
-                }
-            })
-        } else if (status === 'CON_AVISO') {
-            await prisma.inasistencia.create({
-                data: {
-                    empleadoId,
-                    fecha: startOfDay,
-                    tipo: 'JUSTIFICADA',
-                    motivo: 'Ausencia con aviso',
-                    tieneCertificado: false,
-                    observaciones: 'Modificado desde Planilla de Asistencia Diaria'
-                }
-            })
         }
 
         // 3. Recalcular alertas/sanciones automáticas
