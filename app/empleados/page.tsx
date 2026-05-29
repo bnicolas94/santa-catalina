@@ -21,6 +21,7 @@ import { ReporteVacacionesModal } from '@/components/empleados/ReporteVacaciones
 import { InasistenciasModal } from '@/components/empleados/InasistenciasModal'
 import { SancionesModal } from '@/components/empleados/SancionesModal'
 import LiquidacionFinalModal from '@/components/empleados/LiquidacionFinalModal'
+import { PlanillaUniformesModal } from '@/components/empleados/PlanillaUniformesModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -62,6 +63,7 @@ function EmpleadosContent() {
     const [showInasistenciasModal, setShowInasistenciasModal] = useState(false)
     const [showSancionesModal, setShowSancionesModal] = useState(false)
     const [showLiquidacionFinalModal, setShowLiquidacionFinalModal] = useState(false)
+    const [showUniformesModal, setShowUniformesModal] = useState(false)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -108,6 +110,7 @@ function EmpleadosContent() {
         if (openParam === 'inasistencias') setShowInasistenciasModal(true)
         if (openParam === 'sanciones') setShowSancionesModal(true)
         if (openParam === 'liquidacion-final') setShowLiquidacionFinalModal(true)
+        if (openParam === 'uniformes') setShowUniformesModal(true)
         if (openParam === 'new') handleOpenDialog()
         if (openParam === 'import') handleImportarClic()
     }, [openParam])
@@ -134,6 +137,7 @@ function EmpleadosContent() {
         setShowInasistenciasModal(false)
         setShowSancionesModal(false)
         setShowLiquidacionFinalModal(false)
+        setShowUniformesModal(false)
     }
 
     const handleSave = async (formData: any) => {
@@ -686,6 +690,9 @@ function EmpleadosContent() {
                     onClose={closeModal}
                     onSuccess={() => fetchEmpleados()}
                 />
+            )}
+            {showUniformesModal && (
+                <PlanillaUniformesModal onClose={closeModal} />
             )}
         </div>
     )

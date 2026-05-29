@@ -990,6 +990,7 @@ model TalleUniforme {
   empleadoId  String   @unique @map("id_empleado")
   remera      String?
   buzo        String?
+  impreso     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)

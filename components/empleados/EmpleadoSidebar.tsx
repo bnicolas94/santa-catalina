@@ -57,6 +57,12 @@ const menuItems: MenuItem[] = [
         openModal: 'liquidacion-final'
     },
     {
+        label: 'Planilla Uniformes',
+        href: '/empleados?open=uniformes',
+        icon: '👕',
+        openModal: 'uniformes'
+    },
+    {
         label: 'Sanciones / Apercibimientos',
         href: '/empleados?open=sanciones',
         icon: '⚖️',
