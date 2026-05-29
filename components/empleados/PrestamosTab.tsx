@@ -36,6 +36,7 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
         cajaOrigen: 'caja_chica'
     })
     const [editingCuota, setEditingCuota] = useState<any>(null)
+    const [addingCuotaToPrestamo, setAddingCuotaToPrestamo] = useState<any>(null)
 
     const fetchPrestamos = async () => {
         setLoading(true)
@@ -197,6 +198,92 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                 </div>
             )}
 
+            {/* Modal para agregar cuota */}
+            {addingCuotaToPrestamo && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div className="card shadow-lg" style={{ width: '450px', padding: 'var(--space-6)', background: 'white' }}>
+                        <h4 style={{ marginBottom: 'var(--space-4)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <span>➕</span> Agregar Cuota al Préstamo
+                        </h4>
+                        <form onSubmit={async (e) => {
+                            e.preventDefault()
+                            try {
+                                const res = await fetch(`/api/prestamos/${addingCuotaToPrestamo.prestamoId}/cuotas`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        monto: addingCuotaToPrestamo.monto,
+                                        cajaOrigen: addingCuotaToPrestamo.cajaOrigen,
+                                        detalle: addingCuotaToPrestamo.detalle
+                                    })
+                                })
+                                if (res.ok) {
+                                    setAddingCuotaToPrestamo(null)
+                                    fetchPrestamos()
+                                } else {
+                                    const err = await res.json()
+                                    alert(err.error || 'Error al agregar la cuota')
+                                }
+                            } catch (error) {
+                                console.error(error)
+                                alert('Error de red al agregar la cuota')
+                            }
+                        }}>
+                            <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                                <label className="form-label">Monto de la Nueva Cuota ($)</label>
+                                <input 
+                                    required
+                                    type="number" 
+                                    className="form-input" 
+                                    value={addingCuotaToPrestamo.monto} 
+                                    onChange={e => setAddingCuotaToPrestamo({ ...addingCuotaToPrestamo, monto: e.target.value })} 
+                                />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                                <label className="form-label">Origen / Concepto</label>
+                                <select 
+                                    className="form-select" 
+                                    value={addingCuotaToPrestamo.cajaOrigen} 
+                                    onChange={e => setAddingCuotaToPrestamo({ ...addingCuotaToPrestamo, cajaOrigen: e.target.value })}
+                                >
+                                    <option value="mercaderia">📦 Retiro de Paquetes (Mercadería)</option>
+                                    <option value="caja_chica">💼 Caja Chica (Fábrica)</option>
+                                    <option value="caja_chica_local">💼 Caja Chica Local</option>
+                                    <option value="mercado_pago">💳 Mercado Pago</option>
+                                    <option value="mercado_pago_juani">🔵 MP Juani</option>
+                                    <option value="ninguna">❌ Ninguno (Solo ajuste / Refinanciación)</option>
+                                </select>
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 'var(--space-6)' }}>
+                                <label className="form-label">Detalle / Concepto específico (Opcional)</label>
+                                <input 
+                                    type="text" 
+                                    className="form-input" 
+                                    placeholder="Ej: 16 jamón y queso, adelanto efectivo, etc."
+                                    value={addingCuotaToPrestamo.detalle} 
+                                    onChange={e => setAddingCuotaToPrestamo({ ...addingCuotaToPrestamo, detalle: e.target.value })} 
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
+                                <button 
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={() => setAddingCuotaToPrestamo(null)}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    type="submit"
+                                    className="btn btn-primary"
+                                >
+                                    Agregar Cuota
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Historial de Préstamos y Adelantos</h3>
@@ -335,6 +422,42 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                                         </span>
                                     </div>
                                 ))}
+                                {p.estado !== 'pagado' && p.estado !== 'saldado' && (
+                                    <div 
+                                        onClick={() => setAddingCuotaToPrestamo({
+                                            prestamoId: p.id,
+                                            monto: p.cuotas[0]?.monto?.toString() || '0',
+                                            cajaOrigen: 'mercaderia',
+                                            detalle: ''
+                                        })}
+                                        style={{
+                                            padding: 'var(--space-3)',
+                                            borderRadius: 'var(--radius-lg)',
+                                            border: '2px dashed var(--color-primary-light, #d1d5db)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            textAlign: 'center',
+                                            backgroundColor: 'var(--color-gray-50)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            minHeight: '80px',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'scale(1.05)'
+                                            e.currentTarget.style.backgroundColor = '#f3f4f6'
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'scale(1)'
+                                            e.currentTarget.style.backgroundColor = 'var(--color-gray-50)'
+                                        }}
+                                        title="Agregar nueva cuota a este préstamo"
+                                    >
+                                        <span style={{ fontSize: '1.5rem', color: 'var(--color-primary)', fontWeight: 700 }}>+</span>
+                                        <span style={{ fontSize: '10px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase' }}>Agregar Cuota</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))
