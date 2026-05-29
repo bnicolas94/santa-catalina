@@ -32,7 +32,8 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
         observaciones: '',
         frecuencia: 'SEMANAL',
         modoInicio: 'INMEDIATO',
-        fechaInicio: '' 
+        fechaInicio: '',
+        cajaOrigen: 'caja_chica'
     })
     const [editingCuota, setEditingCuota] = useState<any>(null)
 
@@ -104,7 +105,8 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                     observaciones: '',
                     frecuencia: 'SEMANAL',
                     modoInicio: 'INMEDIATO',
-                    fechaInicio: ''
+                    fechaInicio: '',
+                    cajaOrigen: 'caja_chica'
                 })
                 setShowNew(false)
                 fetchPrestamos()
@@ -240,7 +242,16 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                                 <input type="date" value={form.fechaInicio} onChange={e => setForm({ ...form, fechaInicio: e.target.value })} className="form-input" />
                             </div>
                         )}
-                        <div className="form-group" style={{ gridColumn: form.modoInicio === 'FECHA_ESPECIFICA' ? 'span 1' : 'span 2' }}>
+                        <div className="form-group">
+                            <label className="form-label">Caja de Origen</label>
+                            <select value={form.cajaOrigen} onChange={e => setForm({ ...form, cajaOrigen: e.target.value })} className="form-select">
+                                <option value="caja_chica">💼 Caja Chica (Fábrica)</option>
+                                <option value="caja_chica_local">💼 Caja Chica Local</option>
+                                <option value="mercado_pago">💳 Mercado Pago</option>
+                                <option value="mercado_pago_juani">🔵 MP Juani</option>
+                            </select>
+                        </div>
+                        <div className="form-group" style={{ gridColumn: form.modoInicio === 'FECHA_ESPECIFICA' ? 'span 2' : 'span 1' }}>
                             <label className="form-label">Observaciones</label>
                             <input type="text" value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} placeholder="Ej: Especial vacaciones" className="form-input" />
                         </div>

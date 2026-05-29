@@ -6,8 +6,10 @@ const DEFAULTS = [
     { clave: 'cobro_pedido', nombre: '📋 Cobro Pedido' },
     { clave: 'pago_proveedor', nombre: '🏪 Pago Proveedor' },
     { clave: 'rendicion_chofer', nombre: '🚛 Rendición Chofer' },
+    { clave: 'prestamo_empleado', nombre: '👤 Préstamo Empleado' },
     { clave: 'otro', nombre: '📝 Otro' },
 ]
+
 
 async function seedDefaults() {
     const count = await prisma.conceptoCaja.count()

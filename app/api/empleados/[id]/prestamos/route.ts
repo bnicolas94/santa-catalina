@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
 
 // GET /api/empleados/[id]/prestamos
 export async function GET(
@@ -38,11 +39,17 @@ export async function POST(
             observaciones, 
             fechaInicio, 
             frecuencia = 'SEMANAL', 
-            modoInicio = 'INMEDIATO' 
+            modoInicio = 'INMEDIATO',
+            cajaOrigen
         } = body
 
         if (!montoTotal || !cantidadCuotas) {
             return NextResponse.json({ error: 'Monto y cantidad de cuotas son requeridos' }, { status: 400 })
+        }
+
+        const validBoxes = ['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani']
+        if (!cajaOrigen || !validBoxes.includes(cajaOrigen)) {
+            return NextResponse.json({ error: 'Debe especificar una caja de origen válida (Caja Chica o Mercado Pago)' }, { status: 400 })
         }
 
         const montoCuota = parseFloat(montoTotal) / parseInt(cantidadCuotas)
@@ -64,6 +71,15 @@ export async function POST(
         }
 
         const prestamo = await prisma.$transaction(async (tx) => {
+            // Obtener empleado para la descripción del movimiento de caja
+            const empleado = await tx.empleado.findUnique({
+                where: { id },
+                select: { nombre: true, apellido: true }
+            })
+            if (!empleado) {
+                throw new Error('Empleado no encontrado')
+            }
+
             // 2. Crear Préstamo
             const nuevoPrestamo = await tx.prestamoEmpleado.create({
                 data: {
@@ -75,6 +91,15 @@ export async function POST(
                     observaciones: observaciones || null,
                 }
             })
+
+            // 2b. Registrar movimiento de caja
+            await CajaService.createMovimiento({
+                tipo: 'egreso',
+                concepto: 'prestamo_empleado',
+                monto: parseFloat(montoTotal),
+                cajaOrigen: cajaOrigen,
+                descripcion: `Préstamo a empleado: ${empleado.nombre} ${empleado.apellido || ''} (${cantidadCuotas} cuotas)${observaciones ? ` - ${observaciones}` : ''}`,
+            }, tx)
 
             // 3. Crear Cuotas
             for (let i = 1; i <= cantidadCuotas; i++) {
