@@ -13,19 +13,31 @@ export async function POST(request: Request) {
 
         const empleado = await prisma.empleado.findUnique({
             where: { id: empleadoId },
-            select: { horarioEntrada: true }
+            select: { horarioEntrada: true, horarioSalida: true, horasTrabajoDiarias: true }
         })
 
         if (!empleado) return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 })
 
         const [hH, hM] = (empleado.horarioEntrada || '09:00').split(':').map(Number)
         
-        // Crear fechas para entrada y salida (9 horas después)
         const dEntrada = new Date(`${fecha}T00:00:00`)
         dEntrada.setHours(hH, hM, 0, 0)
 
         const dSalida = new Date(dEntrada)
-        dSalida.setHours(dEntrada.getHours() + 9)
+        
+        if (empleado.horarioSalida) {
+            const [sH, sM] = empleado.horarioSalida.split(':').map(Number)
+            dSalida.setHours(sH, sM, 0, 0)
+            
+            // Si la salida es al día siguiente (ej. entrada 22:00, salida 06:00)
+            if (dSalida < dEntrada) {
+                dSalida.setDate(dSalida.getDate() + 1)
+            }
+        } else {
+            const horasAAgregar = empleado.horasTrabajoDiarias || 8
+            dSalida.setHours(dEntrada.getHours() + Math.floor(horasAAgregar))
+            dSalida.setMinutes(dEntrada.getMinutes() + (horasAAgregar % 1) * 60)
+        }
 
         // Crear las dos fichadas en una transacción
         await prisma.$transaction([
