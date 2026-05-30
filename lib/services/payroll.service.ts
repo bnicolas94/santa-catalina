@@ -237,9 +237,11 @@ export class PayrollService {
                     valorDiaBase = jornalBase
                 } else {
                     valorDiaBase = 0
+                    multiplicadorJornal = 0
                 }
             } else {
                 valorDiaBase = 0
+                multiplicadorJornal = 0
             }
             const valorExtra = hsExtrasRedondeadas * valorHoraExtra
             // Recargo feriado: 50% extra del valor de la hora.
