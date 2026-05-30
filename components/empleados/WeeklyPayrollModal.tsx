@@ -261,13 +261,19 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                             const valorDiaBaseAjustado = Math.round(newDia.jornalBase * mult);
                             const valorExtraAjustado = Math.round(manualExtras * newData.valorHoraExtra);
                             
+                            let nuevoValorFeriado = newDia.valorFeriado;
+                            if (newDia.esFeriado) {
+                                nuevoValorFeriado = Math.round((newDia.jornalBase * mult) * 0.5);
+                            }
+                            
                             return {
                                 ...newDia,
                                 multiplicadorJornal: mult,
                                 horasExtras: manualExtras,
                                 valorDiaBase: valorDiaBaseAjustado,
                                 valorExtra: valorExtraAjustado,
-                                totalDia: Math.round(valorDiaBaseAjustado + valorExtraAjustado + newDia.valorFeriado)
+                                valorFeriado: nuevoValorFeriado,
+                                totalDia: Math.round(valorDiaBaseAjustado + valorExtraAjustado + nuevoValorFeriado)
                             }
                         }
                         return newDia;
@@ -414,13 +420,19 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 const nuevoDesglose = r.desglosePorDia.map((dia: any) => {
                     if (dia.fecha === fecha) {
                         const nuevoValorDiaBase = Math.round(dia.jornalBase * mult);
-                        // Si mult es 0, también anulamos extras y feriado de ese día por defecto?
-                        // Por ahora lo dejamos a criterio del usuario o lo forzamos.
+                        
+                        // Recalcular también el valor del feriado proporcional al multiplicador
+                        let nuevoValorFeriado = dia.valorFeriado;
+                        if (dia.esFeriado) {
+                            nuevoValorFeriado = Math.round((dia.jornalBase * mult) * 0.5);
+                        }
+
                         return {
                             ...dia,
                             multiplicadorJornal: mult,
                             valorDiaBase: nuevoValorDiaBase,
-                            totalDia: Math.round(nuevoValorDiaBase + dia.valorExtra + dia.valorFeriado)
+                            valorFeriado: nuevoValorFeriado,
+                            totalDia: Math.round(nuevoValorDiaBase + dia.valorExtra + nuevoValorFeriado)
                         }
                     }
                     return dia;
