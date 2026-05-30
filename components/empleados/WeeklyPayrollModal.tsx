@@ -128,6 +128,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                 const adjustmentHs = b.ajusteHorasExtras || 0;
                                 const adjustmentMoney = Math.round(adjustmentHs * r.valorHoraExtra);
                                 const totalMontoExtras = currentMontoExtrasBase + adjustmentMoney;
+                                const diasTrabajados = currentDesglose.filter((d: any) => d.multiplicadorJornal > 0 || d.multiplicadorJornal === undefined).length;
 
                                 return {
                                     ...r,
@@ -138,7 +139,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                     montoHorasExtras: totalMontoExtras,
                                     montoHorasFeriado: currentMontoFeriado,
                                     adicionales: extraItems,
-                                    totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems - (r.descuentoPrestamos || 0),
+                                    diasTrabajados: diasTrabajados,
+                                    totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems + (r.montoHorasPendientes || 0) - (r.descuentoPrestamos || 0),
                                     borradorId: b.id
                                 }
                             }
@@ -248,17 +250,51 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             
             setResultados(prev => prev.map(r => {
                 if (r.empleadoId === empleadoId) {
-                    // Mantener el ajuste manual de horas extras si ya existía
                     const adj = r.ajusteHorasExtras || 0;
+                    
+                    const nuevoDesglose = newData.desglosePorDia.map((newDia: any) => {
+                        const oldDia = r.desglosePorDia.find((d: any) => d.fecha === newDia.fecha);
+                        if (oldDia) {
+                            const mult = oldDia.multiplicadorJornal !== undefined ? oldDia.multiplicadorJornal : 1;
+                            const manualExtras = oldDia.horasExtras || 0;
+                            
+                            const valorDiaBaseAjustado = Math.round(newDia.jornalBase * mult);
+                            const valorExtraAjustado = Math.round(manualExtras * newData.valorHoraExtra);
+                            
+                            return {
+                                ...newDia,
+                                multiplicadorJornal: mult,
+                                horasExtras: manualExtras,
+                                valorDiaBase: valorDiaBaseAjustado,
+                                valorExtra: valorExtraAjustado,
+                                totalDia: Math.round(valorDiaBaseAjustado + valorExtraAjustado + newDia.valorFeriado)
+                            }
+                        }
+                        return newDia;
+                    });
+
+                    const currentHsExtrasBase = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0);
+                    const currentMontoExtrasBase = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.valorExtra || 0), 0);
+                    const currentMontoFeriado = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.valorFeriado || 0), 0);
+                    const currentSueldoBase = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.valorDiaBase || 0), 0);
+                    
                     const adjMoney = Math.round(adj * newData.valorHoraExtra);
+                    const totalMontoExtras = currentMontoExtrasBase + adjMoney;
+                    const adicionalesOriginales = r.adicionales || [];
+                    const montoExtrasItems = adicionalesOriginales.reduce((acc: number, item: any) => acc + item.montoCalculado, 0);
+                    const diasTrabajados = nuevoDesglose.filter((d: any) => d.multiplicadorJornal > 0 || d.multiplicadorJornal === undefined).length;
+
                     return {
                         ...newData,
+                        desglosePorDia: nuevoDesglose,
+                        sueldoBase: currentSueldoBase,
+                        horasExtras: currentHsExtrasBase,
                         ajusteHorasExtras: adj,
-                        montoHorasExtras: newData.montoHorasExtras + adjMoney,
-                        totalNeto: newData.totalNeto + adjMoney,
-                        horasExtrasOriginal: newData.horasExtras,
-                        totalNetoOriginal: newData.totalNeto,
-                        montoHorasExtrasOriginal: newData.montoHorasExtras
+                        montoHorasExtras: totalMontoExtras,
+                        montoHorasFeriado: currentMontoFeriado,
+                        adicionales: adicionalesOriginales,
+                        diasTrabajados: diasTrabajados,
+                        totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems + (newData.montoHorasPendientes || 0) - (newData.descuentoPrestamos || 0)
                     }
                 }
                 return r;
