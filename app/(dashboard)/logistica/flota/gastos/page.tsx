@@ -244,6 +244,7 @@ export default function GastosFlotaPage() {
                                 <option value="caja_chica">Caja Chica (Efectivo)</option>
                                 <option value="caja_madre">Caja Madre</option>
                                 <option value="mercado_pago">Mercado Pago</option>
+                                <option value="mercado_pago_juani">MP Juani</option>
                                 <option value="local">Caja Local</option>
                             </select>
                         </div>
