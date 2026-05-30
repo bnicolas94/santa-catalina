@@ -255,7 +255,18 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     const nuevoDesglose = newData.desglosePorDia.map((newDia: any) => {
                         const oldDia = r.desglosePorDia.find((d: any) => d.fecha === newDia.fecha);
                         if (oldDia) {
-                            const mult = oldDia.multiplicadorJornal !== undefined ? oldDia.multiplicadorJornal : 1;
+                            const hasStateChanged = (
+                                oldDia.horasTrabajadas !== newDia.horasTrabajadas ||
+                                oldDia.esJustificado !== newDia.esJustificado ||
+                                oldDia.esInasistencia !== newDia.esInasistencia ||
+                                oldDia.inasistenciaTipo !== newDia.inasistenciaTipo ||
+                                oldDia.esFranco !== newDia.esFranco
+                            );
+                            
+                            const mult = hasStateChanged 
+                                ? (newDia.multiplicadorJornal !== undefined ? newDia.multiplicadorJornal : 1)
+                                : (oldDia.multiplicadorJornal !== undefined ? oldDia.multiplicadorJornal : 1);
+                                
                             const manualExtras = oldDia.horasExtras || 0;
                             
                             const valorDiaBaseAjustado = Math.round(newDia.jornalBase * mult);
