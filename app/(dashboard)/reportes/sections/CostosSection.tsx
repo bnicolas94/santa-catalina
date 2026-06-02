@@ -5,6 +5,7 @@ import type { RangoFechas } from '../utils/dateUtils'
 import KpiCardEnhanced from '../components/KpiCardEnhanced'
 import TrendChart from '../components/TrendChart'
 import DataTable from '../components/DataTable'
+import CostoVariacionModal from '../components/CostoVariacionModal'
 import { formatCurrency, formatPercent, formatNumber, formatDelta, formatCurrencyDecimals, formatDate, formatDecimal } from '../utils/formatters'
 
 interface Props {
@@ -25,6 +26,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
     const [insumoSeleccionado, setInsumoSeleccionado] = useState('')
     const [proveedorSeleccionado, setProveedorSeleccionado] = useState('')
     const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('')
+    const [showVariacionModal, setShowVariacionModal] = useState(false)
 
     useEffect(() => {
         async function fetchData() {
@@ -99,7 +101,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     color="var(--color-danger)"
                     delta={deltaCostoTotal}
                     previousLabel="período ant."
-                    onClick={() => setSubTab('resumen')}
+                    onClick={() => setShowVariacionModal(true)}
                 />
                 <KpiCardEnhanced
                     label={esGanancia ? 'Ganancia' : 'Pérdida'}
@@ -187,6 +189,15 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
             )}
             {subTab === 'compras' && <ComprasView data={data} rango={rango} filtro={filtroInsumo} onFiltroChange={setFiltroInsumo} />}
             {subTab === 'margenes' && <MargenesView data={data} rango={rango} />}
+            {/* Modal de análisis de variación de costos */}
+            {showVariacionModal && data.desgloseCostos && (
+                <CostoVariacionModal
+                    desgloseCostos={data.desgloseCostos}
+                    costoTotalActual={k.costoTotal}
+                    costoTotalAnterior={k.costoTotalAnterior}
+                    onClose={() => setShowVariacionModal(false)}
+                />
+            )}
         </div>
     )
 }

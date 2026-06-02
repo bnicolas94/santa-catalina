@@ -137,27 +137,25 @@ export async function getCostosReport(
             },
             include: { vehiculo: { select: { patente: true, marca: true, modelo: true } } }
         }),
-        // Totales periodo anterior (también excluyendo los vinculados a insumos)
-        prisma.gastoOperativo.aggregate({
+        // Período anterior detallado (para desglose de variación por categoría)
+        prisma.gastoOperativo.findMany({
             where: {
                 fecha: { gte: startAnterior, lte: endAnterior },
                 ...(ubicacionId ? { ubicacionId } : {}),
                 movimientosStock: { none: {} }
             },
-            _sum: { monto: true }
+            include: { categoria: true }
         }),
-        prisma.liquidacionSueldo.aggregate({
+        prisma.liquidacionSueldo.findMany({
             where: {
                 fechaGeneracion: { gte: liqStartAnterior, lte: liqEndAnterior },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
-            },
-            _sum: { totalNeto: true }
+            }
         }),
-        prisma.mantenimientoVehiculo.aggregate({
+        prisma.mantenimientoVehiculo.findMany({
             where: {
                 fecha: { gte: startAnterior, lte: endAnterior }
-            },
-            _sum: { costo: true }
+            }
         })
     ])
 
@@ -166,7 +164,14 @@ export async function getCostosReport(
     const mantsTotalActual = mants.reduce((acc, m) => acc + m.costo, 0)
     const gastosTotalActual = gastosTotalActualBase + liqsTotalActual + mantsTotalActual
 
-    const gastosTotalAnterior = (gastosAnterior._sum.monto || 0) + (liqsAnterior._sum.totalNeto || 0) + (mantsAnterior._sum.costo || 0)
+    const gastosTotalAnteriorBase = gastosAnterior.reduce((acc: number, g: any) => acc + g.monto, 0)
+    const liqsTotalAnterior = liqsAnterior.reduce((acc: number, l: any) => acc + l.totalNeto, 0)
+    const mantsTotalAnterior = mantsAnterior.reduce((acc: number, m: any) => acc + m.costo, 0)
+    const gastosTotalAnterior = gastosTotalAnteriorBase + liqsTotalAnterior + mantsTotalAnterior
+
+    // Costos totales pre-calculados
+    const costoTotalActual = costoInsumosActual + gastosTotalActual
+    const costoTotalAnterior = costoInsumosAnterior + gastosTotalAnterior
 
     const gastosPorCategoria: Record<string, { nombre: string; monto: number; count: number }> = {}
 
@@ -193,6 +198,60 @@ export async function getCostosReport(
         gastosPorCategoria[catMant].monto += mantsTotalActual
         gastosPorCategoria[catMant].count += mants.length
     }
+
+    // ── Desglose por categoría del período anterior (para análisis de variación) ──
+    const gastosPorCatAnterior: Record<string, { nombre: string; monto: number }> = {}
+
+    for (const g of gastosAnterior) {
+        const cat = (g.categoria as any)?.nombre || 'Sin categoría'
+        if (!gastosPorCatAnterior[cat]) gastosPorCatAnterior[cat] = { nombre: cat, monto: 0 }
+        gastosPorCatAnterior[cat].monto += g.monto
+    }
+
+    if (liqsTotalAnterior > 0) {
+        if (!gastosPorCatAnterior['Sueldos']) gastosPorCatAnterior['Sueldos'] = { nombre: 'Sueldos', monto: 0 }
+        gastosPorCatAnterior['Sueldos'].monto += liqsTotalAnterior
+    }
+
+    if (mantsTotalAnterior > 0) {
+        if (!gastosPorCatAnterior['Mantenimiento']) gastosPorCatAnterior['Mantenimiento'] = { nombre: 'Mantenimiento', monto: 0 }
+        gastosPorCatAnterior['Mantenimiento'].monto += mantsTotalAnterior
+    }
+
+    // ── Construir desglose completo de costos con variación MoM ──
+    const allCatNames = new Set([
+        ...Object.keys(gastosPorCategoria),
+        ...Object.keys(gastosPorCatAnterior)
+    ])
+
+    const desgloseCostos = [
+        // Compra de Insumos como primera categoría
+        {
+            nombre: 'Compra de Insumos',
+            montoActual: costoInsumosActual,
+            montoAnterior: costoInsumosAnterior,
+            diferencia: costoInsumosActual - costoInsumosAnterior,
+            variacionPct: costoInsumosAnterior > 0
+                ? ((costoInsumosActual - costoInsumosAnterior) / costoInsumosAnterior) * 100
+                : null,
+            participacion: costoTotalActual > 0 ? (costoInsumosActual / costoTotalActual) * 100 : 0
+        },
+        // Cada categoría de gastos operativos
+        ...Array.from(allCatNames).map(cat => {
+            const actual = gastosPorCategoria[cat]?.monto || 0
+            const anterior = gastosPorCatAnterior[cat]?.monto || 0
+            return {
+                nombre: cat,
+                montoActual: actual,
+                montoAnterior: anterior,
+                diferencia: actual - anterior,
+                variacionPct: anterior > 0
+                    ? ((actual - anterior) / anterior) * 100
+                    : null,
+                participacion: costoTotalActual > 0 ? (actual / costoTotalActual) * 100 : 0
+            }
+        })
+    ].sort((a, b) => b.montoActual - a.montoActual)
 
     // ── 2b. Detalle unificado de TODOS los gastos operativos ──
     const gastosDetalle: any[] = []
@@ -441,8 +500,8 @@ export async function getCostosReport(
             costoInsumosAnterior,
             gastosTotalActual,
             gastosTotalAnterior,
-            costoTotal: costoInsumosActual + gastosTotalActual,
-            costoTotalAnterior: costoInsumosAnterior + gastosTotalAnterior,
+            costoTotal: costoTotalActual,
+            costoTotalAnterior,
             // Margen real: ventas vs costos totales
             ventasTotalActual,
             ventasTotalAnterior,
@@ -458,6 +517,7 @@ export async function getCostosReport(
             totalProveedores: gastoPorProveedor.length
         },
         gastosPorCategoria: Object.values(gastosPorCategoria).sort((a, b) => b.monto - a.monto),
+        desgloseCostos,
         costoPorProducto,
         evolucion,
         rankingInsumos,
