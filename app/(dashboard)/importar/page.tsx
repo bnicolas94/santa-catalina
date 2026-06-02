@@ -3,15 +3,20 @@
 import { useState } from "react";
 import * as xlsx from "xlsx";
 import { ExcelRow, PreviewRowResult } from "../../api/importar-pedidos/preview/route";
+import { PreviewLocalRowResult } from "../../api/importar-pedidos-local/preview/route";
 
 export default function ImportarPedidosPage() {
+    const [moduleMode, setModuleMode] = useState<"general" | "local">("general");
     const [file, setFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
     const [previewData, setPreviewData] = useState<PreviewRowResult[] | null>(null);
-    const [summary, setSummary] = useState({ verdes: 0, amarillos: 0, rojos: 0, totalRows: 0 });
+    const [previewLocalData, setPreviewLocalData] = useState<PreviewLocalRowResult[] | null>(null);
+    const [summary, setSummary] = useState({ verdes: 0, amarillos: 0, rojos: 0, totalRows: 0, filtradosLocal: 0 });
     const [importStatus, setImportStatus] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
     const [importMode, setImportMode] = useState<"excel" | "paste">("excel");
     const [pasteText, setPasteText] = useState("");
+    const [pasteLocalText, setPasteLocalText] = useState("");
+
 
     // Procesar archivo seleccionado
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +92,7 @@ export default function ImportarPedidosPage() {
             if (!res.ok) throw new Error(result.error || "Falló preview");
 
             setPreviewData(result.results);
-            setSummary({ verdes: result.verdes, amarillos: result.amarillos, rojos: result.rojos, totalRows: result.totalRows });
+            setSummary({ verdes: result.verdes, amarillos: result.amarillos, rojos: result.rojos, totalRows: result.totalRows, filtradosLocal: 0 });
             setImportStatus(null);
 
         } catch (err: any) {
@@ -209,7 +214,7 @@ export default function ImportarPedidosPage() {
             if (!res.ok) throw new Error(result.error || "Falló preview");
 
             setPreviewData(result.results);
-            setSummary({ verdes: result.verdes, amarillos: result.amarillos, rojos: result.rojos, totalRows: result.totalRows });
+            setSummary({ verdes: result.verdes, amarillos: result.amarillos, rojos: result.rojos, totalRows: result.totalRows, filtradosLocal: 0 });
             setImportStatus(null);
         } catch (err: any) {
             setImportStatus({ type: "error", msg: err.message });
@@ -244,214 +249,433 @@ export default function ImportarPedidosPage() {
         }
     };
 
+    const handlePasteLocalPreview = async () => {
+        if (!pasteLocalText.trim()) return;
+        setLoading(true);
+        setImportStatus({ type: "info", msg: "Analizando ventas locales..." });
+
+        try {
+            const lines = pasteLocalText.trim().split("\n");
+            const parsedRows = lines.map(line => line.split("\t"));
+            
+            // Asumimos el orden estricto del reporte del sistema externo:
+            // 0: Fecha Pedido, 1: Cliente, 2: Teléfono, 3: Producto, 4: Cantidad, 5: Precio, 6: Forma Pago
+            
+            // Saltar primera fila si es cabecera ("Fecha Pedido" o similar)
+            const firstRowIsHeader = parsedRows.length > 0 && 
+                (parsedRows[0][0]?.toLowerCase().includes("fecha") || parsedRows[0][1]?.toLowerCase().includes("cliente"));
+            
+            const dataRows = firstRowIsHeader ? parsedRows.slice(1) : parsedRows;
+
+            const rows = dataRows.map((cols, index) => {
+                return {
+                    rowId: index,
+                    fechaPedido: cols[0]?.trim(),
+                    cliente: cols[1]?.trim(),
+                    telefono: cols[2]?.trim(),
+                    producto: cols[3]?.trim(),
+                    cantidad: parseInt(cols[4]?.trim() || "0"),
+                    precio: parseFloat(cols[5]?.trim() || "0"),
+                    formaPago: cols[6]?.trim() || "Efectivo",
+                };
+            }).filter(r => r.cliente && r.producto); // filtrar filas vacías
+
+            if (rows.length === 0) throw new Error("No se detectaron filas válidas.");
+
+            const res = await fetch("/api/importar-pedidos-local/preview", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rows }),
+            });
+
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || "Falló preview local");
+
+            setPreviewLocalData(result.results);
+            setSummary({ 
+                verdes: result.verdes, 
+                amarillos: result.amarillos, 
+                rojos: result.rojos, 
+                totalRows: result.totalOriginalRows,
+                filtradosLocal: result.totalFiltradosLocal
+            });
+            setImportStatus(null);
+            
+            if (result.totalFiltradosLocal === 0) {
+                setImportStatus({ type: "error", msg: "No se encontraron ventas cuyo cliente contenga la palabra 'local'." });
+            }
+
+        } catch (err: any) {
+            setImportStatus({ type: "error", msg: err.message });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleConfirmLocal = async () => {
+        if (!previewLocalData) return;
+        setLoading(true);
+        setImportStatus({ type: "info", msg: "Facturando en base de datos..." });
+
+        try {
+            const res = await fetch("/api/importar-pedidos-local/confirm", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rows: previewLocalData }),
+            });
+
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || "Error al confirmar");
+
+            setImportStatus({ type: "success", msg: result.message });
+            setPreviewLocalData(null); // Limpiar preview
+
+        } catch (err: any) {
+            setImportStatus({ type: "error", msg: err.message });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <div className="p-6 max-w-6xl mx-auto space-y-6">
             <h1 className="text-3xl font-bold tracking-tight">Importación de Pedidos (Excel)</h1>
             <p className="text-gray-500">Sube el archivo Excel operativo para procesar pedidos de forma masiva.</p>
 
-            {/* Selector de Modo */}
-            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-                <button 
-                    onClick={() => { setImportMode("excel"); setPreviewData(null); }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${importMode === 'excel' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+            {/* Tabs principales de Módulo */}
+            <div className="flex border-b border-gray-200">
+                <button
+                    onClick={() => { setModuleMode("general"); setImportStatus(null); }}
+                    className={`py-2 px-4 border-b-2 font-medium text-sm ${moduleMode === 'general' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
-                    📁 Archivo Excel
+                    📦 Importar Producción
                 </button>
-                <button 
-                    onClick={() => { setImportMode("paste"); setPreviewData(null); }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${importMode === 'paste' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                <button
+                    onClick={() => { setModuleMode("local"); setImportStatus(null); }}
+                    className={`py-2 px-4 border-b-2 font-medium text-sm ${moduleMode === 'local' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
-                    📋 Pegar Contenido
+                    🏪 Importar Ventas Mostrador
                 </button>
             </div>
 
-            {/* Tarjeta de Carga */}
-            <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-                {importMode === "excel" ? (
-                    <div className="flex items-center space-x-4">
-                        <input
-                            type="file"
-                            accept=".xlsx,.xls"
-                            onChange={handleFileChange}
-                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                        />
-                        <button
-                            onClick={handlePreview}
-                            disabled={!file || loading}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 min-w-[140px]"
+            {moduleMode === "general" && (
+                <div className="space-y-6">
+                    {/* Selector de Modo General */}
+                    <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+                        <button 
+                            onClick={() => { setImportMode("excel"); setPreviewData(null); }}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${importMode === 'excel' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                            {loading ? "Procesando..." : "Previsualizar"}
+                            📁 Archivo Excel
+                        </button>
+                        <button 
+                            onClick={() => { setImportMode("paste"); setPreviewData(null); }}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${importMode === 'paste' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            📋 Pegar Contenido
                         </button>
                     </div>
-                ) : (
-                    <div className="space-y-6">
-                        <div className="bg-blue-50 p-4 rounded-lg flex items-start space-x-3 text-sm text-blue-800">
-                            <span className="text-xl">💡</span>
+
+                    {/* Tarjeta de Carga */}
+                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                        {importMode === "excel" ? (
+                            <div className="flex items-center space-x-4">
+                                <input
+                                    type="file"
+                                    accept=".xlsx,.xls"
+                                    onChange={handleFileChange}
+                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                                <button
+                                    onClick={handlePreview}
+                                    disabled={!file || loading}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 min-w-[140px]"
+                                >
+                                    {loading ? "Procesando..." : "Previsualizar"}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="bg-blue-50 p-4 rounded-lg flex items-start space-x-3 text-sm text-blue-800">
+                                    <span className="text-xl">💡</span>
+                                    <div>
+                                        <p className="font-semibold">Modo Inteligente Activado</p>
+                                        <p>Pegue sus celdas y el sistema intentará detectar el orden automáticamente. Puede corregir el mapeo usando los selectores debajo.</p>
+                                    </div>
+                                </div>
+
+                                <textarea 
+                                    className="w-full h-40 p-3 text-sm font-mono border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    placeholder="Pegue aquí (Ctrl+V) las celdas de Excel..."
+                                    value={pasteText}
+                                    onChange={(e) => handlePasteChange(e.target.value)}
+                                />
+
+                                {pasteRows.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-sm font-bold text-gray-700">Configuración de Columnas ({pasteRows[0].length} detectadas)</h3>
+                                        <div className="overflow-x-auto border rounded-lg bg-gray-50">
+                                            <table className="w-full text-xs text-left">
+                                                <thead>
+                                                    <tr>
+                                                        {pasteRows[0].map((_, idx) => (
+                                                            <th key={idx} className="p-2 min-w-[140px] border-r border-b bg-white">
+                                                                <select 
+                                                                    value={colMapping[idx] || "ignore"}
+                                                                    onChange={(e) => setColMapping({...colMapping, [idx]: e.target.value})}
+                                                                    className={`w-full p-1 border rounded font-bold ${colMapping[idx] && colMapping[idx] !== 'ignore' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-500'}`}
+                                                                >
+                                                                    <option value="ignore">🔽 Ignorar</option>
+                                                                    {MAPPABLE_FIELDS.filter(f => f.id !== 'ignore').map(field => (
+                                                                        <option key={field.id} value={field.id}>
+                                                                            {field.label} {field.required ? '*' : ''}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {pasteRows.slice(0, 3).map((row, rIdx) => (
+                                                        <tr key={rIdx} className="bg-white">
+                                                            {row.map((cell, cIdx) => (
+                                                                <td key={cIdx} className="p-2 border-r border-b text-gray-400 truncate max-w-[140px]">
+                                                                    {cell}
+                                                                </td>
+                                                            ))}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-[11px] text-gray-400 italic">
+                                                * Columnas con (*) son obligatorias para previsualizar.
+                                            </div>
+                                            <button
+                                                onClick={handlePastePreview}
+                                                disabled={loading || !pasteText.trim()}
+                                                className="px-6 py-2 bg-blue-600 text-white font-bold rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all"
+                                            >
+                                                {loading ? "Procesando..." : "Analizar y Previsualizar"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Menaje de Estado */}
+                    {importStatus && (
+                        <div className={`p-4 rounded-lg ${importStatus.type === 'error' ? 'bg-red-50 text-red-700' : importStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+                            {importStatus.msg}
+                        </div>
+                    )}
+
+                    {/* Vista Previa de Tabla */}
+                    {previewData && (
+                        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                <div className="flex gap-4">
+                                    <span className="font-semibold text-gray-700">Total: {summary.totalRows}</span>
+                                    <span className="text-green-600 font-medium">🟢 Ok: {summary.verdes}</span>
+                                    <span className="text-yellow-600 font-medium">🟡 A revisar: {summary.amarillos}</span>
+                                    <span className="text-red-600 font-medium">🔴 Error: {summary.rojos}</span>
+                                </div>
+                                <button
+                                    onClick={handleConfirm}
+                                    disabled={loading}
+                                    className="px-4 py-2 bg-green-600 text-white font-medium rounded hover:bg-green-700 disabled:opacity-50"
+                                >
+                                    Confirmar e Importar
+                                </button>
+                            </div>
+
+                            <div className="overflow-x-auto max-h-[600px]">
+                                <table className="w-full text-sm text-left relative">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th className="px-4 py-3">Estado</th>
+                                            <th className="px-4 py-3">Cliente (Excel)</th>
+                                            <th className="px-4 py-3">Pedido (Excel)</th>
+                                            <th className="px-4 py-3">Match Cliente</th>
+                                            <th className="px-4 py-3">Interpretación</th>
+                                            <th className="px-4 py-3">Mensajes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {previewData.slice(0, 50).map((row) => (
+                                            <tr key={row.rowId} className={`
+                            ${row.status === 'verde' ? 'bg-white' : ''}
+                            ${row.status === 'amarillo' ? 'bg-yellow-50' : ''}
+                            ${row.status === 'rojo' ? 'bg-red-50' : ''}
+                        `}>
+                                                <td className="px-4 py-3">
+                                                    {row.status === 'verde' && "🟢"}
+                                                    {row.status === 'amarillo' && "🟡"}
+                                                    {row.status === 'rojo' && "🔴"}
+                                                </td>
+                                                <td className="px-4 py-3 font-medium">
+                                                    {row.original.nombreCliente} <br />
+                                                    <span className="text-xs text-gray-500">{row.original.telefono}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-600">{row.original.pedidoTexto}</td>
+
+                                                <td className="px-4 py-3">
+                                                    {row.clientMatch.isNew ? (
+                                                        <span className="text-yellow-700 bg-yellow-100 px-2 py-1 rounded text-xs">Nuevo (+Crear)</span>
+                                                    ) : (
+                                                        <span className="text-green-700 bg-green-100 px-2 py-1 rounded text-xs">ID Existe</span>
+                                                    )}
+                                                </td>
+
+                                                <td className="px-4 py-3">
+                                                    {row.orderMatch.detalles.length > 0 ? (
+                                                        <ul className="list-disc list-inside text-xs">
+                                                            {row.orderMatch.detalles.map((d, i) => (
+                                                                <li key={i}>{d.cantidad} unid. ({d.observaciones || "Sin nota"})</li>
+                                                            ))}
+                                                        </ul>
+                                                    ) : (
+                                                        <span className="text-red-500 italic text-xs">Ninguno</span>
+                                                    )}
+                                                    {!row.orderMatch.isFullyMatched && (
+                                                        <span className="block mt-1 text-xs text-yellow-600 underline cursor-pointer">Revisar (Manual)</span>
+                                                    )}
+                                                </td>
+
+                                                <td className="px-4 py-3 text-xs text-red-600 max-w-xs truncate" title={row.errors.join(", ")}>
+                                                    {row.errors.length > 0 ? row.errors[0] + (row.errors.length > 1 ? "..." : "") : "-"}
+                                                </td>
+
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {previewData.length > 50 && (
+                                    <div className="p-4 text-center text-gray-500 bg-white border-t">
+                                        Mostrando 50 de {previewData.length} resultados.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {moduleMode === "local" && (
+                <div className="space-y-6">
+                    {/* Tarjeta de Instrucción Local */}
+                    <div className="bg-white p-6 rounded-lg shadow border border-gray-200 space-y-4">
+                        <div className="bg-indigo-50 p-4 rounded-lg flex items-start space-x-3 text-sm text-indigo-800">
+                            <span className="text-xl">🏪</span>
                             <div>
-                                <p className="font-semibold">Modo Inteligente Activado</p>
-                                <p>Pegue sus celdas y el sistema intentará detectar el orden automáticamente. Puede corregir el mapeo usando los selectores debajo.</p>
+                                <p className="font-semibold">Importación de Ventas Mostrador</p>
+                                <p>Pegue el reporte directamente. El sistema filtrará automáticamente dejando solo las filas cuyo Cliente contenga la palabra <strong>"local"</strong> y generará los pedidos cobrados.</p>
                             </div>
                         </div>
 
                         <textarea 
-                            className="w-full h-40 p-3 text-sm font-mono border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            placeholder="Pegue aquí (Ctrl+V) las celdas de Excel..."
-                            value={pasteText}
-                            onChange={(e) => handlePasteChange(e.target.value)}
+                            className="w-full h-40 p-3 text-sm font-mono border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                            placeholder="Pegue aquí el excel con las columnas: Fecha Pedido | Cliente | Teléfono | Producto | Cantidad | Precio | Forma Pago..."
+                            value={pasteLocalText}
+                            onChange={(e) => setPasteLocalText(e.target.value)}
                         />
 
-                        {pasteRows.length > 0 && (
-                            <div className="space-y-3">
-                                <h3 className="text-sm font-bold text-gray-700">Configuración de Columnas ({pasteRows[0].length} detectadas)</h3>
-                                <div className="overflow-x-auto border rounded-lg bg-gray-50">
-                                    <table className="w-full text-xs text-left">
-                                        <thead>
-                                            <tr>
-                                                {pasteRows[0].map((_, idx) => (
-                                                    <th key={idx} className="p-2 min-w-[140px] border-r border-b bg-white">
-                                                        <select 
-                                                            value={colMapping[idx] || "ignore"}
-                                                            onChange={(e) => setColMapping({...colMapping, [idx]: e.target.value})}
-                                                            className={`w-full p-1 border rounded font-bold ${colMapping[idx] && colMapping[idx] !== 'ignore' ? 'border-blue-500 text-blue-700 bg-blue-50' : 'border-gray-300 text-gray-500'}`}
-                                                        >
-                                                            <option value="ignore">🔽 Ignorar</option>
-                                                            {MAPPABLE_FIELDS.filter(f => f.id !== 'ignore').map(field => (
-                                                                <option key={field.id} value={field.id}>
-                                                                    {field.label} {field.required ? '*' : ''}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {pasteRows.slice(0, 3).map((row, rIdx) => (
-                                                <tr key={rIdx} className="bg-white">
-                                                    {row.map((cell, cIdx) => (
-                                                        <td key={cIdx} className="p-2 border-r border-b text-gray-400 truncate max-w-[140px]">
-                                                            {cell}
-                                                        </td>
-                                                    ))}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <div className="text-[11px] text-gray-400 italic">
-                                        * Columnas con (*) son obligatorias para previsualizar.
-                                    </div>
-                                    <button
-                                        onClick={handlePastePreview}
-                                        disabled={loading || !pasteText.trim()}
-                                        className="px-6 py-2 bg-blue-600 text-white font-bold rounded shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all"
-                                    >
-                                        {loading ? "Procesando..." : "Analizar y Previsualizar"}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {/* Menaje de Estado */}
-            {importStatus && (
-                <div className={`p-4 rounded-lg ${importStatus.type === 'error' ? 'bg-red-50 text-red-700' : importStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-                    {importStatus.msg}
-                </div>
-            )}
-
-            {/* Vista Previa de Tabla */}
-            {previewData && (
-                <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                        <div className="flex gap-4">
-                            <span className="font-semibold text-gray-700">Total: {summary.totalRows}</span>
-                            <span className="text-green-600 font-medium">🟢 Ok: {summary.verdes}</span>
-                            <span className="text-yellow-600 font-medium">🟡 A revisar: {summary.amarillos}</span>
-                            <span className="text-red-600 font-medium">🔴 Error: {summary.rojos}</span>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={handlePasteLocalPreview}
+                                disabled={loading || !pasteLocalText.trim()}
+                                className="px-6 py-2 bg-indigo-600 text-white font-bold rounded shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-all"
+                            >
+                                {loading ? "Procesando..." : "Analizar Ventas"}
+                            </button>
                         </div>
-                        <button
-                            onClick={handleConfirm}
-                            disabled={loading}
-                            className="px-4 py-2 bg-green-600 text-white font-medium rounded hover:bg-green-700 disabled:opacity-50"
-                        >
-                            Confirmar e Importar
-                        </button>
                     </div>
 
-                    <div className="overflow-x-auto max-h-[600px]">
-                        <table className="w-full text-sm text-left relative">
-                            <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 shadow-sm">
-                                <tr>
-                                    <th className="px-4 py-3">Estado</th>
-                                    <th className="px-4 py-3">Cliente (Excel)</th>
-                                    <th className="px-4 py-3">Pedido (Excel)</th>
-                                    <th className="px-4 py-3">Match Cliente</th>
-                                    <th className="px-4 py-3">Interpretación</th>
-                                    <th className="px-4 py-3">Mensajes</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {previewData.slice(0, 50).map((row) => ( // Paginamos a 50 para no reventar DOM si son 5000
-                                    <tr key={row.rowId} className={`
-                    ${row.status === 'verde' ? 'bg-white' : ''}
-                    ${row.status === 'amarillo' ? 'bg-yellow-50' : ''}
-                    ${row.status === 'rojo' ? 'bg-red-50' : ''}
-                  `}>
-                                        <td className="px-4 py-3">
-                                            {row.status === 'verde' && "🟢"}
-                                            {row.status === 'amarillo' && "🟡"}
-                                            {row.status === 'rojo' && "🔴"}
-                                        </td>
-                                        <td className="px-4 py-3 font-medium">
-                                            {row.original.nombreCliente} <br />
-                                            <span className="text-xs text-gray-500">{row.original.telefono}</span>
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-600">{row.original.pedidoTexto}</td>
+                    {/* Mensaje de Estado */}
+                    {importStatus && (
+                        <div className={`p-4 rounded-lg ${importStatus.type === 'error' ? 'bg-red-50 text-red-700' : importStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+                            {importStatus.msg}
+                        </div>
+                    )}
 
-                                        <td className="px-4 py-3">
-                                            {row.clientMatch.isNew ? (
-                                                <span className="text-yellow-700 bg-yellow-100 px-2 py-1 rounded text-xs">Nuevo (+Crear)</span>
-                                            ) : (
-                                                <span className="text-green-700 bg-green-100 px-2 py-1 rounded text-xs">ID Existe</span>
-                                            )}
-                                        </td>
-
-                                        <td className="px-4 py-3">
-                                            {row.orderMatch.detalles.length > 0 ? (
-                                                <ul className="list-disc list-inside text-xs">
-                                                    {row.orderMatch.detalles.map((d, i) => (
-                                                        <li key={i}>{d.cantidad} unid. ({d.observaciones || "Sin nota"})</li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <span className="text-red-500 italic text-xs">Ninguno</span>
-                                            )}
-                                            {!row.orderMatch.isFullyMatched && (
-                                                <span className="block mt-1 text-xs text-yellow-600 underline cursor-pointer">Revisar (Manual)</span>
-                                            )}
-                                        </td>
-
-                                        <td className="px-4 py-3 text-xs text-red-600 max-w-xs truncate" title={row.errors.join(", ")}>
-                                            {row.errors.length > 0 ? row.errors[0] + (row.errors.length > 1 ? "..." : "") : "-"}
-                                        </td>
-
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {previewData.length > 50 && (
-                            <div className="p-4 text-center text-gray-500 bg-white border-t">
-                                Mostrando 50 de {previewData.length} resultados.
+                    {/* Vista Previa Local */}
+                    {previewLocalData && (
+                        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                <div className="flex gap-4">
+                                    <span className="font-semibold text-gray-700">Detectadas: {summary.filtradosLocal} de {summary.totalRows} filas</span>
+                                    <span className="text-green-600 font-medium">🟢 Ok: {summary.verdes}</span>
+                                    <span className="text-yellow-600 font-medium">🟡 Alerta: {summary.amarillos}</span>
+                                    <span className="text-red-600 font-medium">🔴 Error: {summary.rojos}</span>
+                                </div>
+                                <button
+                                    onClick={handleConfirmLocal}
+                                    disabled={loading || summary.verdes + summary.amarillos === 0}
+                                    className="px-4 py-2 bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                    Confirmar y Facturar ({summary.verdes + summary.amarillos})
+                                </button>
                             </div>
-                        )}
-                    </div>
+
+                            <div className="overflow-x-auto max-h-[600px]">
+                                <table className="w-full text-sm text-left relative">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 shadow-sm">
+                                        <tr>
+                                            <th className="px-4 py-3">Estado</th>
+                                            <th className="px-4 py-3">Fecha</th>
+                                            <th className="px-4 py-3">Referencia</th>
+                                            <th className="px-4 py-3">Producto Detectado</th>
+                                            <th className="px-4 py-3">Paquetes</th>
+                                            <th className="px-4 py-3">Importe</th>
+                                            <th className="px-4 py-3">Medio de Pago</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {previewLocalData.map((row) => (
+                                            <tr key={row.rowId} className={`
+                                                ${row.status === 'verde' ? 'bg-white' : ''}
+                                                ${row.status === 'amarillo' ? 'bg-yellow-50' : ''}
+                                                ${row.status === 'rojo' ? 'bg-red-50' : ''}
+                                            `}>
+                                                <td className="px-4 py-3">
+                                                    {row.status === 'verde' && "🟢"}
+                                                    {row.status === 'amarillo' && "🟡"}
+                                                    {row.status === 'rojo' && <span title={row.errors.join(", ")}>🔴</span>}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-500">
+                                                    {new Date(row.original.fechaPedido).toLocaleDateString()}
+                                                </td>
+                                                <td className="px-4 py-3 font-medium">
+                                                    {row.original.cliente}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-700">
+                                                    {row.productoNombre || <span className="text-red-500 italic">No reconocido: {row.original.producto}</span>}
+                                                    {row.errors.length > 0 && <span className="block text-xs text-red-500">{row.errors[0]}</span>}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {row.paquetes > 0 ? `${row.paquetes} (${row.original.cantidad} un.)` : "-"}
+                                                </td>
+                                                <td className="px-4 py-3 font-medium">
+                                                    ${row.original.precio} <br/>
+                                                    {row.precioUnitario > 0 && <span className="text-xs text-gray-500 font-normal">${row.precioUnitario.toFixed(0)}/c.u</span>}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-500">
+                                                    {row.original.formaPago}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
+
         </div>
     );
 }

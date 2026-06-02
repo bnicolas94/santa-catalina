@@ -71,7 +71,11 @@ export async function POST(req: NextRequest) {
             // 3. Determinar Status General de la Fila
             let status: "verde" | "amarillo" | "rojo" = "verde";
 
-            if (!orderMatch.isFullyMatched) {
+            // IGNORAR FILAS DE CONTROL INTERNO (Cliente == "local")
+            if (row.nombreCliente.trim().toLowerCase() === "local") {
+                status = "rojo";
+                errors.push("Fila de control interno ('local'). Se ignora.");
+            } else if (!orderMatch.isFullyMatched) {
                 // En el nuevo formato, las filas no matcheadas van a amarillo para carga manual
                 status = "amarillo";
                 errors.push(`Concepto no reconocido en: "${row.pedidoTexto}". Se cargará manualmente o revisar formato.`);
