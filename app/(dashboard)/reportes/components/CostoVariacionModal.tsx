@@ -1,7 +1,15 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { formatCurrency, formatPercent, formatDelta } from '../utils/formatters'
+
+interface SubItem {
+    nombre: string
+    montoActual: number
+    montoAnterior: number
+    diferencia: number
+    variacionPct: number | null
+}
 
 interface DesgloseItem {
     nombre: string
@@ -10,6 +18,7 @@ interface DesgloseItem {
     diferencia: number
     variacionPct: number | null
     participacion: number
+    items?: SubItem[]
 }
 
 interface CostoVariacionModalProps {
@@ -17,6 +26,34 @@ interface CostoVariacionModalProps {
     costoTotalActual: number
     costoTotalAnterior: number
     onClose: () => void
+}
+
+function VariacionBadge({ variacionPct, montoActual }: { variacionPct: number | null; montoActual: number }) {
+    if (variacionPct == null) {
+        return montoActual > 0
+            ? <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>▲ Nuevo</span>
+            : <span style={{ color: 'var(--color-gray-400)' }}>—</span>
+    }
+    if (Math.abs(variacionPct) < 0.5) {
+        return <span style={{ color: 'var(--color-gray-400)' }}>≈ 0%</span>
+    }
+    const isUp = variacionPct > 0
+    return (
+        <span style={{ color: isUp ? 'var(--color-danger)' : 'var(--color-success)', fontWeight: 600 }}>
+            {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{variacionPct.toFixed(1).replace('.', ',')}%
+        </span>
+    )
+}
+
+function DiffCell({ diferencia }: { diferencia: number }) {
+    const isPositive = diferencia > 0
+    const isNeutral = Math.abs(diferencia) < 1
+    const color = isNeutral ? 'var(--color-gray-400)' : isPositive ? 'var(--color-danger)' : 'var(--color-success)'
+    return (
+        <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)', color, fontWeight: 600 }}>
+            {isNeutral ? '—' : `${isPositive ? '+' : ''}${formatCurrency(diferencia)}`}
+        </td>
+    )
 }
 
 export default function CostoVariacionModal({
@@ -27,6 +64,7 @@ export default function CostoVariacionModal({
 }: CostoVariacionModalProps) {
     const deltaTotal = formatDelta(costoTotalActual, costoTotalAnterior, { invertColor: true })
     const diferenciaTotalAbs = costoTotalActual - costoTotalAnterior
+    const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
     return (
         <div
@@ -43,7 +81,7 @@ export default function CostoVariacionModal({
                 className="card shadow-xl slide-up"
                 onClick={e => e.stopPropagation()}
                 style={{
-                    width: '95%', maxWidth: '900px', maxHeight: '85vh',
+                    width: '95%', maxWidth: '950px', maxHeight: '90vh',
                     backgroundColor: 'white', display: 'flex', flexDirection: 'column',
                     overflow: 'hidden'
                 }}
@@ -101,6 +139,9 @@ export default function CostoVariacionModal({
 
                 {/* Tabla de desglose */}
                 <div style={{ padding: 'var(--space-5) var(--space-6)', overflowY: 'auto', flex: 1 }}>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)', marginBottom: 'var(--space-3)', fontStyle: 'italic' }}>
+                        💡 Hacé clic en una categoría para ver el detalle de la variación
+                    </p>
                     <div className="table-container" style={{ overflowX: 'auto' }}>
                         <table className="table">
                             <thead>
@@ -115,49 +156,92 @@ export default function CostoVariacionModal({
                             </thead>
                             <tbody>
                                 {desgloseCostos.map((item, i) => {
-                                    const isPositiveDiff = item.diferencia > 0
-                                    const isNeutralDiff = Math.abs(item.diferencia) < 1
-                                    // Para costos: subir = malo (rojo), bajar = bueno (verde)
-                                    const diffColor = isNeutralDiff
-                                        ? 'var(--color-gray-400)'
-                                        : isPositiveDiff ? 'var(--color-danger)' : 'var(--color-success)'
-
-                                    let varDisplay: React.ReactNode
-                                    if (item.variacionPct == null) {
-                                        varDisplay = item.montoActual > 0
-                                            ? <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>▲ Nuevo</span>
-                                            : <span style={{ color: 'var(--color-gray-400)' }}>—</span>
-                                    } else if (Math.abs(item.variacionPct) < 0.5) {
-                                        varDisplay = <span style={{ color: 'var(--color-gray-400)' }}>≈ 0%</span>
-                                    } else {
-                                        const isUp = item.variacionPct > 0
-                                        varDisplay = (
-                                            <span style={{
-                                                color: isUp ? 'var(--color-danger)' : 'var(--color-success)',
-                                                fontWeight: 600
-                                            }}>
-                                                {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{item.variacionPct.toFixed(1).replace('.', ',')}%
-                                            </span>
-                                        )
-                                    }
+                                    const isExpanded = expandedRow === item.nombre
+                                    const hasItems = item.items && item.items.length > 0
 
                                     return (
-                                        <tr key={i} style={{ transition: 'background-color 0.2s' }}>
-                                            <td style={{ fontWeight: 600 }}>{item.nombre}</td>
-                                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)' }}>{formatCurrency(item.montoActual)}</td>
-                                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)', color: 'var(--color-gray-500)' }}>{formatCurrency(item.montoAnterior)}</td>
-                                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)', color: diffColor, fontWeight: 600 }}>
-                                                {isNeutralDiff ? '—' : `${isPositiveDiff ? '+' : ''}${formatCurrency(item.diferencia)}`}
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>{varDisplay}</td>
-                                            <td style={{ textAlign: 'right', color: 'var(--color-gray-500)' }}>{formatPercent(item.participacion)}</td>
-                                        </tr>
+                                        <React.Fragment key={i}>
+                                            <tr
+                                                onClick={() => hasItems && setExpandedRow(isExpanded ? null : item.nombre)}
+                                                style={{
+                                                    transition: 'background-color 0.2s',
+                                                    cursor: hasItems ? 'pointer' : 'default',
+                                                    backgroundColor: isExpanded ? 'var(--color-primary-50, #eff6ff)' : undefined
+                                                }}
+                                            >
+                                                <td style={{ fontWeight: 600 }}>
+                                                    {hasItems && (
+                                                        <span style={{
+                                                            display: 'inline-block', width: 16, marginRight: 4,
+                                                            transition: 'transform 0.2s',
+                                                            transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                                                            fontSize: 'var(--text-xs)', color: 'var(--color-gray-400)'
+                                                        }}>▶</span>
+                                                    )}
+                                                    {!hasItems && <span style={{ display: 'inline-block', width: 20 }} />}
+                                                    {item.nombre}
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)' }}>{formatCurrency(item.montoActual)}</td>
+                                                <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)', color: 'var(--color-gray-500)' }}>{formatCurrency(item.montoAnterior)}</td>
+                                                <DiffCell diferencia={item.diferencia} />
+                                                <td style={{ textAlign: 'right' }}>
+                                                    <VariacionBadge variacionPct={item.variacionPct} montoActual={item.montoActual} />
+                                                </td>
+                                                <td style={{ textAlign: 'right', color: 'var(--color-gray-500)' }}>{formatPercent(item.participacion)}</td>
+                                            </tr>
+
+                                            {/* Sub-items expandidos */}
+                                            {isExpanded && hasItems && (
+                                                <tr>
+                                                    <td colSpan={6} style={{ padding: 0, borderTop: 'none' }}>
+                                                        <div style={{
+                                                            borderLeft: '3px solid var(--color-primary)',
+                                                            backgroundColor: 'var(--color-gray-50)',
+                                                            padding: 'var(--space-3) var(--space-4)',
+                                                            animation: 'fadeIn 0.2s ease'
+                                                        }}>
+                                                            <div style={{
+                                                                fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)',
+                                                                fontWeight: 600, marginBottom: 'var(--space-2)',
+                                                                textTransform: 'uppercase', letterSpacing: '0.05em'
+                                                            }}>
+                                                                Detalle de variación — {item.nombre}
+                                                            </div>
+                                                            <table className="table" style={{ fontSize: 'var(--text-xs)' }}>
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th style={{ backgroundColor: 'var(--color-gray-100)' }}>Ítem</th>
+                                                                        <th style={{ textAlign: 'right', backgroundColor: 'var(--color-gray-100)' }}>Actual</th>
+                                                                        <th style={{ textAlign: 'right', backgroundColor: 'var(--color-gray-100)' }}>Anterior</th>
+                                                                        <th style={{ textAlign: 'right', backgroundColor: 'var(--color-gray-100)' }}>Diferencia</th>
+                                                                        <th style={{ textAlign: 'right', backgroundColor: 'var(--color-gray-100)' }}>Var. %</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {item.items!.map((sub, j) => (
+                                                                        <tr key={j}>
+                                                                            <td>{sub.nombre}</td>
+                                                                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)' }}>{formatCurrency(sub.montoActual)}</td>
+                                                                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)', color: 'var(--color-gray-500)' }}>{formatCurrency(sub.montoAnterior)}</td>
+                                                                            <DiffCell diferencia={sub.diferencia} />
+                                                                            <td style={{ textAlign: 'right' }}>
+                                                                                <VariacionBadge variacionPct={sub.variacionPct} montoActual={sub.montoActual} />
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     )
                                 })}
                             </tbody>
                             <tfoot>
                                 <tr style={{ backgroundColor: 'var(--color-gray-50)', fontWeight: 700, borderTop: '2px solid var(--color-gray-300)' }}>
-                                    <td>TOTAL</td>
+                                    <td><span style={{ display: 'inline-block', width: 20 }} />TOTAL</td>
                                     <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)' }}>{formatCurrency(costoTotalActual)}</td>
                                     <td style={{ textAlign: 'right', fontFamily: 'var(--font-ui)', color: 'var(--color-gray-500)' }}>{formatCurrency(costoTotalAnterior)}</td>
                                     <td style={{

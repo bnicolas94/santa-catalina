@@ -150,12 +150,14 @@ export async function getCostosReport(
             where: {
                 fechaGeneracion: { gte: liqStartAnterior, lte: liqEndAnterior },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
-            }
+            },
+            include: { empleado: { select: { nombre: true, apellido: true } } }
         }),
         prisma.mantenimientoVehiculo.findMany({
             where: {
                 fecha: { gte: startAnterior, lte: endAnterior }
-            }
+            },
+            include: { vehiculo: { select: { patente: true, marca: true, modelo: true } } }
         })
     ])
 
@@ -234,7 +236,8 @@ export async function getCostosReport(
             variacionPct: costoInsumosAnterior > 0
                 ? ((costoInsumosActual - costoInsumosAnterior) / costoInsumosAnterior) * 100
                 : null,
-            participacion: costoTotalActual > 0 ? (costoInsumosActual / costoTotalActual) * 100 : 0
+            participacion: costoTotalActual > 0 ? (costoInsumosActual / costoTotalActual) * 100 : 0,
+            items: [] as any[] // se llena después de calcular insumosItems
         },
         // Cada categoría de gastos operativos
         ...Array.from(allCatNames).map(cat => {
@@ -248,7 +251,8 @@ export async function getCostosReport(
                 variacionPct: anterior > 0
                     ? ((actual - anterior) / anterior) * 100
                     : null,
-                participacion: costoTotalActual > 0 ? (actual / costoTotalActual) * 100 : 0
+                participacion: costoTotalActual > 0 ? (actual / costoTotalActual) * 100 : 0,
+                items: [] as any[] // se llena después
             }
         })
     ].sort((a, b) => b.montoActual - a.montoActual)
@@ -397,21 +401,36 @@ export async function getCostosReport(
     }
 
     // ── 5. Ranking COMPLETO de insumos por costo (sin límite) ──
-    const allInsumos = await prisma.movimientoStock.groupBy({
-        by: ['insumoId'],
-        where: {
-            tipo: 'entrada',
-            fecha: { gte: startOfCurrent, lte: endOfCurrent },
-            ...whereUbi
-        },
-        _sum: { costoTotal: true, cantidad: true },
-        _count: true,
-        orderBy: { _sum: { costoTotal: 'desc' } }
-    })
+    const [allInsumos, allInsumosAnterior] = await Promise.all([
+        prisma.movimientoStock.groupBy({
+            by: ['insumoId'],
+            where: {
+                tipo: 'entrada',
+                fecha: { gte: startOfCurrent, lte: endOfCurrent },
+                ...whereUbi
+            },
+            _sum: { costoTotal: true, cantidad: true },
+            _count: true,
+            orderBy: { _sum: { costoTotal: 'desc' } }
+        }),
+        prisma.movimientoStock.groupBy({
+            by: ['insumoId'],
+            where: {
+                tipo: 'entrada',
+                fecha: { gte: startAnterior, lte: endAnterior },
+                ...whereUbi
+            },
+            _sum: { costoTotal: true, cantidad: true },
+            _count: true
+        })
+    ])
 
-    const insumoIds = allInsumos.map(t => t.insumoId)
+    const allInsumoIds = new Set([
+        ...allInsumos.map(t => t.insumoId),
+        ...allInsumosAnterior.map(t => t.insumoId)
+    ])
     const insumos = await prisma.insumo.findMany({
-        where: { id: { in: insumoIds } },
+        where: { id: { in: Array.from(allInsumoIds) } },
         select: { id: true, nombre: true, unidadMedida: true, familia: { select: { nombre: true } } }
     })
 
@@ -430,6 +449,100 @@ export async function getCostosReport(
             compras: t._count
         }
     })
+
+    // ── 5b. Items de drill-down para desgloseCostos ──
+    // Insumos: comparar por insumo individual
+    const insumosItems = Array.from(allInsumoIds).map(insumoId => {
+        const insumo = insumos.find(i => i.id === insumoId)
+        const actual = allInsumos.find(t => t.insumoId === insumoId)
+        const anterior = allInsumosAnterior.find(t => t.insumoId === insumoId)
+        const montoActual = actual?._sum.costoTotal || 0
+        const montoAnterior = anterior?._sum.costoTotal || 0
+        return {
+            nombre: insumo?.nombre || 'Desconocido',
+            montoActual,
+            montoAnterior,
+            diferencia: montoActual - montoAnterior,
+            variacionPct: montoAnterior > 0 ? ((montoActual - montoAnterior) / montoAnterior) * 100 : null
+        }
+    }).filter(i => i.montoActual > 0 || i.montoAnterior > 0)
+      .sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+
+    // Sueldos: comparar por empleado
+    const sueldosMap: Record<string, { nombre: string; montoActual: number; montoAnterior: number }> = {}
+    for (const l of liqs) {
+        const nombre = `${(l as any).empleado?.nombre || ''} ${(l as any).empleado?.apellido || ''}`.trim() || 'Empleado'
+        if (!sueldosMap[nombre]) sueldosMap[nombre] = { nombre, montoActual: 0, montoAnterior: 0 }
+        sueldosMap[nombre].montoActual += l.totalNeto
+    }
+    for (const l of liqsAnterior) {
+        const nombre = `${(l as any).empleado?.nombre || ''} ${(l as any).empleado?.apellido || ''}`.trim() || 'Empleado'
+        if (!sueldosMap[nombre]) sueldosMap[nombre] = { nombre, montoActual: 0, montoAnterior: 0 }
+        sueldosMap[nombre].montoAnterior += l.totalNeto
+    }
+    const sueldosItems = Object.values(sueldosMap).map(s => ({
+        ...s,
+        diferencia: s.montoActual - s.montoAnterior,
+        variacionPct: s.montoAnterior > 0 ? ((s.montoActual - s.montoAnterior) / s.montoAnterior) * 100 : null
+    })).sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+
+    // Mantenimiento: comparar por vehículo
+    const mantMap: Record<string, { nombre: string; montoActual: number; montoAnterior: number }> = {}
+    for (const m of mants) {
+        const veh = (m as any).vehiculo
+        const nombre = veh ? `${veh.patente || ''} ${veh.marca || ''} ${veh.modelo || ''}`.trim() : m.tipo
+        if (!mantMap[nombre]) mantMap[nombre] = { nombre, montoActual: 0, montoAnterior: 0 }
+        mantMap[nombre].montoActual += m.costo
+    }
+    for (const m of mantsAnterior) {
+        const veh = (m as any).vehiculo
+        const nombre = veh ? `${veh.patente || ''} ${veh.marca || ''} ${veh.modelo || ''}`.trim() : (m as any).tipo
+        if (!mantMap[nombre]) mantMap[nombre] = { nombre, montoActual: 0, montoAnterior: 0 }
+        mantMap[nombre].montoAnterior += m.costo
+    }
+    const mantItems = Object.values(mantMap).map(m => ({
+        ...m,
+        diferencia: m.montoActual - m.montoAnterior,
+        variacionPct: m.montoAnterior > 0 ? ((m.montoActual - m.montoAnterior) / m.montoAnterior) * 100 : null
+    })).sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+
+    // Gastos operativos manuales: comparar por descripción dentro de cada categoría
+    const gastosItemsMap: Record<string, Record<string, { nombre: string; montoActual: number; montoAnterior: number }>> = {}
+    for (const g of gastos) {
+        const cat = (g.categoria as any)?.nombre || 'Sin categoría'
+        if (!gastosItemsMap[cat]) gastosItemsMap[cat] = {}
+        const desc = g.descripcion || 'Sin descripción'
+        if (!gastosItemsMap[cat][desc]) gastosItemsMap[cat][desc] = { nombre: desc, montoActual: 0, montoAnterior: 0 }
+        gastosItemsMap[cat][desc].montoActual += g.monto
+    }
+    for (const g of gastosAnterior) {
+        const cat = (g.categoria as any)?.nombre || 'Sin categoría'
+        if (!gastosItemsMap[cat]) gastosItemsMap[cat] = {}
+        const desc = (g as any).descripcion || 'Sin descripción'
+        if (!gastosItemsMap[cat][desc]) gastosItemsMap[cat][desc] = { nombre: desc, montoActual: 0, montoAnterior: 0 }
+        gastosItemsMap[cat][desc].montoAnterior += g.monto
+    }
+
+    // Mapeo de items por categoría para asignar al desglose
+    const itemsPorCategoria: Record<string, any[]> = {}
+    for (const [cat, items] of Object.entries(gastosItemsMap)) {
+        itemsPorCategoria[cat] = Object.values(items).map(i => ({
+            ...i,
+            diferencia: i.montoActual - i.montoAnterior,
+            variacionPct: i.montoAnterior > 0 ? ((i.montoActual - i.montoAnterior) / i.montoAnterior) * 100 : null
+        })).sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+    }
+    itemsPorCategoria['Sueldos'] = sueldosItems
+    itemsPorCategoria['Mantenimiento'] = mantItems
+
+    // Asignar items de drill-down a cada entrada del desglose
+    for (const entry of desgloseCostos) {
+        if (entry.nombre === 'Compra de Insumos') {
+            entry.items = insumosItems
+        } else if (itemsPorCategoria[entry.nombre]) {
+            entry.items = itemsPorCategoria[entry.nombre]
+        }
+    }
 
     // ── 6. Gasto por Proveedor ──
     const comprasProveedor = await prisma.movimientoStock.groupBy({
