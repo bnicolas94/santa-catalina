@@ -65,12 +65,12 @@ export async function POST(req: NextRequest) {
             // Detectar producto base por alias
             let matchedProducto = null;
             if (prodText.includes("jamón") || prodText.includes("jamon") || prodText.includes("jyq")) {
-                matchedProducto = presentacionesDB.find(p => p.producto.codigoInterno === "JYQ")?.producto;
-            } else if (prodText.includes("surtidos clásicos") || prodText.includes("clasicos")) {
-                matchedProducto = presentacionesDB.find(p => p.producto.codigoInterno === "CLA")?.producto;
-            } else if (prodText.includes("surtidos especiales") || prodText.includes("especiales")) {
+                matchedProducto = presentacionesDB.find(p => p.producto.codigoInterno === "JQ")?.producto;
+            } else if (prodText.includes("surtido") && prodText.includes("especial")) {
                 matchedProducto = presentacionesDB.find(p => p.producto.codigoInterno === "ESP")?.producto;
-            } else if (prodText.includes("personalizado") || prodText.includes("elegidos")) {
+            } else if (prodText.includes("surtido") && (prodText.includes("clásico") || prodText.includes("clasico"))) {
+                matchedProducto = presentacionesDB.find(p => p.producto.codigoInterno === "CLA")?.producto;
+            } else if (prodText.includes("personalizado")) {
                 matchedProducto = presentacionesDB.find(p => p.producto.codigoInterno === "ELE")?.producto;
             } else {
                 // Intento genérico por alias
@@ -134,9 +134,34 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            if (!row.fechaPedido || isNaN(new Date(row.fechaPedido).getTime())) {
+            let fechaValida = false;
+            let parsedDate = new Date(row.fechaPedido);
+
+            if (!isNaN(parsedDate.getTime())) {
+                fechaValida = true;
+            } else if (row.fechaPedido) {
+                const parts = row.fechaPedido.trim().split(" ");
+                const datePart = parts[0];
+                const timePart = parts[1] || "00:00:00";
+                
+                if (datePart && datePart.includes("/")) {
+                    const [d, m, y] = datePart.split("/");
+                    if (d && m && y) {
+                        const cleanTime = timePart.split(":").length === 2 ? `${timePart}:00` : timePart;
+                        const isoStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${cleanTime}`;
+                        parsedDate = new Date(isoStr);
+                        if (!isNaN(parsedDate.getTime())) {
+                            fechaValida = true;
+                        }
+                    }
+                }
+            }
+
+            if (!fechaValida) {
                 status = "rojo";
                 errors.push("Fecha de pedido inválida.");
+            } else {
+                row.fechaPedido = parsedDate.toISOString();
             }
 
             return {
