@@ -75,7 +75,7 @@ export async function PATCH(
     try {
         const { id } = await params
         const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, fechaMovimiento } = body
+        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, fechaMovimiento, fechaFactura } = body
 
         // 1. Buscar el movimiento original
         const movOriginal = await prisma.movimientoStock.findUnique({
@@ -200,6 +200,7 @@ export async function PATCH(
                     costoTotal: nuevoCostoTotal,
                     estadoPago: nuevoEstado,
                     fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
+                    fechaFactura: fechaFactura ? new Date(`${fechaFactura}T12:00:00Z`) : null,
                     gastoId
                 },
                 include: {

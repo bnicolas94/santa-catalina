@@ -8,7 +8,7 @@ interface Proveedor { id: string; nombre: string }
 interface Movimiento {
     id: string; tipo: string; cantidad: number; cantidadSecundaria: number | null; fecha: string; observaciones: string | null
     costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null; numeroFactura: string | null;
-    montoPagado: number | null;
+    montoPagado: number | null; fechaFactura: string | null;
     insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
     proveedor: { id: string; nombre: string } | null
     ubicacion: { id: string; nombre: string } | null
@@ -26,7 +26,7 @@ function StockContent() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[], montoPagado: '' })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[], montoPagado: '' })
     const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -40,6 +40,7 @@ function StockContent() {
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
+        fechaFactura: '',
         ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[],
     })
     const [error, setError] = useState('')
@@ -133,7 +134,7 @@ function StockContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -203,7 +204,7 @@ function StockContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess('Factura registrada correctamente')
             setShowFacturaModal(false)
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -226,6 +227,7 @@ function StockContent() {
             unidadesPorBulto: '',
             fechaVencimiento: mov.fechaVencimiento ? new Date(mov.fechaVencimiento).toLocaleDateString('en-CA') : '',
             fechaMovimiento: mov.fecha ? new Date(mov.fecha).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
+            fechaFactura: mov.fechaFactura ? new Date(mov.fechaFactura).toLocaleDateString('en-CA') : '',
             ubicacionId: mov.ubicacion?.id || '',
             cajaOrigen: 'caja_chica',
             pagoDividido: false,
@@ -362,7 +364,7 @@ function StockContent() {
                     )}
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
                         setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
@@ -372,7 +374,7 @@ function StockContent() {
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), ubicacionId: defaultUbi, cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: defaultUbi, cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
                         setShowModal(true)
                     }}>+ Simple</button>
                 </div>
@@ -586,7 +588,12 @@ function StockContent() {
                                         </span>
                                     ) : <span style={{ color: '#aaa' }}>—</span>}
                                 </td>
-                                <td className="hidden-mobile">{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                                <td className="hidden-mobile">
+                                    <div>{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                                    {mov.fechaFactura && (
+                                        <div style={{ fontSize: '10px', color: '#8E44AD', fontWeight: 600 }}>📄 FC: {new Date(mov.fechaFactura).toLocaleDateString('es-AR')}</div>
+                                    )}
+                                </td>
                                 <td className="hidden-mobile">
                                     {mov.proveedor?.nombre || '—'}
                                     {mov.numeroFactura && <div style={{ fontSize: '10px', color: '#666', fontWeight: 600 }}>Fac: {mov.numeroFactura}</div>}
@@ -747,6 +754,12 @@ function StockContent() {
                                         <label className="form-label">Fecha del Movimiento</label>
                                         <input type="date" className="form-input" value={form.fechaMovimiento} onChange={(e) => setForm({ ...form, fechaMovimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
+                                    {form.tipo === 'entrada' && (
+                                        <div className="form-group">
+                                            <label className="form-label">Fecha Factura/Remito</label>
+                                            <input type="date" className="form-input" value={form.fechaFactura} onChange={(e) => setForm({ ...form, fechaFactura: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
+                                        </div>
+                                    )}
                                     <div className="form-group">
                                         <label className="form-label">Fecha de Vencimiento</label>
                                         <input type="date" className="form-input" value={form.fechaVencimiento} onChange={(e) => setForm({ ...form, fechaVencimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
@@ -907,7 +920,7 @@ function StockContent() {
                         </div>
                         <form onSubmit={handleFacturaSubmit}>
                             <div className="modal-body">
-                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Sede de entrada</label>
                                         <select className="form-select" value={facturaForm.ubicacionId} onChange={(e) => setFacturaForm({ ...facturaForm, ubicacionId: e.target.value })} required>
@@ -938,6 +951,10 @@ function StockContent() {
                                     <div className="form-group">
                                         <label className="form-label">Nº Factura / Remito</label>
                                         <input className="form-input" value={facturaForm.numeroFactura} onChange={(e) => setFacturaForm({ ...facturaForm, numeroFactura: e.target.value })} placeholder="Opcional" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Fecha Factura/Remito</label>
+                                        <input type="date" className="form-input" value={facturaForm.fechaFactura} onChange={(e) => setFacturaForm({ ...facturaForm, fechaFactura: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
                                     </div>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>

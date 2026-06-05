@@ -296,6 +296,7 @@ model MovimientoStock {
   cantidadSecundaria Float?          @map("cantidad_secundaria")
   numeroFactura      String?         @map("numero_factura")
   montoPagado        Float?          @default(0) @map("monto_pagado")
+  fechaFactura       DateTime?       @map("fecha_factura")
   gasto              GastoOperativo? @relation(fields: [gastoId], references: [id])
   insumo             Insumo          @relation(fields: [insumoId], references: [id])
   loteOrigen         Lote?           @relation(fields: [loteOrigenId], references: [id])

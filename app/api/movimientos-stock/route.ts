@@ -36,7 +36,7 @@ export async function POST(request: Request) {
             insumoId, tipo, cantidad, cantidadSecundaria, observaciones, 
             proveedorId, costoTotal, estadoPago, actualizarCosto, 
             fechaVencimiento, ubicacionId, fechaMovimiento, cajaOrigen,
-            pagoDividido, pagos, montoPagado
+            pagoDividido, pagos, montoPagado, fechaFactura
         } = body
 
         if (!insumoId || !tipo || !cantidad || !ubicacionId) {
@@ -140,6 +140,7 @@ export async function POST(request: Request) {
                     montoPagado: esPagado ? costoTotalFloat : (esACuenta ? montoACuentaFloat : 0),
                     gastoId,
                     fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
+                    fechaFactura: fechaFactura ? new Date(`${fechaFactura}T12:00:00Z`) : null,
                     ubicacionId
                 }
             })

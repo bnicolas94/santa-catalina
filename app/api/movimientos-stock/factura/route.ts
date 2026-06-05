@@ -11,6 +11,7 @@ export async function POST(request: Request) {
             proveedorId, 
             numeroFactura, 
             fechaMovimiento, 
+            fechaFactura,
             estadoPago, 
             cajaOrigen, 
             ubicacionId, 
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
         }
 
         const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : new Date()
+        const parsedFechaFactura = fechaFactura ? new Date(`${fechaFactura}T12:00:00Z`) : null
         const selectedCaja = cajaOrigen || 'caja_madre'
 
         // 1. Calcular costo total de la factura
@@ -162,6 +164,7 @@ export async function POST(request: Request) {
                         montoPagado: estadoPago === 'pagado' ? costoItemFloat : (esACuenta && costoItemFloat ? (montoACuentaFloat / costoTotalFactura * (costoItemFloat || 0)) : 0),
                         gastoId,
                         fechaVencimiento: item.fechaVencimiento ? new Date(item.fechaVencimiento) : null,
+                        fechaFactura: parsedFechaFactura,
                         ubicacionId
                     }
                 })
