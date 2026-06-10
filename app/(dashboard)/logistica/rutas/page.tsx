@@ -115,9 +115,16 @@ export default function PlanificacionRutasPage() {
             const vehData = await vehRes.json()
             setVehiculos(Array.isArray(vehData) ? vehData.filter((v: any) => v.activo) : [])
 
-            // Solo pedidos confirmados y que NO sean retiro
+            // Solo pedidos confirmados y que NO sean retiro (verificando flag y texto en dirección/zona)
             const disponibles = Array.isArray(pedData)
-                ? pedData.filter((p: Pedido) => p.estado === 'confirmado' && !p.esRetiro)
+                ? pedData.filter((p: Pedido) => {
+                    if (p.estado !== 'confirmado') return false;
+                    if (p.esRetiro) return false;
+                    const dir = p.cliente?.direccion?.toLowerCase() || '';
+                    const zona = p.cliente?.zona?.toLowerCase() || '';
+                    if (dir.includes('retira') || zona.includes('retira')) return false;
+                    return true;
+                })
                 : []
             setPedidosDisponibles(disponibles)
 
