@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PreviewRowResult } from "../preview/route";
 import { parseDireccion } from "@/lib/parsers/addressUtils";
-import { geocodeAddress } from "@/lib/services/geocoding";
+// geocodeAddress deshabilitado — se resuelve desde logística
 
 export async function POST(req: NextRequest) {
     try {
@@ -108,14 +108,9 @@ export async function POST(req: NextRequest) {
                         row.clientMatch.proposedData.localidad || null
                     );
 
-                    // Geocoding data
+                    // Geocoding deshabilitado en importación — se resuelve desde el módulo de logística
                     let latitud: number | null = null;
                     let longitud: number | null = null;
-                    const geocode = await geocodeAddress(calle, numero, row.clientMatch.proposedData.localidad || null);
-                    if (geocode) {
-                        latitud = geocode.lat;
-                        longitud = geocode.lng;
-                    }
 
                     // 1. Crear o Actualizar cliente
                     if (row.clientMatch.isNew || !finalClientId) {
