@@ -58,6 +58,7 @@ export default function PlanificacionRutasPage() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [isOptimizing, setIsOptimizing] = useState(false)
+    const [isEntregandoTodos, setIsEntregandoTodos] = useState<string | null>(null)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
@@ -391,6 +392,35 @@ export default function PlanificacionRutasPage() {
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error al registrar entrega') }
     }
 
+    async function handleEntregarTodosAdmin(ruta: Ruta) {
+        const pendientes = ruta.entregas.filter(e => !e.horaEntrega)
+        if (pendientes.length === 0) return
+        if (!confirm(`¿Marcar las ${pendientes.length} entregas pendientes de esta ruta como entregadas?`)) return
+        
+        setIsEntregandoTodos(ruta.id)
+        setError('')
+        try {
+            for (const entrega of pendientes) {
+                const res = await fetch(`/api/entregas/${entrega.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tempEntrega: null, unidadesRechazadas: 0, motivoRechazo: null, observaciones: 'Entregado masivamente por Administrador' })
+                })
+                if (!res.ok) {
+                    const data = await res.json()
+                    throw new Error(`Error en ${entrega.cliente?.nombreComercial}: ${data.error}`)
+                }
+            }
+            setSuccess('Todas las entregas de la ruta fueron marcadas como entregadas')
+            fetchData()
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al entregar todos')
+        } finally {
+            setIsEntregandoTodos(null)
+            setTimeout(() => setSuccess(''), 3000)
+        }
+    }
+
     function getResumenProductos(entregas: Entrega[]) {
         const resumen: Record<string, { nombre: string; cantidad: number }> = {}
         for (const e of entregas) {
@@ -523,6 +553,12 @@ export default function PlanificacionRutasPage() {
                                                 <div style={{ height: '100%', borderRadius: '3px', width: `${progreso}%`, backgroundColor: progreso === 100 ? '#2ECC71' : 'var(--color-primary)', transition: 'width 0.3s' }} />
                                             </div>
                                         </div>
+                                        {progreso < 100 && (
+                                            <button className="btn btn-icon btn-xs btn-ghost" style={{ color: '#2ECC71', fontSize: '14px' }}
+                                                onClick={(e) => { e.stopPropagation(); handleEntregarTodosAdmin(ruta) }} title="Entregar todos los pendientes" disabled={isEntregandoTodos === ruta.id}>
+                                                {isEntregandoTodos === ruta.id ? '⏳' : '✅'}
+                                            </button>
+                                        )}
                                         <button className="btn btn-icon btn-xs btn-ghost" style={{ color: '#E74C3C' }}
                                             onClick={(e) => { e.stopPropagation(); handleDeleteRuta(ruta.id) }} title="Eliminar ruta">🗑️</button>
                                         <div style={{ fontSize: '1.2rem', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>⌄</div>
