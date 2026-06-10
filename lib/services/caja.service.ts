@@ -189,16 +189,49 @@ export class CajaService {
 
     // ─── Eliminar Movimiento ─────────────────────────────────────────────────
     /**
-     * Revierte el impacto del movimiento en SaldoCaja y lo elimina.
+     * Revierte el impacto del movimiento en SaldoCaja, revierte el estado de los pedidos asociados a la rendición, y lo elimina.
      */
     static async deleteMovimiento(id: string) {
         return prisma.$transaction(async (tx) => {
             const mov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!mov) return
 
-            // Revertir impacto
+            // Revertir impacto de saldo
             if (mov.cajaOrigen) {
                 await revertirImpactoSaldo(tx, mov.cajaOrigen, mov.tipo, mov.monto)
+            }
+
+            // Si es un movimiento de rendición de chofer, restaurar los pedidos asociados a pendientes de cobro
+            if (mov.concepto === 'rendicion_chofer' && mov.rendicionId) {
+                const rendicion = await tx.rendicionChofer.findUnique({
+                    where: { id: mov.rendicionId }
+                })
+                if (rendicion && rendicion.rutaId) {
+                    const entregasRuta = await tx.entrega.findMany({
+                        where: {
+                            rutaId: rendicion.rutaId,
+                            pedido: { medioPago: 'efectivo', estado: 'entregado' }
+                        },
+                        select: { pedidoId: true }
+                    })
+                    const pedidoIds = entregasRuta.map(e => e.pedidoId)
+                    if (pedidoIds.length > 0) {
+                        await tx.pedido.updateMany({
+                            where: { id: { in: pedidoIds } },
+                            data: { abonado: false }
+                        })
+                    }
+                }
+                
+                // Desvincular de MovimientoCaja para no violar la FK al borrar RendicionChofer
+                await tx.movimientoCaja.update({
+                    where: { id },
+                    data: { rendicionId: null }
+                })
+
+                await tx.rendicionChofer.delete({
+                    where: { id: mov.rendicionId }
+                })
             }
 
             await tx.movimientoCaja.delete({ where: { id } })
@@ -258,10 +291,10 @@ export class CajaService {
 
     // ─── Rendición de Chofer ─────────────────────────────────────────────────
     /**
-     * Confirma la rendición del chofer, crea el movimiento de ingreso y actualiza caja.
+     * Confirma la rendición del chofer para una ruta específica, crea el movimiento de ingreso y actualiza caja.
      */
     static async confirmarRendicion(
-        choferId: string,
+        rutaId: string,
         montoEsperado: number,
         montoEntregado: number,
         observaciones?: string | null
@@ -269,16 +302,82 @@ export class CajaService {
         const diferencia = montoEntregado - montoEsperado
 
         return prisma.$transaction(async (tx) => {
+            const rutaActual = await tx.ruta.findUnique({
+                where: { id: rutaId },
+                include: { chofer: true }
+            })
+            if (!rutaActual) throw new Error('Ruta no encontrada')
+
+            // Validar orden cronológico: no permitir si hay rutas anteriores sin rendir del mismo chofer
+            const rutaAnteriorPendiente = await tx.ruta.findFirst({
+                where: {
+                    choferId: rutaActual.choferId,
+                    OR: [
+                        { fecha: { lt: rutaActual.fecha } },
+                        {
+                            fecha: rutaActual.fecha,
+                            createdAt: { lt: rutaActual.createdAt }
+                        }
+                    ],
+                    rendicion: null,
+                    entregas: {
+                        some: {
+                            pedido: {
+                                medioPago: 'efectivo',
+                                estado: 'entregado',
+                                abonado: false
+                            }
+                        }
+                    }
+                },
+                orderBy: [
+                    { fecha: 'asc' },
+                    { createdAt: 'asc' }
+                ]
+            })
+
+            if (rutaAnteriorPendiente) {
+                const fechaString = new Date(rutaAnteriorPendiente.fecha).toLocaleDateString('es-AR')
+                const turnoString = rutaAnteriorPendiente.turno || 'Sin Turno'
+                throw new Error(`No se puede rendir esta ruta. El chofer tiene una ruta anterior pendiente del ${fechaString} (Turno: ${turnoString}).`)
+            }
+
+            // Crear la rendición asociada a la ruta
             const rendicion = await tx.rendicionChofer.create({
                 data: {
-                    choferId,
+                    choferId: rutaActual.choferId,
+                    rutaId,
                     montoEsperado,
-                    montoEntregado: montoEntregado,
+                    montoEntregado,
                     diferencia,
                     estado: 'controlado',
                     observaciones: observaciones || null,
                 },
             })
+
+            // Marcar todos los pedidos en efectivo entregados de esta ruta como abonado
+            const entregasRuta = await tx.entrega.findMany({
+                where: {
+                    rutaId,
+                    pedido: {
+                        medioPago: 'efectivo',
+                        estado: 'entregado',
+                        abonado: false
+                    }
+                },
+                select: { pedidoId: true }
+            })
+            const pedidoIds = entregasRuta.map(e => e.pedidoId)
+            if (pedidoIds.length > 0) {
+                await tx.pedido.updateMany({
+                    where: { id: { in: pedidoIds } },
+                    data: { abonado: true }
+                })
+            }
+
+            const fechaRutaStr = new Date(rutaActual.fecha).toLocaleDateString('es-AR')
+            const turnoStr = rutaActual.turno ? ` - Turno ${rutaActual.turno}` : ''
+            const desc = `Rendición chofer ${rutaActual.chofer.nombre} - Ruta ${fechaRutaStr}${turnoStr}${diferencia !== 0 ? ` (Dif: $${diferencia.toFixed(2)})` : ''}`
 
             await (tx as any).movimientoCaja.create({
                 data: {
@@ -287,7 +386,7 @@ export class CajaService {
                     monto: montoEntregado,
                     medioPago: 'efectivo',
                     cajaOrigen: 'caja_chica',
-                    descripcion: `Rendición chofer - ${diferencia !== 0 ? `Diferencia: $${diferencia.toFixed(2)}` : 'Sin diferencia'}`,
+                    descripcion: desc,
                     rendicionId: rendicion.id,
                     fecha: new Date(),
                 },

@@ -12,9 +12,19 @@ interface MovCaja {
     movimientoMp?: { mpId: string; comisionMp: number; montoNeto: number; estado: string; metodoPago: string | null } | null
 }
 
+interface PendingPedido {
+    id: string
+    clienteNombre: string
+    totalImporte: number
+    totalUnidades: number
+}
+
 interface Rendicion {
+    rutaId: string
+    fecha: string
+    turno: string | null
     choferId: string; choferNombre: string; montoEsperado: number
-    pedidosEfectivo: number; rendicionId: string | null; estado: string
+    pedidosEfectivo: number; bloqueada: boolean; pedidos: PendingPedido[]
 }
 
 interface Resumen {
@@ -65,7 +75,7 @@ export default function CajaPage() {
     const resumen = swrData?.cajaData?.resumen || { ingresosEfectivo: 0, ingresosTransferencia: 0, egresosTotal: 0, saldo: 0 }
     
     const rendDataRaw = swrData?.rendicionesData
-    const rendiciones = Array.isArray(rendDataRaw) ? rendDataRaw.filter((r: Rendicion) => r.estado === 'pendiente' && r.montoEsperado > 0) : []
+    const rendiciones = Array.isArray(rendDataRaw) ? rendDataRaw.filter((r: Rendicion) => r.montoEsperado > 0) : []
 
     const saldosData = swrData?.saldosData || {}
     const saldoMadre = saldosData.cajaMadre?.saldo ?? 0
@@ -353,7 +363,7 @@ export default function CajaPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    choferId: showRendicionModal.choferId,
+                    rutaId: showRendicionModal.rutaId,
                     montoEsperado: showRendicionModal.montoEsperado,
                     montoEntregado: rendForm.montoEntregado,
                     observaciones: rendForm.observaciones,
@@ -754,26 +764,50 @@ export default function CajaPage() {
                     <h3 style={{ marginBottom: 'var(--space-3)', fontSize: '1rem' }}>🚛 Rendiciones Pendientes de Choferes</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
                         {rendiciones.map((r) => (
-                            <div key={r.choferId} className="card" style={{ borderLeft: '4px solid #F39C12' }}>
+                            <div key={r.rutaId} className="card" style={{ 
+                                borderLeft: `4px solid ${r.bloqueada ? '#BDC3C7' : '#F39C12'}`,
+                                opacity: r.bloqueada ? 0.75 : 1
+                            }}>
                                 <div className="card-body" style={{ padding: 'var(--space-4)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
                                         <span style={{ fontWeight: 700, fontSize: '1rem' }}>🧑‍✈️ {r.choferNombre}</span>
-                                        <span className="badge" style={{ backgroundColor: '#F39C1215', color: '#E67E22', border: '1px solid #F39C12' }}>
-                                            Pendiente
+                                        <span className="badge" style={{ 
+                                            backgroundColor: r.bloqueada ? '#E2E8F0' : '#F39C1215', 
+                                            color: r.bloqueada ? '#64748B' : '#E67E22', 
+                                            border: `1px solid ${r.bloqueada ? '#CBD5E1' : '#F39C12'}` 
+                                        }}>
+                                            {r.bloqueada ? 'Bloqueada' : 'Pendiente'}
                                         </span>
                                     </div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginBottom: 'var(--space-2)' }}>
-                                        {r.pedidosEfectivo} pedidos en efectivo
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginBottom: 'var(--space-1)' }}>
+                                        📅 Ruta: {new Date(r.fecha).toLocaleDateString('es-AR')} {r.turno ? `(${r.turno.toUpperCase()})` : ''}
                                     </div>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#E67E22', marginBottom: 'var(--space-3)' }}>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-gray-400)', marginBottom: 'var(--space-2)' }}>
+                                        📦 {r.pedidosEfectivo} pedidos en efectivo
+                                    </div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: r.bloqueada ? '#7F8C8D' : '#E67E22', marginBottom: 'var(--space-3)' }}>
                                         {formatCurrency(r.montoEsperado)}
                                     </div>
-                                    <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
-                                        setShowRendicionModal(r)
-                                        setRendForm({ montoEntregado: String(r.montoEsperado), observaciones: '' })
-                                    }}>
-                                        ✅ Controlado
-                                    </button>
+                                    {r.bloqueada ? (
+                                        <div style={{ 
+                                            fontSize: '0.75rem', 
+                                            color: '#E74C3C', 
+                                            textAlign: 'center', 
+                                            padding: '8px', 
+                                            backgroundColor: '#E74C3C10', 
+                                            borderRadius: 'var(--radius-md)',
+                                            fontWeight: 600
+                                        }}>
+                                            ⚠️ Debe rendir la ruta anterior primero
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => {
+                                            setShowRendicionModal(r)
+                                            setRendForm({ montoEntregado: String(r.montoEsperado), observaciones: '' })
+                                        }}>
+                                            ✅ Controlado
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -1094,15 +1128,40 @@ export default function CajaPage() {
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowRendicionModal(null)}>✕</button>
                         </div>
                         <div className="modal-body">
-                            <div style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+                            <div style={{ textAlign: 'center', marginBottom: 'var(--space-3)' }}>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)' }}>Chofer</div>
                                 <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>🧑‍✈️ {showRendicionModal.choferNombre}</div>
+                                <div style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginTop: '4px' }}>
+                                    📅 Ruta: {new Date(showRendicionModal.fecha).toLocaleDateString('es-AR')} 
+                                    {showRendicionModal.turno ? ` (${showRendicionModal.turno.toUpperCase()})` : ''}
+                                </div>
                             </div>
                             <div style={{ textAlign: 'center', marginBottom: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: '#F39C1210', borderRadius: 'var(--radius-md)', border: '1px solid #F39C1240' }}>
                                 <div style={{ fontSize: '0.75rem', color: '#E67E22', fontWeight: 600, textTransform: 'uppercase' }}>Monto Esperado</div>
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E67E22' }}>{formatCurrency(showRendicionModal.montoEsperado)}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--color-gray-500)' }}>{showRendicionModal.pedidosEfectivo} pedidos en efectivo</div>
                             </div>
+
+                            {/* Desglose de pedidos */}
+                            <div style={{ marginBottom: 'var(--space-4)' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-gray-500)', textTransform: 'uppercase', marginBottom: 'var(--space-2)' }}>Desglose de Pedidos</div>
+                                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2)', backgroundColor: 'var(--color-gray-50)' }}>
+                                    {showRendicionModal.pedidos?.map((ped) => (
+                                        <div key={ped.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '6px 4px', borderBottom: '1px solid var(--color-gray-100)' }}>
+                                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }} title={ped.clienteNombre}>
+                                                🏢 {ped.clienteNombre}
+                                            </span>
+                                            <span style={{ fontWeight: 700, color: 'var(--color-gray-700)' }}>
+                                                {formatCurrency(ped.totalImporte)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {(!showRendicionModal.pedidos || showRendicionModal.pedidos.length === 0) && (
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-400)', textAlign: 'center', padding: '12px' }}>No hay detalles de pedidos</div>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="form-group">
                                 <label className="form-label">Monto Entregado ($)</label>
                                 <input type="number" step="0.01" className="form-input" value={rendForm.montoEntregado}

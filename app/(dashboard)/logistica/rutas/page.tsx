@@ -267,6 +267,27 @@ export default function PlanificacionRutasPage() {
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
     }
 
+    async function handleCompletarEntregaAdmin(entregaId: string) {
+        if (!confirm('¿Marcar este pedido como entregado? Se actualizará el estado del pedido y se registrará la entrega.')) return
+        setError('')
+        try {
+            const res = await fetch(`/api/entregas/${entregaId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tempEntrega: null,
+                    unidadesRechazadas: 0,
+                    motivoRechazo: null,
+                    observaciones: 'Entregado por Administrador'
+                }),
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess('Entrega registrada con éxito')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error al registrar entrega') }
+    }
+
     function getResumenProductos(entregas: Entrega[]) {
         const resumen: Record<string, { nombre: string; cantidad: number }> = {}
         for (const e of entregas) {
@@ -442,15 +463,29 @@ export default function PlanificacionRutasPage() {
                                                                 </td>
                                                                 <td>
                                                                     {entregado ? (
-                                                                        <div>
-                                                                            <span className="badge badge-success" style={{ fontSize: '10px' }}>
-                                                                                {entrega.pedido.estado === 'rechazado' ? '❌ Rechazado' : '✅ Entregado'}
-                                                                            </span>
-                                                                            <div style={{ fontSize: '9px', color: 'var(--color-gray-400)', marginTop: '2px' }}>
-                                                                                {new Date(entrega.horaEntrega!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : <span className="badge badge-warning" style={{ fontSize: '10px' }}>🟡 Pendiente</span>}
+                                                                         <div>
+                                                                             <span className="badge badge-success" style={{ fontSize: '10px' }}>
+                                                                                 {entrega.pedido.estado === 'rechazado' ? '❌ Rechazado' : '✅ Entregado'}
+                                                                             </span>
+                                                                             <div style={{ fontSize: '9px', color: 'var(--color-gray-400)', marginTop: '2px' }}>
+                                                                                 {new Date(entrega.horaEntrega!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                                                                             </div>
+                                                                         </div>
+                                                                     ) : (
+                                                                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                                             <span className="badge badge-warning" style={{ fontSize: '10px' }}>🟡 Pendiente</span>
+                                                                             <button 
+                                                                                 className="btn btn-primary"
+                                                                                 style={{ padding: '2px 6px', fontSize: '9px', fontWeight: 700, height: 'auto', minHeight: 'unset', lineHeight: 'normal' }}
+                                                                                 onClick={(e) => {
+                                                                                     e.stopPropagation();
+                                                                                     handleCompletarEntregaAdmin(entrega.id);
+                                                                                 }}
+                                                                             >
+                                                                                 ✓ Entregar
+                                                                             </button>
+                                                                         </div>
+                                                                     )}
                                                                 </td>
                                                             </tr>
                                                         )

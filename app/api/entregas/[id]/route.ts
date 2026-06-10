@@ -97,10 +97,20 @@ export async function PUT(
                 ? 'rechazado'
                 : 'entregado'
 
-            // 5. Actualizar estado del pedido relacionado
+            // 5. Recalcular totalImporte de forma proporcional si hay rechazo parcial (Opción A)
+            let nuevoImporte = upEntrega.pedido.totalImporte
+            if (upEntrega.unidadesRechazadas > 0 && upEntrega.pedido.totalUnidades > 0) {
+                const factorEntregado = 1 - (upEntrega.unidadesRechazadas / upEntrega.pedido.totalUnidades)
+                nuevoImporte = Math.round(upEntrega.pedido.totalImporte * Math.max(0, factorEntregado))
+            }
+
+            // 6. Actualizar estado y totalImporte del pedido relacionado
             await tx.pedido.update({
                 where: { id: upEntrega.pedidoId },
-                data: { estado: estadoPedido }
+                data: { 
+                    estado: estadoPedido,
+                    totalImporte: nuevoImporte
+                }
             })
 
             return upEntrega

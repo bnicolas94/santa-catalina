@@ -408,6 +408,7 @@ model Ruta {
   chofer            Empleado             @relation("ChoferRuta", fields: [choferId], references: [id])
   ubicacionOrigen   Ubicacion?           @relation("OrigenRuta", fields: [ubicacionOrigenId], references: [id])
   vehiculo          Vehiculo?            @relation("RutaVehiculo", fields: [vehiculoId], references: [id])
+  rendicion         RendicionChofer?
 
   @@map("rutas")
 }
@@ -508,8 +509,10 @@ model RendicionChofer {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   choferId        String           @map("id_chofer")
+  rutaId          String?          @unique @map("id_ruta")
   movimientosCaja MovimientoCaja[]
   chofer          Empleado         @relation("RendicionesChofer", fields: [choferId], references: [id])
+  ruta            Ruta?            @relation(fields: [rutaId], references: [id], onDelete: Cascade)
 
   @@map("rendiciones_chofer")
 }

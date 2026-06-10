@@ -2,88 +2,117 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { CajaService } from '@/lib/services/caja.service'
 
-// GET /api/caja/rendiciones — Rendiciones pendientes del día
+// GET /api/caja/rendiciones — Rendiciones pendientes de choferes por ruta/turno
 export async function GET() {
     try {
-        const now = new Date()
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
-
-        // Buscar choferes que tuvieron rutas hoy
-        const rutasHoy = await prisma.ruta.findMany({
-            where: { fecha: { gte: startOfDay, lte: endOfDay } },
+        // Buscar todas las rutas sin rendición asociada que contengan entregas en efectivo completadas y no cobradas
+        const rutasPendientes = await prisma.ruta.findMany({
+            where: {
+                rendicion: null, // Sin RendicionChofer asociada
+                entregas: {
+                    some: {
+                        pedido: {
+                            medioPago: 'efectivo',
+                            estado: 'entregado',
+                            abonado: false
+                        }
+                    }
+                }
+            },
             include: {
                 chofer: { select: { id: true, nombre: true } },
                 entregas: {
+                    where: {
+                        pedido: {
+                            medioPago: 'efectivo',
+                            estado: 'entregado',
+                            abonado: false
+                        }
+                    },
                     include: {
-                        pedido: { select: { id: true, totalImporte: true, medioPago: true, estado: true } },
+                        pedido: {
+                            select: {
+                                id: true,
+                                totalImporte: true,
+                                totalUnidades: true,
+                                cliente: { select: { nombreComercial: true } }
+                            }
+                        },
+                        cliente: { select: { nombreComercial: true } }
                     }
-                },
+                }
             },
+            orderBy: [
+                { fecha: 'asc' },
+                { createdAt: 'asc' }
+            ]
         })
 
-        // Para cada ruta, calcular cuánto efectivo debe rendir el chofer
-        const rendicionesPorChofer: Record<string, {
-            choferId: string; choferNombre: string; montoEsperado: number;
-            pedidosEfectivo: number; rendicionId: string | null; estado: string
-        }> = {}
+        // Mapear rutas a formato detallado para la interfaz
+        const result = rutasPendientes.map(ruta => {
+            const entregasEfectivo = ruta.entregas
+            const montoEsperado = entregasEfectivo.reduce((sum, e) => sum + e.pedido.totalImporte, 0)
 
-        for (const ruta of rutasHoy) {
-            const cId = ruta.chofer.id
-            if (!rendicionesPorChofer[cId]) {
-                rendicionesPorChofer[cId] = {
-                    choferId: cId, choferNombre: ruta.chofer.nombre,
-                    montoEsperado: 0, pedidosEfectivo: 0, rendicionId: null, estado: 'pendiente',
-                }
+            return {
+                rutaId: ruta.id,
+                fecha: ruta.fecha.toISOString(),
+                turno: ruta.turno,
+                choferId: ruta.chofer.id,
+                choferNombre: ruta.chofer.nombre,
+                montoEsperado,
+                pedidosEfectivo: entregasEfectivo.length,
+                bloqueada: false, // se marca abajo
+                pedidos: entregasEfectivo.map(e => ({
+                    id: e.pedido.id,
+                    clienteNombre: e.cliente?.nombreComercial || e.pedido?.cliente?.nombreComercial || 'Desconocido',
+                    totalImporte: e.pedido.totalImporte,
+                    totalUnidades: e.pedido.totalUnidades
+                }))
             }
+        })
 
-            for (const entrega of ruta.entregas) {
-                if (entrega.pedido.medioPago === 'efectivo' && entrega.pedido.estado === 'entregado') {
-                    rendicionesPorChofer[cId].montoEsperado += entrega.pedido.totalImporte
-                    rendicionesPorChofer[cId].pedidosEfectivo++
-                }
+        // Evaluar bloqueos cronológicos por chofer:
+        // Si el chofer tiene más de una ruta pendiente, solo la más antigua (primera en la lista)
+        // se puede rendir. Las demás se marcan como bloqueadas.
+        const driverRouteCounts: Record<string, number> = {}
+        for (const r of result) {
+            const cId = r.choferId
+            if (!driverRouteCounts[cId]) {
+                driverRouteCounts[cId] = 1
+                r.bloqueada = false
+            } else {
+                driverRouteCounts[cId]++
+                r.bloqueada = true
             }
         }
 
-        // Verificar si ya hay rendiciones creadas hoy para estos choferes
-        const rendicionesExistentes = await prisma.rendicionChofer.findMany({
-            where: { fecha: { gte: startOfDay, lte: endOfDay } },
-        })
-
-        for (const rend of rendicionesExistentes) {
-            if (rendicionesPorChofer[rend.choferId]) {
-                rendicionesPorChofer[rend.choferId].rendicionId = rend.id
-                rendicionesPorChofer[rend.choferId].estado = rend.estado
-            }
-        }
-
-        return NextResponse.json(Object.values(rendicionesPorChofer))
+        return NextResponse.json(result)
     } catch (error) {
         console.error('Error obteniendo rendiciones:', error)
         return NextResponse.json({ error: 'Error al cargar rendiciones' }, { status: 500 })
     }
 }
 
-// POST /api/caja/rendiciones — Confirmar rendición (Controlado)
+// POST /api/caja/rendiciones — Confirmar rendición de una ruta
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { choferId, montoEsperado, montoEntregado, observaciones } = body
+        const { rutaId, montoEsperado, montoEntregado, observaciones } = body
 
-        if (!choferId || montoEntregado === undefined) {
-            return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 })
+        if (!rutaId || montoEntregado === undefined) {
+            return NextResponse.json({ error: 'Faltan datos obligatorios (rutaId, montoEntregado)' }, { status: 400 })
         }
 
         const result = await CajaService.confirmarRendicion(
-            choferId,
+            rutaId,
             parseFloat(montoEsperado),
             parseFloat(montoEntregado),
             observaciones
         )
 
         return NextResponse.json(result, { status: 201 })
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error confirmando rendición:', error)
-        return NextResponse.json({ error: 'Error al confirmar rendición' }, { status: 500 })
+        return NextResponse.json({ error: error.message || 'Error al confirmar rendición' }, { status: 500 })
     }
 }
