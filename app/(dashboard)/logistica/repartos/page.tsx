@@ -62,6 +62,7 @@ export default function RepartosPage() {
     const [formEntrega, setFormEntrega] = useState({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const [isEntregandoTodos, setIsEntregandoTodos] = useState(false)
 
     const rutas = Array.isArray(rutasData) ? rutasData : []
 
@@ -84,6 +85,31 @@ export default function RepartosPage() {
             setSelectedEntrega(null)
             // No hace falta fetchData manual por useSWR, pero podemos forzar revalidación si queremos
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+    }
+
+    const handleEntregarTodos = async (entregasPendientes: Entrega[]) => {
+        if (!window.confirm('¿Estás seguro de marcar TODOS los pedidos pendientes como entregados?')) return;
+        setIsEntregandoTodos(true)
+        setError('')
+        try {
+            for (const entrega of entregasPendientes) {
+                const res = await fetch(`/api/entregas/${entrega.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tempEntrega: null, unidadesRechazadas: 0, motivoRechazo: '', observaciones: '' })
+                })
+                if (!res.ok) {
+                    const data = await res.json()
+                    throw new Error(`Error en ${entrega.cliente.nombreComercial}: ${data.error}`)
+                }
+            }
+            setSuccess('Todos los pedidos marcados como entregados')
+            mutate(cacheKey)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al entregar todos')
+        } finally {
+            setIsEntregandoTodos(false)
+        }
     }
 
     if (!session) return null
@@ -151,14 +177,24 @@ export default function RepartosPage() {
                                     .join('|')
                                 
                                 return (
-                                    <a
-                                        href={`https://www.google.com/maps/dir/?api=1&origin=${companyCoords}&destination=${companyCoords}&waypoints=${pendingWaypoints}&travelmode=driving`}
-                                        target="_blank" rel="noreferrer"
-                                        className="btn"
-                                    style={{ width: '100%', marginBottom: 'var(--space-4)', backgroundColor: '#4285F4', color: 'white', fontWeight: 600, fontSize: '1.1rem', height: '48px' }}
-                                    >
-                                        🗺️ Iniciar Recorrido Completo
-                                    </a>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                                        <a
+                                            href={`https://www.google.com/maps/dir/?api=1&origin=${companyCoords}&destination=${companyCoords}&waypoints=${pendingWaypoints}&travelmode=driving`}
+                                            target="_blank" rel="noreferrer"
+                                            className="btn"
+                                            style={{ width: '100%', backgroundColor: '#4285F4', color: 'white', fontWeight: 600, fontSize: '1.1rem', height: '48px' }}
+                                        >
+                                            🗺️ Iniciar Recorrido Completo
+                                        </a>
+                                        <button
+                                            className="btn btn-outline"
+                                            style={{ width: '100%', borderColor: 'var(--color-primary)', color: 'var(--color-primary)', fontWeight: 600, fontSize: '1rem', height: '48px' }}
+                                            onClick={() => handleEntregarTodos(entregasSorted.filter(e => !e.horaEntrega))}
+                                            disabled={isEntregandoTodos}
+                                        >
+                                            {isEntregandoTodos ? 'Procesando...' : '✅ Entregar todos los pendientes'}
+                                        </button>
+                                    </div>
                                 )
                             })()}
 
