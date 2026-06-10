@@ -201,7 +201,18 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
             const res = await fetch("/api/importar-pedidos/confirm", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ rows: previewData, medioPago: batchMedioPago }),
+                body: JSON.stringify({ 
+                    rows: previewData.map((r: any) => ({
+                        rowId: r.rowId,
+                        original: { 
+                            fecha: r.original.fecha, 
+                            turno: r.original.turno 
+                        },
+                        clientMatch: r.clientMatch,
+                        orderMatch: r.orderMatch
+                    })), 
+                    medioPago: batchMedioPago 
+                }),
             });
 
             const result = await res.json();
