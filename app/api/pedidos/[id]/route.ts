@@ -52,7 +52,10 @@ export async function PUT(
                 }
             }
 
-            const totalRecalculado = Math.round(baseTotal - totalDescuento)
+            let totalRecalculado = Math.round(baseTotal - totalDescuento)
+            if (body.totalImporte !== undefined) {
+                totalRecalculado = Number(body.totalImporte)
+            }
             data.totalImporte = totalRecalculado
 
             const pedido = await tx.pedido.update({

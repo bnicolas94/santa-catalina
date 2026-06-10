@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import ImportarPedidosModal from '@/components/pedidos/ImportarPedidosModal'
 
@@ -61,7 +61,7 @@ export default function PedidosPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [editingPedido, setEditingPedido] = useState<Pedido | null>(null)
-    const [editForm, setEditForm] = useState({ fechaEntrega: '', medioPago: 'efectivo', estado: 'pendiente' })
+    const [editForm, setEditForm] = useState({ fechaEntrega: '', medioPago: 'efectivo', estado: 'pendiente', totalImporte: 0 })
     const [showEditModal, setShowEditModal] = useState(false)
     const [showImportModal, setShowImportModal] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
@@ -114,7 +114,7 @@ export default function PedidosPage() {
         } catch { setError('Error al cargar catálogos') }
     }
 
-    async function fetchPedidos() {
+    const fetchPedidos = useCallback(async () => {
         try {
             setLoading(true)
             const params = new URLSearchParams()
@@ -141,7 +141,7 @@ export default function PedidosPage() {
                 setPedidos(Array.isArray(data) ? data : [])
             }
         } catch { setError('Error al cargar pedidos') } finally { setLoading(false) }
-    }
+    }, [currentPage, filterEstado, filterTurno, filterCanal, fechaDesde, fechaHasta, sortField, sortDir, searchTerm])
 
     async function fetchData() { await fetchPedidos() }
 
@@ -270,6 +270,7 @@ export default function PedidosPage() {
             fechaEntrega: new Date(ped.fechaEntrega).toISOString().split('T')[0],
             medioPago: ped.medioPago || 'efectivo',
             estado: ped.estado,
+            totalImporte: ped.totalImporte || 0,
         })
         setShowEditModal(true)
     }
@@ -995,6 +996,11 @@ export default function PedidosPage() {
                                     <label className="form-label">Fecha Entrega</label>
                                     <input type="date" className="form-input" value={editForm.fechaEntrega}
                                         onChange={(e) => setEditForm({ ...editForm, fechaEntrega: e.target.value })} required />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Importe Total ($)</label>
+                                    <input type="number" className="form-input" value={editForm.totalImporte}
+                                        onChange={(e) => setEditForm({ ...editForm, totalImporte: Number(e.target.value) })} required />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Medio de Pago</label>
