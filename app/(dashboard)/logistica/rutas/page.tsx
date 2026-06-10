@@ -80,6 +80,11 @@ export default function PlanificacionRutasPage() {
     const [previewStats, setPreviewStats] = useState<{ conCoords: number; sinCoords: number } | null>(null)
     const [transferMenu, setTransferMenu] = useState<{ routeIdx: number; pedIdx: number; isSinCoords: boolean } | null>(null)
 
+    // Excel Import
+    const [importMode, setImportMode] = useState<"auto" | "excel">("auto")
+    const [pasteText, setPasteText] = useState("")
+    const [importErrors, setImportErrors] = useState<string[]>([])
+
     useEffect(() => { fetchData() }, [filterFecha])
 
     async function fetchData() {
@@ -194,6 +199,97 @@ export default function PlanificacionRutasPage() {
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Error al optimizar')
         } finally { setIsOptimizing(false) }
+    }
+
+    const handleAssignFromExcel = () => {
+        setImportErrors([])
+        setError('')
+        
+        if (!pasteText.trim()) {
+            setError('Pega el contenido del excel primero.')
+            return
+        }
+
+        const lines = pasteText.trim().split('\n')
+        const routePlansMap: Record<string, RoutePlan> = {}
+        const errors: string[] = []
+
+        // Filtrar pedidos por fecha y turno seleccionado
+        const pedidosFiltrados = pedidosDisponibles.filter(p => {
+            const pFecha = new Date(p.fechaEntrega).toISOString().split('T')[0]
+            if (pFecha !== formRuta.fecha) return false
+            if (!formRuta.turno) return true
+            if (!p.turno) return true 
+            return p.turno === formRuta.turno
+        })
+
+        lines.forEach((line, index) => {
+            const cols = line.split('\t')
+            if (cols.length < 2) return // Ignorar vacías
+            const clientName = cols[0].trim()
+            const driverName = cols[1].trim()
+
+            if (!clientName || !driverName) return
+
+            // Buscar chofer
+            const chofer = choferes.find(c => c.nombre.toLowerCase() === driverName.toLowerCase())
+            if (!chofer) {
+                errors.push(`Fila ${index + 1}: Chofer no encontrado "${driverName}"`)
+                return
+            }
+
+            // Buscar pedido
+            let pedido = pedidosFiltrados.find(p => p.cliente.nombreComercial.toLowerCase() === clientName.toLowerCase())
+            if (!pedido) {
+                pedido = pedidosFiltrados.find(p => p.cliente.nombreComercial.toLowerCase().includes(clientName.toLowerCase()))
+            }
+
+            if (!pedido) {
+                errors.push(`Fila ${index + 1}: Pedido no encontrado para cliente "${clientName}"`)
+                return
+            }
+
+            if (!routePlansMap[chofer.id]) {
+                routePlansMap[chofer.id] = {
+                    choferId: chofer.id,
+                    choferNombre: chofer.nombre,
+                    pedidos: [],
+                    sinCoordenadas: []
+                }
+            }
+
+            if (pedido.cliente.latitud && pedido.cliente.longitud) {
+                routePlansMap[chofer.id].pedidos.push({
+                    pedidoId: pedido.id,
+                    clienteId: pedido.cliente.id,
+                    clienteNombre: pedido.cliente.nombreComercial,
+                    direccion: pedido.cliente.direccion || '',
+                    lat: pedido.cliente.latitud,
+                    lng: pedido.cliente.longitud,
+                    orden: routePlansMap[chofer.id].pedidos.length + 1
+                })
+            } else {
+                routePlansMap[chofer.id].sinCoordenadas.push({
+                    pedidoId: pedido.id,
+                    clienteId: pedido.cliente.id,
+                    clienteNombre: pedido.cliente.nombreComercial,
+                    direccion: pedido.cliente.direccion || ''
+                })
+            }
+        })
+
+        if (Object.keys(routePlansMap).length === 0) {
+            setError('No se pudo asignar ningún pedido válido.')
+            if (errors.length > 0) setImportErrors(errors)
+            return
+        }
+
+        setRoutePreview(Object.values(routePlansMap))
+        setPreviewStats({ 
+            conCoords: Object.values(routePlansMap).reduce((acc, rp) => acc + rp.pedidos.length, 0), 
+            sinCoords: Object.values(routePlansMap).reduce((acc, rp) => acc + rp.sinCoordenadas.length, 0) 
+        })
+        if (errors.length > 0) setImportErrors(errors)
     }
 
     const handleTransferPedido = (fromRouteIdx: number, pedIdx: number, isSinCoords: boolean, toRouteIdx: number) => {
@@ -546,21 +642,42 @@ export default function PlanificacionRutasPage() {
                         {!routePreview ? (
                             /* Step 1: Select config, choferes, pedidos */
                             <div>
-                                <div className="modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-6)' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-2)', borderBottom: '1px solid var(--color-gray-200)', marginBottom: 'var(--space-4)', paddingBottom: 'var(--space-2)', paddingLeft: 'var(--space-6)', paddingRight: 'var(--space-6)' }}>
+                                    <button type="button" className={`btn btn-sm ${importMode === 'auto' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setImportMode('auto')}>
+                                        🤖 Asignación Automática
+                                    </button>
+                                    <button type="button" className={`btn btn-sm ${importMode === 'excel' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setImportMode('excel')}>
+                                        📋 Pegar desde Excel
+                                    </button>
+                                </div>
+
+                                {importErrors.length > 0 && (
+                                    <div style={{ margin: '0 var(--space-6) var(--space-4)', padding: 'var(--space-3)', backgroundColor: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <p style={{ margin: '0 0 5px 0', fontSize: 'var(--text-xs)', fontWeight: 700, color: '#C0392B' }}>⚠️ ADVERTENCIAS EN LA IMPORTACIÓN</p>
+                                            <button type="button" onClick={() => setImportErrors([])} style={{ background: 'none', border: 'none', color: '#C0392B', cursor: 'pointer', fontSize: '14px' }}>✕</button>
+                                        </div>
+                                        <ul style={{ margin: 0, paddingLeft: '15px', color: '#C0392B', fontSize: 'var(--text-xs)', maxHeight: '100px', overflowY: 'auto' }}>
+                                            {importErrors.map((err, i) => <li key={i}>{err}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                <div className="modal-body" style={{ display: importMode === 'auto' ? 'grid' : 'block', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-6)', paddingTop: 0 }}>
                                     {/* Config Panel */}
-                                    <div>
-                                        <div className="form-group">
+                                    <div style={{ marginBottom: importMode === 'excel' ? 'var(--space-4)' : 0, display: importMode === 'excel' ? 'flex' : 'block', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                                        <div className="form-group" style={{ flex: 1, minWidth: '150px' }}>
                                             <label className="form-label">📅 Fecha de Ruta</label>
                                             <input type="date" className="form-input" value={formRuta.fecha} onChange={e => setFormRuta({ ...formRuta, fecha: e.target.value })} required />
                                         </div>
-                                        <div className="form-group">
+                                        <div className="form-group" style={{ flex: 1, minWidth: '150px' }}>
                                             <label className="form-label">📦 Origen (Stock)</label>
                                             <select className="form-select" value={formRuta.ubicacionOrigenId} onChange={e => setFormRuta({ ...formRuta, ubicacionOrigenId: e.target.value })} required>
                                                 <option value="">Seleccionar origen...</option>
                                                 {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre} ({u.tipo})</option>)}
                                             </select>
                                         </div>
-                                        <div className="form-group">
+                                        <div className="form-group" style={{ flex: 1, minWidth: '150px' }}>
                                             <label className="form-label">Turno</label>
                                             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                                                 {['Mañana', 'Siesta', 'Tarde'].map(t => (
@@ -572,43 +689,50 @@ export default function PlanificacionRutasPage() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="form-label">🔢 Máx. paradas por chofer</label>
-                                            <input type="number" className="form-input" min={1} max={50} value={maxParadas}
-                                                onChange={e => setMaxParadas(parseInt(e.target.value) || 15)} />
-                                        </div>
-
-                                        {/* Choferes selection */}
-                                        <div className="form-group">
-                                            <label className="form-label">🚗 Choferes ({choferesSeleccionados.length})</label>
-                                            <div style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', maxHeight: '160px', overflowY: 'auto' }}>
-                                                {choferes.map(c => (
-                                                    <div key={c.id} style={{ padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-gray-100)',
-                                                        display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
-                                                        backgroundColor: choferesSeleccionados.includes(c.id) ? '#EBF5FF' : 'transparent' }}
-                                                        onClick={() => toggleChofer(c.id)}>
-                                                        <input type="checkbox" checked={choferesSeleccionados.includes(c.id)} readOnly
-                                                            style={{ width: 16, height: 16, accentColor: 'var(--color-primary)' }} />
-                                                        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{c.nombre}</span>
-                                                    </div>
-                                                ))}
+                                        
+                                        {importMode === 'auto' && (
+                                            <div className="form-group" style={{ width: '100%', marginTop: 'var(--space-4)' }}>
+                                                <label className="form-label">🔢 Máx. paradas por chofer</label>
+                                                <input type="number" className="form-input" min={1} max={50} value={maxParadas}
+                                                    onChange={e => setMaxParadas(parseInt(e.target.value) || 15)} />
                                             </div>
-                                        </div>
+                                        )}
 
-                                        {/* Summary */}
-                                        <div style={{ padding: 'var(--space-3)', backgroundColor: pedidosSeleccionados.length > 0 ? 'var(--color-primary-50)' : 'var(--color-gray-50)',
-                                            borderRadius: 'var(--radius-md)', border: pedidosSeleccionados.length > 0 ? '1px solid var(--color-primary-200)' : '1px solid var(--color-gray-200)' }}>
-                                            <p style={{ margin: 0, fontWeight: 600, color: pedidosSeleccionados.length > 0 ? 'var(--color-primary)' : 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>
-                                                {pedidosSeleccionados.length} pedido{pedidosSeleccionados.length !== 1 ? 's' : ''} · {choferesSeleccionados.length} chofer{choferesSeleccionados.length !== 1 ? 'es' : ''}
-                                            </p>
-                                        </div>
+                                        {importMode === 'auto' && (
+                                            <>
+                                                {/* Choferes selection */}
+                                                <div className="form-group" style={{ width: '100%' }}>
+                                                    <label className="form-label">🚗 Choferes ({choferesSeleccionados.length})</label>
+                                                    <div style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', maxHeight: '160px', overflowY: 'auto' }}>
+                                                        {choferes.map(c => (
+                                                            <div key={c.id} style={{ padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-gray-100)',
+                                                                display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer',
+                                                                backgroundColor: choferesSeleccionados.includes(c.id) ? '#EBF5FF' : 'transparent' }}
+                                                                onClick={() => toggleChofer(c.id)}>
+                                                                <input type="checkbox" checked={choferesSeleccionados.includes(c.id)} readOnly
+                                                                    style={{ width: 16, height: 16, accentColor: 'var(--color-primary)' }} />
+                                                                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{c.nombre}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Summary */}
+                                                <div style={{ width: '100%', padding: 'var(--space-3)', backgroundColor: pedidosSeleccionados.length > 0 ? 'var(--color-primary-50)' : 'var(--color-gray-50)',
+                                                    borderRadius: 'var(--radius-md)', border: pedidosSeleccionados.length > 0 ? '1px solid var(--color-primary-200)' : '1px solid var(--color-gray-200)' }}>
+                                                    <p style={{ margin: 0, fontWeight: 600, color: pedidosSeleccionados.length > 0 ? 'var(--color-primary)' : 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>
+                                                        {pedidosSeleccionados.length} pedido{pedidosSeleccionados.length !== 1 ? 's' : ''} · {choferesSeleccionados.length} chofer{choferesSeleccionados.length !== 1 ? 'es' : ''}
+                                                    </p>
+                                                </div>
+                                            </>
+                                        )}
 
                                         {/* Stock Warning */}
                                         {(() => {
                                             const faltantes = getStockFaltantes()
                                             if (faltantes.length === 0) return null
                                             return (
-                                                <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', backgroundColor: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)' }}>
+                                                <div style={{ marginTop: importMode === 'auto' ? 'var(--space-3)' : 0, width: importMode === 'excel' ? '100%' : 'auto', padding: 'var(--space-3)', backgroundColor: '#FDEDEC', border: '1px solid #F1948A', borderRadius: 'var(--radius-md)' }}>
                                                     <p style={{ margin: '0 0 5px 0', fontSize: 'var(--text-xs)', fontWeight: 700, color: '#C0392B' }}>⚠️ STOCK INSUFICIENTE EN ORIGEN</p>
                                                     <ul style={{ margin: 0, paddingLeft: '15px', color: '#C0392B', fontSize: 'var(--text-xs)' }}>
                                                         {faltantes.map((f, i) => <li key={i}>{f}</li>)}
@@ -618,7 +742,24 @@ export default function PlanificacionRutasPage() {
                                         })()}
                                     </div>
 
-                                    {/* Pedidos selection */}
+                                    {importMode === 'excel' && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>Pegar datos de Excel</span>
+                                                <span style={{ fontSize: '11px', color: 'var(--color-gray-500)', fontWeight: 400 }}>Formato: Cliente [TAB] Chofer</span>
+                                            </label>
+                                            <textarea 
+                                                className="form-input" 
+                                                style={{ height: '300px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre' }}
+                                                placeholder={`Javier Brizuela\tDaniel\nMeliza León\tCeleste\n...`}
+                                                value={pasteText}
+                                                onChange={e => setPasteText(e.target.value)}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {importMode === 'auto' && (
+                                    /* Pedidos selection */
                                     <div>
                                         {(() => {
                                             // Filtrar pedidos por fecha y turno seleccionado
@@ -684,14 +825,26 @@ export default function PlanificacionRutasPage() {
                                         )}
                                     </>)})()}
                                     </div>
+                                    )}
                                 </div>
                                 <div className="modal-footer">
-                                    <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)} disabled={isOptimizing}>Cancelar</button>
-                                    <button type="button" className="btn btn-primary"
-                                        disabled={pedidosSeleccionados.length === 0 || choferesSeleccionados.length === 0 || isOptimizing}
-                                        onClick={handleAutoAssignPreview}>
-                                        {isOptimizing ? '📍 Optimizando...' : `🚀 Optimizar y Asignar (${choferesSeleccionados.length} choferes)`}
-                                    </button>
+                                    <div style={{ color: '#E74C3C', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{error}</div>
+                                    <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                                        <button className="btn btn-ghost" onClick={() => setShowModal(false)} disabled={isOptimizing}>Cancelar</button>
+                                        {importMode === 'auto' ? (
+                                            <button className="btn btn-primary" 
+                                                onClick={handleAutoAssignPreview} 
+                                                disabled={isOptimizing || pedidosSeleccionados.length === 0 || choferesSeleccionados.length === 0}>
+                                                {isOptimizing ? 'Optimizando...' : '⚙️ Optimizar y Asignar'}
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn-primary" 
+                                                onClick={handleAssignFromExcel} 
+                                                disabled={isOptimizing || !pasteText.trim()}>
+                                                {isOptimizing ? 'Procesando...' : '📋 Procesar Excel'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ) : (
