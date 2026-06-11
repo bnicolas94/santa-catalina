@@ -115,7 +115,9 @@ export async function POST(req: NextRequest) {
                 status,
                 errors,
                 esRetiro: !!orderMatch.esRetiro || 
-                    !!(row.direccion && (row.direccion.toLowerCase().includes('retira') || row.direccion.toLowerCase().includes('local')))
+                    (!row.direccion && !clientMatch.proposedData.direccion) ||
+                    !!(row.direccion && (row.direccion.toLowerCase().includes('retira') || row.direccion.toLowerCase().includes('local'))) ||
+                    !!(clientMatch.proposedData.direccion && (clientMatch.proposedData.direccion.toLowerCase().includes('retira') || clientMatch.proposedData.direccion.toLowerCase().includes('local')))
             };
         });
 

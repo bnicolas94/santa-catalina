@@ -284,7 +284,13 @@ export async function POST(req: NextRequest) {
                             estado: "confirmado",
                             medioPago: medioPago || 'efectivo',
                             turno: original.turno ? (turnoMap[original.turno] || original.turno) : null,
-                            esRetiro: row.esRetiro || original.direccion?.toLowerCase().includes("retira") || false,
+                            esRetiro: row.esRetiro || 
+                                      (!original.direccion && !row.clientMatch.proposedData.direccion) ||
+                                      original.direccion?.toLowerCase().includes("retira") || 
+                                      original.direccion?.toLowerCase().includes("local") || 
+                                      row.clientMatch.proposedData.direccion?.toLowerCase().includes("retira") || 
+                                      row.clientMatch.proposedData.direccion?.toLowerCase().includes("local") || 
+                                      false,
                             totalUnidades,
                             totalImporte: totalImporteNeto, // Redondeamos para evitar decimales de prorrateo
                             totalPacks: totalPacks as any,
