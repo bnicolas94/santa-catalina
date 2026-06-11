@@ -121,7 +121,8 @@ export async function POST(request: Request) {
         }
 
         if (!pedidoIds?.length || !choferIds?.length || !fecha) {
-            return NextResponse.json({ error: 'Faltan pedidos, choferes o fecha' }, { status: 400 })
+            console.error('[AUTO-ASSIGN ERROR]', body)
+            return NextResponse.json({ error: `Faltan datos en la petición. Recibimos: pedidos (${pedidoIds?.length || 0}), choferes (${choferIds?.length || 0}), fecha (${fecha || 'vacía'})` }, { status: 400 })
         }
 
         // 1. Fetch pedidos with client coords
