@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         const errors: any[] = [];
 
         // Validamos que se envíen solament las confirmadas (por ej: que no sean Rojas)
-        const validRows = rows.filter(r => r.status !== "rojo");
+        let validRows = rows.filter(r => r.status !== "rojo");
 
         // Traer precios de todas las presentaciones para calcular totales
         const todasPresentaciones = await prisma.presentacion.findMany({
@@ -35,15 +35,14 @@ export async function POST(req: NextRequest) {
         });
         const precioMap = new Map(todasPresentaciones.map(p => [p.id, p.precioVenta]));
 
-        // --- LÓGICA ANTI-DUPLICADOS (Borrón y cuenta nueva por Cliente/Fecha) ---
-        // Identificamos qué clientes y fechas estamos importando para limpiar lo previo
-        const limpiezas = new Map<string, { fecha: Date, clientes: Set<string> }>();
+        // --- LÓGICA ANTI-DUPLICADOS (Omitir existentes) ---
+        // Identificamos qué clientes y fechas/turnos estamos importando
+        const fechasBuscadas = new Map<string, { fecha: Date, clientes: Set<string> }>();
         validRows.forEach(row => {
-            const fStr = row.original.fecha; // Usamos el string original para agrupar
+            const fStr = row.original.fecha;
             const cid = row.clientMatch.clienteId;
             if (fStr && cid) {
-                if (!limpiezas.has(fStr)) {
-                    // Intentamos parsear la fecha de forma robusta
+                if (!fechasBuscadas.has(fStr)) {
                     let fechaObj: Date;
                     if (fStr.includes('/')) {
                         const [d, m, y] = fStr.split('/');
@@ -51,47 +50,66 @@ export async function POST(req: NextRequest) {
                     } else {
                         fechaObj = new Date(fStr + 'T12:00:00.000Z');
                     }
-
                     if (!isNaN(fechaObj.getTime())) {
-                        limpiezas.set(fStr, { 
-                            fecha: fechaObj, 
-                            clientes: new Set() 
-                        });
+                        fechasBuscadas.set(fStr, { fecha: fechaObj, clientes: new Set() });
                     }
                 }
-                const currentLimpieza = limpiezas.get(fStr);
-                if (currentLimpieza && cid) {
-                    currentLimpieza.clientes.add(cid);
-                }
+                const currentLimpieza = fechasBuscadas.get(fStr);
+                if (currentLimpieza && cid) currentLimpieza.clientes.add(cid);
             }
         });
 
-        // Ejecutamos las limpiezas
-        for (const [_, data] of limpiezas) {
+        const pedidosExistentesSet = new Set<string>();
+        for (const [_, data] of fechasBuscadas) {
             const validCids = Array.from(data.clientes).filter(id => !!id);
             if (validCids.length > 0) {
-                // Primero buscamos los IDs de los pedidos que vamos a borrar para limpiar sus relaciones manuales
-                const pedidosExistentes = await prisma.pedido.findMany({
-                    where: {
-                        fechaEntrega: data.fecha,
-                        clienteId: { in: validCids }
-                    },
-                    select: { id: true }
+                const pedidos = await prisma.pedido.findMany({
+                    where: { fechaEntrega: data.fecha, clienteId: { in: validCids } },
+                    select: { clienteId: true, fechaEntrega: true, turno: true }
                 });
-
-                const idsABorrar = pedidosExistentes.map(p => p.id);
-
-                if (idsABorrar.length > 0) {
-                    await prisma.$transaction([
-                        // Borramos entregas asociadas (que no tienen onDelete: Cascade)
-                        prisma.entrega.deleteMany({ where: { pedidoId: { in: idsABorrar } } }),
-                        // Borramos movimientos de caja asociados
-                        prisma.movimientoCaja.deleteMany({ where: { pedidoId: { in: idsABorrar } } }),
-                        // Los DetallesPedido se borran solos por el Cascade en el esquema
-                        prisma.pedido.deleteMany({ where: { id: { in: idsABorrar } } })
-                    ]);
+                for (const p of pedidos) {
+                    const key = `${p.clienteId}_${p.fechaEntrega.toISOString()}_${(p.turno || '').toLowerCase()}`;
+                    pedidosExistentesSet.add(key);
                 }
             }
+        }
+
+        // Filtrar validRows para omitir los que ya existen
+        const newValidRows = [];
+        let omitidosPorDuplicado = 0;
+        for (const row of validRows) {
+            const cid = row.clientMatch.clienteId;
+            let fStr = row.original.fecha;
+            let omitir = false;
+            if (cid && fStr) {
+                const currentFechas = fechasBuscadas.get(fStr);
+                if (currentFechas) {
+                    const turnoRaw = (row.original.turno || row.original.Turno || '').toString().toLowerCase();
+                    // Como el original puede tener espacios o formatos raros, lo normalizamos como hacemos en Prisma:
+                    // En el pedido creamos el turno sin espacios extra. Pero dejaremos el raw por ahora.
+                    const key = `${cid}_${currentFechas.fecha.toISOString()}_${turnoRaw.trim()}`;
+                    if (pedidosExistentesSet.has(key)) {
+                        omitir = true;
+                    } else {
+                        pedidosExistentesSet.add(key);
+                    }
+                }
+            }
+            if (omitir) {
+                omitidosPorDuplicado++;
+            } else {
+                newValidRows.push(row);
+            }
+        }
+        
+        validRows = newValidRows;
+        if (validRows.length === 0) {
+            return NextResponse.json({ 
+                success: true, 
+                message: omitidosPorDuplicado > 0 
+                    ? `Se omitieron ${omitidosPorDuplicado} pedido(s) que ya existían. No hay nuevos para importar.` 
+                    : 'No hay pedidos válidos para importar.' 
+            });
         }
         // -----------------------------------------------------------------------
 
