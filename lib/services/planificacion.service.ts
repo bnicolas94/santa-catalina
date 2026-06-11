@@ -13,6 +13,7 @@ export class PlanificacionService {
                     include: {
                         pedido: {
                             include: {
+                                cliente: true,
                                 detalles: {
                                     include: {
                                         presentacion: {
@@ -34,6 +35,7 @@ export class PlanificacionService {
                 entregas: { none: {} }
             },
             include: {
+                cliente: true,
                 detalles: {
                     include: {
                         presentacion: {
@@ -99,7 +101,7 @@ export class PlanificacionService {
             if (!demandaRutas[turno]) demandaRutas[turno] = {}
             
             ruta.entregas.forEach(entrega => {
-                const esLocal = entrega.pedido.esRetiro
+                const esLocal = entrega.pedido.esRetiro || entrega.pedido.cliente?.direccion?.toLowerCase().includes('retira')
                 entrega.pedido.detalles.forEach(detalle => {
                     const prod = detalle.presentacion.producto
                     const pres = detalle.presentacion
@@ -120,7 +122,7 @@ export class PlanificacionService {
         pedidosSinRuta.forEach(pedido => {
             const turnoPedido = pedido.turno || 'Por Asignar'
             const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
-            const esLocal = pedido.esRetiro
+            const esLocal = pedido.esRetiro || pedido.cliente?.direccion?.toLowerCase().includes('retira')
             
             if (!demandaRutas[turnoFinal]) demandaRutas[turnoFinal] = {}
 
@@ -249,14 +251,16 @@ export class PlanificacionService {
             if (!shipmentsSet[turno]) shipmentsSet[turno] = new Set()
             
             ruta.entregas.forEach(entrega => {
-                if (!entrega.pedido.esRetiro) {
+                const esLocal = entrega.pedido.esRetiro || entrega.pedido.cliente?.direccion?.toLowerCase().includes('retira')
+                if (!esLocal) {
                     shipmentsSet[turno].add(entrega.pedido.id)
                 }
             })
         })
 
         pedidosSinRuta.forEach(pedido => {
-            if (pedido.esRetiro) return
+            const esLocal = pedido.esRetiro || pedido.cliente?.direccion?.toLowerCase().includes('retira')
+            if (esLocal) return
             const turnoPedido = pedido.turno || 'Por Asignar'
             const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
             if (!shipmentsSet[turnoFinal]) shipmentsSet[turnoFinal] = new Set()
