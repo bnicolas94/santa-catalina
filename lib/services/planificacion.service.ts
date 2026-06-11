@@ -71,7 +71,7 @@ export class PlanificacionService {
         }
 
         // --- NUEVO: Objeto separado para demanda de logística (solo referencia) ---
-        const demandaRutas: Record<string, Record<string, number>> = {
+        const demandaRutas: Record<string, Record<string, { fabrica: number, local: number }>> = {
             'Mañana': {},
             'Siesta': {},
             'Tarde': {},
@@ -99,13 +99,19 @@ export class PlanificacionService {
             if (!demandaRutas[turno]) demandaRutas[turno] = {}
             
             ruta.entregas.forEach(entrega => {
+                const esLocal = entrega.pedido.esRetiro
                 entrega.pedido.detalles.forEach(detalle => {
                     const prod = detalle.presentacion.producto
                     const pres = detalle.presentacion
                     const key = registerInfo(prod, pres)
                     const cantTotal = detalle.cantidad * pres.cantidad
                     
-                    demandaRutas[turno][key] = (demandaRutas[turno][key] || 0) + cantTotal
+                    if (!demandaRutas[turno][key]) demandaRutas[turno][key] = { fabrica: 0, local: 0 }
+                    if (esLocal) {
+                        demandaRutas[turno][key].local += cantTotal
+                    } else {
+                        demandaRutas[turno][key].fabrica += cantTotal
+                    }
                 })
             })
         })
@@ -114,6 +120,7 @@ export class PlanificacionService {
         pedidosSinRuta.forEach(pedido => {
             const turnoPedido = pedido.turno || 'Por Asignar'
             const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
+            const esLocal = pedido.esRetiro
             
             if (!demandaRutas[turnoFinal]) demandaRutas[turnoFinal] = {}
 
@@ -124,7 +131,12 @@ export class PlanificacionService {
                 const cantTotal = detalle.cantidad * pres.cantidad
                 
                 // Lo sumamos a demandaRutas como referencia "proyectada"
-                demandaRutas[turnoFinal][key] = (demandaRutas[turnoFinal][key] || 0) + cantTotal
+                if (!demandaRutas[turnoFinal][key]) demandaRutas[turnoFinal][key] = { fabrica: 0, local: 0 }
+                if (esLocal) {
+                    demandaRutas[turnoFinal][key].local += cantTotal
+                } else {
+                    demandaRutas[turnoFinal][key].fabrica += cantTotal
+                }
             })
         })
 
@@ -218,7 +230,7 @@ export class PlanificacionService {
         }
         const shipmentsSet: Record<string, Set<string>> = {}
 
-        // --- AHORA shipmentCounts SOLO cuenta lo del Excel/Manual para no duplicar ---
+        // --- Contar envíos de Excel/Manual ---
         manuales.forEach(m => {
             if (m.destino === 'LOCAL') return // No es un envío de reparto
             const turno = m.turno
@@ -229,6 +241,27 @@ export class PlanificacionService {
             } else {
                 shipmentsSet[turno].add(m.id)
             }
+        })
+
+        // --- Contar envíos de Pedidos (Logística y sin asignar) ---
+        rutas.forEach(ruta => {
+            const turno = ruta.turno || 'Sin Turno'
+            if (!shipmentsSet[turno]) shipmentsSet[turno] = new Set()
+            
+            ruta.entregas.forEach(entrega => {
+                if (!entrega.pedido.esRetiro) {
+                    shipmentsSet[turno].add(entrega.pedido.id)
+                }
+            })
+        })
+
+        pedidosSinRuta.forEach(pedido => {
+            if (pedido.esRetiro) return
+            const turnoPedido = pedido.turno || 'Por Asignar'
+            const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
+            if (!shipmentsSet[turnoFinal]) shipmentsSet[turnoFinal] = new Set()
+            
+            shipmentsSet[turnoFinal].add(pedido.id)
         })
 
         // Sumar conteos de manuales al total

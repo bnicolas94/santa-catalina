@@ -805,11 +805,18 @@ export default function ProduccionPage() {
 
                                         todosPids.forEach(pid_presid => {
                                             const manualUnitsTotal = Object.values(planning?.necesidades || {}).reduce((sum: number, t: any) => sum + (t?.[pid_presid] || 0), 0) as number
-                                            const rutaUnitsRaw = Object.values(planning?.demandaRutas || {}).reduce((sum: number, t: any) => sum + (t?.[pid_presid] || 0), 0) as number
+                                            const rutaDetalle = Object.values(planning?.demandaRutas || {}).reduce((acc: any, t: any) => {
+                                                const d = t?.[pid_presid]
+                                                if (d) {
+                                                    acc.fabrica += d.fabrica || 0
+                                                    acc.local += d.local || 0
+                                                }
+                                                return acc
+                                            }, { fabrica: 0, local: 0 }) as { fabrica: number, local: number }
                                             const det = manualesDetalleConsolidado[pid_presid] || { fabrica: 0, local: 0 }
                                             
-                                            // Aplicar lógica de filtro: rutaUnits siempre es fábrica
-                                            const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
+                                            // Aplicar lógica de filtro: Ahora Rutas SI tiene local y fabrica basado en pedidos
+                                            const rutaUnits = filterDestino === 'TODOS' ? (rutaDetalle.fabrica + rutaDetalle.local) : (filterDestino === 'LOCAL' ? rutaDetalle.local : rutaDetalle.fabrica)
                                             const manualUnits = filterDestino === 'TODOS' ? (det.fabrica + det.local) : (filterDestino === 'LOCAL' ? det.local : det.fabrica)
 
                                             consolidado[pid_presid] = {
@@ -996,10 +1003,10 @@ export default function ProduccionPage() {
                                             const presid = prodInfo?.presentacion?.id || null
 
                                             const manInfo = manualesTurno[key] || { fabrica: 0, local: 0 }
-                                            const rutaUnitsRaw = planning?.demandaRutas?.[activeTurno]?.[key] || 0
+                                            const dR = planning?.demandaRutas?.[activeTurno]?.[key] || { fabrica: 0, local: 0 }
 
                                             // Aplicar filtro
-                                            const rutaUnits = filterDestino === 'LOCAL' ? 0 : rutaUnitsRaw
+                                            const rutaUnits = filterDestino === 'TODOS' ? (dR.fabrica + dR.local) : (filterDestino === 'LOCAL' ? dR.local : dR.fabrica)
                                             const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
                                             // El total de producción AHORA solo contempla lo manual/Excel por pedido del usuario
                                             const totalUnits = manualUnits
@@ -1034,8 +1041,9 @@ export default function ProduccionPage() {
                                                         // Si no se descontó, sumamos su necesidad técnica (ajustada por filtro) al "bloqueo" de stock
                                                         const necT = planning?.necesidades?.[tNombre]?.[key] || 0
                                                         const manT = planning?.manualesDetalle?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
-                                                        const rutaTRaw = Math.max(0, necT - (manT.fabrica + manT.local))
-                                                        const rutaT = filterDestino === 'LOCAL' ? 0 : rutaTRaw
+                                                        const dRT = planning?.demandaRutas?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
+                                                        
+                                                        const rutaT = filterDestino === 'TODOS' ? (dRT.fabrica + dRT.local) : (filterDestino === 'LOCAL' ? dRT.local : dRT.fabrica)
                                                         const manualT = filterDestino === 'TODOS' ? (manT.fabrica + manT.local) : (filterDestino === 'LOCAL' ? manT.local : manT.fabrica)
                                                         pendTurnosPrevios += (rutaT + manualT)
                                                     }
