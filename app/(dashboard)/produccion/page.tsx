@@ -822,7 +822,7 @@ export default function ProduccionPage() {
                                             consolidado[pid_presid] = {
                                                 ruta: rutaUnits,
                                                 manual: manualUnits,
-                                                total: manualUnits // El Total para producción AHORA es solo lo manual (Excel)
+                                                total: Math.max(manualUnits, rutaUnits) // Toma el mayor para no duplicar pero asegurar que si solo hay pedidos, se descuente
                                             }
                                         })
 
@@ -1008,8 +1008,8 @@ export default function ProduccionPage() {
                                             // Aplicar filtro
                                             const rutaUnits = filterDestino === 'TODOS' ? (dR.fabrica + dR.local) : (filterDestino === 'LOCAL' ? dR.local : dR.fabrica)
                                             const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
-                                            // El total de producción AHORA solo contempla lo manual/Excel por pedido del usuario
-                                            const totalUnits = manualUnits
+                                            // El total de producción: max entre manual (Excel) y ruta (Pedidos)
+                                            const totalUnits = Math.max(manualUnits, rutaUnits)
 
                                             if (totalUnits === 0 && rutaUnits === 0 && filterDestino !== 'TODOS') return null
 
