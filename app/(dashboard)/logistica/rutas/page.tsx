@@ -171,7 +171,6 @@ export default function PlanificacionRutasPage() {
         )
     }
 
-    // Auto-assign: Preview
     async function handleAutoAssignPreview() {
         if (!pedidosSeleccionados.length || !choferesSeleccionados.length) {
             setError('Seleccioná pedidos y al menos un chofer')
@@ -180,18 +179,21 @@ export default function PlanificacionRutasPage() {
         setIsOptimizing(true)
         setError('')
         try {
+            const payload = {
+                pedidoIds: Array.from(pedidosSeleccionados),
+                choferIds: Array.from(choferesSeleccionados),
+                fecha: formRuta.fecha,
+                turno: formRuta.turno,
+                ubicacionOrigenId: formRuta.ubicacionOrigenId,
+                maxParadasPorChofer: maxParadas,
+                mode: 'preview'
+            }
+            console.log("Enviando a API:", payload)
+            
             const res = await fetch('/api/rutas/auto-assign', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    pedidoIds: pedidosSeleccionados,
-                    choferIds: choferesSeleccionados,
-                    fecha: formRuta.fecha,
-                    turno: formRuta.turno,
-                    ubicacionOrigenId: formRuta.ubicacionOrigenId,
-                    maxParadasPorChofer: maxParadas,
-                    mode: 'preview'
-                })
+                body: JSON.stringify(payload)
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error)
