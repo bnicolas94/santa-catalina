@@ -62,6 +62,7 @@ export default function PlanificacionRutasPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [filterFecha, setFilterFecha] = useState(getLocalDateString())
+    const [busquedaPedido, setBusquedaPedido] = useState('')
     const [expandedRutas, setExpandedRutas] = useState<Record<string, boolean>>({})
 
     const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
@@ -807,18 +808,34 @@ export default function PlanificacionRutasPage() {
                                                 if (pFecha !== formRuta.fecha) return false
 
                                                 // 2. Filtrar por turno
-                                                if (!formRuta.turno) return true
-                                                if (!p.turno) return true // mostrar sin turno siempre
-                                                return p.turno === formRuta.turno
-                                            })
+                                                if (formRuta.turno && p.turno && p.turno !== formRuta.turno) return false
+                                                
+                                                // 3. Filtrar por búsqueda
+                                                if (busquedaPedido && !p.cliente.nombreComercial.toLowerCase().includes(busquedaPedido.toLowerCase())) return false
+
+                                                return true
+                                            }).sort((a, b) => a.cliente.nombreComercial.localeCompare(b.cliente.nombreComercial))
+
                                             const sinTurno = pedidosFiltrados.filter(p => !p.turno).length
                                             return (<>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
                                             <h3 style={{ fontSize: 'var(--text-md)', margin: 0 }}>Pedidos — {formRuta.turno} ({pedidosFiltrados.length})</h3>
-                                            <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 'var(--text-xs)' }}
-                                                onClick={() => setPedidosSeleccionados(prev => prev.length === pedidosFiltrados.length ? [] : pedidosFiltrados.map(p => p.id))}>
-                                                {pedidosSeleccionados.length === pedidosFiltrados.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
-                                            </button>
+                                            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 'var(--text-xs)' }}
+                                                    onClick={() => setPedidosSeleccionados(prev => prev.length === pedidosFiltrados.length ? [] : pedidosFiltrados.map(p => p.id))}>
+                                                    {pedidosSeleccionados.length === pedidosFiltrados.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div style={{ marginBottom: 'var(--space-3)' }}>
+                                            <input 
+                                                type="text" 
+                                                className="form-input" 
+                                                placeholder="🔍 Buscar cliente por nombre..." 
+                                                value={busquedaPedido}
+                                                onChange={e => setBusquedaPedido(e.target.value)}
+                                                style={{ width: '100%', fontSize: 'var(--text-sm)', padding: 'var(--space-2)' }}
+                                            />
                                         </div>
                                         {sinTurno > 0 && (
                                             <div style={{ fontSize: 'var(--text-xs)', color: '#F39C12', marginBottom: 'var(--space-2)', padding: 'var(--space-1) var(--space-2)', backgroundColor: '#FEF9E7', borderRadius: 'var(--radius-sm)' }}>

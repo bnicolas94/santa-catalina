@@ -183,20 +183,20 @@ export async function POST(request: Request) {
         const defaultOrigin = { lat: -34.8237468, lng: -58.1873516 }
         const origin = defaultOrigin
 
-        // 6. For each cluster, optimize route order
+        // 6. For each chofer, create a route plan (with optimized points if available)
         const routePlans: RoutePlan[] = []
 
-        for (let i = 0; i < clusters.length; i++) {
-            const cluster = clusters[i]
-            const chofer = choferesList[i % choferesList.length]
+        for (let i = 0; i < choferesList.length; i++) {
+            const chofer = choferesList[i]
+            const cluster = clusters[i] || { points: [] }
             
             let optimizedPoints = cluster.points
             let totalDistance: number | undefined
             let totalDuration: number | undefined
 
-            if (cluster.points.length > 1 && GOOGLE_MAPS_API_KEY) {
+            if (optimizedPoints.length > 1 && GOOGLE_MAPS_API_KEY) {
                 try {
-                    const waypointsParam = cluster.points.map(p => `${p.lat},${p.lng}`).join('|')
+                    const waypointsParam = optimizedPoints.map((p: any) => `${p.lat},${p.lng}`).join('|')
                     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.lat},${origin.lng}&destination=${origin.lat},${origin.lng}&waypoints=optimize:true|${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}&region=ar`
                     const res = await fetch(url)
                     const data = await res.json()
@@ -214,7 +214,7 @@ export async function POST(request: Request) {
             routePlans.push({
                 choferId: chofer.id,
                 choferNombre: chofer.nombre,
-                pedidos: optimizedPoints.map((point, orden) => {
+                pedidos: optimizedPoints.map((point: any, orden: number) => {
                     const pedido = pedidos.find(p => p.id === point.id)!
                     return {
                         pedidoId: point.id,
