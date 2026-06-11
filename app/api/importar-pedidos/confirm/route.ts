@@ -138,14 +138,15 @@ export async function POST(req: NextRequest) {
                         const existing = await tx.cliente.findUnique({ where: { id: finalClientId } });
                         if (existing) {
                             const updateData: any = {};
-                            if (!existing.direccion && row.clientMatch.proposedData.direccion) {
-                                updateData.direccion = full || row.clientMatch.proposedData.direccion;
+                            const proposedDireccion = full || row.clientMatch.proposedData.direccion;
+                            if (proposedDireccion && proposedDireccion !== existing.direccion) {
+                                updateData.direccion = proposedDireccion;
                                 updateData.calle = calle;
                                 updateData.numero = numero;
-                                updateData.latitud = latitud;
-                                updateData.longitud = longitud;
+                                updateData.latitud = null; // Resetear coordenadas porque cambió la dirección
+                                updateData.longitud = null;
                             }
-                            if (!existing.localidad && row.clientMatch.proposedData.localidad) {
+                            if (row.clientMatch.proposedData.localidad && row.clientMatch.proposedData.localidad !== existing.localidad) {
                                 updateData.localidad = row.clientMatch.proposedData.localidad;
                             }
                             if (!existing.contactoTelefono && row.clientMatch.proposedData.contactoTelefono) {
