@@ -395,6 +395,27 @@ export default function PlanificacionRutasPage() {
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error al registrar entrega') }
     }
 
+    async function handleRechazarEntregaAdmin(entregaId: string, totalUnidades: number) {
+        if (!confirm('¿Marcar este pedido como RECHAZADO (no entregado)?')) return
+        setError('')
+        try {
+            const res = await fetch(`/api/entregas/${entregaId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tempEntrega: null,
+                    unidadesRechazadas: totalUnidades,
+                    motivoRechazo: 'Rechazado (Admin)',
+                    observaciones: 'Rechazado por Administrador'
+                }),
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess('Entrega marcada como rechazada')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error al rechazar entrega') }
+    }
+
     async function handleEntregarTodosAdmin(ruta: Ruta) {
         const pendientes = ruta.entregas.filter(e => !e.horaEntrega)
         if (pendientes.length === 0) return
@@ -616,6 +637,16 @@ export default function PlanificacionRutasPage() {
                                                                      ) : (
                                                                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                                                              <span className="badge badge-warning" style={{ fontSize: '10px' }}>🟡 Pendiente</span>
+                                                                             <button 
+                                                                                 className="btn btn-ghost"
+                                                                                 style={{ padding: '2px 6px', fontSize: '9px', fontWeight: 700, height: 'auto', minHeight: 'unset', lineHeight: 'normal', color: '#E74C3C' }}
+                                                                                 onClick={(e) => {
+                                                                                     e.stopPropagation();
+                                                                                     handleRechazarEntregaAdmin(entrega.id, entrega.pedido.totalUnidades);
+                                                                                 }}
+                                                                             >
+                                                                                 ✗ No entregado
+                                                                             </button>
                                                                              <button 
                                                                                  className="btn btn-primary"
                                                                                  style={{ padding: '2px 6px', fontSize: '9px', fontWeight: 700, height: 'auto', minHeight: 'unset', lineHeight: 'normal' }}

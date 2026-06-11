@@ -63,14 +63,15 @@ export default function RepartosPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [isEntregandoTodos, setIsEntregandoTodos] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     const rutas = Array.isArray(rutasData) ? rutasData : []
 
-    async function handleConfirmarEntrega(e: React.FormEvent) {
+    const handleConfirmarEntrega = async (e: React.FormEvent) => {
         e.preventDefault()
-        setError('')
         if (!selectedEntrega) return
-
+        setIsSubmitting(true)
+        setError('')
         try {
             const res = await fetch(`/api/entregas/${selectedEntrega.id}`, {
                 method: 'PUT',
@@ -81,10 +82,36 @@ export default function RepartosPage() {
                 }),
             })
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
-            setSuccess('Entrega registrada correctamente')
+            setSuccess('Entrega registrada con éxito')
+            mutate(cacheKey)
             setSelectedEntrega(null)
-            // No hace falta fetchData manual por useSWR, pero podemos forzar revalidación si queremos
-        } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al registrar la entrega')
+        } finally { setIsSubmitting(false) }
+    }
+
+    const handleRechazarTotal = async (entregaId: string, totalUnidades: number) => {
+        if (!confirm('¿Seguro que querés marcar este pedido como RECHAZADO (no entregado)?')) return
+        setError('')
+        try {
+            const res = await fetch(`/api/entregas/${entregaId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tempEntrega: null,
+                    unidadesRechazadas: totalUnidades,
+                    motivoRechazo: 'Rechazado en destino',
+                    observaciones: 'Marcado como No Entregado por el chofer'
+                })
+            })
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            setSuccess('Entrega marcada como no entregada (Rechazo)')
+            mutate(cacheKey)
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al rechazar entrega')
+        }
     }
 
     const handleEntregarTodos = async (entregasPendientes: Entrega[]) => {
@@ -265,18 +292,23 @@ export default function RepartosPage() {
                                         </div>
 
                                         {!estaEntregado ? (
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                                 <a href={`https://www.google.com/maps/search/?api=1&query=${getMapQuery(entrega.cliente)}`}
                                                     target="_blank" rel="noreferrer"
                                                     className="btn btn-outline" style={{ textAlign: 'center', color: 'var(--color-primary)' }}>
                                                     🗺️ Navegar
                                                 </a>
-                                                <button className="btn btn-primary" onClick={() => {
-                                                    setSelectedEntrega(entrega)
-                                                    setFormEntrega({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
-                                                }}>
-                                                    Entregar
-                                                </button>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+                                                    <button className="btn btn-outline" style={{ borderColor: '#E74C3C', color: '#E74C3C' }} onClick={() => handleRechazarTotal(entrega.id, entrega.pedido.totalUnidades)}>
+                                                        ✗ No entregado
+                                                    </button>
+                                                    <button className="btn btn-primary" onClick={() => {
+                                                        setSelectedEntrega(entrega)
+                                                        setFormEntrega({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
+                                                    }}>
+                                                        ✓ Entregar
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
