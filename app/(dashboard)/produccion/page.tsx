@@ -846,7 +846,7 @@ export default function ProduccionPage() {
                                             <>
                                                 {items.map(([key, data]) => {
                                                     const { ruta, manual, total: totalUnits } = data
-                                                    if (totalUnits === 0 && filterDestino !== 'TODOS') return null
+                                                    if (totalUnits === 0 && ruta === 0 && filterDestino !== 'TODOS') return null
                                                     const prodInfo = planning.infoProductos[key]
                                                     const presSize = prodInfo?.presentacion?.cantidad || 48
                                                     const pid = prodInfo?.id
@@ -1011,7 +1011,7 @@ export default function ProduccionPage() {
                                             // El total de producción AHORA solo contempla lo manual/Excel por pedido del usuario
                                             const totalUnits = manualUnits
 
-                                            if (totalUnits === 0 && filterDestino !== 'TODOS') return null
+                                            if (totalUnits === 0 && rutaUnits === 0 && filterDestino !== 'TODOS') return null
 
                                             // Stock dinámico según la fuente seleccionada
                                             const stockSource = filterDestino === 'LOCAL' ? 'local' : (filterDestino === 'FABRICA' ? 'fabrica' : 'ambos')
