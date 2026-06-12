@@ -36,7 +36,13 @@ function ComprasContent() {
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
     const [filterPago, setFilterPago] = useState('')
     const [agruparPorProveedor, setAgruparPorProveedor] = useState(false)
+    const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({})
     const [editingId, setEditingId] = useState<string | null>(null)
+    
+    const toggleProvider = (provName: string) => {
+        setExpandedProviders(prev => ({ ...prev, [provName]: !(prev[provName] ?? true) }))
+    }
+
     const [form, setForm] = useState({
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
@@ -74,7 +80,7 @@ function ComprasContent() {
             const stockProdData = await stockProdRes.json()
             const cajasData = await cajasRes.json()
 
-            setMovimientos(Array.isArray(movData) ? movData : [])
+            setMovimientos(Array.isArray(movData) ? movData.filter((m: any) => m.tipo === 'entrada') : [])
             setInsumos(Array.isArray(insData) ? insData : [])
             setProveedores(Array.isArray(provData) ? provData : [])
             setUbicaciones(Array.isArray(ubiData) ? ubiData : [])
@@ -505,17 +511,7 @@ function ComprasContent() {
 
             {/* Filtros */}
             <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
-                <button className={`btn btn-sm ${filterTipo === '' ? 'btn-secondary' : 'btn-ghost'}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setFilterTipo('')}>
-                    Todos ({movimientosPorFecha.length})
-                </button>
-                <button className="btn btn-sm" onClick={() => setFilterTipo(filterTipo === 'entrada' ? '' : 'entrada')}
-                    style={{ whiteSpace: 'nowrap', backgroundColor: filterTipo === 'entrada' ? '#2ECC71' : '#2ECC7118', color: filterTipo === 'entrada' ? '#fff' : '#2ECC71', border: '2px solid #2ECC71', fontWeight: 600 }}>
-                    ⬆️ Entradas ({statsEntradas})
-                </button>
-                <button className="btn btn-sm" onClick={() => setFilterTipo(filterTipo === 'salida' ? '' : 'salida')}
-                    style={{ whiteSpace: 'nowrap', backgroundColor: filterTipo === 'salida' ? '#E74C3C' : '#E74C3C18', color: filterTipo === 'salida' ? '#fff' : '#E74C3C', border: '2px solid #E74C3C', fontWeight: 600 }}>
-                    ⬇️ Salidas ({statsSalidas})
-                </button>
+
                 <button className="btn btn-sm" onClick={() => setFilterPago(filterPago === 'pendiente' ? '' : 'pendiente')}
                     style={{ whiteSpace: 'nowrap', backgroundColor: filterPago === 'pendiente' ? '#E67E22' : '#E67E2218', color: filterPago === 'pendiente' ? '#fff' : '#E67E22', border: '2px solid #E67E22', fontWeight: 600 }}>
                     ⏳ Pagos Pendientes ({movimientosPorFecha.filter(m => m.estadoPago === 'pendiente' || m.estadoPago === 'a_cuenta').length})
@@ -577,16 +573,19 @@ function ComprasContent() {
                                 if (!groups[provName]) groups[provName] = [];
                                 groups[provName].push(mov);
                             });
-                            return Object.entries(groups).map(([provName, movs]) => (
+                            return Object.entries(groups).map(([provName, movs]) => {
+                                const isExpanded = expandedProviders[provName] ?? true;
+                                return (
                                 <Fragment key={provName}>
-                                    <tr style={{ backgroundColor: '#F8F9FA' }}>
-                                        <td colSpan={9} style={{ fontWeight: 700, padding: '1rem', borderBottom: '2px solid #E5E7E9' }}>
-                                            🏢 {provName} <span className="badge badge-secondary" style={{ marginLeft: '8px', opacity: 0.8 }}>{movs.length} items</span>
+                                    <tr style={{ backgroundColor: '#F8F9FA', cursor: 'pointer' }} onClick={() => toggleProvider(provName)}>
+                                        <td colSpan={9} style={{ fontWeight: 700, padding: '1rem', borderBottom: '2px solid #E5E7E9', userSelect: 'none' }}>
+                                            {isExpanded ? '🔽' : '▶️'} 🏢 {provName} <span className="badge badge-secondary" style={{ marginLeft: '8px', opacity: 0.8 }}>{movs.length} items</span>
                                         </td>
                                     </tr>
-                                    {movs.map(renderRow)}
+                                    {isExpanded && movs.map(renderRow)}
                                 </Fragment>
-                            ));
+                                );
+                            });
                         })() : filtered.map(renderRow)}
                     </tbody>
                 </table>
