@@ -892,8 +892,18 @@ export default function ProduccionPage() {
                                                     
                                                     // --- CORRECCIÓN EN TOTALES ---
                                                     // 1. Pendientes de días anteriores
-                                                    const pendAnterioresInfo = planning?.pendientesAnteriores?.[key]
-                                                    const pendAnteriores = pendAnterioresInfo?.total || 0
+                                                    const pendAntExcel = planning?.pendientesAnterioresExcel?.[key]
+                                                    const pendAntPedidos = planning?.pendientesAnterioresPedidos?.[key]
+                                                    
+                                                    // Calculamos el total anterior cruzado o separado
+                                                    const pendAnteriores = usePedidosMode 
+                                                        ? Math.max(pendAntExcel?.total || 0, pendAntPedidos?.total || 0)
+                                                        : (pendAntExcel?.total || 0)
+
+                                                    // Armamos los detalles para el tooltip
+                                                    const detallesAnteriores = usePedidosMode 
+                                                        ? (pendAntExcel?.total || 0) >= (pendAntPedidos?.total || 0) ? (pendAntExcel?.detalles || []) : (pendAntPedidos?.detalles || [])
+                                                        : (pendAntExcel?.detalles || [])
                                                     
                                                     // 2. Solo lo que Falta descontar de HOY
                                                     let pendHoy = 0
@@ -901,12 +911,16 @@ export default function ProduccionPage() {
                                                     TURNOS_POSIBLES.forEach(tNombre => {
                                                         const yaDescontado = planning?.descuentosRealizados?.includes(tNombre)
                                                         if (!yaDescontado) {
-                                                            const necT = planning?.necesidades?.[tNombre]?.[key] || 0
                                                             const manT = planning?.manualesDetalle?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
-                                                            const rutaTRaw = Math.max(0, necT - (manT.fabrica + manT.local))
-                                                            const rutaT = filterDestino === 'LOCAL' ? 0 : rutaTRaw
                                                             const manualT = filterDestino === 'TODOS' ? (manT.fabrica + manT.local) : (filterDestino === 'LOCAL' ? manT.local : manT.fabrica)
-                                                            pendHoy += (rutaT + manualT)
+                                                            
+                                                            let rutaT = 0
+                                                            if (usePedidosMode) {
+                                                                const dR = planning?.demandaRutas?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
+                                                                rutaT = filterDestino === 'TODOS' ? (dR.fabrica + dR.local) : (filterDestino === 'LOCAL' ? dR.local : dR.fabrica)
+                                                            }
+                                                            
+                                                            pendHoy += usePedidosMode ? Math.max(manualT, rutaT) : manualT
                                                         }
                                                     })
 
@@ -959,7 +973,7 @@ export default function ProduccionPage() {
                                                             </td>
                                                             <td 
                                                                 style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
-                                                                title={pendAnterioresInfo?.detalles?.length ? `Detalle de Pendientes:\n${pendAnterioresInfo.detalles.map((d: any) => `• ${formatDateOnly(d.fecha)} (${d.turno}): ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
+                                                                title={detallesAnteriores?.length ? `Detalle de Pendientes:\n${detallesAnteriores.map((d: any) => `• ${formatDateOnly(d.fecha)} (${d.turno}): ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
                                                             >
                                                                 {prevUnits > 0 ? (
                                                                     <span style={{ borderBottom: pendAnteriores > 0 ? '1px dotted var(--color-gray-300)' : 'none' }}>
@@ -1462,7 +1476,7 @@ export default function ProduccionPage() {
                                                         const planchas = lote.unidadesProducidas * (lote.producto.planchasPorPaquete || 6)
                                                         return (
                                                             <tr key={lote.id}>
-                                                                <td style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>{lote.id}</td>
+                                                <td style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>{lote.id}</td>
                                                                 <td style={{ fontSize: 'var(--text-xs)' }}>{formatDateOnly(lote.fechaProduccion)}</td>
                                                                 <td style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{lote.unidadesProducidas.toLocaleString()} paq</td>
                                                                 <td style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>{planchas.toLocaleString()} pl</td>

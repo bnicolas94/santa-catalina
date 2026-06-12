@@ -336,21 +336,22 @@ export class PlanificacionService {
             }
         })
 
-        const pendientesAnteriores: Record<string, { total: number, detalles: { fecha: string, turno: string, cantidad: number }[] }> = {}
+        const pendientesAnterioresExcel: Record<string, { total: number, detalles: { fecha: string, turno: string, cantidad: number }[] }> = {}
+        const pendientesAnterioresPedidos: Record<string, { total: number, detalles: { fecha: string, turno: string, cantidad: number }[] }> = {}
 
-        const registerPendiente = (keyProd: string, fecha: Date, turno: string, cantidad: number) => {
-            if (!pendientesAnteriores[keyProd]) {
-                pendientesAnteriores[keyProd] = { total: 0, detalles: [] }
+        const registerPendiente = (target: any, keyProd: string, fecha: Date, turno: string, cantidad: number) => {
+            if (!target[keyProd]) {
+                target[keyProd] = { total: 0, detalles: [] }
             }
-            pendientesAnteriores[keyProd].total += cantidad
+            target[keyProd].total += cantidad
             
             // Buscar si ya existe la misma fecha/turno para agrupar
             const fechaStr = fecha.toISOString().split('T')[0]
-            const existing = pendientesAnteriores[keyProd].detalles.find(d => d.fecha === fechaStr && d.turno === turno)
+            const existing = target[keyProd].detalles.find((d: any) => d.fecha === fechaStr && d.turno === turno)
             if (existing) {
                 existing.cantidad += cantidad
             } else {
-                pendientesAnteriores[keyProd].detalles.push({ fecha: fechaStr, turno, cantidad })
+                target[keyProd].detalles.push({ fecha: fechaStr, turno, cantidad })
             }
         }
 
@@ -361,7 +362,7 @@ export class PlanificacionService {
 
             // @ts-ignore
             const keyProd = m.presentacionId ? `${m.productoId}_${m.presentacionId}` : `${m.productoId}_null`
-            registerPendiente(keyProd, m.fecha, m.turno, m.cantidad)
+            registerPendiente(pendientesAnterioresExcel, keyProd, m.fecha, m.turno, m.cantidad)
             
             // Asegurar que infoProductos tenga la info si no estaba hoy
             if (m.producto) registerInfo(m.producto, m.presentacion)
@@ -378,7 +379,7 @@ export class PlanificacionService {
                     const pres = detalle.presentacion
                     const keyProd = registerInfo(prod, pres)
                     const cantTotal = detalle.cantidad * pres.cantidad
-                    registerPendiente(keyProd, ruta.fecha, ruta.turno || 'Sin Turno', cantTotal)
+                    registerPendiente(pendientesAnterioresPedidos, keyProd, ruta.fecha, ruta.turno || 'Sin Turno', cantTotal)
                 })
             })
         })
@@ -390,7 +391,8 @@ export class PlanificacionService {
             shipmentCountsExcel,
             shipmentCountsPedidos,
             descuentosRealizados: descuentosTurnos.map((d: any) => d.turno),
-            pendientesAnteriores,
+            pendientesAnterioresExcel,
+            pendientesAnterioresPedidos,
             manualesDetalle: manuales.reduce((acc, m) => {
                 const turno = m.turno
                 // @ts-ignore
