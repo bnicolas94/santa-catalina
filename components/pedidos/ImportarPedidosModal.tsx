@@ -206,10 +206,13 @@ export default function ImportarPedidosModal({ isOpen, onClose, onSuccess }: Imp
                         rowId: r.rowId,
                         original: { 
                             fecha: r.original.fecha, 
-                            turno: r.original.turno 
+                            turno: r.original.turno,
+                            direccion: r.original.direccion,
+                            telefono: r.original.telefono,
                         },
                         clientMatch: r.clientMatch,
-                        orderMatch: r.orderMatch
+                        orderMatch: r.orderMatch,
+                        esRetiro: r.esRetiro,
                     })), 
                     medioPago: batchMedioPago 
                 }),

@@ -39,10 +39,14 @@ function normalizePhone(phone: string | null): string {
 }
 
 /**
- * Intenta encontrar o sugerir un cliente desde la DB en base a los datos del Excel
- * @param nombreExcel - Nombre tal como viene del Excel (ej: "#487 Marita")
- * @param telefonoExcel - Teléfono tal como viene del Excel
- * @param clientesDB - Todos los clientes del sistema para comparación
+ * Intenta encontrar o sugerir un cliente desde la DB en base a los datos del Excel.
+ * 
+ * PRIORIDAD DE CRUCE:
+ * 1° TELÉFONO — Es el identificador único por excelencia.
+ *    Si el teléfono del Excel coincide con uno en la DB, es el mismo cliente
+ *    sin importar que el nombre haya cambiado. El nombre se actualiza.
+ * 2° NOMBRE EXACTO — Solo si no hay teléfono o no coincide.
+ * 3° CLIENTE NUEVO — Si no matchea por ningún criterio.
  */
 export function matchClient(
     nombreExcel: string,
@@ -66,20 +70,22 @@ export function matchClient(
         };
     }
 
-    // 1. Prioridad: Coincidencia por teléfono (es un identificador muy fuerte)
-    if (normPhoneExcel.length > 5) { // al menos un numero valido
+    // 1. PRIORIDAD MÁXIMA: Coincidencia por teléfono (identificador único del cliente)
+    if (normPhoneExcel.length > 5) {
         const matchByPhone = clientesDB.find((c) => {
             const dbPhone = normalizePhone(c.contactoTelefono);
             return dbPhone && dbPhone === normPhoneExcel;
         });
 
         if (matchByPhone) {
+            // El teléfono es el mismo → es el mismo cliente.
+            // El nombre del Excel se toma como el más actualizado (proposedData).
             return {
                 clienteId: matchByPhone.id,
                 isNew: false,
-                confidence: "high", // Match exacto por teléfono = alta confianza
+                confidence: "high",
                 proposedData: {
-                    nombreComercial: nombreExcel,
+                    nombreComercial: nombreExcel.trim(),
                     contactoTelefono: telefonoExcel || undefined,
                     direccion: parseDireccion(direccionExcel, localidadExcel).full || undefined,
                     localidad: localidadExcel || undefined,
@@ -88,20 +94,18 @@ export function matchClient(
         }
     }
 
-    // 2. Coincidencia por Nombre exacto (normalizado)
+    // 2. Coincidencia por Nombre exacto (normalizado) — solo si no matcheó por teléfono
     const matchByName = clientesDB.find(
         (c) => normalizeString(c.nombreComercial) === normNameExcel
     );
 
     if (matchByName) {
-        // Si el Excel trae un telefono nuevo pero el nombre coincide exacto
-        // Lo asociamos, pero con confianza media para que un humano lo apruebe visualmente
         return {
             clienteId: matchByName.id,
             isNew: false,
             confidence: normPhoneExcel && !matchByName.contactoTelefono ? "medium" : "high",
             proposedData: {
-                nombreComercial: nombreExcel,
+                nombreComercial: nombreExcel.trim(),
                 contactoTelefono: telefonoExcel || undefined,
                 direccion: parseDireccion(direccionExcel, localidadExcel).full || undefined,
                 localidad: localidadExcel || undefined,
@@ -112,7 +116,7 @@ export function matchClient(
     // 3. Fallback: Cliente Nuevo
     return {
         isNew: true,
-        confidence: "low", // Como es nuevo a partir del excel, sugerimos revisión
+        confidence: "low",
         proposedData: {
             nombreComercial: nombreExcel.trim(),
             contactoTelefono: telefonoExcel ? telefonoExcel.trim() : undefined,

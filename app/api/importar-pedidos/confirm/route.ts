@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         // -----------------------------------------------------------------------
 
         // En Prisma SQLite, la forma más limpia es hacer operaciones batch o secuencias
-        const newClientsCache = new Map<string, string>(); // Evita duplicar clientes nuevos en el mismo batch
+        const newClientsCache = new Map<string, string>(); // phone/name → clientId
 
         for (const row of validRows) {
             try {
@@ -130,15 +130,38 @@ export async function POST(req: NextRequest) {
                     let latitud: number | null = null;
                     let longitud: number | null = null;
 
-                    // 1. Crear o Actualizar cliente
+                    // 1. Crear o Actualizar cliente (clave primaria: TELÉFONO)
+                    const phoneRaw = row.clientMatch.proposedData.contactoTelefono || '';
+                    const phoneNorm = phoneRaw.replace(/\D/g, '');
+                    // Cache key: teléfono normalizado si existe, sino nombre normalizado
+                    const cacheKey = phoneNorm.length > 5 
+                        ? `phone:${phoneNorm}` 
+                        : `name:${row.clientMatch.proposedData.nombreComercial.trim().toLowerCase()}`;
+
                     if (row.clientMatch.isNew || !finalClientId) {
-                        const cacheKey = row.clientMatch.proposedData.nombreComercial.trim().toLowerCase();
                         if (newClientsCache.has(cacheKey)) {
                             finalClientId = newClientsCache.get(cacheKey)!;
+                            // Aún así actualizamos nombre/dirección por si cambió dentro del mismo batch
+                            const updateData: any = {};
+                            if (row.clientMatch.proposedData.nombreComercial) {
+                                updateData.nombreComercial = row.clientMatch.proposedData.nombreComercial.trim();
+                            }
+                            const proposedDireccion = full || row.clientMatch.proposedData.direccion;
+                            if (proposedDireccion) {
+                                updateData.direccion = proposedDireccion;
+                                updateData.calle = calle;
+                                updateData.numero = numero;
+                            }
+                            if (row.clientMatch.proposedData.localidad) {
+                                updateData.localidad = row.clientMatch.proposedData.localidad;
+                            }
+                            if (Object.keys(updateData).length > 0) {
+                                await tx.cliente.update({ where: { id: finalClientId }, data: updateData });
+                            }
                         } else {
                             const newClient = await tx.cliente.create({
                                 data: {
-                                    nombreComercial: row.clientMatch.proposedData.nombreComercial,
+                                    nombreComercial: row.clientMatch.proposedData.nombreComercial.trim(),
                                     contactoTelefono: row.clientMatch.proposedData.contactoTelefono || null,
                                     direccion: full || row.clientMatch.proposedData.direccion || null,
                                     calle,
@@ -153,9 +176,24 @@ export async function POST(req: NextRequest) {
                             newClientsCache.set(cacheKey, finalClientId);
                         }
                     } else if (finalClientId) {
+                        // Cliente existente: SIEMPRE actualizar nombre, teléfono, dirección, localidad
                         const existing = await tx.cliente.findUnique({ where: { id: finalClientId } });
                         if (existing) {
                             const updateData: any = {};
+
+                            // Siempre actualizar nombre si difiere
+                            const proposedNombre = row.clientMatch.proposedData.nombreComercial?.trim();
+                            if (proposedNombre && proposedNombre !== existing.nombreComercial) {
+                                updateData.nombreComercial = proposedNombre;
+                            }
+
+                            // Siempre actualizar teléfono si viene y difiere
+                            if (row.clientMatch.proposedData.contactoTelefono && 
+                                row.clientMatch.proposedData.contactoTelefono !== existing.contactoTelefono) {
+                                updateData.contactoTelefono = row.clientMatch.proposedData.contactoTelefono;
+                            }
+
+                            // Siempre actualizar dirección si viene y difiere
                             const proposedDireccion = full || row.clientMatch.proposedData.direccion;
                             if (proposedDireccion && proposedDireccion !== existing.direccion) {
                                 updateData.direccion = proposedDireccion;
@@ -164,11 +202,11 @@ export async function POST(req: NextRequest) {
                                 updateData.latitud = null; // Resetear coordenadas porque cambió la dirección
                                 updateData.longitud = null;
                             }
-                            if (row.clientMatch.proposedData.localidad && row.clientMatch.proposedData.localidad !== existing.localidad) {
+
+                            // Siempre actualizar localidad si viene y difiere
+                            if (row.clientMatch.proposedData.localidad && 
+                                row.clientMatch.proposedData.localidad !== existing.localidad) {
                                 updateData.localidad = row.clientMatch.proposedData.localidad;
-                            }
-                            if (!existing.contactoTelefono && row.clientMatch.proposedData.contactoTelefono) {
-                                updateData.contactoTelefono = row.clientMatch.proposedData.contactoTelefono;
                             }
                             
                             if (Object.keys(updateData).length > 0) {
@@ -284,13 +322,18 @@ export async function POST(req: NextRequest) {
                             estado: "confirmado",
                             medioPago: medioPago || 'efectivo',
                             turno: original.turno ? (turnoMap[original.turno] || original.turno) : null,
-                            esRetiro: row.esRetiro || 
-                                      (!original.direccion && !row.clientMatch.proposedData.direccion) ||
-                                      original.direccion?.toLowerCase().includes("retira") || 
-                                      original.direccion?.toLowerCase().includes("local") || 
-                                      row.clientMatch.proposedData.direccion?.toLowerCase().includes("retira") || 
-                                      row.clientMatch.proposedData.direccion?.toLowerCase().includes("local") || 
-                                      false,
+                            // esRetiro: "retira"/"local" = LOCAL (true), dirección real o vacía = REPARTO (false)
+                            esRetiro: (() => {
+                                // Si ya viene calculado desde el preview, usarlo directamente
+                                if (row.esRetiro === true) return true;
+                                const dir = (original.direccion || row.clientMatch.proposedData.direccion || '').toLowerCase().trim();
+                                // "retira" o "local" explícito → es retiro (local)
+                                if (dir.includes('retira') || dir === 'local') return true;
+                                // Sin dirección → es retiro (local)
+                                if (!dir) return true;
+                                // Tiene dirección real → es reparto
+                                return false;
+                            })(),
                             totalUnidades,
                             totalImporte: totalImporteNeto, // Redondeamos para evitar decimales de prorrateo
                             totalPacks: totalPacks as any,
