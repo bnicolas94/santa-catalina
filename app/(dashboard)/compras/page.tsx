@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: any[]; proveedor?: { id: string; nombre: string } }
@@ -578,14 +578,14 @@ function ComprasContent() {
                                 groups[provName].push(mov);
                             });
                             return Object.entries(groups).map(([provName, movs]) => (
-                                <React.Fragment key={provName}>
+                                <Fragment key={provName}>
                                     <tr style={{ backgroundColor: '#F8F9FA' }}>
                                         <td colSpan={9} style={{ fontWeight: 700, padding: '1rem', borderBottom: '2px solid #E5E7E9' }}>
                                             🏢 {provName} <span className="badge badge-secondary" style={{ marginLeft: '8px', opacity: 0.8 }}>{movs.length} items</span>
                                         </td>
                                     </tr>
                                     {movs.map(renderRow)}
-                                </React.Fragment>
+                                </Fragment>
                             ));
                         })() : filtered.map(renderRow)}
                     </tbody>
