@@ -159,6 +159,9 @@ export default function ProduccionPage() {
     const [showMermaModal, setShowMermaModal] = useState(false)
     const [mermaForm, setMermaForm] = useState({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
     const [stockSource, setStockSource] = useState<'fabrica' | 'local' | 'ambos'>('fabrica')
+    
+    // Switch para método de pedidos vs excel
+    const [usePedidosMode, setUsePedidosMode] = useState(false)
 
     // Estado para importación Excel
     const [showImportModal, setShowImportModal] = useState(false)
@@ -748,6 +751,22 @@ export default function ProduccionPage() {
                                         </button>
                                     ))}
                                 </div>
+                                <div className="join" style={{ backgroundColor: 'var(--color-gray-200)', padding: '2px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
+                                    <button
+                                        className={`join-item btn btn-xs ${!usePedidosMode ? 'btn-primary' : 'btn-ghost'}`}
+                                        onClick={() => setUsePedidosMode(false)}
+                                        title="Contemplar SOLO lo cargado por Excel (Método antiguo)"
+                                    >
+                                        📄 Solo Excel
+                                    </button>
+                                    <button
+                                        className={`join-item btn btn-xs ${usePedidosMode ? 'btn-primary' : 'btn-ghost'}`}
+                                        onClick={() => setUsePedidosMode(true)}
+                                        title="Contemplar pedidos del módulo Pedidos"
+                                    >
+                                        🛒 Excel + Pedidos
+                                    </button>
+                                </div>
                                 <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--color-gray-200)', padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
                                     {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
                                         <button
@@ -816,13 +835,13 @@ export default function ProduccionPage() {
                                             const det = manualesDetalleConsolidado[pid_presid] || { fabrica: 0, local: 0 }
                                             
                                             // Aplicar lógica de filtro: Ahora Rutas SI tiene local y fabrica basado en pedidos
-                                            const rutaUnits = filterDestino === 'TODOS' ? (rutaDetalle.fabrica + rutaDetalle.local) : (filterDestino === 'LOCAL' ? rutaDetalle.local : rutaDetalle.fabrica)
+                                            const rutaUnits = (!usePedidosMode) ? 0 : (filterDestino === 'TODOS' ? (rutaDetalle.fabrica + rutaDetalle.local) : (filterDestino === 'LOCAL' ? rutaDetalle.local : rutaDetalle.fabrica))
                                             const manualUnits = filterDestino === 'TODOS' ? (det.fabrica + det.local) : (filterDestino === 'LOCAL' ? det.local : det.fabrica)
 
                                             consolidado[pid_presid] = {
                                                 ruta: rutaUnits,
                                                 manual: manualUnits,
-                                                total: Math.max(manualUnits, rutaUnits) // Toma el mayor para no duplicar pero asegurar que si solo hay pedidos, se descuente
+                                                total: usePedidosMode ? Math.max(manualUnits, rutaUnits) : manualUnits
                                             }
                                         })
 
@@ -1006,10 +1025,10 @@ export default function ProduccionPage() {
                                             const dR = planning?.demandaRutas?.[activeTurno]?.[key] || { fabrica: 0, local: 0 }
 
                                             // Aplicar filtro
-                                            const rutaUnits = filterDestino === 'TODOS' ? (dR.fabrica + dR.local) : (filterDestino === 'LOCAL' ? dR.local : dR.fabrica)
+                                            const rutaUnits = (!usePedidosMode) ? 0 : (filterDestino === 'TODOS' ? (dR.fabrica + dR.local) : (filterDestino === 'LOCAL' ? dR.local : dR.fabrica))
                                             const manualUnits = filterDestino === 'TODOS' ? (manInfo.fabrica + manInfo.local) : (filterDestino === 'LOCAL' ? manInfo.local : manInfo.fabrica)
                                             // El total de producción: max entre manual (Excel) y ruta (Pedidos)
-                                            const totalUnits = Math.max(manualUnits, rutaUnits)
+                                            const totalUnits = usePedidosMode ? Math.max(manualUnits, rutaUnits) : manualUnits
 
                                             if (totalUnits === 0 && rutaUnits === 0 && filterDestino !== 'TODOS') return null
 
