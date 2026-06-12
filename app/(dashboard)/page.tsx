@@ -92,7 +92,7 @@ export default function DashboardPage() {
                 if (permisos.permisoProduccion || rol === 'COORD_PROD' || rol === 'OPERARIO') {
                     router.replace('/produccion')
                 } else if (permisos.permisoStock || rol === 'ADMIN_OPS') {
-                    router.replace('/stock')
+                    router.replace('/compras')
                 } else if (permisos.permisoCaja) {
                     router.replace('/caja')
                 } else if (permisos.permisoPersonal) {
@@ -257,7 +257,7 @@ export default function DashboardPage() {
                     </div>
                 </div>
 
-                <Link href="/stock?pago=pendiente" className={`${styles.statCardSmall} card`} style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
+                <Link href="/compras?pago=pendiente" className={`${styles.statCardSmall} card`} style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
                     <div className="card-body">
                         <div className={styles.statInfo}>
                             <span className={styles.statLabel}>💳 Compras por Pagar</span>

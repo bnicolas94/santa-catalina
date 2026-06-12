@@ -14,7 +14,7 @@ interface Movimiento {
     ubicacion: { id: string; nombre: string } | null
 }
 
-function StockContent() {
+function ComprasContent() {
     const searchParams = useSearchParams()
     const [movimientos, setMovimientos] = useState<Movimiento[]>([])
     const [insumos, setInsumos] = useState<Insumo[]>([])
@@ -337,7 +337,7 @@ function StockContent() {
     return (
         <div>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1>📊 Movimientos de Stock</h1>
+                <h1>🛒 Gestión de Compras</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                     <input
                         type="date"
@@ -370,75 +370,18 @@ function StockContent() {
                         setIsManualProveedor(false)
                         setIsManualInsumo(false)
                         setShowFacturaModal(true)
-                    }}>📑 Múltiples</button>
+                    }}>📑 Factura Múltiple</button>
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
                         setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: defaultUbi, cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
                         setShowModal(true)
-                    }}>+ Simple</button>
-                </div>
-            </div>
-
-            <div className="card" style={{ marginBottom: 'var(--space-6)', backgroundColor: 'var(--color-primary-light)', border: '1px solid var(--color-primary)' }}>
-                <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: '1.5rem' }}>📍</div>
-                    <div style={{ flex: '1 1 200px' }}>
-                        <h3 style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 700 }}>Filtrar por Punto de Venta / Sede</h3>
-                        <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>Gestioná el stock específico de cada lugar.</p>
-                    </div>
-                    <select
-                        className="form-select"
-                        style={{ flex: '1 1 200px', fontWeight: 600, border: '2px solid var(--color-primary)', height: '40px' }}
-                        value={selectedUbi}
-                        onChange={(e) => setSelectedUbi(e.target.value)}
-                    >
-                        <option value="">🌎 Todas las sedes (Global)</option>
-                        {ubicaciones.map(u => (
-                            <option key={u.id} value={u.nombre}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>
-                        ))}
-                    </select>
+                    }}>➕ Ajuste Manual</button>
                 </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
-                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧪 Stock de Insumos {selectedUbi && <span className="badge badge-primary">en {selectedUbi}</span>}</h2>
-            </div>
-            {insumos.length === 0 ? (
-                <div className="empty-state">No hay insumos cargados</div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-                    {insumos.map((ins: any) => {
-                        const stockFound = selectedUbi ? ins.stocks?.find((s: any) => s.ubicacion.nombre === selectedUbi) : null;
-                        const qty = selectedUbi ? (stockFound?.cantidad || 0) : ins.stockActual;
-                        const isLow = qty < ins.stockMinimo;
-
-                        return (
-                            <div key={ins.id} className="card" style={{ border: isLow ? '1px solid var(--color-danger)' : '1px solid var(--color-gray-200)' }}>
-                                <div className="card-body" style={{ padding: 'var(--space-3)' }}>
-                                    <h4 style={{ margin: 0, fontSize: 'var(--text-sm)' }}>{ins.nombre}</h4>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: isLow ? 'var(--color-danger)' : 'var(--color-primary)' }}>
-                                                {qty.toLocaleString('es-AR', { maximumFractionDigits: 2 })} <span style={{ fontSize: 'var(--text-xs)', fontWeight: 400 }}>{ins.unidadMedida}</span>
-                                            </span>
-                                            {ins.unidadSecundaria && (
-                                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600 }}>
-                                                    {(selectedUbi ? (stockFound?.cantidadSecundaria || 0) : (ins.stockActualSecundario || 0)).toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadSecundaria}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {isLow && <span title="Stock bajo" style={{ color: 'var(--color-danger)' }}>⚠️</span>}
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })}
-                </div>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
-                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>📜 Historial de Movimientos</h2>
+                <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>📜 Historial de Compras y Ajustes</h2>
             </div>
 
             {success && <div className="toast toast-success">{success}</div>}
@@ -1261,10 +1204,10 @@ function StockContent() {
     )
 }
 
-export default function StockPage() {
+export default function ComprasPage() {
     return (
-        <Suspense fallback={<div className="empty-state"><div className="spinner" /><p>Cargando filtros...</p></div>}>
-            <StockContent />
+        <Suspense fallback={<div className="empty-state"><div className="spinner" /><p>Cargando compras...</p></div>}>
+            <ComprasContent />
         </Suspense>
     )
 }

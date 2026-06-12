@@ -60,9 +60,9 @@ const menuItems: MenuItem[] = [
         permissionKey: 'permisoStock',
     },
     {
-        label: 'Stock',
-        href: '/stock',
-        icon: '📊',
+        label: 'Compras',
+        href: '/compras',
+        icon: '🛒',
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
         permissionKey: 'permisoStock',
     },
