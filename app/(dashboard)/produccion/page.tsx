@@ -734,20 +734,29 @@ export default function ProduccionPage() {
                                             style={{ fontSize: '13px', padding: '6px 14px', whiteSpace: 'nowrap', ...(t === 'Totales' ? { fontWeight: 700 } : {}) }}
                                         >
                                             {t === 'Totales' ? '📊 Totales' : t}
-                                            {(planning?.shipmentCounts?.[t] ?? 0) > 0 && (
-                                                <span style={{ 
-                                                    marginLeft: '8px', 
-                                                    backgroundColor: activeTurno === t ? 'white' : 'var(--color-gray-300)', 
-                                                    color: activeTurno === t ? 'var(--color-primary)' : 'var(--color-gray-700)', 
-                                                    padding: '2px 8px', 
-                                                    borderRadius: '12px', 
-                                                    fontSize: '12px',
-                                                    fontWeight: 800,
-                                                    boxShadow: activeTurno === t ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
-                                                }}>
-                                                    {planning?.shipmentCounts?.[t]}
-                                                </span>
-                                            )}
+                                            {(() => {
+                                                const excelCount = planning?.shipmentCountsExcel?.[t] ?? 0;
+                                                const pedidosCount = planning?.shipmentCountsPedidos?.[t] ?? 0;
+                                                const totalCount = usePedidosMode ? (excelCount + pedidosCount) : excelCount;
+                                                
+                                                if (totalCount > 0) {
+                                                    return (
+                                                        <span style={{ 
+                                                            marginLeft: '8px', 
+                                                            backgroundColor: activeTurno === t ? 'white' : 'var(--color-gray-300)', 
+                                                            color: activeTurno === t ? 'var(--color-primary)' : 'var(--color-gray-700)', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '12px', 
+                                                            fontSize: '12px',
+                                                            fontWeight: 800,
+                                                            boxShadow: activeTurno === t ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                                        }}>
+                                                            {totalCount}
+                                                        </span>
+                                                    )
+                                                }
+                                                return null;
+                                            })()}
                                         </button>
                                     ))}
                                 </div>

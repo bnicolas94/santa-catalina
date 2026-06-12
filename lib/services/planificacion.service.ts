@@ -223,37 +223,38 @@ export class PlanificacionService {
             }
         })
 
-        const shipmentCounts: Record<string, number> = {
-            'Mañana': 0,
-            'Siesta': 0,
-            'Tarde': 0,
-            'Por Asignar': 0,
-            'Totales': 0
+        const shipmentCountsExcel: Record<string, number> = {
+            'Mañana': 0, 'Siesta': 0, 'Tarde': 0, 'Por Asignar': 0, 'Totales': 0
         }
-        const shipmentsSet: Record<string, Set<string>> = {}
+        const shipmentCountsPedidos: Record<string, number> = {
+            'Mañana': 0, 'Siesta': 0, 'Tarde': 0, 'Por Asignar': 0, 'Totales': 0
+        }
+        
+        const shipmentsSetExcel: Record<string, Set<string>> = {}
+        const shipmentsSetPedidos: Record<string, Set<string>> = {}
 
         // --- Contar envíos de Excel/Manual ---
         manuales.forEach(m => {
             if (m.destino === 'LOCAL') return // No es un envío de reparto
             const turno = m.turno
-            if (!shipmentsSet[turno]) shipmentsSet[turno] = new Set()
+            if (!shipmentsSetExcel[turno]) shipmentsSetExcel[turno] = new Set()
             
             if (m.shipmentId) {
-                shipmentsSet[turno].add(m.shipmentId)
+                shipmentsSetExcel[turno].add(m.shipmentId)
             } else {
-                shipmentsSet[turno].add(m.id)
+                shipmentsSetExcel[turno].add(m.id)
             }
         })
 
         // --- Contar envíos de Pedidos (Logística y sin asignar) ---
         rutas.forEach(ruta => {
             const turno = ruta.turno || 'Sin Turno'
-            if (!shipmentsSet[turno]) shipmentsSet[turno] = new Set()
+            if (!shipmentsSetPedidos[turno]) shipmentsSetPedidos[turno] = new Set()
             
             ruta.entregas.forEach(entrega => {
                 const esLocal = entrega.pedido.esRetiro || entrega.pedido.cliente?.direccion?.toLowerCase().includes('retira')
                 if (!esLocal) {
-                    shipmentsSet[turno].add(entrega.pedido.id)
+                    shipmentsSetPedidos[turno].add(entrega.pedido.id)
                 }
             })
         })
@@ -263,19 +264,27 @@ export class PlanificacionService {
             if (esLocal) return
             const turnoPedido = pedido.turno || 'Por Asignar'
             const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
-            if (!shipmentsSet[turnoFinal]) shipmentsSet[turnoFinal] = new Set()
+            if (!shipmentsSetPedidos[turnoFinal]) shipmentsSetPedidos[turnoFinal] = new Set()
             
-            shipmentsSet[turnoFinal].add(pedido.id)
+            shipmentsSetPedidos[turnoFinal].add(pedido.id)
         })
 
-        // Sumar conteos de manuales al total
-        Object.entries(shipmentsSet).forEach(([turno, set]) => {
-            if (shipmentCounts[turno] === undefined) shipmentCounts[turno] = 0
-            shipmentCounts[turno] += set.size
+        // Sumar conteos
+        Object.entries(shipmentsSetExcel).forEach(([turno, set]) => {
+            if (shipmentCountsExcel[turno] === undefined) shipmentCountsExcel[turno] = 0
+            shipmentCountsExcel[turno] += set.size
+        })
+        Object.entries(shipmentsSetPedidos).forEach(([turno, set]) => {
+            if (shipmentCountsPedidos[turno] === undefined) shipmentCountsPedidos[turno] = 0
+            shipmentCountsPedidos[turno] += set.size
         })
 
         // Calcular total global
-        shipmentCounts['Totales'] = Object.entries(shipmentCounts)
+        shipmentCountsExcel['Totales'] = Object.entries(shipmentCountsExcel)
+            .filter(([k]) => k !== 'Totales')
+            .reduce((acc, [_, v]) => acc + v, 0)
+            
+        shipmentCountsPedidos['Totales'] = Object.entries(shipmentCountsPedidos)
             .filter(([k]) => k !== 'Totales')
             .reduce((acc, [_, v]) => acc + v, 0)
         
@@ -378,7 +387,8 @@ export class PlanificacionService {
             necesidades, // Pura demanda manual (Excel)
             demandaRutas, // Nueva referencia de Logística
             infoProductos,
-            shipmentCounts,
+            shipmentCountsExcel,
+            shipmentCountsPedidos,
             descuentosRealizados: descuentosTurnos.map((d: any) => d.turno),
             pendientesAnteriores,
             manualesDetalle: manuales.reduce((acc, m) => {
