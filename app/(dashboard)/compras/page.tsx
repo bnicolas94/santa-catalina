@@ -35,6 +35,7 @@ function ComprasContent() {
     const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
     const [filterPago, setFilterPago] = useState('')
+    const [agruparPorProveedor, setAgruparPorProveedor] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [form, setForm] = useState({
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
@@ -306,7 +307,9 @@ function ComprasContent() {
     }) : movimientos
 
     const filteredByInsumo = filterInsumo ? movimientosPorFecha.filter(m => m.insumo.id === filterInsumo) : movimientosPorFecha
-    const filteredByPago = filterPago ? filteredByInsumo.filter(m => m.estadoPago === filterPago) : filteredByInsumo
+    const filteredByPago = filterPago === 'pendiente' 
+        ? filteredByInsumo.filter(m => m.estadoPago === 'pendiente' || m.estadoPago === 'a_cuenta')
+        : (filterPago ? filteredByInsumo.filter(m => m.estadoPago === filterPago) : filteredByInsumo)
     const filtered = filterTipo ? filteredByPago.filter((m) => m.tipo === filterTipo) : filteredByPago
 
     // Calcular stock por vencimiento para el insumo filtrado o todos
@@ -331,6 +334,119 @@ function ComprasContent() {
 
     const statsEntradas = movimientosPorFecha.filter((m) => m.tipo === 'entrada').length
     const statsSalidas = movimientosPorFecha.filter((m) => m.tipo === 'salida').length
+
+    const renderRow = (mov: Movimiento) => (
+        <tr key={mov.id}>
+            <td>
+                <span className="badge" style={{
+                    backgroundColor: mov.tipo === 'entrada' ? '#2ECC7120' : '#E74C3C20',
+                    color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C',
+                    border: `1px solid ${mov.tipo === 'entrada' ? '#2ECC7140' : '#E74C3C40'}`,
+                }}>
+                    {mov.tipo === 'entrada' ? '⬆️ Entrada' : '⬇️ Salida'}
+                </span>
+            </td>
+            <td style={{ fontWeight: 600 }}>
+                {mov.insumo.nombre}
+                <div className="visible-mobile" style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 400 }}>
+                    {mov.proveedor?.nombre || 'S/Prov.'} • {new Date(mov.fecha).toLocaleDateString('es-AR')}
+                </div>
+            </td>
+            <td>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C', fontWeight: 700 }}>
+                        {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidad.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadMedida}
+                    </span>
+                    {mov.cantidadSecundaria && (
+                        <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 600 }}>
+                            {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidadSecundaria.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadSecundaria}
+                        </span>
+                    )}
+                </div>
+            </td>
+            <td>
+                {mov.tipo === 'entrada' && mov.costoTotal ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontWeight: 600 }}>${mov.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                        {mov.estadoPago === 'pendiente' ? (
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#F39C1220', color: '#E67E22', border: '1px solid #F39C12', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
+                                    ⏳ Pagar todo
+                                </button>
+                                <button onClick={() => handlePago(mov.id, true)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
+                                    💰 A cuenta
+                                </button>
+                            </div>
+                        ) : mov.estadoPago === 'a_cuenta' ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                <span className="badge" style={{ backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.2rem 0.6rem', fontSize: '0.7rem' }}>
+                                    💰 Pagado ${(mov.montoPagado || 0).toLocaleString('es-AR')} / ${mov.costoTotal.toLocaleString('es-AR')}
+                                </span>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                    <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#27AE6020', color: '#27AE60', border: '1px solid #27AE60', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
+                                        ✅ Completar
+                                    </button>
+                                    <button onClick={() => handlePago(mov.id, true)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
+                                        + Abonar
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <span className="badge" style={{ backgroundColor: '#2ECC7120', color: '#27AE60', border: '1px solid #2ECC71', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
+                                ✅ Pagado
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    <span style={{ color: '#aaa' }}>—</span>
+                )}
+            </td>
+            <td className="hidden-mobile">
+                {mov.fechaVencimiento ? (
+                    <span className="badge" style={{
+                        backgroundColor: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C20' : '#F1C40F20',
+                        color: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#D35400',
+                        border: `1px solid ${new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#F1C40F'}`,
+                        fontWeight: 600,
+                        fontSize: '9px'
+                    }}>
+                        {new Date(mov.fechaVencimiento).toLocaleDateString('es-AR')}
+                    </span>
+                ) : <span style={{ color: '#aaa' }}>—</span>}
+            </td>
+            <td className="hidden-mobile">
+                <div>{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                {mov.fechaFactura && (
+                    <div style={{ fontSize: '10px', color: '#8E44AD', fontWeight: 600 }}>📄 FC: {new Date(mov.fechaFactura).toLocaleDateString('es-AR')}</div>
+                )}
+            </td>
+            <td className="hidden-mobile">
+                {mov.proveedor?.nombre || '—'}
+                {mov.numeroFactura && <div style={{ fontSize: '10px', color: '#666', fontWeight: 600 }}>Fac: {mov.numeroFactura}</div>}
+            </td>
+            <td className="hidden-mobile" style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mov.observaciones || '—'}</td>
+            <td style={{ textAlign: 'right' }}>
+                <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                    <button
+                        onClick={() => handleEdit(mov)}
+                        className="btn btn-icon btn-ghost"
+                        style={{ color: 'var(--color-primary)' }}
+                        title="Editar movimiento"
+                    >
+                        ✏️
+                    </button>
+                    <button
+                        onClick={() => handleDelete(mov.id)}
+                        className="btn btn-icon btn-ghost"
+                        style={{ color: '#E74C3C' }}
+                        title="Eliminar movimiento"
+                    >
+                        🗑️
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando stock...</p></div>
 
@@ -400,12 +516,14 @@ function ComprasContent() {
                     style={{ whiteSpace: 'nowrap', backgroundColor: filterTipo === 'salida' ? '#E74C3C' : '#E74C3C18', color: filterTipo === 'salida' ? '#fff' : '#E74C3C', border: '2px solid #E74C3C', fontWeight: 600 }}>
                     ⬇️ Salidas ({statsSalidas})
                 </button>
-                {filterPago === 'pendiente' && (
-                    <button className="btn btn-sm" onClick={() => setFilterPago('')}
-                        style={{ whiteSpace: 'nowrap', backgroundColor: '#E67E22', color: '#fff', border: '2px solid #E67E22', fontWeight: 600 }}>
-                        ⏳ Pendientes
-                    </button>
-                )}
+                <button className="btn btn-sm" onClick={() => setFilterPago(filterPago === 'pendiente' ? '' : 'pendiente')}
+                    style={{ whiteSpace: 'nowrap', backgroundColor: filterPago === 'pendiente' ? '#E67E22' : '#E67E2218', color: filterPago === 'pendiente' ? '#fff' : '#E67E22', border: '2px solid #E67E22', fontWeight: 600 }}>
+                    ⏳ Pagos Pendientes ({movimientosPorFecha.filter(m => m.estadoPago === 'pendiente' || m.estadoPago === 'a_cuenta').length})
+                </button>
+                <button className="btn btn-sm" onClick={() => setAgruparPorProveedor(!agruparPorProveedor)}
+                    style={{ whiteSpace: 'nowrap', backgroundColor: agruparPorProveedor ? '#9B59B6' : '#9B59B618', color: agruparPorProveedor ? '#fff' : '#9B59B6', border: '2px solid #9B59B6', fontWeight: 600 }}>
+                    🏢 {agruparPorProveedor ? 'Desagrupar Proveedor' : 'Agrupar por Proveedor'}
+                </button>
             </div>
 
             {stockPorVto.length > 0 && (
@@ -451,119 +569,25 @@ function ComprasContent() {
                     </thead>
                     <tbody>
                         {filtered.length === 0 ? (
-                            <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>No hay movimientos registrados</td></tr>
-                        ) : filtered.map((mov) => (
-                            <tr key={mov.id}>
-                                <td>
-                                    <span className="badge" style={{
-                                        backgroundColor: mov.tipo === 'entrada' ? '#2ECC7120' : '#E74C3C20',
-                                        color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C',
-                                        border: `1px solid ${mov.tipo === 'entrada' ? '#2ECC7140' : '#E74C3C40'}`,
-                                    }}>
-                                        {mov.tipo === 'entrada' ? '⬆️ Entrada' : '⬇️ Salida'}
-                                    </span>
-                                </td>
-                                <td style={{ fontWeight: 600 }}>
-                                    {mov.insumo.nombre}
-                                    <div className="visible-mobile" style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 400 }}>
-                                        {mov.proveedor?.nombre || 'S/Prov.'} • {new Date(mov.fecha).toLocaleDateString('es-AR')}
-                                    </div>
-                                </td>
-                                <td>
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <span style={{ color: mov.tipo === 'entrada' ? '#2ECC71' : '#E74C3C', fontWeight: 700 }}>
-                                            {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidad.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadMedida}
-                                        </span>
-                                        {mov.cantidadSecundaria && (
-                                            <span style={{ fontSize: '10px', color: 'var(--color-gray-500)', fontWeight: 600 }}>
-                                                {mov.tipo === 'entrada' ? '+' : '−'}{mov.cantidadSecundaria.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {mov.insumo.unidadSecundaria}
-                                            </span>
-                                        )}
-                                    </div>
-                                </td>
-                                <td>
-                                    {mov.tipo === 'entrada' && mov.costoTotal ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                            <span style={{ fontWeight: 600 }}>${mov.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-                                            {mov.estadoPago === 'pendiente' ? (
-                                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                                    <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#F39C1220', color: '#E67E22', border: '1px solid #F39C12', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
-                                                        ⏳ Pagar todo
-                                                    </button>
-                                                    <button onClick={() => handlePago(mov.id, true)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
-                                                        💰 A cuenta
-                                                    </button>
-                                                </div>
-                                            ) : mov.estadoPago === 'a_cuenta' ? (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                    <span className="badge" style={{ backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.2rem 0.6rem', fontSize: '0.7rem' }}>
-                                                        💰 Pagado ${(mov.montoPagado || 0).toLocaleString('es-AR')} / ${mov.costoTotal.toLocaleString('es-AR')}
-                                                    </span>
-                                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                                        <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#27AE6020', color: '#27AE60', border: '1px solid #27AE60', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
-                                                            ✅ Completar
-                                                        </button>
-                                                        <button onClick={() => handlePago(mov.id, true)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
-                                                            + Abonar
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <span className="badge" style={{ backgroundColor: '#2ECC7120', color: '#27AE60', border: '1px solid #2ECC71', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
-                                                    ✅ Pagado
-                                                </span>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <span style={{ color: '#aaa' }}>—</span>
-                                    )}
-                                </td>
-                                <td className="hidden-mobile">
-                                    {mov.fechaVencimiento ? (
-                                        <span className="badge" style={{
-                                            backgroundColor: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C20' : '#F1C40F20',
-                                            color: new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#D35400',
-                                            border: `1px solid ${new Date(mov.fechaVencimiento) < new Date() ? '#E74C3C' : '#F1C40F'}`,
-                                            fontWeight: 600,
-                                            fontSize: '9px'
-                                        }}>
-                                            {new Date(mov.fechaVencimiento).toLocaleDateString('es-AR')}
-                                        </span>
-                                    ) : <span style={{ color: '#aaa' }}>—</span>}
-                                </td>
-                                <td className="hidden-mobile">
-                                    <div>{new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</div>
-                                    {mov.fechaFactura && (
-                                        <div style={{ fontSize: '10px', color: '#8E44AD', fontWeight: 600 }}>📄 FC: {new Date(mov.fechaFactura).toLocaleDateString('es-AR')}</div>
-                                    )}
-                                </td>
-                                <td className="hidden-mobile">
-                                    {mov.proveedor?.nombre || '—'}
-                                    {mov.numeroFactura && <div style={{ fontSize: '10px', color: '#666', fontWeight: 600 }}>Fac: {mov.numeroFactura}</div>}
-                                </td>
-                                <td className="hidden-mobile" style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mov.observaciones || '—'}</td>
-                                <td style={{ textAlign: 'right' }}>
-                                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                                        <button
-                                            onClick={() => handleEdit(mov)}
-                                            className="btn btn-icon btn-ghost"
-                                            style={{ color: 'var(--color-primary)' }}
-                                            title="Editar movimiento"
-                                        >
-                                            ✏️
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(mov.id)}
-                                            className="btn btn-icon btn-ghost"
-                                            style={{ color: '#E74C3C' }}
-                                            title="Eliminar movimiento"
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>No hay movimientos registrados</td></tr>
+                        ) : agruparPorProveedor ? (() => {
+                            const groups: Record<string, typeof filtered> = {};
+                            filtered.forEach(mov => {
+                                const provName = mov.proveedor?.nombre || 'Sin Proveedor';
+                                if (!groups[provName]) groups[provName] = [];
+                                groups[provName].push(mov);
+                            });
+                            return Object.entries(groups).map(([provName, movs]) => (
+                                <React.Fragment key={provName}>
+                                    <tr style={{ backgroundColor: '#F8F9FA' }}>
+                                        <td colSpan={9} style={{ fontWeight: 700, padding: '1rem', borderBottom: '2px solid #E5E7E9' }}>
+                                            🏢 {provName} <span className="badge badge-secondary" style={{ marginLeft: '8px', opacity: 0.8 }}>{movs.length} items</span>
+                                        </td>
+                                    </tr>
+                                    {movs.map(renderRow)}
+                                </React.Fragment>
+                            ));
+                        })() : filtered.map(renderRow)}
                     </tbody>
                 </table>
             </div>
