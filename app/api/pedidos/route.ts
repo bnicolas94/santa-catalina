@@ -330,8 +330,12 @@ export async function DELETE(request: Request) {
         let targetIds: string[] = []
 
         if (ids && Array.isArray(ids) && ids.length > 0) {
-            // Modo legacy: borrar por IDs explícitos
-            targetIds = ids
+            // Modo legacy: borrar por IDs explícitos (excluyendo entregados)
+            const pedidos = await prisma.pedido.findMany({
+                where: { id: { in: ids }, estado: { not: 'entregado' } },
+                select: { id: true }
+            })
+            targetIds = pedidos.map(p => p.id)
         } else if (fechaDesde || fechaHasta) {
             // Modo filtros: construir el where y obtener todos los IDs
             const where: any = {}
@@ -340,7 +344,15 @@ export async function DELETE(request: Request) {
                 if (fechaDesde) where.fechaEntrega.gte = new Date(fechaDesde + 'T00:00:00.000Z')
                 if (fechaHasta) where.fechaEntrega.lte = new Date(fechaHasta + 'T23:59:59.999Z')
             }
-            if (estado) where.estado = estado
+            if (estado) {
+                if (estado === 'entregado') {
+                    // Si están filtrando específicamente por entregado, no borramos nada
+                    return NextResponse.json({ success: true, count: 0, message: 'Los pedidos entregados no pueden ser eliminados' })
+                }
+                where.estado = estado
+            } else {
+                where.estado = { not: 'entregado' } // Proteger entregados si no hay filtro explícito
+            }
             if (turno) where.turno = turno
             if (search) {
                 where.cliente = { nombreComercial: { contains: search, mode: 'insensitive' } }
