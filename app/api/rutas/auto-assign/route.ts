@@ -52,8 +52,20 @@ export async function POST(request: Request) {
                 const allPedidos = [
                     ...plan.pedidos.map((p: any) => ({ pedidoId: p.pedidoId, clienteId: p.clienteId })),
                     ...plan.sinCoordenadas.map((p: any) => ({ pedidoId: p.pedidoId, clienteId: p.clienteId }))
-                ]
+                ].filter(p => p.pedidoId && p.clienteId)
+
                 if (allPedidos.length === 0) continue
+
+                // Verify orders exist before transaction
+                const validPedidos = await prisma.pedido.findMany({
+                    where: { id: { in: allPedidos.map(p => p.pedidoId) } },
+                    include: { cliente: true }
+                })
+                
+                if (validPedidos.length !== allPedidos.length) {
+                    const invalidIds = allPedidos.filter(p => !validPedidos.some(vp => vp.id === p.pedidoId)).map(p => p.pedidoId)
+                    return NextResponse.json({ error: `Error de sincronización: hay ${invalidIds.length} pedidos seleccionados que ya no existen en la base de datos o están corruptos.` }, { status: 400 })
+                }
 
                 const ruta = await prisma.$transaction(async (tx) => {
                     const nuevaRuta = await tx.ruta.create({
