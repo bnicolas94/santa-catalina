@@ -262,6 +262,6 @@ export async function POST(request: Request) {
 
     } catch (error) {
         console.error('Auto-assign error:', error)
-        return NextResponse.json({ error: 'Error en la asignación automática' }, { status: 500 })
+        return NextResponse.json({ error: `Error: ${error instanceof Error ? error.message : String(error)}` }, { status: 500 })
     }
 }
