@@ -6,6 +6,12 @@ import { PreviewRowResult } from "../preview/route";
 import { parseDireccion } from "@/lib/parsers/addressUtils";
 // geocodeAddress deshabilitado — se resuelve desde logística
 
+/** Normaliza un turno quitando tildes y pasando a minúsculas: 'Mañana' y 'MANANA' → 'manana' */
+function normalizeTurno(turno: string | null | undefined): string {
+    if (!turno) return '';
+    return turno.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 export async function POST(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -68,7 +74,7 @@ export async function POST(req: NextRequest) {
                     select: { clienteId: true, fechaEntrega: true, turno: true }
                 });
                 for (const p of pedidos) {
-                    const key = `${p.clienteId}_${p.fechaEntrega.toISOString()}_${(p.turno || '').toLowerCase()}`;
+                    const key = `${p.clienteId}_${p.fechaEntrega.toISOString()}_${normalizeTurno(p.turno)}`;
                     pedidosExistentesSet.add(key);
                 }
             }
@@ -84,10 +90,8 @@ export async function POST(req: NextRequest) {
             if (cid && fStr) {
                 const currentFechas = fechasBuscadas.get(fStr);
                 if (currentFechas) {
-                    const turnoRaw = (row.original.turno || row.original.Turno || '').toString().toLowerCase();
-                    // Como el original puede tener espacios o formatos raros, lo normalizamos como hacemos en Prisma:
-                    // En el pedido creamos el turno sin espacios extra. Pero dejaremos el raw por ahora.
-                    const key = `${cid}_${currentFechas.fecha.toISOString()}_${turnoRaw.trim()}`;
+                    const turnoNorm = normalizeTurno(row.original.turno || row.original.Turno || '');
+                    const key = `${cid}_${currentFechas.fecha.toISOString()}_${turnoNorm}`;
                     if (pedidosExistentesSet.has(key)) {
                         omitir = true;
                     } else {
