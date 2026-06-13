@@ -14,6 +14,7 @@ interface MovCaja {
 
 interface PendingPedido {
     id: string
+    entregaId: string
     clienteNombre: string
     totalImporte: number
     totalUnidades: number
@@ -135,6 +136,9 @@ export default function CajaPage() {
     const [showRendicionModal, setShowRendicionModal] = useState<Rendicion | null>(null)
     const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
     const [rendForm, setRendForm] = useState({ montoEntregado: '', observaciones: '' })
+    const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null)
+    const [editingPedidoPrice, setEditingPedidoPrice] = useState<string>('')
+    const [updatingPedidoId, setUpdatingPedidoId] = useState<string | null>(null)
 
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -376,6 +380,128 @@ export default function CajaPage() {
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
+    }
+    
+    async function handleSavePrice(pedidoId: string) {
+        if (!editingPedidoPrice) return
+        const price = Math.round(parseFloat(editingPedidoPrice))
+        if (isNaN(price) || price < 0) {
+            alert('Por favor, ingrese un monto válido')
+            return
+        }
+        setUpdatingPedidoId(pedidoId)
+        try {
+            const res = await fetch(`/api/pedidos/${pedidoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ totalImporte: price }),
+            })
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al actualizar el precio')
+            }
+            
+            // Actualización reactiva local
+            if (showRendicionModal) {
+                const updatedPedidos = showRendicionModal.pedidos.map(p => 
+                    p.id === pedidoId ? { ...p, totalImporte: price } : p
+                )
+                const newMontoEsperado = updatedPedidos.reduce((sum, p) => sum + p.totalImporte, 0)
+                setShowRendicionModal({
+                    ...showRendicionModal,
+                    pedidos: updatedPedidos,
+                    montoEsperado: newMontoEsperado
+                })
+                setRendForm(f => ({ ...f, montoEntregado: newMontoEsperado.toString() }))
+            }
+            setEditingPedidoId(null)
+            setEditingPedidoPrice('')
+            fetchData()
+        } catch (err: any) {
+            alert(err.message || 'Error al actualizar el precio')
+        } finally {
+            setUpdatingPedidoId(null)
+        }
+    }
+
+    async function handlePayByTransfer(pedidoId: string) {
+        if (!window.confirm('¿Está seguro de marcar este pedido como abonado por transferencia? Se registrará el ingreso en MP Juani y se removerá de la rendición en efectivo.')) return
+        setUpdatingPedidoId(pedidoId)
+        try {
+            const res = await fetch(`/api/pedidos/${pedidoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ medioPago: 'transferencia', abonado: true }),
+            })
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al registrar pago')
+            }
+
+            // Actualización reactiva local
+            if (showRendicionModal) {
+                const updatedPedidos = showRendicionModal.pedidos.filter(p => p.id !== pedidoId)
+                if (updatedPedidos.length === 0) {
+                    setShowRendicionModal(null)
+                } else {
+                    const newMontoEsperado = updatedPedidos.reduce((sum, p) => sum + p.totalImporte, 0)
+                    setShowRendicionModal({
+                        ...showRendicionModal,
+                        pedidos: updatedPedidos,
+                        pedidosEfectivo: updatedPedidos.length,
+                        montoEsperado: newMontoEsperado
+                    })
+                    setRendForm(f => ({ ...f, montoEntregado: newMontoEsperado.toString() }))
+                }
+            }
+            fetchData()
+        } catch (err: any) {
+            alert(err.message || 'Error al registrar pago por transferencia')
+        } finally {
+            setUpdatingPedidoId(null)
+        }
+    }
+
+    async function handleRejectDelivery(entregaId: string, totalUnidades: number) {
+        if (!window.confirm('¿Está seguro de rechazar este pedido por completo? El stock del pedido retornará a la fábrica y se removerá de la rendición.')) return
+        setUpdatingPedidoId(entregaId)
+        try {
+            const res = await fetch(`/api/entregas/${entregaId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    unidadesRechazadas: totalUnidades,
+                    motivoRechazo: 'otro',
+                    observaciones: 'Rechazado por Admin en rendición'
+                }),
+            })
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al rechazar pedido')
+            }
+
+            // Actualización reactiva local
+            if (showRendicionModal) {
+                const updatedPedidos = showRendicionModal.pedidos.filter(p => p.entregaId !== entregaId)
+                if (updatedPedidos.length === 0) {
+                    setShowRendicionModal(null)
+                } else {
+                    const newMontoEsperado = updatedPedidos.reduce((sum, p) => sum + p.totalImporte, 0)
+                    setShowRendicionModal({
+                        ...showRendicionModal,
+                        pedidos: updatedPedidos,
+                        pedidosEfectivo: updatedPedidos.length,
+                        montoEsperado: newMontoEsperado
+                    })
+                    setRendForm(f => ({ ...f, montoEntregado: newMontoEsperado.toString() }))
+                }
+            }
+            fetchData()
+        } catch (err: any) {
+            alert(err.message || 'Error al rechazar pedido')
+        } finally {
+            setUpdatingPedidoId(null)
+        }
     }
     async function handleDeposit(e: React.FormEvent) {
         e.preventDefault()
@@ -1138,16 +1264,92 @@ export default function CajaPage() {
                             {/* Desglose de pedidos */}
                             <div style={{ marginBottom: 'var(--space-4)' }}>
                                 <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-gray-500)', textTransform: 'uppercase', marginBottom: 'var(--space-2)' }}>Desglose de Pedidos</div>
-                                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2)', backgroundColor: 'var(--color-gray-50)' }}>
+                                <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2)', backgroundColor: 'var(--color-gray-50)' }}>
                                     {showRendicionModal.pedidos?.map((ped) => (
-                                        <div key={ped.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', padding: '6px 4px', borderBottom: '1px solid var(--color-gray-100)' }}>
-                                            <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '230px' }} title={ped.clienteNombre}>
-                                                🏢 {ped.clienteNombre}
-                                            </span>
-                                            <span style={{ fontWeight: 700, color: 'var(--color-gray-700)' }}>
-                                                {formatCurrency(ped.totalImporte)}
-                                            </span>
-                                        </div>
+                                        editingPedidoId === ped.id ? (
+                                            <div key={ped.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 6px', borderBottom: '1px solid var(--color-gray-200)', backgroundColor: 'var(--color-white)', borderRadius: 'var(--radius-sm)', marginBottom: '4px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: 600, fontSize: '0.8rem', color: 'var(--color-gray-800)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={ped.clienteNombre}>
+                                                        🏢 {ped.clienteNombre}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', fontWeight: 500 }}>({ped.totalUnidades} u.)</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                    <input
+                                                        type="number"
+                                                        value={editingPedidoPrice}
+                                                        onChange={(e) => setEditingPedidoPrice(e.target.value)}
+                                                        className="form-input"
+                                                        style={{ padding: '2px 8px', fontSize: '0.85rem', height: '28px', flex: 1, margin: 0 }}
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-primary"
+                                                        style={{ padding: '0 10px', height: '28px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        onClick={() => handleSavePrice(ped.id)}
+                                                        disabled={updatingPedidoId === ped.id}
+                                                    >
+                                                        {updatingPedidoId === ped.id ? '...' : '💾'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost"
+                                                        style={{ padding: '0 8px', height: '28px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        onClick={() => { setEditingPedidoId(null); setEditingPedidoPrice('') }}
+                                                        disabled={updatingPedidoId === ped.id}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div key={ped.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 6px', borderBottom: '1px solid var(--color-gray-150)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '210px', fontSize: '0.85rem' }} title={ped.clienteNombre}>
+                                                        🏢 {ped.clienteNombre} <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)', fontWeight: 400 }}>({ped.totalUnidades} u.)</span>
+                                                    </span>
+                                                    <span style={{ fontWeight: 700, color: 'var(--color-gray-700)', fontSize: '0.85rem' }}>
+                                                        {formatCurrency(ped.totalImporte)}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'center', marginTop: '2px' }}>
+                                                    {updatingPedidoId === ped.id || updatingPedidoId === ped.entregaId ? (
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)' }}>⏳ Actualizando...</span>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                title="Editar precio"
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                                                onClick={() => {
+                                                                    setEditingPedidoId(ped.id)
+                                                                    setEditingPedidoPrice(ped.totalImporte.toString())
+                                                                }}
+                                                            >
+                                                                ✏️
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                title="Abonado por Transferencia (TR)"
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                                                onClick={() => handlePayByTransfer(ped.id)}
+                                                            >
+                                                                🏦
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                title="Rechazar pedido por completo"
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', padding: '2px', display: 'flex', alignItems: 'center' }}
+                                                                onClick={() => handleRejectDelivery(ped.entregaId, ped.totalUnidades)}
+                                                            >
+                                                                ❌
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
                                     ))}
                                     {(!showRendicionModal.pedidos || showRendicionModal.pedidos.length === 0) && (
                                         <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-400)', textAlign: 'center', padding: '12px' }}>No hay detalles de pedidos</div>

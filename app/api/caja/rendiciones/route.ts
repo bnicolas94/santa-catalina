@@ -64,6 +64,7 @@ export async function GET() {
                 bloqueada: false, // se marca abajo
                 pedidos: entregasEfectivo.map(e => ({
                     id: e.pedido.id,
+                    entregaId: e.id,
                     clienteNombre: e.cliente?.nombreComercial || e.pedido?.cliente?.nombreComercial || 'Desconocido',
                     totalImporte: e.pedido.totalImporte,
                     totalUnidades: e.pedido.totalUnidades
