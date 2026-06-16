@@ -254,8 +254,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
             const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
             const montoOtrosLetras = formatCurrencyToWords(liq.montoAdicionales || 0)
-            const totalBruto = liq.totalBruto || 0
-            const totalLetras = formatCurrencyToWords(liq.totalNeto || 0)
+            const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0) + (liq.montoAdicionales || 0)
+            const totalLetrasBruto = formatCurrencyToWords(totalBruto)
+            const totalLetrasNeto = formatCurrencyToWords(liq.totalNeto || 0)
 
             const isVacaciones = liq.tipo === 'VACACIONES' || 
                                 liq.manualData?.esVacaciones === true || 
