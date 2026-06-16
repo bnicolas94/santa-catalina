@@ -331,7 +331,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     </div>
                     <p>
                         Se abona la suma <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                        (pesos ${totalLetras}) correspondiente a <span class="data-label">${diasVacas}</span> días corridos 
+                        (pesos ${totalLetrasNeto}) correspondiente a <span class="data-label">${diasVacas}</span> días corridos 
                         de vacaciones anuales, conforme a la Ley de Contrato de Trabajo N° 20.744.
                     </p>
                     <p>
@@ -347,8 +347,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     (pesos ${montoHsExtrasLetras}) en concepto de <span class="data-label">${liq.horasExtras}</span> horas extras al 100% más de su valor, 
                     ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
                     del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                    Recibiendo un neto total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                    (pesos ${totalLetras}).
+                    Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
+                    (pesos ${totalLetrasBruto}).
                 `
             }
 
