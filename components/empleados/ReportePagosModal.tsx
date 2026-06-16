@@ -279,7 +279,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     </div>
                     <p style="margin-bottom: 15px;">
                         Certifico haber recibido de la firma la suma de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                        (pesos ${totalLetras}), en concepto de liquidación final por <span class="data-label">${manualData.tipoEgreso || 'Egreso'}</span>, 
+                        (pesos ${totalLetrasNeto}), en concepto de liquidación final por <span class="data-label">${manualData.tipoEgreso || 'Egreso'}</span>, 
                         con una antigüedad de <span class="data-label">${manualData.antiguedadAnios || 0}</span> años, según el siguiente detalle:
                     </p>
                     <table style="width: 100%; border-collapse: collapse; font-size: 12pt; margin-bottom: 20px; border: 1px solid #000;">
