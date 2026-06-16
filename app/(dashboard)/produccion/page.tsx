@@ -801,7 +801,6 @@ export default function ProduccionPage() {
                                         <th style={{ textAlign: 'center' }}>Total</th>
                                         <th style={{ textAlign: 'center' }}>Stock</th>
                                         <th style={{ textAlign: 'center' }} className="hidden-mobile">Proceso</th>
-                                        <th style={{ textAlign: 'center' }} title="Pendientes de días anteriores o turnos previos">Previo</th>
                                         <th style={{ textAlign: 'center' }}>Falta</th>
                                         <th style={{ textAlign: 'center' }}>Final</th>
                                         <th>Acción</th>
@@ -889,43 +888,7 @@ export default function ProduccionPage() {
 
                                                     const enProcInfo = planning?.enProduccion?.[key]
                                                     const enProcUnits = enProcInfo?.total || 0
-                                                    
-                                                    // --- CORRECCIÓN EN TOTALES ---
-                                                    // 1. Pendientes de días anteriores
-                                                    const pendAntExcel = planning?.pendientesAnterioresExcel?.[key]
-                                                    const pendAntPedidos = planning?.pendientesAnterioresPedidos?.[key]
-                                                    
-                                                    // Calculamos el total anterior cruzado o separado
-                                                    const pendAnteriores = usePedidosMode 
-                                                        ? Math.max(pendAntExcel?.total || 0, pendAntPedidos?.total || 0)
-                                                        : (pendAntExcel?.total || 0)
-
-                                                    // Armamos los detalles para el tooltip
-                                                    const detallesAnteriores = usePedidosMode 
-                                                        ? (pendAntExcel?.total || 0) >= (pendAntPedidos?.total || 0) ? (pendAntExcel?.detalles || []) : (pendAntPedidos?.detalles || [])
-                                                        : (pendAntExcel?.detalles || [])
-                                                    
-                                                    // 2. Solo lo que Falta descontar de HOY
-                                                    let pendHoy = 0
-                                                    const TURNOS_POSIBLES = ['Mañana', 'Siesta', 'Tarde']
-                                                    TURNOS_POSIBLES.forEach(tNombre => {
-                                                        const yaDescontado = planning?.descuentosRealizados?.includes(tNombre)
-                                                        if (!yaDescontado) {
-                                                            const manT = planning?.manualesDetalle?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
-                                                            const manualT = filterDestino === 'TODOS' ? (manT.fabrica + manT.local) : (filterDestino === 'LOCAL' ? manT.local : manT.fabrica)
-                                                            
-                                                            let rutaT = 0
-                                                            if (usePedidosMode) {
-                                                                const dR = planning?.demandaRutas?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
-                                                                rutaT = filterDestino === 'TODOS' ? (dR.fabrica + dR.local) : (filterDestino === 'LOCAL' ? dR.local : dR.fabrica)
-                                                            }
-                                                            
-                                                            pendHoy += usePedidosMode ? Math.max(manualT, rutaT) : manualT
-                                                        }
-                                                    })
-
-                                                    const totalDeduccionProyectada = pendAnteriores + pendHoy
-                                                    const prevUnits = totalDeduccionProyectada - totalUnits
+                                                    const totalDeduccionProyectada = totalUnits
                                                     const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockValue - enProcUnits)
 
                                                     const rutaPaq = (ruta / presSize).toFixed(1).replace('.0', '')
@@ -971,16 +934,7 @@ export default function ProduccionPage() {
                                                                     </span>
                                                                 ) : (prodInfo?.isPrimary ? '—' : '')}
                                                             </td>
-                                                            <td 
-                                                                style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
-                                                                title={detallesAnteriores?.length ? `Detalle de Pendientes:\n${detallesAnteriores.map((d: any) => `• ${formatDateOnly(d.fecha)} (${d.turno}): ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
-                                                            >
-                                                                {prevUnits > 0 ? (
-                                                                    <span style={{ borderBottom: pendAnteriores > 0 ? '1px dotted var(--color-gray-300)' : 'none' }}>
-                                                                        {(prevUnits / presSize).toFixed(1).replace('.0', '')} paq
-                                                                    </span>
-                                                                ) : '—'}
-                                                            </td>
+
                                                             <td style={{ textAlign: 'center' }}>
                                                                 {faltanteUnits > 0 ? (
                                                                     <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltantePaq} paq</span>
@@ -1068,32 +1022,7 @@ export default function ProduccionPage() {
                                             const enProcInfo = planning?.enProduccion?.[key]
                                             const enProcUnits = enProcInfo?.total || 0
                                             
-                                            // --- CÁLCULO ACUMULATIVO ---
-                                            // 1. Pendientes de días anteriores
-                                            const pendAnterioresInfo = planning?.pendientesAnteriores?.[key]
-                                            const pendAnteriores = pendAnterioresInfo?.total || 0
-                                            
-                                            // 2. Pendientes de turnos anteriores del MISMO día
-                                            let pendTurnosPrevios = 0
-                                            if (indexActual > 0) {
-                                                for (let i = 0; i < indexActual; i++) {
-                                                    const tNombre = TURNOS_ORDEN[i]
-                                                    const yaDescontado = planning?.descuentosRealizados?.includes(tNombre)
-                                                    if (!yaDescontado) {
-                                                        // Si no se descontó, sumamos su necesidad técnica (ajustada por filtro) al "bloqueo" de stock
-                                                        const necT = planning?.necesidades?.[tNombre]?.[key] || 0
-                                                        const manT = planning?.manualesDetalle?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
-                                                        const dRT = planning?.demandaRutas?.[tNombre]?.[key] || { fabrica: 0, local: 0 }
-                                                        
-                                                        const rutaT = filterDestino === 'TODOS' ? (dRT.fabrica + dRT.local) : (filterDestino === 'LOCAL' ? dRT.local : dRT.fabrica)
-                                                        const manualT = filterDestino === 'TODOS' ? (manT.fabrica + manT.local) : (filterDestino === 'LOCAL' ? manT.local : manT.fabrica)
-                                                        pendTurnosPrevios += (rutaT + manualT)
-                                                    }
-                                                }
-                                            }
-
-                                            const totalDeduccionProyectada = totalUnits + pendAnteriores + pendTurnosPrevios
-                                            const prevUnits = totalDeduccionProyectada - totalUnits
+                                            const totalDeduccionProyectada = totalUnits
                                             const faltanteUnits = Math.max(0, totalDeduccionProyectada - stockUnits - enProcUnits)
 
                                             // Conversión a paquetes para mostrar
@@ -1137,16 +1066,7 @@ export default function ProduccionPage() {
                                                             </span>
                                                         ) : (prodInfo?.isPrimary ? '—' : '')}
                                                     </td>
-                                                    <td 
-                                                        style={{ textAlign: 'center', color: 'var(--color-gray-400)', fontSize: '12px', cursor: pendAnteriores > 0 ? 'help' : 'default' }}
-                                                        title={pendAnterioresInfo?.detalles?.length ? `Detalle de Pendientes:\n${pendAnterioresInfo.detalles.map((d: any) => `• ${formatDateOnly(d.fecha)} (${d.turno}): ${d.cantidad / presSize} paq`).join('\n')}` : undefined}
-                                                    >
-                                                        {prevUnits > 0 ? (
-                                                            <span style={{ borderBottom: pendAnteriores > 0 ? '1px dotted var(--color-gray-300)' : 'none' }}>
-                                                                {(prevUnits / presSize).toFixed(1).replace('.0', '')} paq
-                                                            </span>
-                                                        ) : '—'}
-                                                    </td>
+
                                                     <td style={{ textAlign: 'center' }}>
                                                         {faltanteUnits > 0 ? (
                                                             <span style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '13px' }}>{faltantePaq} paq</span>
