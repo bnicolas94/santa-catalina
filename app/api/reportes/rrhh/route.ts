@@ -366,7 +366,8 @@ export async function GET(request: Request) {
 
             // Analizar ausencias desde el desglose de cada liquidación
             const historialSemanas = todasLiquidaciones.map(liq => {
-                const desglose = (liq.desglose as any[]) || []
+                const desgloseRaw = liq.desglose || []
+                const desglose = Array.isArray(desgloseRaw) ? desgloseRaw : []
                 
                 // Días laborales: Lun-Sáb (excluir Domingo)
                 const diasLaborales = desglose.filter(d => d.diaSemana !== 'Domingo')
