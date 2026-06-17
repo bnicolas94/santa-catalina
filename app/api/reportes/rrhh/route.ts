@@ -420,10 +420,15 @@ export async function GET(request: Request) {
 
             // Sanciones individuales
             let sancionesIndividuales = 0
+            let listaSanciones: any[] = []
             try {
-                sancionesIndividuales = await prisma.sancion.count({
-                    where: { empleadoId }
+                const sancionesFetched = await prisma.sancion.findMany({
+                    where: { empleadoId },
+                    orderBy: { fecha: 'desc' },
+                    include: { empleado: true }
                 })
+                sancionesIndividuales = sancionesFetched.length
+                listaSanciones = sancionesFetched
             } catch { /* table may not exist */ }
 
             // Préstamos del empleado
@@ -574,7 +579,8 @@ export async function GET(request: Request) {
                     sanciones: sancionesIndividuales
                 },
                 semanas: historialSemanas,
-                asistenciaDiaria: diasAsistencia.reverse() // Mostrar el más reciente primero
+                asistenciaDiaria: diasAsistencia.reverse(), // Mostrar el más reciente primero
+                listaSanciones
             }
         }
 

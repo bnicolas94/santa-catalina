@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, Fragment } from 'react'
+import { getPrintLogos } from '@/lib/utils/printLogos'
 
 interface TabLegajoProps {
     data: any
@@ -15,6 +16,16 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
     const [selectedDates, setSelectedDates] = useState<string[]>([])
     const [isBulkUpdating, setIsBulkUpdating] = useState(false)
     const [bulkStatus, setBulkStatus] = useState('')
+
+    // Estados para nueva sanción
+    const [showNewSancion, setShowNewSancion] = useState(false)
+    const [isSubmittingSancion, setIsSubmittingSancion] = useState(false)
+    const [newSancion, setNewSancion] = useState({
+        fecha: new Date().toISOString().split('T')[0],
+        tipo: 'APERCIBIMIENTO',
+        motivo: '',
+        observaciones: ''
+    })
 
     if (!data.historico) {
         return (
@@ -156,6 +167,119 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
             alert('Error al aplicar cambios masivos: ' + error.message)
         } finally {
             setIsBulkUpdating(false)
+        }
+    }
+
+    const handleSubmitSancion = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setIsSubmittingSancion(true)
+        try {
+            const res = await fetch('/api/empleados/sanciones', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...newSancion, empleadoId: h.empleado.id })
+            })
+            if (!res.ok) throw new Error('Error al guardar la sanción')
+            
+            setNewSancion({
+                fecha: new Date().toISOString().split('T')[0],
+                tipo: 'APERCIBIMIENTO',
+                motivo: '',
+                observaciones: ''
+            })
+            setShowNewSancion(false)
+            if (onRefresh) await onRefresh()
+        } catch (error) {
+            console.error(error)
+            alert('Error al guardar la sanción')
+        } finally {
+            setIsSubmittingSancion(false)
+        }
+    }
+
+    const handlePrintSancion = async (sancion: any) => {
+        const dImp = new Date(sancion.fecha)
+        // Add timezone offset to display correct day (since it's saved as YYYY-MM-DDT00:00:00Z)
+        const localDImp = new Date(dImp.getTime() + dImp.getTimezoneOffset() * 60000)
+        const dia = localDImp.getDate()
+        const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+        const mesNombre = meses[localDImp.getMonth()]
+        const anio = localDImp.getFullYear()
+
+        const { logo: logoBase64 } = await getPrintLogos()
+
+        const html = `
+            <html>
+            <head>
+                <title>Documento de ${sancion.tipo}</title>
+                <style>
+                    @page { size: A4 portrait; margin: 15mm; }
+                    body { font-family: 'Times New Roman', Times, serif; line-height: 1.4; color: #000; font-size: 12pt; }
+                    .header { text-align: center; margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 15px; }
+                    .logo { font-size: 20pt; font-weight: bold; text-transform: uppercase; margin-bottom: 10px; }
+                    .doc-title { font-size: 16pt; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin-top: 10px; }
+                    .content { margin-top: 20px; text-align: justify; }
+                    .date { text-align: right; margin-bottom: 20px; }
+                    .signature-section { margin-top: 60px; display: flex; justify-content: space-between; }
+                    .signature-box { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 10px; }
+                    .footer { margin-top: 40px; font-size: 10pt; color: #555; border-top: 1px dashed #ccc; padding-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <img src="${logoBase64}" style="height: 60px; margin-bottom: 10px;" />
+                    <div style="font-size: 10pt;">Gestión de Recursos Humanos</div>
+                    <div class="doc-title">${sancion.tipo}</div>
+                </div>
+
+                <div class="date">
+                    Berazategui, ${dia} de ${mesNombre} de ${anio}
+                </div>
+
+                <div class="content">
+                    <p>Por medio de la presente, se notifica formalmente al Sr./Sra. <strong>${h.empleado.nombre} ${h.empleado.apellido || ''}</strong>, 
+                    con DNI <strong>${h.empleado.dni || '________'}</strong>, que se ha resuelto aplicar la siguiente medida disciplinaria: 
+                    <strong>${sancion.tipo}</strong>.</p>
+
+                    <p><strong>Motivo de la medida:</strong><br/>
+                    ${sancion.motivo}</p>
+
+                    ${sancion.observaciones ? `
+                        <p><strong>Observaciones:</strong><br/>
+                        ${sancion.observaciones}</p>
+                    ` : ''}
+
+                    <p>Se deja constancia de que esta medida quedará registrada en el legajo personal. Se insta a evitar futuras inconductas similares, bajo apercibimiento de aplicar sanciones mayores.</p>
+                </div>
+
+                <div class="signature-section">
+                    <div class="signature-box">
+                        <br/><br/><br/>
+                        Firma de la Empresa<br/>
+                        Aclaración
+                    </div>
+                    <div class="signature-box">
+                        <br/><br/><br/>
+                        Firma del Empleado/a<br/>
+                        Aclaración / DNI
+                    </div>
+                </div>
+
+                <div class="footer">
+                    Generado el ${new Date().toLocaleDateString('es-AR', { dateStyle: 'medium', timeStyle: 'short' })}<br/>
+                    ID de Registro: ${sancion.id}
+                </div>
+            </body>
+            </html>
+        `
+
+        const printWindow = window.open('', '_blank')
+        if (printWindow) {
+            printWindow.document.write(html)
+            printWindow.document.close()
+            setTimeout(() => {
+                printWindow.print()
+            }, 500)
         }
     }
 
@@ -538,6 +662,137 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                     )}
                                 </Fragment>
                             ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Registro de Sanciones */}
+            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                    <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, margin: 0 }}>
+                        ⚖️ Registro de Sanciones y Apercibimientos
+                    </h3>
+                    <button 
+                        className="btn btn-primary"
+                        onClick={() => setShowNewSancion(!showNewSancion)}
+                        style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }}
+                    >
+                        {showNewSancion ? '✕ Cancelar' : '+ Registrar Sanción'}
+                    </button>
+                </div>
+
+                {showNewSancion && (
+                    <form onSubmit={handleSubmitSancion} style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', border: '1px solid var(--color-gray-200)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+                            <div className="form-group">
+                                <label className="form-label">Fecha</label>
+                                <input 
+                                    type="date" 
+                                    className="form-input" 
+                                    value={newSancion.fecha}
+                                    onChange={e => setNewSancion({...newSancion, fecha: e.target.value})}
+                                    required 
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Tipo de Medida</label>
+                                <select 
+                                    className="form-select"
+                                    value={newSancion.tipo}
+                                    onChange={e => setNewSancion({...newSancion, tipo: e.target.value})}
+                                    required
+                                >
+                                    <option value="APERCIBIMIENTO">Apercibimiento / Llamado de Atención</option>
+                                    <option value="SANCION">Sanción Disciplinaria</option>
+                                    <option value="SUSPENSION">Suspensión</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                            <label className="form-label">Motivo (se imprimirá en el documento)</label>
+                            <textarea 
+                                className="form-input" 
+                                rows={2}
+                                value={newSancion.motivo}
+                                onChange={e => setNewSancion({...newSancion, motivo: e.target.value})}
+                                placeholder="Describa claramente la inconducta o motivo..."
+                                required
+                            />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                            <label className="form-label">Observaciones Internas (opcional)</label>
+                            <textarea 
+                                className="form-input" 
+                                rows={2}
+                                value={newSancion.observaciones}
+                                onChange={e => setNewSancion({...newSancion, observaciones: e.target.value})}
+                                placeholder="Notas internas que no saldrán en la impresión..."
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button 
+                                type="submit" 
+                                className="btn btn-primary"
+                                disabled={isSubmittingSancion}
+                            >
+                                {isSubmittingSancion ? 'Guardando...' : 'Guardar y Emitir'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                <div className="table-container">
+                    <table className="table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Motivo</th>
+                                <th>Observaciones</th>
+                                <th style={{ textAlign: 'right' }}>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(!h.listaSanciones || h.listaSanciones.length === 0) ? (
+                                <tr>
+                                    <td colSpan={5} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>
+                                        No hay sanciones registradas en el legajo de este empleado.
+                                    </td>
+                                </tr>
+                            ) : (
+                                h.listaSanciones.map((s: any) => (
+                                    <tr key={s.id}>
+                                        <td style={{ fontWeight: 600 }}>{formatFecha(s.fecha.split('T')[0])}</td>
+                                        <td>
+                                            <span style={{ 
+                                                display: 'inline-block',
+                                                padding: '2px 8px',
+                                                borderRadius: 'var(--radius-full)',
+                                                fontSize: '11px',
+                                                fontWeight: 700,
+                                                backgroundColor: s.tipo === 'SUSPENSION' ? '#fee2e2' : s.tipo === 'SANCION' ? '#fce8e6' : '#fffbeb',
+                                                color: s.tipo === 'SUSPENSION' ? '#991b1b' : s.tipo === 'SANCION' ? '#c5221f' : '#b45309',
+                                                border: `1px solid ${s.tipo === 'SUSPENSION' ? '#fecaca' : s.tipo === 'SANCION' ? '#fad2cf' : '#fde68a'}`
+                                            }}>
+                                                {s.tipo}
+                                            </span>
+                                        </td>
+                                        <td>{s.motivo}</td>
+                                        <td style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>{s.observaciones || '-'}</td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <button 
+                                                className="btn btn-outline"
+                                                onClick={() => handlePrintSancion(s)}
+                                                style={{ padding: '4px 8px', fontSize: '11px' }}
+                                                title="Imprimir Documento"
+                                            >
+                                                🖨️ Imprimir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
