@@ -1,26 +1,59 @@
 import { prisma } from '@/lib/prisma'
 
 /**
- * Ajusta el rango de fechas para consultas de liquidaciones de sueldos.
- * Regla de negocio: Si la fecha de pago (fechaGeneracion) de una liquidación cae
- * dentro de los primeros 6 días de un mes, se atribuye al mes anterior.
- * 
- * Esto significa que para el reporte de un mes M:
- * - Se incluyen liquidaciones desde el día 7 del mes M
- * - Hasta el día 6 del mes M+1 (inclusive)
- * 
- * Ejemplo: Para el reporte de Abril (1/4 - 30/4):
- * - Se toman liquidaciones del 7/4 al 6/5
- * - Una liquidación del 3/5 se cuenta como gasto de Abril
- * - Una liquidación del 3/4 se cuenta como gasto de Marzo (no Abril)
+ * Extrae la fecha de INICIO del período trabajado desde el campo `periodo` de una liquidación.
+ * Formatos soportados:
+ *   - "Semana del 1/6/2026 al 7/6/2026"
+ *   - "Express 08/06/2026 - 14/06/2026"
+ *   - Cualquier string que contenga una fecha DD/MM/YYYY o D/M/YYYY
+ *
+ * Retorna la fecha de inicio del período trabajado, o null si no se pudo parsear.
  */
-export function getLiquidacionDateRange(periodStart: Date, periodEnd: Date) {
-    // Inicio: día 7 del mes del inicio del período
-    const liqStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), 7, 0, 0, 0, 0)
+export function parsePeriodoStartDate(periodo: string): Date | null {
+    if (!periodo) return null
 
-    // Fin: día 6 del mes siguiente al fin del período
-    const liqEnd = new Date(periodEnd.getFullYear(), periodEnd.getMonth() + 1, 6, 23, 59, 59, 999)
+    // Intentar extraer la primera fecha del string (formato D/M/YYYY o DD/MM/YYYY)
+    const dateRegex = /(\d{1,2})\/(\d{1,2})\/(\d{4})/
+    const match = periodo.match(dateRegex)
+    if (match) {
+        const day = parseInt(match[1])
+        const month = parseInt(match[2]) - 1 // 0-indexed
+        const year = parseInt(match[3])
+        const date = new Date(year, month, day)
+        if (!isNaN(date.getTime())) return date
+    }
+    return null
+}
 
+/**
+ * Determina a qué mes pertenece una liquidación basándose en el período trabajado.
+ * 
+ * Regla de negocio: Una liquidación pertenece al mes donde INICIA el período trabajado.
+ * Si el período empieza el 26/5, es gasto de Mayo.
+ * Si el período empieza el 1/6, es gasto de Junio.
+ * 
+ * Si no se puede parsear el período, se usa la fechaGeneración como fallback,
+ * pero SIN desplazamiento artificial de días.
+ */
+export function liquidacionBelongsToPeriod(
+    liq: { periodo: string; fechaGeneracion: Date },
+    periodStart: Date,
+    periodEnd: Date
+): boolean {
+    const periodoStart = parsePeriodoStartDate(liq.periodo)
+    const refDate = periodoStart || liq.fechaGeneracion
+
+    return refDate >= periodStart && refDate <= periodEnd
+}
+
+/**
+ * Obtiene un rango amplio para traer liquidaciones de la DB.
+ * Traemos un margen generoso (todo el mes + 10 días antes y después)
+ * y luego filtramos en memoria con liquidacionBelongsToPeriod.
+ */
+export function getLiquidacionFetchRange(periodStart: Date, periodEnd: Date) {
+    const liqStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), -10, 0, 0, 0, 0)
+    const liqEnd = new Date(periodEnd.getFullYear(), periodEnd.getMonth() + 1, 15, 23, 59, 59, 999)
     return { liqStart, liqEnd }
 }
 
@@ -108,11 +141,11 @@ export async function getCostosReport(
     // ── 2. Gastos operativos, Sueldos y Mantenimientos ──
     // IMPORTANTE: Excluir gastos que ya están contabilizados como compras de insumos
     // (los GastoOperativo que tienen un MovimientoStock vinculado)
-    // Ajustar rango de fechas para liquidaciones (día 7 al día 6 del mes siguiente)
-    const { liqStart: liqStartActual, liqEnd: liqEndActual } = getLiquidacionDateRange(startOfCurrent, endOfCurrent)
-    const { liqStart: liqStartAnterior, liqEnd: liqEndAnterior } = getLiquidacionDateRange(startAnterior, endAnterior)
+    // Traer liquidaciones con rango amplio, luego filtrar por período trabajado
+    const { liqStart: liqFetchStartActual, liqEnd: liqFetchEndActual } = getLiquidacionFetchRange(startOfCurrent, endOfCurrent)
+    const { liqStart: liqFetchStartAnterior, liqEnd: liqFetchEndAnterior } = getLiquidacionFetchRange(startAnterior, endAnterior)
 
-    const [gastos, liqs, mants, gastosAnterior, liqsAnterior, mantsAnterior] = await Promise.all([
+    const [gastos, liqsRaw, mants, gastosAnterior, liqsAnteriorRaw, mantsAnterior] = await Promise.all([
         // Gastos operativos actuales (excluyendo los vinculados a movimientos de stock)
         prisma.gastoOperativo.findMany({
             where: {
@@ -122,10 +155,10 @@ export async function getCostosReport(
             },
             include: { categoria: true }
         }),
-        // Liquidaciones actuales (rango ajustado: día 7 del mes → día 6 del mes siguiente)
+        // Liquidaciones: rango amplio, se filtra en memoria por período trabajado
         prisma.liquidacionSueldo.findMany({
             where: {
-                fechaGeneracion: { gte: liqStartActual, lte: liqEndActual },
+                fechaGeneracion: { gte: liqFetchStartActual, lte: liqFetchEndActual },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
             },
             include: { empleado: { select: { nombre: true, apellido: true } } }
@@ -148,7 +181,7 @@ export async function getCostosReport(
         }),
         prisma.liquidacionSueldo.findMany({
             where: {
-                fechaGeneracion: { gte: liqStartAnterior, lte: liqEndAnterior },
+                fechaGeneracion: { gte: liqFetchStartAnterior, lte: liqFetchEndAnterior },
                 estado: incluirTodo ? { in: ['pagado', 'generado'] } : 'pagado'
             },
             include: { empleado: { select: { nombre: true, apellido: true } } }
@@ -160,6 +193,10 @@ export async function getCostosReport(
             include: { vehiculo: { select: { patente: true, marca: true, modelo: true } } }
         })
     ])
+
+    // Filtrar liquidaciones en memoria según el período trabajado
+    const liqs = liqsRaw.filter(l => liquidacionBelongsToPeriod(l, startOfCurrent, endOfCurrent))
+    const liqsAnterior = liqsAnteriorRaw.filter(l => liquidacionBelongsToPeriod(l, startAnterior, endAnterior))
 
     const gastosTotalActualBase = gastos.reduce((acc, g) => acc + g.monto, 0)
     const liqsTotalActual = liqs.reduce((acc, l) => acc + l.totalNeto, 0)
@@ -368,9 +405,9 @@ export async function getCostosReport(
 
         const s = new Date(y, mAjustado - 1, 1)
         const e = new Date(y, mAjustado, 0, 23, 59, 59, 999)
-        const { liqStart: liqS, liqEnd: liqE } = getLiquidacionDateRange(s, e)
+        const { liqStart: liqFS, liqEnd: liqFE } = getLiquidacionFetchRange(s, e)
 
-        const [compras, gast, liqsM, mantsM] = await Promise.all([
+        const [compras, gast, liqsMRaw, mantsM] = await Promise.all([
             prisma.movimientoStock.aggregate({
                 where: { tipo: 'entrada', fecha: { gte: s, lte: e }, ...whereUbi },
                 _sum: { costoTotal: true }
@@ -379,9 +416,9 @@ export async function getCostosReport(
                 where: { fecha: { gte: s, lte: e }, ...(ubicacionId ? { ubicacionId } : {}), movimientosStock: { none: {} } },
                 _sum: { monto: true }
             }),
-            prisma.liquidacionSueldo.aggregate({
-                where: { fechaGeneracion: { gte: liqS, lte: liqE }, estado: 'pagado' },
-                _sum: { totalNeto: true }
+            prisma.liquidacionSueldo.findMany({
+                where: { fechaGeneracion: { gte: liqFS, lte: liqFE }, estado: 'pagado' },
+                select: { periodo: true, fechaGeneracion: true, totalNeto: true }
             }),
             prisma.mantenimientoVehiculo.aggregate({
                 where: { fecha: { gte: s, lte: e } },
@@ -389,8 +426,12 @@ export async function getCostosReport(
             })
         ])
 
+        // Filtrar liquidaciones por período trabajado y sumar
+        const liqsMFiltered = liqsMRaw.filter(l => liquidacionBelongsToPeriod(l, s, e))
+        const liqsMTotal = liqsMFiltered.reduce((acc, l) => acc + l.totalNeto, 0)
+
         const mesNombre = new Date(y, mAjustado - 1, 1).toLocaleDateString('es-AR', { month: 'short' })
-        const mGastos = (gast._sum.monto || 0) + (liqsM._sum.totalNeto || 0) + (mantsM._sum.costo || 0)
+        const mGastos = (gast._sum.monto || 0) + liqsMTotal + (mantsM._sum.costo || 0)
 
         evolucion.push({
             label: mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1),
