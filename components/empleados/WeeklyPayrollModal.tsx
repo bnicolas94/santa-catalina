@@ -689,7 +689,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 let valorFeriado = dia.valorFeriado
                 if (dia.esFeriado && newHorasTrabajadas > 0) {
                     const valorHoraNormal = r.valorHoraExtra / 2
-                    const hsEfectivas = Math.max(newHorasTrabajadas, dia.jornalBase / (valorHoraNormal || 1))
+                    const hsEfectivas = dia.jornalBase / (valorHoraNormal || 1)
                     valorFeriado = Math.round(hsEfectivas * valorHoraNormal * 0.5)
                 }
 

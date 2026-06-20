@@ -219,7 +219,7 @@ export class PayrollService {
             // Recargo feriado: 50% extra del valor de la hora.
             // REGLA: Si trabajó, el recargo se aplica sobre MÍNIMO la hsJornada, o la real si fue mayor.
             const hsEfectivasFeriado = (esFeriado && resumen.horasTrabajadas > 0)
-                ? Math.max(resumen.horasTrabajadas, hsJornada)
+                ? hsJornada
                 : 0
             const valorFeriado = esFeriado ? (hsEfectivasFeriado * valorHora * 0.5) : 0
 
