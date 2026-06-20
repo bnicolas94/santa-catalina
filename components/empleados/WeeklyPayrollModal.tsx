@@ -610,6 +610,122 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         } catch (e) { console.error(e) }
     }
 
+    // Convierte "HH:MM" o "HH:MM AM/PM" a minutos desde medianoche
+    const parseTimeToMinutes = (timeStr: string): number | null => {
+        if (!timeStr) return null
+        // Formato 24h directo: "14:30"
+        const match24 = timeStr.match(/^(\d{1,2}):(\d{2})$/)
+        if (match24) return parseInt(match24[1]) * 60 + parseInt(match24[2])
+        // Formato 12h: "02:30 PM"
+        const match12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+        if (match12) {
+            let h = parseInt(match12[1])
+            const m = parseInt(match12[2])
+            const ampm = match12[3].toUpperCase()
+            if (ampm === 'PM' && h !== 12) h += 12
+            if (ampm === 'AM' && h === 12) h = 0
+            return h * 60 + m
+        }
+        return null
+    }
+
+    // Convierte minutos desde medianoche a "HH:MM AM/PM"
+    const minutesToTimeDisplay = (mins: number): string => {
+        const h24 = Math.floor(mins / 60) % 24
+        const m = Math.round(mins % 60)
+        const ampm = h24 >= 12 ? 'PM' : 'AM'
+        const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24
+        return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`
+    }
+
+    // Convierte "HH:MM" o "HH:MM AM/PM" a formato 24h "HH:MM" para <input type="time">
+    const toTimeInputValue = (timeStr: string | null): string => {
+        if (!timeStr) return ''
+        const mins = parseTimeToMinutes(timeStr)
+        if (mins === null) return ''
+        const h = Math.floor(mins / 60)
+        const m = Math.round(mins % 60)
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    }
+
+    const handleTimeChange = (empleadoId: string, fecha: string, field: 'entrada' | 'salida', value: string) => {
+        if (!value) return
+        setResultados(prev => prev.map(r => {
+            if (r.empleadoId !== empleadoId) return r
+
+            const nuevoDesglose = r.desglosePorDia.map((dia: any) => {
+                if (dia.fecha !== fecha) return dia
+
+                const newDisplay = minutesToTimeDisplay(parseInt(value.split(':')[0]) * 60 + parseInt(value.split(':')[1]))
+                const updatedEntrada = field === 'entrada' ? newDisplay : dia.entrada
+                const updatedSalida = field === 'salida' ? newDisplay : dia.salida
+
+                // Recalcular horas trabajadas
+                const entradaMins = parseTimeToMinutes(updatedEntrada)
+                const salidaMins = parseTimeToMinutes(updatedSalida)
+
+                let newHorasTrabajadas = dia.horasTrabajadas
+                let newHorasExtras = dia.horasExtras
+                const hsJornada = r.desglosePorDia.length > 0 ? (r.desglosePorDia[0].jornalBase > 0 ? (r.desglosePorDia[0].jornalBase / (r.valorHoraExtra / 2)) : 8) : 8
+                // Usamos las horas de jornada del empleado que se guardaron
+                const hsJornadaReal = r.horasNormales > 0 && r.diasTrabajados > 0 ? Math.round((r.horasNormales + r.horasExtras) / r.diasTrabajados) : 8
+
+                if (entradaMins !== null && salidaMins !== null) {
+                    let diffMins = salidaMins - entradaMins
+                    if (diffMins < 0) diffMins += 24 * 60 // Cruce de medianoche
+                    newHorasTrabajadas = parseFloat((diffMins / 60).toFixed(2))
+                    
+                    // Determinar jornada esperada desde el jornal
+                    const valorHoraNormal = r.valorHoraExtra / 2
+                    const jornadaEsperada = valorHoraNormal > 0 ? dia.jornalBase / valorHoraNormal : 8
+                    newHorasExtras = Math.max(0, parseFloat((newHorasTrabajadas - jornadaEsperada).toFixed(2)))
+                    // Redondear extras al 0.5 más cercano
+                    newHorasExtras = Math.round(newHorasExtras * 2) / 2
+                }
+
+                const mult = dia.multiplicadorJornal
+                const valorDiaBase = mult > 0 ? dia.jornalBase * mult : 0
+                const valorExtra = Math.round(newHorasExtras * r.valorHoraExtra)
+                let valorFeriado = dia.valorFeriado
+                if (dia.esFeriado && newHorasTrabajadas > 0) {
+                    const valorHoraNormal = r.valorHoraExtra / 2
+                    const hsEfectivas = Math.max(newHorasTrabajadas, dia.jornalBase / (valorHoraNormal || 1))
+                    valorFeriado = Math.round(hsEfectivas * valorHoraNormal * 0.5)
+                }
+
+                return {
+                    ...dia,
+                    entrada: updatedEntrada,
+                    salida: updatedSalida,
+                    horasTrabajadas: newHorasTrabajadas,
+                    horasExtras: newHorasExtras,
+                    valorExtra,
+                    valorFeriado,
+                    totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado)
+                }
+            })
+
+            const nuevoSueldoBase = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.valorDiaBase || 0), 0)
+            const montoExtrasBase = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.valorExtra || 0), 0)
+            const montoFeriado = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.valorFeriado || 0), 0)
+            const montoExtrasAjuste = Math.round((r.ajusteHorasExtras || 0) * r.valorHoraExtra)
+            const nuevoMontoExtras = montoExtrasBase + montoExtrasAjuste
+            const nuevasHsExtras = nuevoDesglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0)
+            const montoAdic = (r.adicionales || []).reduce((acc: number, a: any) => acc + a.montoCalculado, 0)
+
+            return {
+                ...r,
+                desglosePorDia: nuevoDesglose,
+                sueldoBase: nuevoSueldoBase,
+                horasExtras: nuevasHsExtras,
+                montoHorasExtras: nuevoMontoExtras,
+                montoHorasFeriado: montoFeriado,
+                totalNeto: nuevoSueldoBase + nuevoMontoExtras + montoFeriado + montoAdic + (r.montoHorasPendientes || 0) - (r.descuentoPrestamos || 0)
+            }
+        }))
+        setBorradorCargado(false)
+    }
+
     const totalGeneral = resultados.reduce((acc, r) => acc + (r.totalNeto || 0), 0)
 
     return (
@@ -754,7 +870,25 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                     </div>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                         <div>
-                                                                             <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
+                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                                <input 
+                                                                                    type="time" 
+                                                                                    className="form-input"
+                                                                                    style={{ width: '52px', padding: '0px 1px', fontSize: '9px', height: '18px', textAlign: 'center', border: '1px solid var(--color-gray-200)', borderRadius: '2px' }}
+                                                                                    value={toTimeInputValue(dia.entrada)}
+                                                                                    onChange={e => handleTimeChange(r.empleadoId, dia.fecha, 'entrada', e.target.value)}
+                                                                                    title="Hora de entrada"
+                                                                                />
+                                                                                <span style={{ fontSize: '9px', color: 'var(--color-gray-400)' }}>a</span>
+                                                                                <input 
+                                                                                    type="time" 
+                                                                                    className="form-input"
+                                                                                    style={{ width: '52px', padding: '0px 1px', fontSize: '9px', height: '18px', textAlign: 'center', border: '1px solid var(--color-gray-200)', borderRadius: '2px' }}
+                                                                                    value={toTimeInputValue(dia.salida)}
+                                                                                    onChange={e => handleTimeChange(r.empleadoId, dia.fecha, 'salida', e.target.value)}
+                                                                                    title="Hora de salida"
+                                                                                />
+                                                                             </div>
                                                                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                                 <span style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas}</span>
                                                                                 <input 
