@@ -814,7 +814,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                     )}
                                                 </td>
                                                 {r.error ? (
-                                                    <td colSpan={6} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>
+                                                    <td colSpan={7} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>
                                                         Error: {r.error}
                                                     </td>
                                                 ) : (
@@ -854,7 +854,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                             </tr>
                                             {expandedRow === r.empleadoId && (
                                                 <tr style={{ backgroundColor: 'var(--color-gray-50)' }}>
-                                                    <td colSpan={8} style={{ padding: 'var(--space-4)' }}>
+                                                    <td colSpan={9} style={{ padding: 'var(--space-4)' }}>
                                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 'var(--space-2)' }}>
                                                             {r.desglosePorDia.map((dia: DiaTrabajado) => (
                                                                 <div key={dia.fecha} style={{ backgroundColor: 'white', padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: `1px solid ${dia.esFeriado ? 'var(--color-warning)' : 'var(--color-gray-200)'}`, fontSize: '11px', opacity: dia.horasTrabajadas > 0 ? 1 : 0.5 }}>
@@ -1057,7 +1057,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
 
                                 <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}>
                                     <tr>
-                                        <td colSpan={7} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td>
+                                        <td colSpan={8} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td>
                                         <td style={{ textAlign: 'right', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td>
                                     </tr>
                                 </tfoot>
