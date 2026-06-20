@@ -181,20 +181,7 @@ export class PayrollService {
             const fechaStr = `${year}-${month}-${day}`
             const marcasRaw = gruposPorDia[fechaStr] || []
 
-            // Ajuste de horario de entrada configurado
-            const marcas = marcasRaw.map((m: any, idx: number) => {
-                if (idx === 0 && m.tipo === 'entrada' && empleado.horarioEntrada) {
-                    const [hH, hM] = empleado.horarioEntrada.split(':').map(Number)
-                    const dMarca = new Date(m.fechaHora)
-                    const dConfig = new Date(dMarca)
-                    dConfig.setHours(hH, hM, 0, 0)
-
-                    if (dMarca < dConfig) {
-                        return { ...m, fechaHora: dConfig.toISOString() }
-                    }
-                }
-                return m
-            })
+            const marcas = marcasRaw
 
             const resumen = calcularResumenDia(marcas, hsJornada)
 
