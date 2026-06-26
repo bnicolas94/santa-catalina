@@ -160,8 +160,8 @@ export default function ProduccionPage() {
     const [mermaForm, setMermaForm] = useState({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
     const [stockSource, setStockSource] = useState<'fabrica' | 'local' | 'ambos'>('fabrica')
     
-    // Switch para método de pedidos vs excel
-    const [usePedidosMode, setUsePedidosMode] = useState(false)
+    // Switch para método de pedidos vs excel (Oculto y forzado a true porque ya no usan excel)
+    const [usePedidosMode, setUsePedidosMode] = useState(true)
 
     // Estado para importación Excel
     const [showImportModal, setShowImportModal] = useState(false)
@@ -760,22 +760,7 @@ export default function ProduccionPage() {
                                         </button>
                                     ))}
                                 </div>
-                                <div className="join" style={{ backgroundColor: 'var(--color-gray-200)', padding: '2px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
-                                    <button
-                                        className={`join-item btn btn-xs ${!usePedidosMode ? 'btn-primary' : 'btn-ghost'}`}
-                                        onClick={() => setUsePedidosMode(false)}
-                                        title="Contemplar SOLO lo cargado por Excel (Método antiguo)"
-                                    >
-                                        📄 Solo Excel
-                                    </button>
-                                    <button
-                                        className={`join-item btn btn-xs ${usePedidosMode ? 'btn-primary' : 'btn-ghost'}`}
-                                        onClick={() => setUsePedidosMode(true)}
-                                        title="Contemplar pedidos del módulo Pedidos"
-                                    >
-                                        🛒 Excel + Pedidos
-                                    </button>
-                                </div>
+
                                 <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--color-gray-200)', padding: '6px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-300)' }}>
                                     {(['TODOS', 'FABRICA', 'LOCAL'] as const).map(d => (
                                         <button
