@@ -101,6 +101,7 @@ export class PlanificacionService {
             if (!demandaRutas[turno]) demandaRutas[turno] = {}
             
             ruta.entregas.forEach(entrega => {
+                if (entrega.pedido.estado === 'entregado' || entrega.pedido.estado === 'cancelado') return
                 const esLocal = entrega.pedido.esRetiro || entrega.pedido.cliente?.direccion?.toLowerCase().includes('retira')
                 entrega.pedido.detalles.forEach(detalle => {
                     const prod = detalle.presentacion.producto
@@ -120,6 +121,7 @@ export class PlanificacionService {
 
         // Procesar pedidos sin ruta -> AHORA SE IGNORAN para el total de producción
         pedidosSinRuta.forEach(pedido => {
+            if (pedido.estado === 'entregado' || pedido.estado === 'cancelado') return
             const turnoPedido = pedido.turno || 'Por Asignar'
             const turnoFinal = ['Mañana', 'Siesta', 'Tarde'].includes(turnoPedido) ? turnoPedido : 'Por Asignar'
             const esLocal = pedido.esRetiro || pedido.cliente?.direccion?.toLowerCase().includes('retira')
@@ -252,6 +254,7 @@ export class PlanificacionService {
             if (!shipmentsSetPedidos[turno]) shipmentsSetPedidos[turno] = new Set()
             
             ruta.entregas.forEach(entrega => {
+                if (entrega.pedido.estado === 'entregado' || entrega.pedido.estado === 'cancelado') return
                 const esLocal = entrega.pedido.esRetiro || entrega.pedido.cliente?.direccion?.toLowerCase().includes('retira')
                 if (!esLocal) {
                     shipmentsSetPedidos[turno].add(entrega.pedido.id)
@@ -260,6 +263,7 @@ export class PlanificacionService {
         })
 
         pedidosSinRuta.forEach(pedido => {
+            if (pedido.estado === 'entregado' || pedido.estado === 'cancelado') return
             const esLocal = pedido.esRetiro || pedido.cliente?.direccion?.toLowerCase().includes('retira')
             if (esLocal) return
             const turnoPedido = pedido.turno || 'Por Asignar'
