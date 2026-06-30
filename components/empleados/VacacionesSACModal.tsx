@@ -18,6 +18,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
     const [previewData, setPreviewData] = useState<any>(null)
     const [montoManual, setMontoManual] = useState<number | null>(null)
     const [diasManual, setDiasManual] = useState<number>(0)
+    const [baseManual, setBaseManual] = useState<number | null>(null)
     const [fechaInicioGoce, setFechaInicioGoce] = useState('')
     const [fechaFinGoce, setFechaFinGoce] = useState('')
 
@@ -45,7 +46,8 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                 }
                 setPreviewData(data)
                 setMontoManual(tab === 'sac' ? data.sac : data.monto)
-                setDiasManual(tab === 'sac' ? 180 : data.dias)
+                setDiasManual(tab === 'sac' ? (data.diasTrabajados || 180) : data.dias)
+                if (tab === 'sac') setBaseManual(data.brutoMaximo)
             }
         } catch (error) {
             console.error('Error previewing:', error)
@@ -94,9 +96,18 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
 
     const handleDiasManualChange = (val: number) => {
         setDiasManual(val);
-        if (previewData && previewData.dias > 0) {
+        if (tab === 'vacaciones' && previewData && previewData.dias > 0) {
             const valorDia = previewData.monto / previewData.dias;
             setMontoManual(Math.round(valorDia * val));
+        } else if (tab === 'sac' && baseManual) {
+            setMontoManual(Math.round((baseManual / 2) * (val / 180)));
+        }
+    }
+
+    const handleBaseManualChange = (val: number) => {
+        setBaseManual(val);
+        if (tab === 'sac') {
+            setMontoManual(Math.round((val / 2) * (diasManual / 180)));
         }
     }
 
@@ -170,17 +181,43 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                             {tab === 'sac' ? (
                                 <>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-                                        <span>Mejor Bruto del Semestre:</span>
-                                        <span style={{ fontWeight: 700 }}>${previewData.brutoMaximo?.toLocaleString() || '0'}</span>
+                                        <span>Meses Considerados:</span>
+                                        <span>{previewData.mesesConsiderados || 0} meses (del semestre)</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-                                        <span>Días Proporcionales (base 180):</span>
-                                        <span>{previewData.diasTrabajados || 0} días</span>
+                                    
+                                    <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
+                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Días a Liquidar (Proporcional a 180):</label>
+                                        <input 
+                                            type="number" 
+                                            className="form-input" 
+                                            value={diasManual} 
+                                            onChange={e => handleDiasManualChange(parseInt(e.target.value) || 0)} 
+                                        />
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
+                                            Sugerido por fecha de ingreso: {previewData.diasTrabajados || 0} días
+                                        </div>
                                     </div>
+
+                                    <div className="form-group" style={{ marginBottom: 'var(--space-3)' }}>
+                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Monto Base (Mejor Sueldo):</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontWeight: 'bold' }}>$</span>
+                                            <input 
+                                                type="number" 
+                                                className="form-input" 
+                                                value={baseManual || ''} 
+                                                onChange={e => handleBaseManualChange(parseFloat(e.target.value) || 0)} 
+                                            />
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
+                                            Mejor bruto detectado automáticamente: ${previewData.brutoMaximo?.toLocaleString() || '0'}
+                                        </div>
+                                    </div>
+
                                     <hr style={{ margin: 'var(--space-2) 0', opacity: 0.2 }} />
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', color: 'var(--color-primary)' }}>
-                                        <strong>Monto SAC Sugerido:</strong>
-                                        <strong>${previewData.sac?.toLocaleString() || '0'}</strong>
+                                        <strong>Monto SAC a Liquidar:</strong>
+                                        <strong>${montoManual?.toLocaleString() || '0'}</strong>
                                     </div>
                                 </>
                             ) : (
