@@ -441,6 +441,14 @@ export class PayrollService {
             montoAdicionales = adicionales.reduce((acc, item) => acc + item.montoCalculado, 0)
         }
 
+        // ─── Fusionar horas extras adeudadas con las de la semana ───
+        // Para que el recibo muestre un único concepto unificado de "horas extras"
+        if (montoHorasPendientes > 0) {
+            horasExtras += (calculatedData?.horasPendientes || 0)
+            montoHsExtra += montoHorasPendientes
+            montoHorasPendientes = 0 // Ya está incluido en montoHsExtra
+        }
+
         const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales + montoHorasPendientes - deduccionCuotas
 
         const cuotasAfectadas: string[] = []

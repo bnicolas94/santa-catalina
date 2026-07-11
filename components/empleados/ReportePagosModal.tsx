@@ -22,7 +22,6 @@ interface ReporteFila {
     fechaGeneracion: string
     horasExtras: number
     montoHorasExtras: number
-    ajusteHorasExtras: number
     sueldoProporcional: number
     montoHorasNormales: number
     montoHorasFeriado: number
@@ -252,11 +251,10 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                 }
             }
 
-            const montoExtrasTotal = (liq.montoHorasExtras || 0) + (liq.ajusteHorasExtras || 0)
             const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
-            const montoHsExtrasLetras = formatCurrencyToWords(montoExtrasTotal)
+            const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
             const montoOtrosLetras = formatCurrencyToWords(liq.montoAdicionales || 0)
-            const totalBruto = (liq.sueldoProporcional || 0) + montoExtrasTotal + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0) + (liq.montoAdicionales || 0)
+            const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0) + (liq.montoAdicionales || 0)
             const totalLetrasBruto = formatCurrencyToWords(totalBruto)
             const totalLetrasNeto = formatCurrencyToWords(liq.totalNeto || 0)
 
@@ -346,7 +344,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                 textoHtml = `
                     Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
                     (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral, 
-                    <span class="amount">$${montoExtrasTotal.toLocaleString()}</span> 
+                    <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
                     (pesos ${montoHsExtrasLetras}) en concepto de <span class="data-label">${liq.horasExtras}</span> horas extras al 100% más de su valor, 
                     ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
                     del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 

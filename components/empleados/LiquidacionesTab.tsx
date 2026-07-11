@@ -231,12 +231,11 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
             }
         }
 
-        const montoExtrasTotal = (liq.montoHorasExtras || 0) + (liq.ajusteHorasExtras || 0)
         const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
-        const montoHsExtrasLetras = formatCurrencyToWords(montoExtrasTotal)
+        const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
         
         // El usuario solicitó que el texto del recibo indique el importe íntegro de sueldo + extras antes de descuentos
-        const totalBruto = (liq.sueldoProporcional || 0) + montoExtrasTotal + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0)
+        const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0)
         const totalLetras = formatCurrencyToWords(totalBruto)
 
         const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
@@ -285,7 +284,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                     <div class="texto">
                         Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
                         (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
-                        <span class="amount">$${montoExtrasTotal.toLocaleString()}</span> 
+                        <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
                         (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
                         del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
                         Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 

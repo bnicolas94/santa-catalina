@@ -68,12 +68,11 @@ export async function GET(request: Request) {
                 fechaGeneracion: liq.fechaGeneracion,
                 horasExtras: liq.horasExtras + liq.ajusteHorasExtras,
                 montoHorasExtras: liq.montoHorasExtras,
-                ajusteHorasExtras: liq.ajusteHorasExtras,
                 sueldoProporcional: liq.sueldoProporcional,
                 montoHorasNormales: liq.montoHorasNormales,
                 montoHorasFeriado: liq.montoHorasFeriado,
                 montoAdicionales,
-                totalBruto: soloSueldoBase + liq.montoHorasExtras + liq.ajusteHorasExtras + montoAdicionales,
+                totalBruto: soloSueldoBase + liq.montoHorasExtras + montoAdicionales,
                 descuentos: totalEgresos,
                 totalNeto: liq.totalNeto
             }
@@ -99,7 +98,6 @@ export async function GET(request: Request) {
                 fechaGeneracion: liq.fechaEgreso,
                 horasExtras: 0,
                 montoHorasExtras: 0,
-                ajusteHorasExtras: 0,
                 sueldoProporcional: 0,
                 montoHorasNormales: 0,
                 montoHorasFeriado: 0,
