@@ -40,7 +40,7 @@ export const updateGlobalConfig = async (clave: string, valor: any) => {
     return await (prisma as any).configuracionGlobal.upsert({
         where: { clave },
         update: { valor: valorStr },
-        create: { clave, valor: valorStr, descripcion: `Configuración de ${clave}` }
+        create: { clave, valor: valorStr }
     })
 }
 
