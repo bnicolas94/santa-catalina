@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getGlobalConfig } from './reportes'
 
 /**
  * Extrae la fecha de INICIO del período trabajado desde el campo `periodo` de una liquidación.
@@ -109,6 +110,37 @@ export async function getCostosReport(
     const costoInsumosActual = comprasActual._sum.costoTotal || 0
     const costoInsumosAnterior = comprasAnterior._sum.costoTotal || 0
 
+    // ── 1b. Egresos de Caja tildados para costos ──
+    const conceptosCajaTildados: string[] = await getGlobalConfig('conceptos_caja_en_costos', [])
+    let egresosCajaActual: any[] = []
+    let egresosCajaAnterior: any[] = []
+
+    if (conceptosCajaTildados.length > 0) {
+        ;[egresosCajaActual, egresosCajaAnterior] = await Promise.all([
+            prisma.movimientoCaja.findMany({
+                where: {
+                    tipo: 'egreso',
+                    concepto: { in: conceptosCajaTildados },
+                    gastoId: null,
+                    fecha: { gte: startOfCurrent, lte: endOfCurrent }
+                },
+                orderBy: { fecha: 'desc' }
+            }),
+            prisma.movimientoCaja.findMany({
+                where: {
+                    tipo: 'egreso',
+                    concepto: { in: conceptosCajaTildados },
+                    gastoId: null,
+                    fecha: { gte: startAnterior, lte: endAnterior }
+                },
+                orderBy: { fecha: 'desc' }
+            })
+        ])
+    }
+
+    const egresosCajaTotalActual = egresosCajaActual.reduce((acc, e) => acc + e.monto, 0)
+    const egresosCajaTotalAnterior = egresosCajaAnterior.reduce((acc, e) => acc + e.monto, 0)
+
     // ── 1b. Ventas del período (para calcular margen real) ──
     const estadoVentas = incluirTodo
         ? { in: ['entregado', 'confirmado', 'en_camino', 'pendiente'] as string[] }
@@ -201,12 +233,12 @@ export async function getCostosReport(
     const gastosTotalActualBase = gastos.reduce((acc, g) => acc + g.monto, 0)
     const liqsTotalActual = liqs.reduce((acc, l) => acc + l.totalNeto, 0)
     const mantsTotalActual = mants.reduce((acc, m) => acc + m.costo, 0)
-    const gastosTotalActual = gastosTotalActualBase + liqsTotalActual + mantsTotalActual
+    const gastosTotalActual = gastosTotalActualBase + liqsTotalActual + mantsTotalActual + egresosCajaTotalActual
 
     const gastosTotalAnteriorBase = gastosAnterior.reduce((acc: number, g: any) => acc + g.monto, 0)
     const liqsTotalAnterior = liqsAnterior.reduce((acc: number, l: any) => acc + l.totalNeto, 0)
     const mantsTotalAnterior = mantsAnterior.reduce((acc: number, m: any) => acc + m.costo, 0)
-    const gastosTotalAnterior = gastosTotalAnteriorBase + liqsTotalAnterior + mantsTotalAnterior
+    const gastosTotalAnterior = gastosTotalAnteriorBase + liqsTotalAnterior + mantsTotalAnterior + egresosCajaTotalAnterior
 
     // Costos totales pre-calculados
     const costoTotalActual = costoInsumosActual + gastosTotalActual
@@ -238,6 +270,29 @@ export async function getCostosReport(
         gastosPorCategoria[catMant].count += mants.length
     }
 
+    // Integrar Egresos de Caja agrupados por concepto bajo "Egresos Caja"
+    const conceptosCajaNames = await prisma.conceptoCaja.findMany({
+        where: { clave: { in: conceptosCajaTildados } },
+        select: { clave: true, nombre: true }
+    })
+    const conceptoNameMap: Record<string, string> = {}
+    for (const c of conceptosCajaNames) conceptoNameMap[c.clave] = c.nombre
+
+    // Agrupar egresos de caja por concepto
+    const egresosPorConcepto: Record<string, { monto: number; count: number }> = {}
+    for (const e of egresosCajaActual) {
+        const key = e.concepto
+        if (!egresosPorConcepto[key]) egresosPorConcepto[key] = { monto: 0, count: 0 }
+        egresosPorConcepto[key].monto += e.monto
+        egresosPorConcepto[key].count++
+    }
+    for (const [concepto, data] of Object.entries(egresosPorConcepto)) {
+        const catName = `Caja: ${conceptoNameMap[concepto] || concepto}`
+        if (!gastosPorCategoria[catName]) gastosPorCategoria[catName] = { nombre: catName, monto: 0, count: 0 }
+        gastosPorCategoria[catName].monto += data.monto
+        gastosPorCategoria[catName].count += data.count
+    }
+
     // ── Desglose por categoría del período anterior (para análisis de variación) ──
     const gastosPorCatAnterior: Record<string, { nombre: string; monto: number }> = {}
 
@@ -255,6 +310,19 @@ export async function getCostosReport(
     if (mantsTotalAnterior > 0) {
         if (!gastosPorCatAnterior['Mantenimiento']) gastosPorCatAnterior['Mantenimiento'] = { nombre: 'Mantenimiento', monto: 0 }
         gastosPorCatAnterior['Mantenimiento'].monto += mantsTotalAnterior
+    }
+
+    // Egresos de Caja del período anterior agrupados por concepto
+    const egresosPorConceptoAnterior: Record<string, number> = {}
+    for (const e of egresosCajaAnterior) {
+        const key = e.concepto
+        if (!egresosPorConceptoAnterior[key]) egresosPorConceptoAnterior[key] = 0
+        egresosPorConceptoAnterior[key] += e.monto
+    }
+    for (const [concepto, monto] of Object.entries(egresosPorConceptoAnterior)) {
+        const catName = `Caja: ${conceptoNameMap[concepto] || concepto}`
+        if (!gastosPorCatAnterior[catName]) gastosPorCatAnterior[catName] = { nombre: catName, monto: 0 }
+        gastosPorCatAnterior[catName].monto += monto
     }
 
     // ── Construir desglose completo de costos con variación MoM ──
@@ -337,6 +405,20 @@ export async function getCostosReport(
         })
     }
 
+    // Egresos de Caja tildados
+    for (const e of egresosCajaActual) {
+        const catName = `Caja: ${conceptoNameMap[e.concepto] || e.concepto}`
+        gastosDetalle.push({
+            id: e.id,
+            fecha: e.fecha,
+            categoria: catName,
+            descripcion: e.descripcion || conceptoNameMap[e.concepto] || e.concepto,
+            monto: e.monto,
+            recurrente: false,
+            origen: 'caja'
+        })
+    }
+
     // Ordenar por fecha desc
     gastosDetalle.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
 
@@ -407,7 +489,7 @@ export async function getCostosReport(
         const e = new Date(y, mAjustado, 0, 23, 59, 59, 999)
         const { liqStart: liqFS, liqEnd: liqFE } = getLiquidacionFetchRange(s, e)
 
-        const [compras, gast, liqsMRaw, mantsM] = await Promise.all([
+        const [compras, gast, liqsMRaw, mantsM, cajaM] = await Promise.all([
             prisma.movimientoStock.aggregate({
                 where: { tipo: 'entrada', fecha: { gte: s, lte: e }, ...whereUbi },
                 _sum: { costoTotal: true }
@@ -423,7 +505,19 @@ export async function getCostosReport(
             prisma.mantenimientoVehiculo.aggregate({
                 where: { fecha: { gte: s, lte: e } },
                 _sum: { costo: true }
-            })
+            }),
+            // Egresos de Caja tildados
+            conceptosCajaTildados.length > 0
+                ? prisma.movimientoCaja.aggregate({
+                    where: {
+                        tipo: 'egreso',
+                        concepto: { in: conceptosCajaTildados },
+                        gastoId: null,
+                        fecha: { gte: s, lte: e }
+                    },
+                    _sum: { monto: true }
+                })
+                : Promise.resolve({ _sum: { monto: null } })
         ])
 
         // Filtrar liquidaciones por período trabajado y sumar
@@ -431,7 +525,7 @@ export async function getCostosReport(
         const liqsMTotal = liqsMFiltered.reduce((acc, l) => acc + l.totalNeto, 0)
 
         const mesNombre = new Date(y, mAjustado - 1, 1).toLocaleDateString('es-AR', { month: 'short' })
-        const mGastos = (gast._sum.monto || 0) + liqsMTotal + (mantsM._sum.costo || 0)
+        const mGastos = (gast._sum.monto || 0) + liqsMTotal + (mantsM._sum.costo || 0) + (cajaM._sum.monto || 0)
 
         evolucion.push({
             label: mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1),
@@ -575,6 +669,30 @@ export async function getCostosReport(
     }
     itemsPorCategoria['Sueldos'] = sueldosItems
     itemsPorCategoria['Mantenimiento'] = mantItems
+
+    // Egresos de Caja: drill-down por descripción dentro de cada concepto
+    const cajaItemsMap: Record<string, Record<string, { nombre: string; montoActual: number; montoAnterior: number }>> = {}
+    for (const e of egresosCajaActual) {
+        const catName = `Caja: ${conceptoNameMap[e.concepto] || e.concepto}`
+        if (!cajaItemsMap[catName]) cajaItemsMap[catName] = {}
+        const desc = e.descripcion || 'Sin descripción'
+        if (!cajaItemsMap[catName][desc]) cajaItemsMap[catName][desc] = { nombre: desc, montoActual: 0, montoAnterior: 0 }
+        cajaItemsMap[catName][desc].montoActual += e.monto
+    }
+    for (const e of egresosCajaAnterior) {
+        const catName = `Caja: ${conceptoNameMap[e.concepto] || e.concepto}`
+        if (!cajaItemsMap[catName]) cajaItemsMap[catName] = {}
+        const desc = e.descripcion || 'Sin descripción'
+        if (!cajaItemsMap[catName][desc]) cajaItemsMap[catName][desc] = { nombre: desc, montoActual: 0, montoAnterior: 0 }
+        cajaItemsMap[catName][desc].montoAnterior += e.monto
+    }
+    for (const [catName, items] of Object.entries(cajaItemsMap)) {
+        itemsPorCategoria[catName] = Object.values(items).map(i => ({
+            ...i,
+            diferencia: i.montoActual - i.montoAnterior,
+            variacionPct: i.montoAnterior > 0 ? ((i.montoActual - i.montoAnterior) / i.montoAnterior) * 100 : null
+        })).sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
+    }
 
     // Asignar items de drill-down a cada entrada del desglose
     for (const entry of desgloseCostos) {

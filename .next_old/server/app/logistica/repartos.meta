@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(dashboard)/layout,_N_T_/(dashboard)/logistica/layout,_N_T_/(dashboard)/logistica/repartos/layout,_N_T_/(dashboard)/logistica/repartos/page,_N_T_/logistica/repartos"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGRhc2hib2FyZCk/logistica/repartos/__PAGE__",
+    "/!KGRhc2hib2FyZCk/logistica/repartos",
+    "/!KGRhc2hib2FyZCk/logistica",
+    "/!KGRhc2hib2FyZCk",
+    "/_index",
+    "/_head"
+  ]
+}

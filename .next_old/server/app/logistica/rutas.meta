@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(dashboard)/layout,_N_T_/(dashboard)/logistica/layout,_N_T_/(dashboard)/logistica/rutas/layout,_N_T_/(dashboard)/logistica/rutas/page,_N_T_/logistica/rutas"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGRhc2hib2FyZCk/logistica/rutas/__PAGE__",
+    "/!KGRhc2hib2FyZCk/logistica/rutas",
+    "/!KGRhc2hib2FyZCk/logistica",
+    "/!KGRhc2hib2FyZCk",
+    "/_index",
+    "/_head"
+  ]
+}

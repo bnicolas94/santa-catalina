@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/empleados/layout,_N_T_/empleados/page,_N_T_/empleados"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/empleados/__PAGE__",
+    "/empleados",
+    "/_index",
+    "/_head"
+  ]
+}

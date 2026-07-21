@@ -1,0 +1,3 @@
+{
+  "/api/flota/vehiculos/[id]/route": "app/api/flota/vehiculos/[id]/route.js"
+}

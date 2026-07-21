@@ -177,6 +177,19 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     rango={rango} 
                     seleccionado={categoriaSeleccionada}
                     onSeleccionChange={setCategoriaSeleccionada}
+                    onDataRefresh={() => {
+                        // Refrescar datos al cambiar config de conceptos caja
+                        const params = new URLSearchParams({ 
+                            desde: rango.desde.toISOString(), 
+                            hasta: rango.hasta.toISOString(), 
+                            ...(ubicacionId && { ubicacionId }),
+                            ...(incluirTodo && { todos: 'true' })
+                        })
+                        fetch(`/api/reportes/costos?${params}`)
+                            .then(r => r.json())
+                            .then(d => setData(d))
+                            .catch(console.error)
+                    }}
                 />
             )}
             {subTab === 'proveedores' && (
@@ -587,8 +600,11 @@ function ComprasView({ data, rango, filtro, onFiltroChange }: { data: any; rango
 // ═══════════════════════════════════════════════════════════════
 // SUB-TAB: GASTOS OPERATIVOS (Desglose completo)
 // ═══════════════════════════════════════════════════════════════
-function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange }: { data: any; rango: RangoFechas; seleccionado: string; onSeleccionChange: (v: string) => void }) {
+function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange, onDataRefresh }: { data: any; rango: RangoFechas; seleccionado: string; onSeleccionChange: (v: string) => void; onDataRefresh?: () => void }) {
     const [filtroGasto, setFiltroGasto] = useState('')
+    const [showCajaConfig, setShowCajaConfig] = useState(false)
+    const [cajaConceptos, setCajaConceptos] = useState<{ clave: string; nombre: string; tildado: boolean }[]>([])
+    const [savingCaja, setSavingCaja] = useState(false)
 
     const filteredGastos = useMemo(() => {
         let items = data.gastosDetalle || []
@@ -618,7 +634,8 @@ function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange }: { d
         const styles: Record<string, { bg: string; label: string }> = {
             manual: { bg: '#3498DB22', label: 'Manual' },
             liquidacion: { bg: '#9B59B622', label: 'Liquidación' },
-            mantenimiento: { bg: '#E67E2222', label: 'Flota' }
+            mantenimiento: { bg: '#E67E2222', label: 'Flota' },
+            caja: { bg: '#1ABC9C22', label: 'Caja' }
         }
         const s = styles[origen] || { bg: '#ccc', label: origen }
         return (
@@ -679,7 +696,24 @@ function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange }: { d
                     }}>
                         Desglose Completo de Gastos Operativos
                     </h3>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button
+                            className="btn btn-ghost"
+                            onClick={async () => {
+                                try {
+                                    const res = await fetch('/api/reportes/costos/conceptos-caja')
+                                    const data = await res.json()
+                                    setCajaConceptos(data.conceptos || [])
+                                    setShowCajaConfig(true)
+                                } catch (err) {
+                                    console.error('Error fetching conceptos caja:', err)
+                                }
+                            }}
+                            style={{ fontSize: 'var(--text-xs)', padding: '4px 10px' }}
+                            title="Configurar egresos de caja a incluir"
+                        >
+                            ⚙️ Egresos Caja
+                        </button>
                         <select
                             className="form-input"
                             value={seleccionado}
@@ -708,6 +742,88 @@ function GastosDetalleView({ data, rango, seleccionado, onSeleccionChange }: { d
                     maxHeight="600px"
                 />
             </div>
+
+            {/* Modal de configuración de Egresos de Caja */}
+            {showCajaConfig && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)'
+                }} onClick={() => setShowCajaConfig(false)}>
+                    <div className="card" style={{
+                        padding: 'var(--space-6)', maxWidth: 480, width: '90%',
+                        maxHeight: '80vh', overflow: 'auto'
+                    }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{
+                            fontSize: 'var(--text-base)', fontWeight: 700, marginBottom: 'var(--space-4)',
+                            fontFamily: 'var(--font-heading)'
+                        }}>
+                            ⚙️ Egresos de Caja en Costos
+                        </h3>
+                        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginBottom: 'var(--space-4)' }}>
+                            Tildá los conceptos de caja cuyos egresos querés incluir en el reporte de costos operativos.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                            {cajaConceptos.map(c => (
+                                <label key={c.clave} style={{
+                                    display: 'flex', alignItems: 'center', gap: 'var(--space-2)',
+                                    padding: '8px 12px', borderRadius: 'var(--radius-md)',
+                                    cursor: 'pointer',
+                                    backgroundColor: c.tildado ? 'var(--color-primary-50, #EBF5FB)' : 'transparent',
+                                    border: `1px solid ${c.tildado ? 'var(--color-primary, #3498DB)' : 'var(--color-gray-200)'}`,
+                                    transition: 'all 0.15s'
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={c.tildado}
+                                        onChange={() => {
+                                            setCajaConceptos(prev =>
+                                                prev.map(x => x.clave === c.clave ? { ...x, tildado: !x.tildado } : x)
+                                            )
+                                        }}
+                                    />
+                                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: c.tildado ? 600 : 400 }}>
+                                        {c.nombre}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
+                            <button
+                                className="btn btn-ghost"
+                                onClick={() => setShowCajaConfig(false)}
+                                style={{ fontSize: 'var(--text-sm)' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                disabled={savingCaja}
+                                onClick={async () => {
+                                    setSavingCaja(true)
+                                    try {
+                                        const tildados = cajaConceptos.filter(c => c.tildado).map(c => c.clave)
+                                        await fetch('/api/reportes/costos/conceptos-caja', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ tildados })
+                                        })
+                                        setShowCajaConfig(false)
+                                        onDataRefresh?.()
+                                    } catch (err) {
+                                        console.error('Error saving caja config:', err)
+                                    } finally {
+                                        setSavingCaja(false)
+                                    }
+                                }}
+                                style={{ fontSize: 'var(--text-sm)' }}
+                            >
+                                {savingCaja ? 'Guardando...' : 'Guardar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     )
 }

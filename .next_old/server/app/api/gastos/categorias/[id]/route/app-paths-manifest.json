@@ -1,0 +1,3 @@
+{
+  "/api/gastos/categorias/[id]/route": "app/api/gastos/categorias/[id]/route.js"
+}

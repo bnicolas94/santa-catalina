@@ -1,0 +1,3 @@
+{
+  "/api/cron/mercadopago/route": "app/api/cron/mercadopago/route.js"
+}

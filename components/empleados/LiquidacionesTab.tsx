@@ -287,8 +287,8 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                         <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
                         (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
                         del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                        Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
-                        (pesos ${totalLetras}).
+                        Recibiendo un total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
+                        (pesos ${formatCurrencyToWords(liq.totalNeto || 0)}).
                     </div>
 
                     <div class="firma-section">

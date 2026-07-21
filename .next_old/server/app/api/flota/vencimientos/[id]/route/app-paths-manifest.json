@@ -1,0 +1,3 @@
+{
+  "/api/flota/vencimientos/[id]/route": "app/api/flota/vencimientos/[id]/route.js"
+}

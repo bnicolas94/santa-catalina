@@ -1,0 +1,3 @@
+{
+  "/api/familias-insumo/[id]/route": "app/api/familias-insumo/[id]/route.js"
+}

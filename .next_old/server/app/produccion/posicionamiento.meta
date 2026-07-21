@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(dashboard)/layout,_N_T_/(dashboard)/produccion/layout,_N_T_/(dashboard)/produccion/posicionamiento/layout,_N_T_/(dashboard)/produccion/posicionamiento/page,_N_T_/produccion/posicionamiento"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGRhc2hib2FyZCk/produccion/posicionamiento/__PAGE__",
+    "/!KGRhc2hib2FyZCk/produccion/posicionamiento",
+    "/!KGRhc2hib2FyZCk/produccion",
+    "/!KGRhc2hib2FyZCk",
+    "/_index",
+    "/_head"
+  ]
+}

@@ -1,0 +1,3 @@
+{
+  "/api/lotes/[id]/route": "app/api/lotes/[id]/route.js"
+}
