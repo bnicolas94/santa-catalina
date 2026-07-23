@@ -16,6 +16,13 @@
     width: var(--sidebar-collapsed-width);
 }
 
+/* El contenido y el encabezado deben acompañar el ancho real del menú. */
+@media (min-width: 769px) {
+    :global(body):has(.sidebar.collapsed) {
+        --main-offset: var(--sidebar-collapsed-width);
+    }
+}
+
 /* Logo */
 .logoContainer {
     padding: var(--space-4);
