@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useProduccionData } from '@/components/produccion/hooks/useProduccionData'
+import { OperatorProductionView } from '@/components/produccion/operator/OperatorProductionView'
 
 interface Producto {
     id: string
@@ -91,7 +92,7 @@ export default function ProduccionPage() {
         d.setDate(d.getDate() + days)
         setFilterFecha(getLocalDateString(d))
     }
-    const { data: session } = useSession()
+    const { data: session, status: sessionStatus } = useSession()
 
     const { data: swrData, isLoading: loading, mutate } = useProduccionData(filterFecha || getLocalDateString())
     const fetchData = () => mutate()
@@ -658,6 +659,22 @@ export default function ProduccionPage() {
     }
 
     if (loading) return <div className="loading-container"><div className="loader"></div><p>Cargando producción...</p></div>
+
+    if (sessionStatus === 'loading') return <div className="loading-container"><div className="loader"></div><p>Cargando sesión...</p></div>
+
+    const sessionUser = session?.user as { rol?: string; name?: string | null; ubicacionId?: string | null } | undefined
+    if (sessionUser?.rol && sessionUser.rol !== 'ADMIN') {
+        return (
+            <OperatorProductionView
+                userName={sessionUser.name || 'Operario'}
+                userLocationId={sessionUser.ubicacionId || undefined}
+                date={filterFecha || getLocalDateString()}
+                onDateChange={setFilterFecha}
+                data={swrData}
+                onRefresh={fetchData}
+            />
+        )
+    }
 
     return (
         <div>
