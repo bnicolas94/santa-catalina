@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
 import { CajaService } from '@/lib/services/caja.service'
-import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
+import { agruparFichadasPorDia, calcularProporcionJornal, calcularResumenDia } from '@/utils/horas'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -198,10 +198,14 @@ export class PayrollService {
             )
 
             // Cálculos del día
-            let multiplicadorJornal = 1.0 
+            let multiplicadorJornal = 1.0
             let valorDiaBase = 0
-            
+
             if (marcas.length > 0) {
+                // Pagar solamente las horas normales efectivamente trabajadas.
+                // Si supera la jornada, el jornal queda limitado al día completo
+                // y el excedente se liquida por separado como hora extra.
+                multiplicadorJornal = calcularProporcionJornal(resumen.horasTrabajadas, hsJornada)
                 valorDiaBase = jornalBase * multiplicadorJornal
             } else if (inasistencia) {
                 // Si no hay marcas pero hay inasistencia, vemos si es paga

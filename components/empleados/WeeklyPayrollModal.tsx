@@ -940,6 +940,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                                                             value={dia.multiplicadorJornal}
                                                                             onChange={e => handleMultiplicadorChange(r.empleadoId, dia.fecha, e.target.value)}
                                                                         >
+                                                                            {![0, 0.5, 1].includes(Number(dia.multiplicadorJornal)) && (
+                                                                                <option value={dia.multiplicadorJornal}>Hs reales ({Math.round(dia.multiplicadorJornal * 100)}%)</option>
+                                                                            )}
                                                                             <option value="1">Día Comp.</option>
                                                                             <option value="0.5">Medio Día</option>
                                                                             <option value="0">No Pagar</option>

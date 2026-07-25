@@ -18,6 +18,19 @@ export interface ResumenDia {
 }
 
 /**
+ * Proporción del jornal que corresponde pagar según las horas normales reales.
+ * Las horas que exceden la jornada no incrementan el jornal base: se liquidan
+ * por separado como horas extras.
+ */
+export function calcularProporcionJornal(horasTrabajadas: number, horasJornada: number): number {
+    if (!Number.isFinite(horasTrabajadas) || !Number.isFinite(horasJornada) || horasJornada <= 0) {
+        return 0;
+    }
+
+    return Math.min(1, Math.max(0, horasTrabajadas / horasJornada));
+}
+
+/**
  * Calcula el resumen de un día basado en sus marcas.
  * Asume que las marcas están ordenadas cronológicamente.
  */
