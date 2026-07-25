@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { periodoAnalyticsValido, periodoMesActual } from '@/lib/analytics/fechas'
+import { rangoDiasRRHH } from '@/lib/rrhh/fechas'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     try {
@@ -10,9 +14,20 @@ export async function GET(request: Request) {
 
         const ahora = new Date()
         const inicioMesActual = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
-        
-        const desde = desdeStr ? new Date(desdeStr) : new Date(ahora.getFullYear(), ahora.getMonth() - 3, 1)
-        const hasta = hastaStr ? new Date(hastaStr) : new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59)
+
+        const periodoPredeterminado = periodoMesActual(ahora)
+        const desdeCivil = desdeStr || periodoPredeterminado.desde
+        const hastaCivil = hastaStr || periodoPredeterminado.hasta
+        if (!periodoAnalyticsValido(desdeCivil, hastaCivil)) {
+            return NextResponse.json({ error: 'El período solicitado es inválido.' }, { status: 400 })
+        }
+        const rango = rangoDiasRRHH(desdeCivil, hastaCivil)
+        const diasSolicitados = Math.ceil((rango.lt.getTime() - rango.gte.getTime()) / 86_400_000)
+        if (diasSolicitados > 366) {
+            return NextResponse.json({ error: 'El período no puede superar 366 días.' }, { status: 400 })
+        }
+        const desde = rango.gte
+        const hasta = new Date(rango.lt.getTime() - 1)
 
         // Lista de empleados activos para el selector
         const empleadosActivos = await prisma.empleado.findMany({
@@ -348,7 +363,7 @@ export async function GET(request: Request) {
         if (empleadoId) {
             const empleadoInfo = await prisma.empleado.findUnique({
                 where: { id: empleadoId },
-                select: { id: true, nombre: true, apellido: true, fechaIngreso: true, rol: true, activo: true, jornal: true, diasTrabajoSemana: true }
+                select: { id: true, nombre: true, apellido: true, dni: true, fechaIngreso: true, rol: true, activo: true, jornal: true, diasTrabajoSemana: true }
             })
 
             // Todas las liquidaciones del empleado filtradas por fecha
@@ -642,8 +657,8 @@ export async function GET(request: Request) {
             historico
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error en API Reportes RRHH:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ error: 'No se pudieron generar las analíticas de RR. HH.' }, { status: 500 })
     }
 }

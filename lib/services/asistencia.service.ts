@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
 import { SancionService } from './sancion.service'
+import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, sumarDiasRRHH } from '@/lib/rrhh/fechas'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -73,58 +74,68 @@ export class AsistenciaService {
  
             try {
                 const fecha = new Date(reg.fechaHora)
- 
-                // Idempotencia: verificar si ya existe un registro idéntico
-                const existe = await prisma.fichadaEmpleado.findFirst({
-                    where: {
-                        empleadoId,
-                        fechaHora: fecha,
-                        tipo: reg.tipo.toLowerCase()
-                    }
-                })
- 
-                if (!existe) {
-                    await prisma.fichadaEmpleado.create({
+                const tipo = reg.tipo.toLowerCase()
+                const lockKey = `fichada:${empleadoId}:${fecha.toISOString()}:${tipo}`
+
+                const resultado = await prisma.$transaction(async (tx) => {
+                    // Serializa importaciones concurrentes de la misma marca sin
+                    // requerir depurar previamente los duplicados históricos.
+                    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`
+
+                    const existe = await tx.fichadaEmpleado.findFirst({
+                        where: { empleadoId, fechaHora: fecha, tipo }
+                    })
+
+                    if (existe) return { creada: false, tieneTardanza: false }
+
+                    await tx.fichadaEmpleado.create({
                         data: {
                             empleadoId,
                             fechaHora: fecha,
-                            tipo: reg.tipo.toLowerCase(),
+                            tipo,
                             origen: 'importado'
                         }
                     })
-                    importados++
 
-                    // REGISTRO AUTOMÁTICO EN LEGAJO SI ES TARDANZA
-                    if (reg.tipo.toLowerCase() === 'entrada') {
+                    let tieneTardanza = false
+                    if (tipo === 'entrada') {
                         const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
                         if (mins > 0) {
-                            // Verificar si ya se registró esta tardanza para este día (evitar duplicados por re-importación)
-                            const start = new Date(fecha); start.setHours(0,0,0,0);
-                            const end = new Date(fecha); end.setHours(23,59,59,999);
+                            tieneTardanza = true
+                            const fechaLocal = fechaClaveRRHH(fecha)
+                            const rangoDia = rangoDiaRRHH(fechaLocal)
+                            const tardanzaLockKey = `tardanza:${empleadoId}:${fechaLocal}`
+                            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${tardanzaLockKey}))`
 
-                            const existeTardanza = await prisma.inasistencia.findFirst({
+                            const existeTardanza = await tx.inasistencia.findFirst({
                                 where: {
                                     empleadoId,
                                     tipo: 'TARDANZA',
-                                    fecha: { gte: start, lte: end }
+                                    fecha: { gte: rangoDia.gte, lt: rangoDia.lt }
                                 }
                             })
 
                             if (!existeTardanza) {
-                                await prisma.inasistencia.create({
+                                await tx.inasistencia.create({
                                     data: {
                                         empleadoId,
-                                        fecha: fecha,
+                                        fecha,
                                         tipo: 'TARDANZA',
                                         minutosRetraso: mins,
                                         observaciones: `Llegada tarde detectada automáticamente al importar fichada (${mins} min de retraso).`
                                     }
                                 })
                             }
-                            // Disparar chequeo de alertas para posibles sanciones automáticas
-                            await SancionService.checkAndApplyAlerts(empleadoId)
                         }
                     }
+
+                    return { creada: true, tieneTardanza }
+                })
+
+                if (resultado.creada) importados++
+                if (resultado.tieneTardanza) {
+                    // Las alertas se procesan una vez confirmada la fichada.
+                    await SancionService.checkAndApplyAlerts(empleadoId)
                 }
             } catch (err: any) {
                 errores.push(`Error al insertar registro para empleado ${empleadoId}: ${err.message}`)
@@ -138,7 +149,7 @@ export class AsistenciaService {
             // AUTO-DETECCIÓN DE AUSENCIAS PARA LOS DÍAS IMPORTADOS (SOLO DÍAS PASADOS)
             try {
                 const fechasUnicas = [...new Set(registros.map(r => r.fechaHora.split('T')[0]))]
-                const hoyStr = new Date().toISOString().split('T')[0]
+                const hoyStr = fechaClaveRRHH(new Date())
                 
                 for (const fecha of fechasUnicas) {
                     if (fecha < hoyStr) {
@@ -166,13 +177,14 @@ export class AsistenciaService {
         }
 
         if (params.mes) {
-            const startDate = new Date(`${params.mes}-01T00:00:00.000Z`)
-            const endDate = new Date(startDate)
-            endDate.setMonth(endDate.getMonth() + 1)
+            const [anio, mes] = params.mes.split('-').map(Number)
+            const siguienteMes = mes === 12
+                ? `${anio + 1}-01-01`
+                : `${anio}-${String(mes + 1).padStart(2, '0')}-01`
 
             where.fechaHora = {
-                gte: startDate,
-                lt: endDate
+                gte: instanteRRHH(`${params.mes}-01`),
+                lt: instanteRRHH(siguienteMes)
             }
         }
 
@@ -270,8 +282,7 @@ export class AsistenciaService {
      * Retorna los empleados activos que no tienen fichadas para la fecha dada.
      */
     static async detectarAusencias(fecha: string) {
-        const startDate = new Date(`${fecha}T00:00:00`)
-        const endDate = new Date(`${fecha}T23:59:59`)
+        const rangoDia = rangoDiaRRHH(fecha)
 
         // Empleados activos
         const empleadosActivos = await prisma.empleado.findMany({
@@ -289,7 +300,7 @@ export class AsistenciaService {
         // Empleados con fichadas ese día
         const fichadasDelDia = await prisma.fichadaEmpleado.findMany({
             where: {
-                fechaHora: { gte: startDate, lte: endDate }
+                fechaHora: { gte: rangoDia.gte, lt: rangoDia.lt }
             },
             select: { empleadoId: true }
         })
@@ -323,17 +334,16 @@ export class AsistenciaService {
         const ausentes = await this.detectarAusencias(fecha)
         let creados = 0
 
-        const targetDate = new Date(`${fecha}T12:00:00`) // Hora mediodía para evitar problemas TZ
+        const targetDate = instanteRRHH(fecha, '12:00:00')
 
         for (const emp of ausentes) {
             // Verificar si ya existe un registro de inasistencia para ese día
-            const start = new Date(`${fecha}T00:00:00`)
-            const end = new Date(`${fecha}T23:59:59`)
+            const rangoDia = rangoDiaRRHH(fecha)
             
             const existe = await prisma.inasistencia.findFirst({
                 where: {
                     empleadoId: emp.id,
-                    fecha: { gte: start, lte: end }
+                    fecha: { gte: rangoDia.gte, lt: rangoDia.lt }
                 }
             })
 
@@ -361,14 +371,13 @@ export class AsistenciaService {
      */
     static async procesarAusenciasRango(desde: string, hasta: string) {
         let totalCreados = 0
-        let current = new Date(`${desde}T12:00:00`)
-        const end = new Date(`${hasta}T12:00:00`)
+        let fechaStr = sumarDiasRRHH(desde, 0)
+        const fechaFin = sumarDiasRRHH(hasta, 0)
 
-        while (current <= end) {
-            const fechaStr = current.toISOString().split('T')[0]
+        while (fechaStr <= fechaFin) {
             const creados = await this.procesarAusenciasAutomaticas(fechaStr)
             totalCreados += creados
-            current.setDate(current.getDate() + 1)
+            fechaStr = sumarDiasRRHH(fechaStr, 1)
         }
 
         return totalCreados

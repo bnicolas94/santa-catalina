@@ -1,7 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
 import { CajaService } from '@/lib/services/caja.service'
-import { agruparFichadasPorDia, calcularProporcionJornal, calcularResumenDia } from '@/utils/horas'
+import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
+import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/payroll/validacionLiquidacion'
+import { fechaClaveRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
+import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +38,7 @@ export interface ResumenSemanal {
     horasFeriado: number
     sueldoBase: number
     valorHoraExtra: number
+    horasJornada: number
     montoHorasExtras: number
     montoHorasFeriado: number
     descuentoPrestamos: number
@@ -72,6 +76,7 @@ export class PayrollService {
         fechaInicio: string,
         fechaFin: string
     ): Promise<ResumenSemanal> {
+        const rangoPeriodo = rangoDiasRRHH(fechaInicio, fechaFin)
         const empleado = await prisma.empleado.findUnique({
             where: { id: empleadoId },
             include: {
@@ -79,8 +84,8 @@ export class PayrollService {
                 fichadas: {
                     where: {
                         fechaHora: {
-                            gte: new Date(fechaInicio + 'T00:00:00'),
-                            lte: new Date(fechaFin + 'T23:59:59')
+                            gte: rangoPeriodo.gte,
+                            lt: rangoPeriodo.lt
                         }
                     },
                     include: { tipoLicencia: true }
@@ -88,8 +93,8 @@ export class PayrollService {
                 inasistencias: {
                     where: {
                         fecha: {
-                            gte: new Date(fechaInicio + 'T00:00:00'),
-                            lte: new Date(fechaFin + 'T23:59:59')
+                            gte: rangoPeriodo.gte,
+                            lt: rangoPeriodo.lt
                         }
                     }
                 },
@@ -105,16 +110,15 @@ export class PayrollService {
         const feriados = await prisma.feriado.findMany({
             where: {
                 fecha: {
-                    gte: new Date(fechaInicio + 'T00:00:00'),
-                    lte: new Date(fechaFin + 'T23:59:59')
+                    gte: rangoPeriodo.gte,
+                    lt: rangoPeriodo.lt
                 }
             }
         })
 
         const feriadosMap: Record<string, string> = {}
         feriados.forEach(f => {
-            const d = new Date(f.fecha)
-            const fStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+            const fStr = fechaClaveRRHH(f.fecha)
             feriadosMap[fStr] = f.nombre
         })
 
@@ -185,47 +189,24 @@ export class PayrollService {
 
             const resumen = calcularResumenDia(marcas, hsJornada)
 
-            // Las horas extras se calculan basándose en el total de horas trabajadas menos la jornada esperada.
-            // Si el empleado llega tarde, sus horas trabajadas totales ya se ven reducidas, 
-            // por lo que no es necesario restar los minutos de tardanza nuevamente (doble penalización).
-            const hsExtrasRedondeadas = Math.round(resumen.horasExtras * 2) / 2
-
             const esFeriado = !!feriadosMap[fechaStr]
             
             // 3.1 Verificar Inasistencias registradas
             const inasistencia = empleado.inasistencias.find(i => 
-                i.fecha.toISOString().split('T')[0] === fechaStr
+                fechaClaveRRHH(i.fecha) === fechaStr
             )
 
-            // Cálculos del día
-            let multiplicadorJornal = 1.0
-            let valorDiaBase = 0
-
-            if (marcas.length > 0) {
-                // Pagar solamente las horas normales efectivamente trabajadas.
-                // Si supera la jornada, el jornal queda limitado al día completo
-                // y el excedente se liquida por separado como hora extra.
-                multiplicadorJornal = calcularProporcionJornal(resumen.horasTrabajadas, hsJornada)
-                valorDiaBase = jornalBase * multiplicadorJornal
-            } else if (inasistencia) {
-                // Si no hay marcas pero hay inasistencia, vemos si es paga
-                if (inasistencia.tipo === 'JUSTIFICADA_PAGA') {
-                    valorDiaBase = jornalBase
-                } else {
-                    valorDiaBase = 0
-                    multiplicadorJornal = 0
-                }
-            } else {
-                valorDiaBase = 0
-                multiplicadorJornal = 0
-            }
-            const valorExtra = hsExtrasRedondeadas * valorHoraExtra
-            // Recargo feriado: 50% extra del valor de la hora.
-            // REGLA: Si trabajó, el recargo se aplica sobre MÍNIMO la hsJornada, o la real si fue mayor.
-            const hsEfectivasFeriado = (esFeriado && resumen.horasTrabajadas > 0)
-                ? hsJornada
-                : 0
-            const valorFeriado = esFeriado ? (hsEfectivasFeriado * valorHora * 0.5) : 0
+            const calculoDia = calcularDiaSemanal({
+                horasTrabajadas: resumen.horasTrabajadas,
+                horasExtras: resumen.horasExtras,
+                horasJornada: hsJornada,
+                jornalBase,
+                valorHora,
+                valorHoraExtra,
+                tieneMarcas: marcas.length > 0,
+                esFeriado,
+                tipoInasistencia: inasistencia?.tipo,
+            })
 
             const primerEntrada = marcas.find((m: any) => m.tipo === 'entrada')?.fechaHora
             const ultimaSalida = [...marcas].reverse().find((m: any) => m.tipo === 'salida')?.fechaHora
@@ -236,15 +217,15 @@ export class PayrollService {
                 esFeriado,
                 nombreFeriado: feriadosMap[fechaStr],
                 horasTrabajadas: resumen.horasTrabajadas,
-                horasExtras: hsExtrasRedondeadas,
+                horasExtras: calculoDia.horasExtras,
                 entrada: primerEntrada ? new Date(primerEntrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 salida: ultimaSalida ? new Date(ultimaSalida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 jornalBase: Math.round(jornalBase),
-                valorDiaBase: Math.round(valorDiaBase),
-                multiplicadorJornal,
-                valorExtra: Math.round(valorExtra),
-                valorFeriado: Math.round(valorFeriado),
-                totalDia: Math.round(valorDiaBase + valorExtra + valorFeriado),
+                valorDiaBase: Math.round(calculoDia.valorDiaBase),
+                multiplicadorJornal: calculoDia.multiplicadorJornal,
+                valorExtra: Math.round(calculoDia.valorExtra),
+                valorFeriado: Math.round(calculoDia.valorFeriado),
+                totalDia: Math.round(calculoDia.totalDia),
                 esJustificado: marcas.some((m: any) => m.origen === 'justificada') || (!!inasistencia && inasistencia.tipo.startsWith('JUSTIFICADA')),
                 tipoInasistencia: inasistencia?.tipo,
                 motivoInasistencia: inasistencia?.motivo || null
@@ -298,6 +279,7 @@ export class PayrollService {
             horasFeriado: parseFloat(horasFeriadoTotales.toFixed(2)),
             sueldoBase,
             valorHoraExtra,
+            horasJornada: hsJornada,
             montoHorasExtras,
             montoHorasFeriado,
             descuentoPrestamos,
@@ -332,12 +314,13 @@ export class PayrollService {
             throw new Error('Faltan datos para la liquidación')
         }
 
+        const rangoPeriodo = rangoDiasRRHH(fechaInicio, fechaFin)
         const empleado = await prisma.empleado.findUnique({
             where: { id: empleadoId },
             include: {
                 fichadas: {
                     where: {
-                        fechaHora: { gte: new Date(fechaInicio), lte: new Date(fechaFin) }
+                        fechaHora: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt }
                     },
                     orderBy: { fechaHora: 'asc' }
                 },
@@ -349,7 +332,9 @@ export class PayrollService {
                             orderBy: { numeroCuota: 'asc' }
                         }
                     }
-                }
+                },
+                rolRel: true,
+                horasPendientes: { where: { pagado: false } }
             }
         })
 
@@ -375,26 +360,57 @@ export class PayrollService {
             deduccionCuotas = manualData.descuentoPrestamos || 0
             diasTrabajados = manualData.diasTrabajados || 0
         } else if (calculatedData) {
-            // Liquidación Automática (vía WeeklyPayrollModal)
-            sueldoProporcional = calculatedData.sueldoBase || 0
-            horasNormales = calculatedData.horasNormales || 0
-            montoHsNorm = calculatedData.montoHorasNormales || 0
-            horasExtras = calculatedData.horasExtras || 0
-            montoHsExtra = calculatedData.montoHorasExtras || 0
-            horasFeriado = calculatedData.horasFeriado || 0
-            montoHsFeriado = calculatedData.montoHorasFeriado || 0
-            deduccionCuotas = calculatedData.descuentoPrestamos || 0
-            diasTrabajados = calculatedData.diasTrabajados || 0
-            ajusteHorasExtras = calculatedData.ajusteHorasExtras || 0
-            montoHorasPendientes = calculatedData.montoHorasPendientes || 0
+            // Reconstruir los importes desde el desglose. Los totales enviados por
+            // la pantalla son informativos y no constituyen una fuente confiable.
+            let montoBaseServidor = empleado.sueldoBaseMensual
+            let cicloServidor = 'MENSUAL'
+            if (empleado.jornal > 0) {
+                montoBaseServidor = empleado.jornal
+                cicloServidor = empleado.cicloPago || 'SEMANAL'
+            } else if (empleado.rolRel?.jornal) {
+                montoBaseServidor = empleado.rolRel.jornal
+                cicloServidor = empleado.rolRel.cicloPago || 'SEMANAL'
+            }
+
+            const jornalServidor = cicloServidor === 'DIARIO'
+                ? montoBaseServidor
+                : cicloServidor === 'MENSUAL'
+                    ? montoBaseServidor / 30
+                    : montoBaseServidor / 6
+            const valorHoraNormalServidor = empleado.valorHoraNormal && empleado.valorHoraNormal > 0
+                ? empleado.valorHoraNormal
+                : jornalServidor / (empleado.horasTrabajoDiarias || 8)
+            const valorHoraExtraServidor = empleado.valorHoraExtra > 0
+                ? empleado.valorHoraExtra
+                : empleado.rolRel?.valorHoraExtra && empleado.rolRel.valorHoraExtra > 0
+                    ? empleado.rolRel.valorHoraExtra
+                    : valorHoraNormalServidor * 2
+
+            const totales = reconstruirLiquidacionCalculada(
+                calculatedData,
+                jornalServidor,
+                valorHoraExtraServidor,
+            )
+            sueldoProporcional = totales.sueldoBase
+            horasNormales = totales.horasNormales
+            horasExtras = totales.horasExtras
+            montoHsExtra = totales.montoHorasExtras
+            montoHsFeriado = totales.montoHorasFeriado
+            diasTrabajados = totales.diasTrabajados
+            ajusteHorasExtras = totales.ajusteHorasExtras
+            deduccionCuotas = empleado.prestamos.reduce((total, prestamo) => {
+                return total + (prestamo.cuotas[0]?.monto || 0)
+            }, 0)
+            montoHorasPendientes = empleado.horasPendientes.reduce((total, pendiente) => {
+                return total + pendiente.montoCalculado
+            }, 0)
         } else {
             // Cálculo Automático basado en fichadas
             const fichadas = empleado.fichadas || []
             const diasSet = new Set<string>()
             fichadas.forEach((f: any) => {
                 if (f.tipo !== 'ausencia') {
-                    const d = new Date(f.fechaHora)
-                    diasSet.add(d.toISOString().split('T')[0])
+                    diasSet.add(fechaClaveRRHH(f.fechaHora))
                 }
             })
 
@@ -402,13 +418,13 @@ export class PayrollService {
             const inasistenciasPagas = await prisma.inasistencia.findMany({
                 where: {
                     empleadoId: empleado.id,
-                    fecha: { gte: new Date(fechaInicio), lte: new Date(fechaFin) },
+                    fecha: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt },
                     tipo: 'JUSTIFICADA_PAGA'
                 }
             })
 
             inasistenciasPagas.forEach(i => {
-                diasSet.add(i.fecha.toISOString().split('T')[0])
+                diasSet.add(fechaClaveRRHH(i.fecha))
             })
 
             diasTrabajados = diasSet.size
@@ -442,7 +458,17 @@ export class PayrollService {
         // ─── Incorporar Conceptos Salariales Adicionales ───
         let montoAdicionales = 0
         if (adicionales && adicionales.length > 0) {
-            montoAdicionales = adicionales.reduce((acc, item) => acc + item.montoCalculado, 0)
+            const conceptosIds = [...new Set(adicionales.map(item => item.conceptoSalarialId))]
+            if (conceptosIds.some(id => typeof id !== 'string' || !id)) {
+                throw new Error('Existe un concepto salarial sin identificador válido.')
+            }
+            const conceptosActivos = await prisma.conceptoSalarial.count({
+                where: { id: { in: conceptosIds }, activo: true }
+            })
+            if (conceptosActivos !== conceptosIds.length) {
+                throw new Error('Uno o más conceptos salariales no existen o están inactivos.')
+            }
+            montoAdicionales = adicionales.reduce((acc, item) => acc + validarMontoAdicional(item.montoCalculado), 0)
         }
 
         // ─── Fusionar horas extras adeudadas con las de la semana ───
@@ -454,9 +480,12 @@ export class PayrollService {
         }
 
         const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales + montoHorasPendientes - deduccionCuotas
+        if (!Number.isFinite(neto) || neto < 0) {
+            throw new Error('El total neto calculado es inválido o negativo.')
+        }
 
         const cuotasAfectadas: string[] = []
-        const debeDescontarPrestamos = (!manualData && !calculatedData) || (calculatedData && calculatedData.descuentoPrestamos > 0)
+        const debeDescontarPrestamos = (!manualData && !calculatedData) || (!!calculatedData && deduccionCuotas > 0)
         
         if (debeDescontarPrestamos) {
             empleado.prestamos.forEach((prestamo: any) => {
@@ -467,95 +496,132 @@ export class PayrollService {
             })
         }
 
-        // Eliminar borradores existentes
-        await prisma.liquidacionSueldo.deleteMany({
-            where: { empleadoId: empleado.id, periodo, estado: 'borrador' }
-        })
+        const liquidacion = await prisma.$transaction(async (tx) => {
+            // Serializar todas las liquidaciones del empleado, no solamente las
+            // del mismo periodo: cuotas y horas pendientes son recursos
+            // compartidos entre periodos diferentes.
+            const lockKey = `liquidacion:${empleado.id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`
 
-        // Crear liquidación
-        const liquidacion = await prisma.liquidacionSueldo.create({
-            data: {
-                empleadoId: empleado.id,
-                periodo: (manualData || calculatedData) ? periodo : `${periodo} (${diasTrabajados} d. trab.)`,
-                sueldoProporcional,
-                horasNormales,
-                montoHorasNormales: montoHsNorm,
-                horasExtras,
-                montoHorasExtras: montoHsExtra,
-                horasFeriado,
-                montoHorasFeriado: montoHsFeriado,
-                ajusteHorasExtras,
-                descuentosPrestamos: deduccionCuotas,
-                totalNeto: neto,
-                estado: 'pagado',
-                tipo: tipo || 'NORMAL',
-                desglose: calculatedData?.desglosePorDia || manualData || null,
-                items: (adicionales && adicionales.length > 0) ? {
-                    create: adicionales.map(ad => ({
-                        conceptoSalarialId: ad.conceptoSalarialId,
-                        montoCalculado: ad.montoCalculado,
-                        detalle: ad.detalle
-                    }))
-                } : undefined
+            // La verificación definitiva ocurre dentro del bloqueo. La consulta
+            // previa sólo funciona como salida rápida para el caso habitual.
+            const liquidacionPagada = await tx.liquidacionSueldo.findFirst({
+                where: { empleadoId: empleado.id, periodo, estado: 'pagado' }
+            })
+            if (liquidacionPagada) {
+                throw new Error(`El empleado ya tiene una liquidación pagada para el periodo ${periodo}.`)
             }
-        })
 
-        // Marcar cuotas como pagadas
-        const prestamosAfectados = new Set<string>()
-        for (const cuotaId of cuotasAfectadas) {
-            const cuota = await prisma.cuotaPrestamo.update({
-                where: { id: cuotaId },
+            if (calculatedData) {
+                const cuotasTodaviaPendientes = cuotasAfectadas.length > 0
+                    ? await tx.cuotaPrestamo.count({
+                        where: { id: { in: cuotasAfectadas }, estado: 'pendiente' }
+                    })
+                    : 0
+                if (cuotasTodaviaPendientes !== cuotasAfectadas.length) {
+                    throw new Error('Las cuotas pendientes cambiaron mientras se calculaba la liquidación. Recalculá antes de confirmar.')
+                }
+
+                const horasTodaviaPendientes = await tx.horaExtraPendiente.findMany({
+                    where: { empleadoId: empleado.id, pagado: false },
+                    select: { montoCalculado: true }
+                })
+                const montoPendienteActual = horasTodaviaPendientes.reduce(
+                    (total, pendiente) => total + pendiente.montoCalculado,
+                    0,
+                )
+                if (Math.abs(montoPendienteActual - montoHorasPendientes) > 0.01) {
+                    throw new Error('Las horas pendientes cambiaron mientras se calculaba la liquidación. Recalculá antes de confirmar.')
+                }
+            }
+
+            // El borrador, la liquidación, los préstamos, las horas pendientes
+            // y Caja deben confirmarse juntos o revertirse juntos.
+            await tx.liquidacionSueldo.deleteMany({
+                where: { empleadoId: empleado.id, periodo, estado: 'borrador' }
+            })
+
+            const nuevaLiquidacion = await tx.liquidacionSueldo.create({
                 data: {
-                    estado: 'pagada',
-                    fechaPago: new Date(),
-                    liquidacionId: liquidacion.id
+                    empleadoId: empleado.id,
+                    periodo: (manualData || calculatedData) ? periodo : `${periodo} (${diasTrabajados} d. trab.)`,
+                    sueldoProporcional,
+                    horasNormales,
+                    montoHorasNormales: montoHsNorm,
+                    horasExtras,
+                    montoHorasExtras: montoHsExtra,
+                    horasFeriado,
+                    montoHorasFeriado: montoHsFeriado,
+                    ajusteHorasExtras,
+                    descuentosPrestamos: deduccionCuotas,
+                    totalNeto: neto,
+                    estado: 'pagado',
+                    tipo: tipo || 'NORMAL',
+                    desglose: calculatedData?.desglosePorDia || manualData || null,
+                    items: (adicionales && adicionales.length > 0) ? {
+                        create: adicionales.map(ad => ({
+                            conceptoSalarialId: ad.conceptoSalarialId,
+                            montoCalculado: ad.montoCalculado,
+                            detalle: ad.detalle
+                        }))
+                    } : undefined
                 }
             })
-            prestamosAfectados.add(cuota.prestamoId)
-        }
 
-        // Verificar si algún préstamo quedó totalmente saldado
-        for (const prestamoId of prestamosAfectados) {
-            const pendientes = await prisma.cuotaPrestamo.count({
-                where: { prestamoId, estado: 'pendiente' }
-            })
-            if (pendientes === 0) {
-                await prisma.prestamoEmpleado.update({
-                    where: { id: prestamoId },
-                    data: { estado: 'saldado' }
+            const prestamosAfectados = new Set<string>()
+            for (const cuotaId of cuotasAfectadas) {
+                const cuota = await tx.cuotaPrestamo.update({
+                    where: { id: cuotaId },
+                    data: {
+                        estado: 'pagada',
+                        fechaPago: new Date(),
+                        liquidacionId: nuevaLiquidacion.id
+                    }
+                })
+                prestamosAfectados.add(cuota.prestamoId)
+            }
+
+            for (const prestamoId of prestamosAfectados) {
+                const pendientes = await tx.cuotaPrestamo.count({
+                    where: { prestamoId, estado: 'pendiente' }
+                })
+                if (pendientes === 0) {
+                    await tx.prestamoEmpleado.update({
+                        where: { id: prestamoId },
+                        data: { estado: 'saldado' }
+                    })
+                }
+            }
+
+            if (cajaId && neto > 0) {
+                const caja = await tx.saldoCaja.findUnique({ where: { tipo: cajaId } })
+                if (!caja) throw new Error(`La caja '${cajaId}' no existe en el sistema.`)
+
+                await CajaService.createMovimientoEnTx(tx, {
+                    tipo: 'egreso',
+                    concepto: concepto || 'pago_sueldo',
+                    monto: neto,
+                    cajaOrigen: cajaId,
+                    descripcion: `Liquidación Sueldo: ${empleado.nombre} ${empleado.apellido || ''} - Periodo: ${periodo} (ID: ${nuevaLiquidacion.id})`,
                 })
             }
-        }
 
-        // Registro en Caja
-        if (cajaId && neto > 0) {
-            const conceptoFinal = concepto || 'pago_sueldo'
-            const caja = await prisma.saldoCaja.findUnique({ where: { tipo: cajaId } })
-            if (!caja) throw new Error(`La caja '${cajaId}' no existe en el sistema.`)
-
-            await CajaService.createMovimiento({
-                tipo: 'egreso',
-                concepto: conceptoFinal,
-                monto: neto,
-                cajaOrigen: cajaId,
-                descripcion: `Liquidación Sueldo: ${empleado.nombre} ${empleado.apellido || ''} - Periodo: ${periodo} (ID: ${liquidacion.id})`,
+            await tx.horaExtraPendiente.updateMany({
+                where: { empleadoId: empleado.id, pagado: false },
+                data: {
+                    pagado: true,
+                    liquidacionId: nuevaLiquidacion.id
+                }
             })
-        }
+
+            return nuevaLiquidacion
+        })
 
         // Evento de dominio
         eventBus.emit('liquidacion:created', {
             liquidacionId: liquidacion.id,
             empleadoId: empleado.id,
             monto: neto
-        })
-
-        // Marcar horas pendientes como pagadas
-        await prisma.horaExtraPendiente.updateMany({
-            where: { empleadoId: empleado.id, pagado: false },
-            data: {
-                pagado: true,
-                liquidacionId: liquidacion.id
-            }
         })
 
         return liquidacion
@@ -567,39 +633,53 @@ export class PayrollService {
      * NUNCA pierde datos históricos — las cuotas vuelven a pendiente, no se borran.
      */
     static async revertirLiquidacion(id: string) {
-        const liq = await prisma.liquidacionSueldo.findUnique({
-            where: { id },
-            include: { cuotasDescontadas: true }
-        })
+        const liq = await prisma.$transaction(async (tx) => {
+            const liquidacion = await tx.liquidacionSueldo.findUnique({
+                where: { id },
+                include: { cuotasDescontadas: true }
+            })
 
-        if (!liq) throw new Error('Liquidación no encontrada')
+            if (!liquidacion) throw new Error('Liquidación no encontrada')
 
-        // 1. Revertir cuotas de préstamos
-        if (liq.cuotasDescontadas.length > 0) {
-            await prisma.cuotaPrestamo.updateMany({
+            const prestamosAfectados = [...new Set(
+                liquidacion.cuotasDescontadas.map(cuota => cuota.prestamoId)
+            )]
+
+            if (liquidacion.cuotasDescontadas.length > 0) {
+                await tx.cuotaPrestamo.updateMany({
+                    where: { liquidacionId: id },
+                    data: {
+                        estado: 'pendiente',
+                        fechaPago: null,
+                        liquidacionId: null
+                    }
+                })
+
+                await tx.prestamoEmpleado.updateMany({
+                    where: { id: { in: prestamosAfectados } },
+                    data: { estado: 'activo' }
+                })
+            }
+
+            await tx.horaExtraPendiente.updateMany({
                 where: { liquidacionId: id },
-                data: {
-                    estado: 'pendiente',
-                    fechaPago: null,
-                    liquidacionId: null
+                data: { pagado: false, liquidacionId: null }
+            })
+
+            const movCaja = await tx.movimientoCaja.findFirst({
+                where: {
+                    descripcion: { contains: `(ID: ${id})` },
+                    tipo: 'egreso'
                 }
             })
-        }
 
-        // 2. Buscar y revertir movimiento de caja asociado
-        const movCaja = await prisma.movimientoCaja.findFirst({
-            where: {
-                descripcion: { contains: `(ID: ${id})` },
-                tipo: 'egreso'
+            if (movCaja) {
+                await CajaService.revertirMovimientoEnTx(tx, movCaja.id)
             }
+
+            await tx.liquidacionSueldo.delete({ where: { id } })
+            return liquidacion
         })
-
-        if (movCaja) {
-            await CajaService.deleteMovimiento(movCaja.id)
-        }
-
-        // 3. Eliminar la liquidación
-        await prisma.liquidacionSueldo.delete({ where: { id } })
 
         eventBus.emit('liquidacion:reverted', { liquidacionId: id, empleadoId: liq.empleadoId })
 

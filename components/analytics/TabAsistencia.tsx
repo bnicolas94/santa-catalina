@@ -1,7 +1,9 @@
 'use client'
 
+import type { AnalyticsData } from './analytics.types'
+
 interface TabAsistenciaProps {
-    data: any
+    data: AnalyticsData
     setSelectedEmpleado: (id: string) => void
     setActiveTab: (tab: string) => void
 }
@@ -45,15 +47,15 @@ export default function TabAsistencia({ data, setSelectedEmpleado, setActiveTab 
             </div>
 
             {/* Ranking de Puntualidad */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
                     <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>🏆 Mejores en Puntualidad</h3>
                     {(data.asistencia.rankingMejores || []).length === 0 ? (
                         <div style={{ color: 'var(--color-gray-400)', textAlign: 'center', padding: 'var(--space-6)' }}>Sin datos de puntualidad</div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                            {data.asistencia.rankingMejores.map((item: any, idx: number) => (
-                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)' }}>
+                            {data.asistencia.rankingMejores.map((item, idx) => (
+                                <div key={item.empleadoId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                                         <span style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-gray-300)', width: '24px' }}>{idx + 1}</span>
                                         <div>
@@ -76,8 +78,8 @@ export default function TabAsistencia({ data, setSelectedEmpleado, setActiveTab 
                         <div style={{ color: 'var(--color-gray-400)', textAlign: 'center', padding: 'var(--space-6)' }}>Sin datos de puntualidad</div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                            {data.asistencia.rankingPeores.map((item: any, idx: number) => (
-                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)' }}>
+                            {data.asistencia.rankingPeores.map((item, idx) => (
+                                <div key={item.empleadoId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', background: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-100)' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                                         <span style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-gray-300)', width: '24px' }}>{idx + 1}</span>
                                         <div>
@@ -119,8 +121,8 @@ export default function TabAsistencia({ data, setSelectedEmpleado, setActiveTab 
                                     </td>
                                 </tr>
                             ) : (
-                                data.asistencia.detalleTardanzas.map((t: any, idx: number) => (
-                                    <tr key={idx}>
+                                data.asistencia.detalleTardanzas.map((t, idx) => (
+                                    <tr key={`${t.empleadoId}-${t.fecha}-${idx}`}>
                                         <td style={{ fontWeight: 600 }}>{t.empleadoNombre}</td>
                                         <td>{new Date(t.fecha).toLocaleDateString()}</td>
                                         <td style={{ textAlign: 'center' }}>{t.horaEsperada} hs</td>

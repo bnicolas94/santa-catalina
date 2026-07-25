@@ -1,21 +1,23 @@
 'use client'
 
 import { useState, Fragment } from 'react'
+import type { AnalyticsData, AnalyticsPrestamo } from './analytics.types'
 
 interface TabPrestamosProps {
-    data: any
+    data: AnalyticsData
 }
 
 export default function TabPrestamos({ data }: TabPrestamosProps) {
     const [expandedPrestamo, setExpandedPrestamo] = useState<string | null>(null)
-    const [sortedDetalle, setSortedDetalle] = useState<any[] | null>(null)
+    const [sortedDetalle, setSortedDetalle] = useState<AnalyticsPrestamo[] | null>(null)
 
     const detalle = sortedDetalle || data.prestamos.detalle
 
     const sortBy = (field: string) => {
         const sorted = [...data.prestamos.detalle].sort((a, b) => {
             if (field === 'empleado') return a.empleado.localeCompare(b.empleado)
-            return b[field] - a[field]
+            const clave = field as 'montoTotal' | 'pagado' | 'saldo'
+            return b[clave] - a[clave]
         })
         setSortedDetalle(sorted)
     }
@@ -84,7 +86,7 @@ export default function TabPrestamos({ data }: TabPrestamosProps) {
                                     </td>
                                 </tr>
                             ) : (
-                                detalle.map((p: any) => (
+                                detalle.map(p => (
                                     <Fragment key={p.id}>
                                         <tr>
                                             <td>
@@ -117,7 +119,7 @@ export default function TabPrestamos({ data }: TabPrestamosProps) {
                                                     <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-danger)' }}>
                                                         <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-4)' }}>Detalle de Préstamos Individuales</div>
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                            {p.listaPrestamos.map((item: any) => (
+                                                            {p.listaPrestamos.map(item => (
                                                                 <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-3)', background: 'white', borderRadius: '8px', border: '1px solid var(--color-gray-200)', alignItems: 'center' }}>
                                                                     <div>
                                                                         <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>{item.observaciones || 'Préstamo Personal'}</div>

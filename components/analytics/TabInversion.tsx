@@ -2,9 +2,10 @@
 
 import { Fragment } from 'react'
 import { Line, Bar } from 'react-chartjs-2'
+import type { AnalyticsData } from './analytics.types'
 
 interface TabInversionProps {
-    data: any
+    data: AnalyticsData
     filtroConcepto: string
     setFiltroConcepto: (v: string) => void
     expandedRow: string | null
@@ -12,19 +13,19 @@ interface TabInversionProps {
 }
 
 export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, expandedRow, setExpandedRow }: TabInversionProps) {
-    const filteredDetalle = data.nomina.detalle.filter((liq: any) => {
+    const filteredDetalle = data.nomina.detalle.filter(liq => {
         if (filtroConcepto === 'todos') return true
-        return liq.conceptos.some((c: any) => c.nombre === filtroConcepto)
+        return liq.conceptos.some(c => c.nombre === filtroConcepto)
     })
 
     // Tendencia semanal chart
     const tendencia = data.inversion?.tendenciaSemanal || []
     const tendenciaChartData = {
-        labels: tendencia.map((t: any) => t.periodo),
+        labels: tendencia.map(t => t.periodo),
         datasets: [
             {
                 label: 'Inversión Total',
-                data: tendencia.map((t: any) => t.totalNeto),
+                data: tendencia.map(t => t.totalNeto),
                 borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 fill: true,
@@ -33,7 +34,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
             },
             {
                 label: 'Horas Extras',
-                data: tendencia.map((t: any) => t.montoExtras),
+                data: tendencia.map(t => t.montoExtras),
                 borderColor: '#8b5cf6',
                 backgroundColor: 'transparent',
                 borderWidth: 2,
@@ -42,7 +43,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
             },
             {
                 label: 'Feriados',
-                data: tendencia.map((t: any) => t.montoFeriados),
+                data: tendencia.map(t => t.montoFeriados),
                 borderColor: '#f59e0b',
                 backgroundColor: 'transparent',
                 borderWidth: 2,
@@ -54,15 +55,15 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
 
     // Top extras employees
     const topExtrasEmployees = [...(data.nomina?.detalle || [])]
-        .filter((l: any) => l.hsExtras > 0)
-        .sort((a: any, b: any) => b.montoExtras - a.montoExtras)
+        .filter(l => l.hsExtras > 0)
+        .sort((a, b) => b.montoExtras - a.montoExtras)
         .slice(0, 8)
 
     const extrasChartData = {
-        labels: topExtrasEmployees.map((l: any) => l.empleado),
+        labels: topExtrasEmployees.map(l => l.empleado),
         datasets: [{
             label: 'Costo Horas Extras ($)',
-            data: topExtrasEmployees.map((l: any) => l.montoExtras),
+            data: topExtrasEmployees.map(l => l.montoExtras),
             backgroundColor: 'rgba(139, 92, 246, 0.5)',
             borderColor: '#8b5cf6',
             borderWidth: 1
@@ -71,10 +72,10 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
 
     // Payroll by area
     const payrollChartData = {
-        labels: data.nomina.porArea.map((a: any) => a.nombre),
+        labels: data.nomina.porArea.map(a => a.nombre),
         datasets: [{
             label: 'Inversión Salarial ($)',
-            data: data.nomina.porArea.map((a: any) => a.monto),
+            data: data.nomina.porArea.map(a => a.monto),
             backgroundColor: 'rgba(59, 130, 246, 0.5)',
             borderColor: '#3b82f6',
             borderWidth: 1
@@ -84,7 +85,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
     const barOptions = {
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, ticks: { callback: (value: any) => '$' + value.toLocaleString() } } }
+        scales: { y: { beginAtZero: true, ticks: { callback: (value: string | number) => '$' + value.toLocaleString() } } }
     }
 
     return (
@@ -125,7 +126,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                         <Line data={tendenciaChartData} options={{
                             maintainAspectRatio: false,
                             plugins: { legend: { position: 'top' as const } },
-                            scales: { y: { beginAtZero: true, ticks: { callback: (value: any) => '$' + value.toLocaleString() } } }
+                            scales: { y: { beginAtZero: true, ticks: { callback: (value: string | number) => '$' + value.toLocaleString() } } }
                         }} />
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-gray-400)' }}>
@@ -185,7 +186,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredDetalle.map((l: any) => (
+                            {filteredDetalle.map(l => (
                                 <Fragment key={l.id}>
                                     <tr>
                                         <td>
@@ -208,7 +209,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                                                 <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-primary)' }}>
                                                     <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-2)' }}>Desglose de Conceptos</div>
                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>
-                                                        {l.conceptos?.map((item: any, idx: number) => (
+                                                        {l.conceptos?.map((item, idx) => (
                                                             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-2)', background: 'white', borderRadius: '4px', border: '1px solid var(--color-gray-200)' }}>
                                                                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)' }}>{item.nombre}</span>
                                                                 <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: item.tipo === 'DESCUENTO' ? 'var(--color-danger)' : 'inherit' }}>

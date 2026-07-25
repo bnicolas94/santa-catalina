@@ -1,27 +1,28 @@
 'use client'
 
 import { Pie } from 'react-chartjs-2'
+import type { AnalyticsData } from './analytics.types'
 
 interface TabResumenProps {
-    data: any
+    data: AnalyticsData
 }
 
 export default function TabResumen({ data }: TabResumenProps) {
     const areaChartData = {
-        labels: data.distribucion.area.map((a: any) => a.nombre),
+        labels: data.distribucion.area.map(a => a.nombre),
         datasets: [{
             label: 'Empleados por Área',
-            data: data.distribucion.area.map((a: any) => a.cantidad),
+            data: data.distribucion.area.map(a => a.cantidad),
             backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
             borderWidth: 1
         }]
     }
 
     const puestoChartData = {
-        labels: data.distribucion.puesto.map((p: any) => p.nombre),
+        labels: data.distribucion.puesto.map(p => p.nombre),
         datasets: [{
             label: 'Empleados por Puesto',
-            data: data.distribucion.puesto.map((p: any) => p.cantidad),
+            data: data.distribucion.puesto.map(p => p.cantidad),
             backgroundColor: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6'],
             borderWidth: 1
         }]
@@ -64,7 +65,7 @@ export default function TabResumen({ data }: TabResumenProps) {
             </div>
 
             {/* Charts */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-6)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
                     <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Área</h3>
                     <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>

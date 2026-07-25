@@ -2,9 +2,12 @@
 
 import { useState, Fragment } from 'react'
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import type { AnalyticsData, AnalyticsSancion } from './analytics.types'
+import { ESTADOS_ASISTENCIA, escaparHtml, formatearFechaCivil, textoEstadoAsistencia, tonoEstadoAsistencia } from './legajo.utils'
+import { LegajoSummary } from './LegajoSummary'
 
 interface TabLegajoProps {
-    data: any
+    data: AnalyticsData
     onRefresh?: () => void
 }
 
@@ -38,48 +41,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
     }
 
     const h = data.historico
-    const kpis = h.kpis
     const asistenciaDiaria = h.asistenciaDiaria || []
-
-    const formatFecha = (fechaStr: string) => {
-        if (!fechaStr) return ''
-        const parts = fechaStr.split('-')
-        if (parts.length === 3) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`
-        }
-        return fechaStr
-    }
-
-    const mapStatusText = (status: string) => {
-        switch (status) {
-            case 'TRABAJO': return 'Trabajó'
-            case 'FRANCO': return 'Franco'
-            case 'FERIADO': return 'Feriado'
-            case 'ENFERMEDAD': return 'Enfermedad'
-            case 'SIN_AVISO': return 'Ausente Sin Aviso'
-            case 'CON_AVISO': return 'Ausente Con Aviso'
-            default: return status
-        }
-    }
-
-    const getStatusStyle = (status: string) => {
-        switch (status) {
-            case 'TRABAJO':
-                return { backgroundColor: '#e6f4ea', color: '#137333', border: '1px solid #ceead6' }
-            case 'FRANCO':
-                return { backgroundColor: '#f1f3f4', color: '#5f6368', border: '1px solid #dadce0' }
-            case 'FERIADO':
-                return { backgroundColor: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }
-            case 'ENFERMEDAD':
-                return { backgroundColor: '#f3e8ff', color: '#6b21a8', border: '1px solid #e9d5ff' }
-            case 'SIN_AVISO':
-                return { backgroundColor: '#fce8e6', color: '#c5221f', border: '1px solid #fad2cf' }
-            case 'CON_AVISO':
-                return { backgroundColor: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }
-            default:
-                return { backgroundColor: '#f1f3f4', color: '#5f6368', border: '1px solid #dadce0' }
-        }
-    }
 
     // Manejador para cambiar estado de un solo día
     const handleStatusChange = async (fecha: string, newStatus: string) => {
@@ -106,8 +68,8 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
             if (onRefresh) {
                 await onRefresh()
             }
-        } catch (error: any) {
-            alert('Error: ' + error.message)
+        } catch (error: unknown) {
+            alert('Error: ' + (error instanceof Error ? error.message : 'No se pudo actualizar la asistencia'))
         } finally {
             setUpdatingDate(null)
         }
@@ -128,7 +90,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
         if (selectedDates.length === asistenciaDiaria.length) {
             setSelectedDates([])
         } else {
-            setSelectedDates(asistenciaDiaria.map((d: any) => d.fecha))
+            setSelectedDates(asistenciaDiaria.map(d => d.fecha))
         }
     }
 
@@ -163,8 +125,8 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
             if (onRefresh) {
                 await onRefresh()
             }
-        } catch (error: any) {
-            alert('Error al aplicar cambios masivos: ' + error.message)
+        } catch (error: unknown) {
+            alert('Error al aplicar cambios masivos: ' + (error instanceof Error ? error.message : 'Error desconocido'))
         } finally {
             setIsBulkUpdating(false)
         }
@@ -197,7 +159,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
         }
     }
 
-    const handlePrintSancion = async (sancion: any) => {
+    const handlePrintSancion = async (sancion: AnalyticsSancion) => {
         const dImp = new Date(sancion.fecha)
         // Add timezone offset to display correct day (since it's saved as YYYY-MM-DDT00:00:00Z)
         const localDImp = new Date(dImp.getTime() + dImp.getTimezoneOffset() * 60000)
@@ -237,16 +199,16 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                 </div>
 
                 <div class="content">
-                    <p>Por medio de la presente, se notifica formalmente al Sr./Sra. <strong>${h.empleado.nombre} ${h.empleado.apellido || ''}</strong>, 
-                    con DNI <strong>${h.empleado.dni || '________'}</strong>, que se ha resuelto aplicar la siguiente medida disciplinaria: 
-                    <strong>${sancion.tipo}</strong>.</p>
+                    <p>Por medio de la presente, se notifica formalmente al Sr./Sra. <strong>${escaparHtml(h.empleado.nombre)} ${escaparHtml(h.empleado.apellido)}</strong>,
+                    con DNI <strong>${escaparHtml(h.empleado.dni || '________')}</strong>, que se ha resuelto aplicar la siguiente medida disciplinaria:
+                    <strong>${escaparHtml(sancion.tipo)}</strong>.</p>
 
                     <p><strong>Motivo de la medida:</strong><br/>
-                    ${sancion.motivo}</p>
+                    ${escaparHtml(sancion.motivo)}</p>
 
                     ${sancion.observaciones ? `
                         <p><strong>Observaciones:</strong><br/>
-                        ${sancion.observaciones}</p>
+                        ${escaparHtml(sancion.observaciones)}</p>
                     ` : ''}
 
                     <p>Se deja constancia de que esta medida quedará registrada en el legajo personal. Se insta a evitar futuras inconductas similares, bajo apercibimiento de aplicar sanciones mayores.</p>
@@ -267,7 +229,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
 
                 <div class="footer">
                     Generado el ${new Date().toLocaleDateString('es-AR', { dateStyle: 'medium', timeStyle: 'short' })}<br/>
-                    ID de Registro: ${sancion.id}
+                    ID de Registro: ${escaparHtml(sancion.id)}
                 </div>
             </body>
             </html>
@@ -287,10 +249,10 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
         if (asistenciaDiaria.length === 0) return
 
         const headers = ['Fecha', 'Dia', 'Estado', 'Entrada', 'Salida', 'Hs Trabajadas', 'Detalle/Motivo']
-        const rows = asistenciaDiaria.map((d: any) => [
-            formatFecha(d.fecha),
+        const rows = asistenciaDiaria.map(d => [
+            formatearFechaCivil(d.fecha),
             d.diaSemana,
-            mapStatusText(d.status),
+            textoEstadoAsistencia(d.status),
             d.entrada || '',
             d.salida || '',
             d.horasTrabajadas || '0',
@@ -298,7 +260,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
         ])
 
         const csvContent = "\uFEFF" // UTF-8 BOM para soporte correcto de caracteres especiales en Excel en Español
-            + [headers.join(';'), ...rows.map((row: any[]) => row.map(val => `"${val.toString().replace(/"/g, '""')}"`).join(';'))].join('\n')
+            + [headers.join(';'), ...rows.map(row => row.map(val => `"${val.toString().replace(/"/g, '""')}"`).join(';'))].join('\n')
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
         const url = URL.createObjectURL(blob)
@@ -310,61 +272,24 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
+        URL.revokeObjectURL(url)
     }
 
     return (
         <div>
-            {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #10b981' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Neto Acumulado</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-success)' }}>${kpis.totalNeto.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{kpis.cantidadLiquidaciones} liquidaciones</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #3b82f6' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Promedio Semanal</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>${kpis.promedioNetoPorLiquidacion.toLocaleString()}</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #f59e0b' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Hs Extras Totales</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#f59e0b' }}>{kpis.totalHsExtras} hs</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>Acumulado: ${kpis.totalMontoHsExtras?.toLocaleString() || 0}</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #ef4444' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Días Ausentes</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: kpis.totalDiasAusentes > 0 ? 'var(--color-danger)' : 'inherit' }}>{kpis.totalDiasAusentes}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{kpis.totalDiasJustificados} justificados</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #8b5cf6' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Días Trabajados</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>{kpis.totalDiasTrabajados}</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #06b6d4' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Puntualidad</div>
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: kpis.puntualidad >= 90 ? 'var(--color-success)' : kpis.puntualidad >= 70 ? '#f59e0b' : 'var(--color-danger)' }}>
-                        {kpis.puntualidad}%
-                    </div>
-                </div>
-                {kpis.sanciones > 0 && (
-                    <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #7c3aed' }}>
-                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Sanciones</div>
-                        <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#7c3aed' }}>{kpis.sanciones}</div>
-                    </div>
-                )}
-                {kpis.deudaPendiente > 0 && (
-                    <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid var(--color-danger)' }}>
-                        <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Deuda Préstamos</div>
-                        <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-danger)' }}>${kpis.deudaPendiente.toLocaleString()}</div>
-                    </div>
-                )}
-            </div>
+            <LegajoSummary historico={h} />
+            <nav style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', padding: '6px', background: 'white', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }} aria-label="Secciones del legajo">
+                <a className="btn btn-ghost" href="#legajo-asistencia">Asistencia</a>
+                <a className="btn btn-ghost" href="#legajo-liquidaciones">Liquidaciones</a>
+                <a className="btn btn-ghost" href="#legajo-sanciones">Sanciones</a>
+            </nav>
 
             {/* Control de Asistencia Diario */}
-            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+            <div id="legajo-asistencia" className="card shadow-sm" style={{ padding: 'var(--space-6)', marginBottom: 'var(--space-6)', scrollMarginTop: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                     <div>
                         <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: '2px' }}>
-                            📅 Control de Asistencia Diario
+                            Control de asistencia diario
                         </h3>
                         <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', margin: 0 }}>
                             Registrá justificaciones, enfermedades o ausencias de forma individual o masiva.
@@ -419,12 +344,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                         }}
                                     >
                                         <option value="">-- Seleccionar estado a aplicar --</option>
-                                        <option value="TRABAJO">🟢 Trabajó / Presente</option>
-                                        <option value="FRANCO">⚪ Franco</option>
-                                        <option value="FERIADO">🚩 Feriado</option>
-                                        <option value="ENFERMEDAD">🟣 Enfermedad</option>
-                                        <option value="SIN_AVISO">🔴 Sin Aviso</option>
-                                        <option value="CON_AVISO">🟠 Con Aviso</option>
+                                        {ESTADOS_ASISTENCIA.map(estado => <option key={estado.value} value={estado.value}>{estado.label}</option>)}
                                     </select>
                                     <button
                                         className="btn btn-primary"
@@ -479,8 +399,8 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                     </td>
                                 </tr>
                             ) : (
-                                asistenciaDiaria.map((d: any) => {
-                                    const statusStyle = getStatusStyle(d.status)
+                                asistenciaDiaria.map(d => {
+                                    const statusStyle = tonoEstadoAsistencia(d.status)
                                     const isChecked = selectedDates.includes(d.fecha)
                                     return (
                                         <tr key={d.fecha} style={{ verticalAlign: 'middle', backgroundColor: isChecked ? '#f8fafc' : 'transparent' }}>
@@ -494,7 +414,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                 />
                                             </td>
                                             <td style={{ fontWeight: 600 }}>
-                                                {d.diaSemana} {formatFecha(d.fecha)}
+                                                {d.diaSemana} {formatearFechaCivil(d.fecha)}
                                             </td>
                                             <td style={{ textAlign: 'center' }}>
                                                 {d.entrada && d.salida ? (
@@ -557,7 +477,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                         ...statusStyle
                                                     }}
                                                 >
-                                                    {mapStatusText(d.status)}
+                                                    {textoEstadoAsistencia(d.status)}
                                                 </span>
                                             </td>
                                             <td style={{ textAlign: 'right' }}>
@@ -581,12 +501,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                             cursor: 'pointer'
                                                         }}
                                                     >
-                                                        <option value="TRABAJO">🟢 Trabajó / Presente</option>
-                                                        <option value="FRANCO">⚪ Franco</option>
-                                                        <option value="FERIADO">🚩 Feriado</option>
-                                                        <option value="ENFERMEDAD">🟣 Enfermedad</option>
-                                                        <option value="SIN_AVISO">🔴 Sin Aviso</option>
-                                                        <option value="CON_AVISO">🟠 Con Aviso</option>
+                                                        {ESTADOS_ASISTENCIA.map(estado => <option key={estado.value} value={estado.value}>{estado.label}</option>)}
                                                     </select>
                                                 )}
                                             </td>
@@ -600,9 +515,9 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
             </div>
 
             {/* Historial de Liquidaciones */}
-            <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
+            <div id="legajo-liquidaciones" className="card shadow-sm" style={{ padding: 'var(--space-6)', scrollMarginTop: '20px' }}>
                 <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>
-                    📋 Historial de Liquidaciones — {h.empleado?.nombre} {h.empleado?.apellido || ''}
+                    Historial de liquidaciones — {h.empleado?.nombre} {h.empleado?.apellido || ''}
                 </h3>
                 <div className="table-container">
                     <table className="table">
@@ -623,7 +538,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                         <tbody>
                             {h.semanas.length === 0 ? (
                                 <tr><td colSpan={10} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>No hay liquidaciones registradas.</td></tr>
-                            ) : h.semanas.map((s: any) => (
+                            ) : h.semanas.map(s => (
                                 <Fragment key={s.id}>
                                     <tr onClick={() => setExpandedHistorico(expandedHistorico === s.id ? null : s.id)} style={{ cursor: 'pointer', backgroundColor: expandedHistorico === s.id ? 'var(--color-info-bg)' : 'transparent' }}>
                                         <td>{expandedHistorico === s.id ? '▼' : '▶'}</td>
@@ -643,7 +558,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                 <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-primary)' }}>
                                                     <div style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-3)' }}>Desglose Día por Día</div>
                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 'var(--space-2)' }}>
-                                                        {s.desglose.map((dia: any) => (
+                                                        {s.desglose.map(dia => (
                                                             <div key={dia.fecha} style={{ backgroundColor: 'white', padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: `1px solid ${dia.esFeriado ? '#f59e0b' : dia.horasTrabajadas > 0 ? 'var(--color-gray-200)' : dia.esJustificado ? '#10b981' : '#ef4444'}`, fontSize: '11px', opacity: dia.horasTrabajadas > 0 || dia.esJustificado ? 1 : 0.6 }}>
                                                                 <div style={{ fontWeight: 700, borderBottom: '1px solid var(--color-gray-100)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
                                                                     <span>{dia.diaSemana?.substring(0, 3)} {dia.fecha?.split('-')[2]}</span>
@@ -651,7 +566,7 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                                     {dia.esJustificado && <span style={{ color: '#10b981', fontSize: '9px' }}>✓M</span>}
                                                                 </div>
                                                                 <div>{dia.entrada || '--:--'} a {dia.salida || '--:--'}</div>
-                                                                <div style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas} {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)' }}>(+{dia.horasExtras})</span>}</div>
+                                                                <div style={{ color: 'var(--color-gray-500)' }}>HS: {dia.horasTrabajadas} {(dia.horasExtras || 0) > 0 && <span style={{ color: 'var(--color-success)' }}>(+{dia.horasExtras})</span>}</div>
                                                                 <div style={{ fontWeight: 600, textAlign: 'right' }}>${dia.totalDia?.toLocaleString()}</div>
                                                             </div>
                                                         ))}
@@ -668,10 +583,10 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
             </div>
 
             {/* Registro de Sanciones */}
-            <div className="card shadow-sm" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
+            <div id="legajo-sanciones" className="card shadow-sm" style={{ padding: 'var(--space-6)', marginTop: 'var(--space-6)', scrollMarginTop: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                     <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, margin: 0 }}>
-                        ⚖️ Registro de Sanciones y Apercibimientos
+                        Registro de sanciones y apercibimientos
                     </h3>
                     <button 
                         className="btn btn-primary"
@@ -761,9 +676,9 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                     </td>
                                 </tr>
                             ) : (
-                                h.listaSanciones.map((s: any) => (
+                                h.listaSanciones.map(s => (
                                     <tr key={s.id}>
-                                        <td style={{ fontWeight: 600 }}>{formatFecha(s.fecha.split('T')[0])}</td>
+                                        <td style={{ fontWeight: 600 }}>{formatearFechaCivil(s.fecha)}</td>
                                         <td>
                                             <span style={{ 
                                                 display: 'inline-block',
