@@ -8,6 +8,8 @@ export default withAuth(
         const hostname = req.headers.get('host') || ''
         const url = req.nextUrl.clone()
         const pathname = url.pathname
+        let authorizationPathname = pathname
+        let shouldRewrite = false
 
         // 0. Lógica de Subdominio para Empleados
         // Si entran por empleados.santacatalina.online, reescribimos internamente a /empleados
@@ -16,12 +18,14 @@ export default withAuth(
             // Si es /, lo mandamos a /empleados internamente
             if (pathname === '/') {
                 url.pathname = '/empleados'
-                return NextResponse.rewrite(url)
+                authorizationPathname = url.pathname
+                shouldRewrite = true
             }
             // Si es /123, lo mandamos a /empleados/123 internamente
-            if (!pathname.startsWith('/empleados') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
+            else if (!pathname.startsWith('/empleados') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
                 url.pathname = `/empleados${pathname}`
-                return NextResponse.rewrite(url)
+                authorizationPathname = url.pathname
+                shouldRewrite = true
             }
         }
 
@@ -41,14 +45,14 @@ export default withAuth(
                 : null,
         }
 
-        if (!canAccessPath(pathname, accessToken)) {
+        if (!canAccessPath(authorizationPathname, accessToken)) {
             if (isApiRequest) {
                 return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
             }
             return NextResponse.redirect(new URL('/', req.url))
         }
 
-        return NextResponse.next()
+        return shouldRewrite ? NextResponse.rewrite(url) : NextResponse.next()
     },
     {
         callbacks: {

@@ -38,6 +38,7 @@ function EmpleadosContent() {
     const openParam = searchParams.get('open')
     const [empleados, setEmpleados] = useState<Empleado[]>([])
     const [loading, setLoading] = useState(true)
+    const [loadError, setLoadError] = useState('')
     const [dialogOpen, setDialogOpen] = useState(false)
     const [selectedEmpleado, setSelectedEmpleado] = useState<Empleado | null>(null)
     const [showRolesModal, setShowRolesModal] = useState(false)
@@ -67,12 +68,17 @@ function EmpleadosContent() {
 
     const fetchEmpleados = async () => {
         setLoading(true)
+        setLoadError('')
         try {
             const res = await fetch('/api/empleados')
             const data = await res.json()
+            if (!res.ok) throw new Error(data?.error || 'No se pudo cargar el personal')
+            if (!Array.isArray(data)) throw new Error('La respuesta de empleados no es válida')
             setEmpleados(data)
         } catch (error) {
             console.error(error)
+            setEmpleados([])
+            setLoadError(error instanceof Error ? error.message : 'No se pudo cargar el personal')
         } finally {
             setLoading(false)
         }
@@ -82,9 +88,13 @@ function EmpleadosContent() {
         try {
             const res = await fetch('/api/ubicaciones')
             const data = await res.json()
+            if (!res.ok) throw new Error(data?.error || 'No se pudieron cargar las ubicaciones')
+            if (!Array.isArray(data)) throw new Error('La respuesta de ubicaciones no es válida')
             setUbicaciones(data)
         } catch (error) {
             console.error('Error fetching ubicaciones:', error)
+            setUbicaciones([])
+            setLoadError(error instanceof Error ? error.message : 'No se pudieron cargar las ubicaciones')
         }
     }
 
@@ -352,6 +362,12 @@ function EmpleadosContent() {
                     />
                 </div>
             </div>
+
+            {loadError && (
+                <div className="alert alert-danger" role="alert" style={{ marginBottom: 'var(--space-4)' }}>
+                    {loadError}. Cerrá sesión y volvé a ingresar; si continúa, verificá el permiso de Personal.
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
