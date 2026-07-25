@@ -2,24 +2,21 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPayment } from "@/lib/mercadopago";
 import { CajaService } from "@/lib/services/caja.service";
-import crypto from 'crypto';
+import { validateMercadoPagoSignature } from "@/lib/mercadopago-webhook";
 
 export async function POST(req: Request) {
   try {
-    let body: any = {};
+    let body: {
+      type?: string;
+      action?: string;
+      data?: { id?: string | number };
+    } = {};
     const textBody = await req.text();
     
-    // DUMP ABSOLUTO PARA DEBUGGING EN VERCEL LOGS
-    console.log(`\n\n========== [WEBHOOK MP INGRESO] ==========`);
-    console.log(`[URL] ${req.url}`);
-    console.log(`[HEADERS] x-signature: ${req.headers.get("x-signature")} | x-request-id: ${req.headers.get("x-request-id")}`);
-    console.log(`[RAW TEXT BODY] ${textBody}`);
-    console.log(`==========================================\n`);
-
     if (textBody) {
         try {
             body = JSON.parse(textBody);
-        } catch (e) {
+        } catch {
             console.warn("[MercadoPago Webhook] Body no es JSON válido o está vacío");
         }
     }
@@ -33,52 +30,15 @@ export async function POST(req: Request) {
 
     // Verificamos si la solicitud es una notificación de pago (v1 IPN o Webhook)
     if ((topic === "payment" || topic === "payment.created") && paymentId) {
-
-      // ---- SEGURIDAD: Validación de Firma Webhook ----
-      const signature = req.headers.get("x-signature");
-      const requestId = req.headers.get("x-request-id");
-      const secret = process.env.MP_WEBHOOK_SECRET;
-
-      if (secret && signature && requestId) {
-        const parts = signature.split(',');
-        let ts, v1;
-        parts.forEach(part => {
-            const splitIndex = part.indexOf('=');
-            if (splitIndex !== -1) {
-                const key = part.substring(0, splitIndex).trim();
-                const value = part.substring(splitIndex + 1).trim();
-                if (key === 'ts') ts = value;
-                if (key === 'v1') v1 = value;
-            }
-        });
-
-        // Search params para ID en webhooks suele estar en la URL
-        const url = new URL(req.url);
-        const queryId = url.searchParams.get('data.id') || url.searchParams.get('id');
-        
-        // El manifest DEBE armarse con el ID que viene en la query (es lo que MP firma)
-        // Si no hay en query y es test, usamos el del body
-        const manifestId = queryId || paymentId;
-
-        const manifest = `id:${manifestId};request-id:${requestId};ts:${ts}`;
-        const hmac = crypto.createHmac('sha256', secret);
-        const digest = hmac.update(manifest).digest('hex');
-
-        if (digest !== v1) {
-          // El simulador de pruebas de MP a veces envía firmas dummy
-          if (paymentId === "123456" || paymentId === 123456) {
-            console.warn(`[MercadoPago Webhook] TEST DETECTADO: Ignorando firma inválida para el pago test ${paymentId}`);
-            return NextResponse.json({ ok: true, message: "Test verified successfully" }, { status: 200 });
-          } else {
-            console.warn(`[MercadoPago Webhook] ALERTA: Firma de Webhook no coincide (calculada: ${digest}, recibida: ${v1}). Dejando pasar para verificación directa contra la API de MP.`);
-            // Quitamos el bloqueo 403. La verdadera seguridad está en que ignoramos el contenido del payload
-            // y obligamos al servidor a pedirle a Mercado Pago todos los detalles usando nuestro ACCESS_TOKEN.
-          }
-        }
-      } else if (secret) {
-          console.warn("[MercadoPago Webhook] Faltan cabeceras de firma (posible IPN antigua o request no autorizado).");
+      const signedDataId = queryId || String(paymentId);
+      const signatureValidation = validateMercadoPagoSignature(req, signedDataId);
+      if (!signatureValidation.valid) {
+        console.warn(`[MercadoPago Webhook] Solicitud rechazada: ${signatureValidation.error}`);
+        return NextResponse.json(
+          { error: signatureValidation.error },
+          { status: signatureValidation.status }
+        );
       }
-      // ------------------------------------------------
       
       console.log(`[MercadoPago Webhook] Recibido pago ID: ${paymentId}`);
 
@@ -93,7 +53,10 @@ export async function POST(req: Request) {
       // Procesar parámetros de montos
       const montoBruto = paymentInfo.transaction_amount || 0;
       const montoNeto = paymentInfo.transaction_details?.net_received_amount ?? montoBruto;
-      const comision = paymentInfo.fee_details?.reduce((acc: number, fee: any) => acc + fee.amount, 0) || 0;
+      const comision = paymentInfo.fee_details?.reduce(
+        (acc: number, fee: { amount?: number }) => acc + (fee.amount || 0),
+        0
+      ) || 0;
 
       // Intentar obtener el nombre del pagador
       const p = paymentInfo.payer;
@@ -160,8 +123,11 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ message: "Notificación ignorada", receivedType: body.type });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error procesando Webhook de Mercado Pago:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Error interno' },
+      { status: 500 }
+    );
   }
 }

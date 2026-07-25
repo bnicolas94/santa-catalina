@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "npx prisma generate && next build",
-    "start": "npx prisma db push --accept-data-loss && next start",
+    "start": "next start",
+    "db:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate",
     "lint": "eslint",
+    "test": "tsx --test \"lib/**/*.test.ts\"",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "npx prisma migrate reset --force",
     "db:studio": "npx prisma studio",

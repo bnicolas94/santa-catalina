@@ -62,10 +62,10 @@ export default function PosicionamientoPage() {
     async function fetchInitialData() {
         try {
             const [ubiRes, conceptRes, empRes, rolesRes] = await Promise.all([
-                fetch('/api/ubicaciones'),
+                fetch('/api/operaciones/ubicaciones'),
                 fetch('/api/produccion/conceptos'),
-                fetch('/api/empleados'),
-                fetch('/api/empleados/roles')
+                fetch('/api/operaciones/empleados'),
+                fetch('/api/operaciones/roles')
             ])
             const ubiData = await ubiRes.json()
             const conceptData = await conceptRes.json()

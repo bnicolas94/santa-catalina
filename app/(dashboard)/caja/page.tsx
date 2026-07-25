@@ -47,7 +47,7 @@ const cajaFetcher = async ([_, fecha]: [string, string]) => {
         fetch('/api/caja/rendiciones'),
         fetch('/api/caja/saldos'),
         fetch('/api/caja/conceptos'),
-        fetch('/api/empleados')
+        fetch('/api/operaciones/empleados')
     ])
     
     return {

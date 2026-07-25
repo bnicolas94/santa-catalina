@@ -1,37 +1,29 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { authorizeCronRequest } from '@/lib/cron-auth'
 
-export async function GET() {
+export async function GET(request: Request) {
+    const authorization = authorizeCronRequest(request)
+    if (!authorization.authorized) {
+        return NextResponse.json(
+            { error: authorization.error },
+            { status: authorization.status }
+        )
+    }
+
     try {
-        const clientCount = await prisma.cliente.count()
-        const pedidoCount = await prisma.pedido.count()
-        const rutaCount = await prisma.ruta.count()
-        
-        // Check if we have clients with coordinates
-        const clientsWithCoords = await prisma.cliente.count({
-            where: {
-                latitud: { not: null },
-                longitud: { not: null }
-            }
-        })
-
-        const dbUrl = process.env.DATABASE_URL || 'NOT SET'
-        const maskedUrl = dbUrl.replace(/:([^@]+)@/, ':****@')
+        await prisma.$queryRaw`SELECT 1`
 
         return NextResponse.json({
-            success: true,
-            counts: {
-                clientes: clientCount,
-                clientesWithCoords: clientsWithCoords,
-                pedidos: pedidoCount,
-                rutas: rutaCount
-            },
-            env: {
-                DATABASE_URL: maskedUrl,
-                GOOGLE_MAP_KEY_SET: !!process.env.GOOGLE_MAPS_API_KEY
-            }
+            status: 'ok',
+            database: 'reachable',
+            timestamp: new Date().toISOString(),
         })
-    } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        console.error('System health check failed:', error)
+        return NextResponse.json(
+            { status: 'error', database: 'unreachable' },
+            { status: 503 }
+        )
     }
 }

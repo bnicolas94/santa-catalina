@@ -103,9 +103,9 @@ export default function PlanificacionRutasPage() {
 
             const [pedRes, empRes, rutaRes, ubiRes, planRes] = await Promise.all([
                 fetch(`/api/pedidos?${pedParams.toString()}`),
-                fetch('/api/empleados'),
+                fetch('/api/operaciones/empleados'),
                 fetch(`/api/rutas${params}`),
-                fetch('/api/ubicaciones'),
+                fetch('/api/operaciones/ubicaciones'),
                 fetch(`/api/produccion/planificacion?fecha=${filterFecha || getLocalDateString()}`)
             ])
             const pedResponse = await pedRes.json()

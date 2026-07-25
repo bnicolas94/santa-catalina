@@ -10,7 +10,7 @@ export async function GET(request: Request) {
         const userRol = (session?.user as any)?.rol
         const permisos = (session?.user as any)?.permisos || {}
 
-        if (userRol !== 'ADMIN' && !permisos.permisoProduccion) {
+        if (userRol !== 'ADMIN' && userRol !== 'LOGISTICA' && !permisos.permisoProduccion) {
             return NextResponse.json({ error: 'No tienes permiso para ver planificación' }, { status: 403 })
         }
 

@@ -1,20 +1,39 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { CajaService } from '@/lib/services/caja.service';
+import { authorizeCronRequest } from '@/lib/cron-auth';
 
 // Permitir más tiempo de ejecución si Vercel/Railway lo soporta
 export const maxDuration = 60;
 
-export async function GET(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const secret = url.searchParams.get("secret");
-    
-    // Verificación de seguridad simple: el cronjob debe ejecutarse con ?secret=COMPARTIDO
-    if (secret !== process.env.MP_WEBHOOK_SECRET) {
-       return NextResponse.json({ error: "No autorizado. Token incorrecto." }, { status: 401 });
-    }
+type MercadoPagoFee = { amount?: number };
 
+type MercadoPagoPayment = {
+  id: string | number;
+  status?: string;
+  collector_id?: string | number;
+  operation_type?: string;
+  transaction_amount?: number;
+  transaction_details?: { net_received_amount?: number };
+  fee_details?: MercadoPagoFee[];
+  payment_type_id?: string;
+  payment_method_id?: string;
+  date_created: string;
+  date_approved?: string | null;
+  description?: string;
+  external_reference?: string | null;
+};
+
+export async function GET(req: Request) {
+  const authorization = authorizeCronRequest(req);
+  if (!authorization.authorized) {
+    return NextResponse.json(
+      { error: authorization.error },
+      { status: authorization.status }
+    );
+  }
+
+  try {
     const mpToken = process.env.MP_ACCESS_TOKEN;
     if (!mpToken) {
        return NextResponse.json({ error: "Falta configuración de MP_ACCESS_TOKEN" }, { status: 500 });
@@ -32,11 +51,11 @@ export async function GET(req: Request) {
        throw new Error(`API de MP falló con el código histórico ${response.status}`);
     }
     
-    const data = await response.json();
+    const data = await response.json() as { results?: MercadoPagoPayment[] };
     const results = data.results || [];
     
     // Identificar Egresos (salientes)
-    const outgoing = results.filter((p: any) => {
+    const outgoing = results.filter((p) => {
         if (p.status !== "approved") return false;
         
         // Criterio BROAD: Cualquier pago en mi cuenta donde el BENEFICIARIO (collector) NO sea mi ID.
@@ -71,7 +90,7 @@ export async function GET(req: Request) {
             // Calculamos el valor a descontar de forma absoluta (ya sabemos que es egreso)
             const bruto = Math.abs(p.transaction_amount || 0);
             const neto = Math.abs(p.transaction_details?.net_received_amount ?? bruto);
-            const comision = p.fee_details?.reduce((acc: number, fee: any) => acc + fee.amount, 0) || 0;
+            const comision = p.fee_details?.reduce((acc, fee) => acc + (fee.amount || 0), 0) || 0;
             
             await prisma.$transaction(async (tx) => {
                  // 1. Crear registro en logs de MercadoPago
@@ -83,7 +102,7 @@ export async function GET(req: Request) {
                         montoNeto: neto,
                         comisionMp: comision,
                         metodoPago: `${p.payment_type_id}-${p.payment_method_id}`,
-                        estado: p.status,
+                        estado: p.status || 'approved',
                         fechaCreacionMp: new Date(p.date_created),
                         fechaAprobacionMp: p.date_approved ? new Date(p.date_approved) : null,
                         descripcion: p.description || `Egreso ${p.operation_type} #${p.id}`,
@@ -122,8 +141,11 @@ export async function GET(req: Request) {
         newlyAdded: addedCount,
         addedIds
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
       console.error("[Cron MercadoPago] Error crítico:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Error interno' },
+        { status: 500 }
+      );
   }
 }

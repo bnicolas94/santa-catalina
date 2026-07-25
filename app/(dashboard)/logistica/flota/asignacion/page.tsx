@@ -52,7 +52,7 @@ export default function AsignacionFlotaPage() {
         setLoading(true)
         try {
             const [pedRes, vehRes, asigRes] = await Promise.all([
-                fetch('/api/empleados'),
+                fetch('/api/operaciones/empleados'),
                 fetch('/api/flota/vehiculos'),
                 fetch(`/api/logistica/flota/asignaciones?fecha=${fecha}&turno=${turno}`)
             ])

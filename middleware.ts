@@ -1,17 +1,6 @@
 import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
-
-// Mapa de rutas → roles permitidos
-const routeRoles: Record<string, string[]> = {
-    '/produccion': ['ADMIN', 'COORD_PROD', 'OPERARIO'],
-    '/productos': ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
-    '/insumos': ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
-    '/stock': ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
-    '/proveedores': ['ADMIN', 'ADMIN_OPS'],
-    '/clientes': ['ADMIN', 'ADMIN_OPS'],
-    '/pedidos': ['ADMIN', 'ADMIN_OPS'],
-    '/empleados': ['ADMIN'],
-}
+import { canAccessPath, type PermissionKey } from '@/lib/access-control'
 
 export default withAuth(
     function middleware(req) {
@@ -36,35 +25,35 @@ export default withAuth(
             }
         }
 
-        if (!token) return NextResponse.redirect(new URL('/login', req.url))
+        const isApiRequest = pathname.startsWith('/api/')
 
-        const userRol = token.rol as string
-        const permisos = (token.permisos as any) || {}
-
-        // 1. Verificación por permisos dinámicos (Prioridad)
-        if (pathname.startsWith('/produccion') && permisos.permisoProduccion) return NextResponse.next()
-        if (pathname.startsWith('/stock') && permisos.permisoStock) return NextResponse.next()
-        if (pathname.startsWith('/insumos') && permisos.permisoStock) return NextResponse.next()
-        if (pathname.startsWith('/caja') && permisos.permisoCaja) return NextResponse.next()
-        if (pathname.startsWith('/empleados') && permisos.permisoPersonal) return NextResponse.next()
-        if (pathname.startsWith('/costos') && permisos.permisoCostos) return NextResponse.next()
-        if (pathname.startsWith('/') && pathname.length === 1 && permisos.permisoDashboard) return NextResponse.next()
-
-        // 2. Fallback a mapa estático para rutas legacy o roles base
-        const matchingRoute = Object.keys(routeRoles).find((route) => pathname.startsWith(route))
-
-        if (matchingRoute) {
-            const allowedRoles = routeRoles[matchingRoute]
-            if (!allowedRoles.includes(userRol)) {
-                return NextResponse.redirect(new URL('/', req.url))
+        if (!token) {
+            if (isApiRequest) {
+                return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
             }
+            return NextResponse.redirect(new URL('/login', req.url))
+        }
+
+        const accessToken = {
+            rol: typeof token.rol === 'string' ? token.rol : null,
+            permisos: token.permisos && typeof token.permisos === 'object'
+                ? token.permisos as Partial<Record<PermissionKey, boolean>>
+                : null,
+        }
+
+        if (!canAccessPath(pathname, accessToken)) {
+            if (isApiRequest) {
+                return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
+            }
+            return NextResponse.redirect(new URL('/', req.url))
         }
 
         return NextResponse.next()
     },
     {
         callbacks: {
-            authorized: ({ token }) => !!token,
+            // La respuesta 401 de las API se genera arriba en lugar de redirigir a HTML.
+            authorized: () => true,
         },
     }
 )

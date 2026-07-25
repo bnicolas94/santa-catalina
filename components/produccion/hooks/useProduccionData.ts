@@ -8,10 +8,10 @@ const fetcher = async ([_, fecha]: [string, string]) => {
     const [lotesRes, prodRes, empRes, stockRes, movRes, ubiRes, planRes] = await Promise.all([
         fetch('/api/lotes'),
         fetch('/api/productos'),
-        fetch('/api/empleados'),
+        fetch('/api/operaciones/empleados'),
         fetch('/api/stock-producto'),
         fetch('/api/movimientos-producto?limit=10'),
-        fetch('/api/ubicaciones'),
+        fetch('/api/operaciones/ubicaciones'),
         fetch(`/api/produccion/planificacion?fecha=${fecha || new Date().toISOString().slice(0, 10)}`)
     ])
 

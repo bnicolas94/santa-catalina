@@ -69,7 +69,7 @@ function ComprasContent() {
                 fetch('/api/movimientos-stock'),
                 fetch('/api/insumos'),
                 fetch('/api/proveedores'),
-                fetch('/api/ubicaciones'),
+                fetch('/api/operaciones/ubicaciones'),
                 fetch('/api/stock-producto'),
                 fetch('/api/caja/saldos')
             ])
