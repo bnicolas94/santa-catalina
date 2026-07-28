@@ -39,6 +39,12 @@ const menuItems: MenuItem[] = [
         openModal: 'weekly'
     },
     {
+        label: 'Horas Extras Adeudadas',
+        href: '/empleados?open=horas-adeudadas',
+        icon: '⏱️',
+        openModal: 'horas-adeudadas'
+    },
+    {
         label: 'Vacaciones / SAC',
         href: '/empleados?open=vacaciones',
         icon: '🏖️',

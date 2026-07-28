@@ -6,6 +6,13 @@ import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidati
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
 
+const escaparHtml = (valor: string) => valor
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+
 
 export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: string, empleadoDatos: any }) {
     const [liquidaciones, setLiquidaciones] = useState<any[]>([])
@@ -233,10 +240,24 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
 
         const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
         const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
-        
-        // El usuario solicitó que el texto del recibo indique el importe íntegro de sueldo + extras antes de descuentos
-        const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0)
-        const totalLetras = formatCurrencyToWords(totalBruto)
+        const desglose = liq.desglose || {}
+        const esHorasAdeudadas = liq.tipo === 'HORAS_EXTRAS_ADEUDADAS' || desglose.origen === 'HORAS_EXTRAS_ADEUDADAS'
+        const textoRecibo = esHorasAdeudadas
+            ? `
+                <div style="text-align: center; margin-bottom: 24px;"><h2 style="text-decoration: underline; margin-bottom: 4px;">Recibo de horas extras adeudadas</h2><p style="font-size: 10pt; margin-top: 0;">Pago extraordinario independiente de la liquidación semanal en curso</p></div>
+                <p>Se deja constancia de la recepción de <span class="amount">$${(liq.totalNeto || 0).toLocaleString('es-AR')}</span> (pesos ${formatCurrencyToWords(liq.totalNeto || 0)}) en concepto exclusivo de horas extras omitidas de una liquidación anterior.</p>
+                <table style="width: 100%; border-collapse: collapse; font-size: 11pt; margin: 22px 0;"><thead><tr style="background: #f2f2f2;"><th style="border: 1px solid #555; padding: 7px; text-align: left;">Semana de origen</th><th style="border: 1px solid #555; padding: 7px;">Horas</th><th style="border: 1px solid #555; padding: 7px; text-align: right;">Valor hora</th><th style="border: 1px solid #555; padding: 7px; text-align: right;">Total</th></tr></thead><tbody><tr><td style="border: 1px solid #555; padding: 7px;">${escaparHtml(desglose.semanaOrigen || liq.periodo)}</td><td style="border: 1px solid #555; padding: 7px; text-align: center;">${Number(desglose.cantidadHoras || liq.horasExtras || 0).toLocaleString('es-AR')} h</td><td style="border: 1px solid #555; padding: 7px; text-align: right;">$${Number(desglose.valorHoraExtra || 0).toLocaleString('es-AR')}</td><td style="border: 1px solid #555; padding: 7px; text-align: right; font-weight: bold;">$${(liq.totalNeto || 0).toLocaleString('es-AR')}</td></tr></tbody></table>
+                <p style="font-size: 10pt;"><strong>Detalle:</strong> ${escaparHtml(desglose.observaciones || 'Sin observaciones')}</p>
+            `
+            : `
+                Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span>
+                (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y
+                <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span>
+                (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor
+                del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>.
+                Recibiendo un total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span>
+                (pesos ${formatCurrencyToWords(liq.totalNeto || 0)}).
+            `
 
         const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
 
@@ -281,15 +302,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                         <p>Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
                     </div>
 
-                    <div class="texto">
-                        Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
-                        (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
-                        <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
-                        (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
-                        del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                        Recibiendo un total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                        (pesos ${formatCurrencyToWords(liq.totalNeto || 0)}).
-                    </div>
+                    <div class="texto">${textoRecibo}</div>
 
                     <div class="firma-section">
                         <div class="firma-line">Firma</div>

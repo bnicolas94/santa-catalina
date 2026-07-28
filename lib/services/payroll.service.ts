@@ -110,9 +110,6 @@ export class PayrollService {
                 liquidaciones: {
                     where: { tipo: 'VACACIONES', estado: { not: 'anulado' } },
                     select: { desglose: true }
-                },
-                horasPendientes: {
-                    where: { pagado: false }
                 }
             }
         })
@@ -292,10 +289,9 @@ export class PayrollService {
         const horasExtrasTotales = desglosePorDia.reduce((acc, d) => acc + d.horasExtras, 0)
         const horasFeriadoTotales = desglosePorDia.reduce((acc, d) => acc + (d.esFeriado ? d.horasTrabajadas : 0), 0)
 
-        const montoHorasPendientes = (empleado.horasPendientes || []).reduce((acc: number, hp: any) => acc + hp.montoCalculado, 0)
-        const horasPendientesTotales = (empleado.horasPendientes || []).reduce((acc: number, hp: any) => acc + hp.cantidadHoras, 0)
-
-        const totalNeto = sueldoBase + montoHorasExtras + montoHorasFeriado + montoHorasPendientes - descuentoPrestamos
+        // Las deudas de horas extras se pagan desde su módulo independiente y
+        // nunca se incorporan a la liquidación de la semana en curso.
+        const totalNeto = sueldoBase + montoHorasExtras + montoHorasFeriado - descuentoPrestamos
         const diasVacaciones = desglosePorDia.filter(dia => dia.tipoInasistencia === 'VACACIONES').length
         const excluirLiquidacionSemanal = periodoLaboralCubiertoPorVacaciones(
             fechaInicio,
@@ -318,8 +314,8 @@ export class PayrollService {
             montoHorasExtras,
             montoHorasFeriado,
             descuentoPrestamos,
-            horasPendientes: horasPendientesTotales,
-            montoHorasPendientes,
+            horasPendientes: 0,
+            montoHorasPendientes: 0,
             totalNeto,
             diasVacaciones,
             excluirLiquidacionSemanal,
@@ -370,8 +366,7 @@ export class PayrollService {
                         }
                     }
                 },
-                rolRel: true,
-                horasPendientes: { where: { pagado: false } }
+                rolRel: true
             }
         })
 
@@ -394,7 +389,6 @@ export class PayrollService {
         let deduccionCuotas = 0
         let diasTrabajados = 0
         let ajusteHorasExtras = 0
-        let montoHorasPendientes = 0
 
         if (manualData) {
             // Liquidación Express / Manual
@@ -444,9 +438,6 @@ export class PayrollService {
             ajusteHorasExtras = totales.ajusteHorasExtras
             deduccionCuotas = empleado.prestamos.reduce((total, prestamo) => {
                 return total + (prestamo.cuotas[0]?.monto || 0)
-            }, 0)
-            montoHorasPendientes = empleado.horasPendientes.reduce((total, pendiente) => {
-                return total + pendiente.montoCalculado
             }, 0)
         } else {
             // Cálculo Automático basado en fichadas
@@ -515,15 +506,7 @@ export class PayrollService {
             montoAdicionales = adicionales.reduce((acc, item) => acc + validarMontoAdicional(item.montoCalculado), 0)
         }
 
-        // ─── Fusionar horas extras adeudadas con las de la semana ───
-        // Para que el recibo muestre un único concepto unificado de "horas extras"
-        if (montoHorasPendientes > 0) {
-            horasExtras += (calculatedData?.horasPendientes || 0)
-            montoHsExtra += montoHorasPendientes
-            montoHorasPendientes = 0 // Ya está incluido en montoHsExtra
-        }
-
-        const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales + montoHorasPendientes - deduccionCuotas
+        const neto = sueldoProporcional + montoHsNorm + montoHsExtra + montoHsFeriado + montoAdicionales - deduccionCuotas
         if (!Number.isFinite(neto) || neto < 0) {
             throw new Error('El total neto calculado es inválido o negativo.')
         }
@@ -545,7 +528,7 @@ export class PayrollService {
             // del mismo periodo: cuotas y horas pendientes son recursos
             // compartidos entre periodos diferentes.
             const lockKey = `liquidacion:${empleado.id}`
-            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
 
             // La verificación definitiva ocurre dentro del bloqueo. La consulta
             // previa sólo funciona como salida rápida para el caso habitual.
@@ -590,21 +573,10 @@ export class PayrollService {
                     throw new Error('Las cuotas pendientes cambiaron mientras se calculaba la liquidación. Recalculá antes de confirmar.')
                 }
 
-                const horasTodaviaPendientes = await tx.horaExtraPendiente.findMany({
-                    where: { empleadoId: empleado.id, pagado: false },
-                    select: { montoCalculado: true }
-                })
-                const montoPendienteActual = horasTodaviaPendientes.reduce(
-                    (total, pendiente) => total + pendiente.montoCalculado,
-                    0,
-                )
-                if (Math.abs(montoPendienteActual - montoHorasPendientes) > 0.01) {
-                    throw new Error('Las horas pendientes cambiaron mientras se calculaba la liquidación. Recalculá antes de confirmar.')
-                }
             }
 
-            // El borrador, la liquidación, los préstamos, las horas pendientes
-            // y Caja deben confirmarse juntos o revertirse juntos.
+            // El borrador, la liquidación, los préstamos y Caja deben
+            // confirmarse juntos o revertirse juntos.
             await tx.liquidacionSueldo.deleteMany({
                 where: { empleadoId: empleado.id, periodo, estado: 'borrador' }
             })
@@ -689,14 +661,6 @@ export class PayrollService {
                     descripcion: `Liquidación Sueldo: ${empleado.nombre} ${empleado.apellido || ''} - Periodo: ${periodo} (ID: ${nuevaLiquidacion.id})`,
                 })
             }
-
-            await tx.horaExtraPendiente.updateMany({
-                where: { empleadoId: empleado.id, pagado: false },
-                data: {
-                    pagado: true,
-                    liquidacionId: nuevaLiquidacion.id
-                }
-            })
 
             return nuevaLiquidacion
         })

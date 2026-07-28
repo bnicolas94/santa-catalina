@@ -164,7 +164,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                                     montoHorasFeriado: currentMontoFeriado,
                                     adicionales: extraItems,
                                     diasTrabajados: diasTrabajados,
-                                    totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems + (r.montoHorasPendientes || 0) - (r.descuentoPrestamos || 0),
+                                    totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems - (r.descuentoPrestamos || 0),
                                     borradorId: b.id
                                 }
                             }
@@ -343,7 +343,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         montoHorasFeriado: currentMontoFeriado,
                         adicionales: adicionalesOriginales,
                         diasTrabajados: diasTrabajados,
-                        totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems + (newData.montoHorasPendientes || 0) - (newData.descuentoPrestamos || 0)
+                        totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems - (newData.descuentoPrestamos || 0)
                     }
                 }
                 return r;
@@ -479,77 +479,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setBorradorCargado(false);
     }
 
-    const handleDeferHours = async (empleadoId: string, hours: string, monto: number) => {
-        if (!hours || parseFloat(hours) <= 0) return;
-        if (!confirm(`¿Deseas diferir ${hours}hs ($${monto.toLocaleString()}) para la liquidación del próximo sábado? Se descontarán de la liquidación actual.`)) return;
-
-        try {
-            const res = await fetch('/api/empleados/horas-extras-pendientes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleadoId,
-                    cantidadHoras: hours,
-                    montoCalculado: monto,
-                    observaciones: 'Diferido desde liquidación semanal'
-                })
-            })
-            if (res.ok) {
-                // Descontar del ajuste manual actual
-                setResultados(prev => prev.map(r => {
-                    if (r.empleadoId === empleadoId) {
-                        const currentAdj = r.ajusteHorasExtras || 0;
-                        const newAdj = currentAdj - parseFloat(hours);
-                        const valExtra = r.valorHoraExtra || 0;
-                        const totalMontoExtras = r.desglosePorDia.reduce((acc, d) => acc + (d.valorExtra || 0), 0) + Math.round(newAdj * valExtra);
-                        
-                        return {
-                            ...r,
-                            ajusteHorasExtras: newAdj,
-                            montoHorasExtras: totalMontoExtras,
-                            totalNeto: r.sueldoBase + totalMontoExtras + r.montoHorasFeriado + r.montoHorasPendientes + r.adicionales.reduce((acc, adicional) => acc + adicional.montoCalculado, 0) - r.descuentoPrestamos
-                        }
-                    }
-                    return r;
-                }));
-                alert('Horas diferidas correctamente. Se han descontado del total actual.');
-            }
-        } catch (e) { console.error(e) }
-    }
-
-    const handleManualDebt = async (empleadoId: string, hours: string, monto: number) => {
-        if (!hours || parseFloat(hours) <= 0) return;
-        try {
-            const res = await fetch('/api/empleados/horas-extras-pendientes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleadoId,
-                    cantidadHoras: hours,
-                    montoCalculado: monto,
-                    observaciones: 'Carga manual de deuda anterior'
-                })
-            })
-            if (res.ok) {
-                // Recargar los datos del empleado para que se refleje la nueva deuda en el total
-                await handleRecalcularEmpleado(empleadoId);
-                alert('Deuda cargada y sumada a la liquidación actual.');
-            }
-        } catch (e) { console.error(e) }
-    }
-
-    const handleClearDebt = async (empleadoId: string) => {
-        if (!confirm('¿Seguro que quieres borrar todas las horas adeudadas de este empleado?')) return;
-        try {
-            const res = await fetch(`/api/empleados/horas-extras-pendientes?empleadoId=${empleadoId}`, {
-                method: 'DELETE'
-            })
-            if (res.ok) {
-                await handleRecalcularEmpleado(empleadoId);
-            }
-        } catch (e) { console.error(e) }
-    }
-
     const handleTimeChange = (empleadoId: string, fecha: string, field: 'entrada' | 'salida', value: string) => {
         if (!value) return
         setResultados(prev => prev.map(r => {
@@ -624,7 +553,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         conceptos={conceptos}
                         updatingStatusDate={updatingStatusDate}
                         getDiaStatus={getDiaStatus}
-                        onClearDebt={handleClearDebt}
                         onAjusteChange={handleAjusteChange}
                         onTimeChange={handleTimeChange}
                         onHoursChange={handleHoursChange}
@@ -633,8 +561,6 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         onStatusChange={handleStatusChange}
                         onAddAdicional={handleAddAdicional}
                         onRemoveAdicional={handleRemoveAdicional}
-                        onDeferHours={handleDeferHours}
-                        onManualDebt={handleManualDebt}
                     />
                 </div>
                 <WeeklyPayrollFooter

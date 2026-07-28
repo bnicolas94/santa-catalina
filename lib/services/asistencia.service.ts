@@ -80,7 +80,7 @@ export class AsistenciaService {
                 const resultado = await prisma.$transaction(async (tx) => {
                     // Serializa importaciones concurrentes de la misma marca sin
                     // requerir depurar previamente los duplicados históricos.
-                    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`
+                    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
 
                     const existe = await tx.fichadaEmpleado.findFirst({
                         where: { empleadoId, fechaHora: fecha, tipo }
@@ -105,7 +105,7 @@ export class AsistenciaService {
                             const fechaLocal = fechaClaveRRHH(fecha)
                             const rangoDia = rangoDiaRRHH(fechaLocal)
                             const tardanzaLockKey = `tardanza:${empleadoId}:${fechaLocal}`
-                            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${tardanzaLockKey}))`
+                            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${tardanzaLockKey}))::text AS lock_result`
 
                             const existeTardanza = await tx.inasistencia.findFirst({
                                 where: {

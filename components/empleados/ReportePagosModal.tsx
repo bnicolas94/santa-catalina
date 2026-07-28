@@ -31,6 +31,13 @@ interface ReporteFila {
     totalNeto: number
 }
 
+const escaparHtml = (valor: string) => valor
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+
 export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     const [fechaDesde, setFechaDesde] = useState(new Date().toISOString().split('T')[0])
     const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
@@ -263,6 +270,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 liq.periodo.toLowerCase().includes('vacaciones')
             
             const isFinal = liq.tipo === 'FINAL' || liq.manualData?.esLiquidacionFinal === true
+            const isHorasAdeudadas = liq.tipo === 'HORAS_EXTRAS_ADEUDADAS' || liq.manualData?.origen === 'HORAS_EXTRAS_ADEUDADAS'
 
             const manualData = liq.manualData || {}
             const goceInicio = manualData.fechaInicioGoce ? manualData.fechaInicioGoce.split('-').reverse().join('/') : '___'
@@ -270,7 +278,25 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             const diasVacas = manualData.diasTrabajados || '___'
 
             let textoHtml = ''
-            if (isFinal) {
+            if (isHorasAdeudadas) {
+                const semanaOrigen = escaparHtml(manualData.semanaOrigen || liq.periodo)
+                const horasAdeudadas = Number(manualData.cantidadHoras || liq.horasExtras || 0)
+                const montoAdeudado = Number(manualData.monto || liq.montoHorasExtras || liq.totalNeto || 0)
+                const valorHoraAdeudada = Number(manualData.valorHoraExtra || (horasAdeudadas > 0 ? montoAdeudado / horasAdeudadas : 0))
+                const observaciones = escaparHtml(manualData.observaciones || 'Sin observaciones')
+                textoHtml = `
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <h2 style="text-decoration: underline; margin-bottom: 4px;">Recibo de horas extras adeudadas</h2>
+                        <p style="font-size: 10pt; margin-top: 0;">Pago extraordinario independiente de la liquidación semanal en curso</p>
+                    </div>
+                    <p>Se deja constancia de la recepción de <span class="amount">$${montoAdeudado.toLocaleString('es-AR')}</span> (pesos ${formatCurrencyToWords(montoAdeudado)}) en concepto exclusivo de horas extras omitidas de una liquidación anterior.</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11pt; margin: 22px 0;">
+                        <thead><tr style="background: #f2f2f2;"><th style="border: 1px solid #555; padding: 7px; text-align: left;">Semana de origen</th><th style="border: 1px solid #555; padding: 7px;">Horas</th><th style="border: 1px solid #555; padding: 7px; text-align: right;">Valor hora</th><th style="border: 1px solid #555; padding: 7px; text-align: right;">Total</th></tr></thead>
+                        <tbody><tr><td style="border: 1px solid #555; padding: 7px;">${semanaOrigen}</td><td style="border: 1px solid #555; padding: 7px; text-align: center;">${horasAdeudadas.toLocaleString('es-AR')} h</td><td style="border: 1px solid #555; padding: 7px; text-align: right;">$${valorHoraAdeudada.toLocaleString('es-AR')}</td><td style="border: 1px solid #555; padding: 7px; text-align: right; font-weight: bold;">$${montoAdeudado.toLocaleString('es-AR')}</td></tr></tbody>
+                    </table>
+                    <p style="font-size: 10pt;"><strong>Detalle:</strong> ${observaciones}</p>
+                `
+            } else if (isFinal) {
                 const conceptos = manualData.conceptos || []
                 textoHtml = `
                     <div style="text-align: center; margin-bottom: 20px;">
@@ -477,6 +503,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                         )}
                                                         {d.tipo === 'FINAL' && (
                                                             <span style={{ backgroundColor: 'var(--color-danger-light)', color: 'var(--color-danger)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>FINAL</span>
+                                                        )}
+                                                        {d.tipo === 'HORAS_EXTRAS_ADEUDADAS' && (
+                                                            <span style={{ backgroundColor: 'var(--color-warning-light)', color: 'var(--color-warning)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>HS. ADEUDADAS</span>
                                                         )}
                                                     </div>
                                                 </td>

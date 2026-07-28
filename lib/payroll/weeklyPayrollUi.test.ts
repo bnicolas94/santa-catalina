@@ -65,7 +65,7 @@ test('al editar horas reales prorratea el jornal y marca el día como ajustado',
     assert.equal(ajustado.ajusteManual, true)
 })
 
-test('un ajuste diario actualiza todos los totales derivados sin perder adicionales ni deuda', () => {
+test('un ajuste diario actualiza los totales sin incorporar deudas de otras semanas', () => {
     const dia = recalcularDiaPorHoras({
         fecha: '2026-07-20', diaSemana: 'Lunes', esFeriado: false,
         horasTrabajadas: 9, horasExtras: 0, entrada: '08:00', salida: '17:00',
@@ -85,7 +85,7 @@ test('un ajuste diario actualiza todos los totales derivados sin perder adiciona
     assert.equal(resultado.horasNormales, 9)
     assert.equal(resultado.horasExtras, 1)
     assert.equal(resultado.montoHorasExtras, 2_000)
-    assert.equal(resultado.totalNeto, 11_800)
+    assert.equal(resultado.totalNeto, 11_300)
 })
 
 test('bloquea marcas incompletas y advierte diferencias en horas ajustadas', () => {

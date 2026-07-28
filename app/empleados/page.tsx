@@ -13,6 +13,7 @@ import { ConfigLicenciasModal } from '@/components/empleados/ConfigLicenciasModa
 import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
 import FeriadosConfigModal from '@/components/empleados/FeriadosConfigModal'
 import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
+import { HorasExtrasAdeudadasModal } from '@/components/empleados/HorasExtrasAdeudadasModal'
 import OrganigramaModal from '@/components/empleados/OrganigramaModal'
 import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
 import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalarialesModal'
@@ -49,6 +50,7 @@ function EmpleadosContent() {
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
     const [weeklyPayrollOpen, setWeeklyPayrollOpen] = useState(false)
+    const [horasAdeudadasOpen, setHorasAdeudadasOpen] = useState(false)
     const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
     const [showFeriadosModal, setShowFeriadosModal] = useState(false)
     const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
@@ -108,6 +110,7 @@ function EmpleadosContent() {
 
         // Sincronizar parámetros de URL con estados de modales
         if (openParam === 'weekly') setWeeklyPayrollOpen(true)
+        if (openParam === 'horas-adeudadas') setHorasAdeudadasOpen(true)
         if (openParam === 'vacaciones') setVacacionesSacOpen(true)
         if (openParam === 'mass') setMassLiquidationOpen(true)
         if (openParam === 'recibos') setShowReportePagos(true)
@@ -133,6 +136,7 @@ function EmpleadosContent() {
         
         // También cerramos los estados locales
         setWeeklyPayrollOpen(false)
+        setHorasAdeudadasOpen(false)
         setVacacionesSacOpen(false)
         setMassLiquidationOpen(false)
         setShowReportePagos(false)
@@ -665,6 +669,9 @@ function EmpleadosContent() {
                     onClose={closeModal} 
                     onSuccess={() => { fetchEmpleados(); closeModal(); }} 
                 />
+            )}
+            {horasAdeudadasOpen && (
+                <HorasExtrasAdeudadasModal empleados={empleados} onClose={closeModal} />
             )}
             {showOrganigramaModal && (
                 <OrganigramaModal

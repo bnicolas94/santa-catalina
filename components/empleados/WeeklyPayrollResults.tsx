@@ -3,7 +3,6 @@
 import { Fragment, useState } from 'react'
 import { WeeklyPayrollAdditionals } from './WeeklyPayrollAdditionals'
 import { WeeklyPayrollDayCard } from './WeeklyPayrollDayCard'
-import { WeeklyPayrollHoursDebt } from './WeeklyPayrollHoursDebt'
 import type { ConceptoSalarialUI, DiaLiquidacionUI, EmpleadoLiquidable, ResultadoLiquidacionUI } from './weeklyPayroll.types'
 import { obtenerAlertasLiquidacion } from './weeklyPayroll.utils'
 
@@ -13,7 +12,6 @@ interface Props {
     conceptos: ConceptoSalarialUI[]
     updatingStatusDate: string | null
     getDiaStatus: (dia: DiaLiquidacionUI) => string
-    onClearDebt: (empleadoId: string) => void
     onAjusteChange: (empleadoId: string, valor: string) => void
     onTimeChange: (empleadoId: string, fecha: string, campo: 'entrada' | 'salida', valor: string) => void
     onHoursChange: (empleadoId: string, fecha: string, valor: string) => void
@@ -22,8 +20,6 @@ interface Props {
     onStatusChange: (empleadoId: string, fecha: string, estado: string) => void
     onAddAdicional: (empleadoId: string, conceptoId: string, monto: number) => void
     onRemoveAdicional: (empleadoId: string, index: number) => void
-    onDeferHours: (empleadoId: string, horas: string, monto: number) => void
-    onManualDebt: (empleadoId: string, horas: string, monto: number) => void
 }
 
 export function WeeklyPayrollResults(props: Props) {
@@ -35,7 +31,7 @@ export function WeeklyPayrollResults(props: Props) {
 
     const totalGeneral = props.resultados.reduce((total, resultado) => total + resultado.totalNeto, 0)
     const totalBase = props.resultados.reduce((total, resultado) => total + resultado.sueldoBase, 0)
-    const totalExtras = props.resultados.reduce((total, resultado) => total + resultado.montoHorasExtras + resultado.montoHorasFeriado + resultado.montoHorasPendientes, 0)
+    const totalExtras = props.resultados.reduce((total, resultado) => total + resultado.montoHorasExtras + resultado.montoHorasFeriado, 0)
     const totalDeducciones = props.resultados.reduce((total, resultado) => total + resultado.descuentoPrestamos, 0)
     const ajustesManuales = props.resultados.reduce((total, resultado) => total + resultado.desglosePorDia.filter(dia => dia.ajusteManual).length, 0)
     return <>
@@ -70,10 +66,6 @@ export function WeeklyPayrollResults(props: Props) {
                         {resultado.error && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '10px' }}>ERROR</span>}
                         {errores > 0 && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{errores} BLOQUEO{errores === 1 ? '' : 'S'}</span>}
                         {advertencias > 0 && <span className="badge badge-warning" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{advertencias} REVISAR</span>}
-                        {resultado.montoHorasPendientes > 0 && <div style={{ fontSize: '10px', color: 'var(--color-primary)', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            ⚠️ HS ADEUDADAS: {resultado.horasPendientes}hs (${resultado.montoHorasPendientes.toLocaleString()})
-                            <button className="btn btn-ghost" style={{ padding: 0, height: '14px', width: '14px', color: 'var(--color-danger)', fontSize: '10px' }} title="Borrar deuda" onClick={evento => { evento.stopPropagation(); props.onClearDebt(resultado.empleadoId) }}>🗑️</button>
-                        </div>}
                     </td>
                     {resultado.error ? <td colSpan={7} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>Error: {resultado.error}</td> : <>
                         <td style={{ textAlign: 'center' }}>{resultado.diasTrabajados}</td><td style={{ textAlign: 'right' }}>${resultado.sueldoBase.toLocaleString()}</td>
@@ -88,7 +80,6 @@ export function WeeklyPayrollResults(props: Props) {
                     {alertas.length > 0 && <div style={{ display: 'grid', gap: '6px', marginBottom: 'var(--space-3)' }}>{alertas.map((alerta, indice) => <div key={`${alerta.fecha || 'general'}-${indice}`} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: alerta.nivel === 'error' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', color: alerta.nivel === 'error' ? 'var(--color-danger)' : 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{alerta.fecha ? `${alerta.fecha}: ` : ''}{alerta.mensaje}</div>)}</div>}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>{resultado.desglosePorDia.map(dia => <WeeklyPayrollDayCard key={dia.fecha} dia={dia} empleadoId={resultado.empleadoId} actualizandoEstado={props.updatingStatusDate === `${resultado.empleadoId}-${dia.fecha}`} estado={props.getDiaStatus(dia)} onTimeChange={props.onTimeChange} onHoursChange={props.onHoursChange} onJustificar={props.onJustificar} onQuitarJustificacion={props.onQuitarJustificacion} onStatusChange={props.onStatusChange} />)}</div>
                     <WeeklyPayrollAdditionals empleadoId={resultado.empleadoId} adicionales={resultado.adicionales} conceptos={props.conceptos} onAdd={props.onAddAdicional} onRemove={props.onRemoveAdicional} />
-                    <WeeklyPayrollHoursDebt empleadoId={resultado.empleadoId} valorHoraExtra={resultado.valorHoraExtra} onDefer={props.onDeferHours} onManualDebt={props.onManualDebt} />
                 </td></tr>}
             </Fragment>})}</tbody>
             <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}><tr><td colSpan={8} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td><td style={{ textAlign: 'right', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr></tfoot>

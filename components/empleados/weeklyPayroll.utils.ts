@@ -56,7 +56,6 @@ export function recalcularResultado(resultado: ResultadoLiquidacionUI): Resultad
             sueldoBase: resumen.sueldoBase,
             montoHorasExtras,
             montoHorasFeriado: resumen.montoHorasFeriado,
-            montoHorasPendientes: resultado.montoHorasPendientes,
             montoAdicionales,
             descuentoPrestamos: resultado.descuentoPrestamos,
         }),
@@ -118,14 +117,12 @@ export function calcularTotalNeto(input: {
     sueldoBase: number
     montoHorasExtras: number
     montoHorasFeriado: number
-    montoHorasPendientes?: number
     montoAdicionales?: number
     descuentoPrestamos: number
 }): number {
     return input.sueldoBase
         + input.montoHorasExtras
         + input.montoHorasFeriado
-        + (input.montoHorasPendientes || 0)
         + (input.montoAdicionales || 0)
         - input.descuentoPrestamos
 }
