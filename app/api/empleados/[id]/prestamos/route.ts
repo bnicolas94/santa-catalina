@@ -1,11 +1,34 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { CajaService } from '@/lib/services/caja.service'
 
-// GET /api/empleados/[id]/prestamos
+import { CajaService } from '@/lib/services/caja.service'
+import { prisma } from '@/lib/prisma'
+import {
+    dividirMontoEnCuotas,
+    sumarMesesFechaCivil,
+    validarCantidadCuotas,
+    validarMontoPrestamo,
+} from '@/lib/payroll/prestamos'
+import { fechaClaveRRHH, instanteRRHH, sumarDiasRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
+
+const FRECUENCIAS = new Set(['SEMANAL', 'MENSUAL'])
+const MODOS_INICIO = new Set(['INMEDIATO', 'FECHA_ESPECIFICA', 'AL_FINALIZAR_ANTERIOR'])
+const CAJAS_VALIDAS = new Set(['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani', 'mercaderia'])
+
+class PrestamoApiError extends Error {
+    constructor(message: string, readonly status: number) {
+        super(message)
+    }
+}
+
+function fechaCuota(fechaBase: string, indice: number, frecuencia: string): string {
+    return frecuencia === 'SEMANAL'
+        ? sumarDiasRRHH(fechaBase, indice * 7)
+        : sumarMesesFechaCivil(fechaBase, indice)
+}
+
 export async function GET(
     _request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await params
@@ -14,125 +37,124 @@ export async function GET(
             orderBy: { fechaSolicitud: 'desc' },
             include: {
                 cuotas: {
-                    orderBy: { numeroCuota: 'asc' }
-                }
-            }
+                    orderBy: [
+                        { fechaVencimiento: 'asc' },
+                        { numeroCuota: 'asc' },
+                    ],
+                },
+            },
         })
         return NextResponse.json(prestamos)
     } catch (error) {
         console.error('Error fetching prestamos:', error)
-        return NextResponse.json({ error: 'Error al obtener prestamos' }, { status: 500 })
+        return NextResponse.json({ error: 'Error al obtener los préstamos.' }, { status: 500 })
     }
 }
 
-// POST /api/empleados/[id]/prestamos
 export async function POST(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await params
         const body = await request.json()
-        const { 
-            montoTotal, 
-            cantidadCuotas, 
-            observaciones, 
-            fechaInicio, 
-            frecuencia = 'SEMANAL', 
-            modoInicio = 'INMEDIATO',
-            cajaOrigen
-        } = body
+        const montoTotal = validarMontoPrestamo(body.montoTotal)
+        const cantidadCuotas = validarCantidadCuotas(body.cantidadCuotas)
+        const frecuencia = String(body.frecuencia || 'SEMANAL')
+        const modoInicio = String(body.modoInicio || 'INMEDIATO')
+        const cajaOrigen = String(body.cajaOrigen || '')
+        const observaciones = typeof body.observaciones === 'string'
+            ? body.observaciones.trim().slice(0, 500)
+            : ''
 
-        if (!montoTotal || !cantidadCuotas) {
-            return NextResponse.json({ error: 'Monto y cantidad de cuotas son requeridos' }, { status: 400 })
+        if (!FRECUENCIAS.has(frecuencia)) throw new PrestamoApiError('La frecuencia seleccionada no es válida.', 400)
+        if (!MODOS_INICIO.has(modoInicio)) throw new PrestamoApiError('El modo de inicio seleccionado no es válido.', 400)
+        if (!CAJAS_VALIDAS.has(cajaOrigen)) throw new PrestamoApiError('Seleccioná una caja de origen válida.', 400)
+
+        let fechaBase = fechaClaveRRHH(new Date())
+        if (modoInicio === 'FECHA_ESPECIFICA') {
+            if (!body.fechaInicio) throw new PrestamoApiError('Seleccioná la fecha de la primera cuota.', 400)
+            fechaBase = validarFechaCivilRRHH(String(body.fechaInicio))
         }
 
-        const validBoxes = ['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani', 'mercaderia']
-        if (!cajaOrigen || !validBoxes.includes(cajaOrigen)) {
-            return NextResponse.json({ error: 'Debe especificar una caja de origen válida (Caja Chica, Mercado Pago o Retiro de Mercadería)' }, { status: 400 })
-        }
+        const montosCuotas = dividirMontoEnCuotas(montoTotal, cantidadCuotas)
+        const prestamo = await prisma.$transaction(async tx => {
+            const lockKey = `prestamos-empleado:${id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
 
-        const montoCuota = parseFloat(montoTotal) / parseInt(cantidadCuotas)
-
-        // 1. Determinar Fecha Base de Inicio
-        let fechaBase = fechaInicio ? new Date(fechaInicio) : new Date()
-
-        if (modoInicio === 'AL_FINALIZAR_ANTERIOR') {
-            const ultimaCuota = await prisma.cuotaPrestamo.findFirst({
-                where: { prestamo: { empleadoId: id }, estado: 'pendiente' },
-                orderBy: { fechaVencimiento: 'desc' }
-            })
-            if (ultimaCuota) {
-                fechaBase = new Date(ultimaCuota.fechaVencimiento)
-                // Sumamos un salto según la frecuencia para que empiece justo después
-                if (frecuencia === 'SEMANAL') fechaBase.setDate(fechaBase.getDate() + 7)
-                else fechaBase.setMonth(fechaBase.getMonth() + 1)
-            }
-        }
-
-        const prestamo = await prisma.$transaction(async (tx) => {
-            // Obtener empleado para la descripción del movimiento de caja
             const empleado = await tx.empleado.findUnique({
                 where: { id },
-                select: { nombre: true, apellido: true }
+                select: { nombre: true, apellido: true },
             })
-            if (!empleado) {
-                throw new Error('Empleado no encontrado')
+            if (!empleado) throw new PrestamoApiError('Empleado no encontrado.', 404)
+
+            const liquidacionLockKey = `liquidacion:${id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${liquidacionLockKey}))::text AS lock_result`
+
+            if (modoInicio === 'AL_FINALIZAR_ANTERIOR') {
+                const ultimaPendiente = await tx.cuotaPrestamo.findFirst({
+                    where: {
+                        prestamo: { empleadoId: id },
+                        estado: 'pendiente',
+                        liquidacionId: null,
+                    },
+                    orderBy: { fechaVencimiento: 'desc' },
+                })
+                if (ultimaPendiente) {
+                    const ultimaFecha = fechaClaveRRHH(ultimaPendiente.fechaVencimiento)
+                    fechaBase = frecuencia === 'SEMANAL'
+                        ? sumarDiasRRHH(ultimaFecha, 7)
+                        : sumarMesesFechaCivil(ultimaFecha, 1)
+                }
             }
 
-            // 2. Crear Préstamo
             const nuevoPrestamo = await tx.prestamoEmpleado.create({
                 data: {
                     empleadoId: id,
-                    montoTotal: parseFloat(montoTotal),
-                    cantidadCuotas: parseInt(cantidadCuotas),
-                    frecuencia: frecuencia,
-                    modoInicio: modoInicio,
+                    montoTotal,
+                    cantidadCuotas,
+                    frecuencia,
+                    modoInicio,
                     observaciones: observaciones || null,
-                }
+                },
             })
 
-            // 2b. Registrar movimiento de caja (si no es retiro de mercadería)
             if (cajaOrigen !== 'mercaderia') {
                 await CajaService.createMovimiento({
                     tipo: 'egreso',
                     concepto: 'prestamo_empleado',
-                    monto: parseFloat(montoTotal),
-                    cajaOrigen: cajaOrigen,
+                    monto: montoTotal,
+                    cajaOrigen,
                     descripcion: `Préstamo a empleado: ${empleado.nombre} ${empleado.apellido || ''} (${cantidadCuotas} cuotas)${observaciones ? ` - ${observaciones}` : ''}`,
                 }, tx)
             }
 
-            // 3. Crear Cuotas
-            for (let i = 1; i <= cantidadCuotas; i++) {
-                const fechaCuota = new Date(fechaBase)
-                
-                if (frecuencia === 'SEMANAL') {
-                    fechaCuota.setDate(fechaBase.getDate() + (i - 1) * 7)
-                } else {
-                    fechaCuota.setMonth(fechaBase.getMonth() + (i - 1))
-                }
-
-                // Generamos etiqueta mesAnio (compatible con UI anterior)
-                const mesAnio = `${(fechaCuota.getMonth() + 1).toString().padStart(2, '0')}-${fechaCuota.getFullYear()}`
-
-                await tx.cuotaPrestamo.create({
-                    data: {
+            await tx.cuotaPrestamo.createMany({
+                data: montosCuotas.map((monto, indice) => {
+                    const fecha = fechaCuota(fechaBase, indice, frecuencia)
+                    const [anio, mes] = fecha.split('-')
+                    return {
                         prestamoId: nuevoPrestamo.id,
-                        numeroCuota: i,
-                        monto: montoCuota,
-                        mesAnio: mesAnio,
-                        fechaVencimiento: fechaCuota
+                        numeroCuota: indice + 1,
+                        monto,
+                        mesAnio: `${mes}-${anio}`,
+                        fechaVencimiento: instanteRRHH(fecha),
                     }
-                })
-            }
+                }),
+            })
 
-            return nuevoPrestamo
+            return tx.prestamoEmpleado.findUnique({
+                where: { id: nuevoPrestamo.id },
+                include: { cuotas: { orderBy: { numeroCuota: 'asc' } } },
+            })
         })
 
         return NextResponse.json(prestamo, { status: 201 })
     } catch (error) {
         console.error('Error creating prestamo:', error)
-        return NextResponse.json({ error: 'Error al crear prestamo' }, { status: 500 })
+        const esValidacion = error instanceof Error && /(monto|cuotas|fecha).*(debe|inválid|límite)|debe.*(monto|cuotas|fecha)/i.test(error.message)
+        const status = error instanceof PrestamoApiError ? error.status : esValidacion ? 400 : 500
+        const message = error instanceof Error ? error.message : 'Error al crear el préstamo.'
+        return NextResponse.json({ error: status === 500 ? 'No se pudo crear el préstamo.' : message }, { status })
     }
 }

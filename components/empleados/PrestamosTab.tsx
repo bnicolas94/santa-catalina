@@ -1,13 +1,16 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 interface Cuota {
     id: string
     numeroCuota: number
     monto: number
-    estado: string // "pendiente", "pagada"
+    estado: string
     mesAnio: string
+    fechaVencimiento: string
+    fechaPago: string | null
+    liquidacionId: string | null
 }
 
 interface Prestamo {
@@ -15,336 +18,297 @@ interface Prestamo {
     fechaSolicitud: string
     montoTotal: number
     cantidadCuotas: number
-    estado: string // "activo", "pagado"
+    estado: string
     frecuencia: string
     modoInicio: string
     observaciones: string | null
     cuotas: Cuota[]
 }
 
+interface NuevaCuotaForm {
+    prestamoId: string
+    monto: string
+    cajaOrigen: string
+    detalle: string
+}
+
+const FORM_INICIAL = {
+    montoTotal: '',
+    cantidadCuotas: '1',
+    observaciones: '',
+    frecuencia: 'SEMANAL',
+    modoInicio: 'INMEDIATO',
+    fechaInicio: '',
+    cajaOrigen: 'caja_chica',
+}
+
+const moneda = new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 2,
+})
+
+const formatoFecha = new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Buenos_Aires',
+})
+
+async function mensajeError(response: Response, fallback: string): Promise<string> {
+    try {
+        const data = await response.json()
+        return typeof data.error === 'string' ? data.error : fallback
+    } catch {
+        return fallback
+    }
+}
+
 export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
     const [prestamos, setPrestamos] = useState<Prestamo[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [instanteReferencia] = useState(() => Date.now())
     const [showNew, setShowNew] = useState(false)
-    const [form, setForm] = useState({ 
-        montoTotal: '', 
-        cantidadCuotas: '1', 
-        observaciones: '',
-        frecuencia: 'SEMANAL',
-        modoInicio: 'INMEDIATO',
-        fechaInicio: '',
-        cajaOrigen: 'caja_chica'
-    })
-    const [editingCuota, setEditingCuota] = useState<any>(null)
-    const [addingCuotaToPrestamo, setAddingCuotaToPrestamo] = useState<any>(null)
+    const [form, setForm] = useState(FORM_INICIAL)
+    const [editingCuota, setEditingCuota] = useState<Cuota | null>(null)
+    const [editingMonto, setEditingMonto] = useState('')
+    const [addingCuota, setAddingCuota] = useState<NuevaCuotaForm | null>(null)
 
-    const fetchPrestamos = async () => {
+    const fetchPrestamos = useCallback(async () => {
         setLoading(true)
+        setError('')
         try {
-            const res = await fetch(`/api/empleados/${empleadoId}/prestamos`)
-            const data = await res.json()
-            setPrestamos(data)
-        } catch (error) {
-            console.error(error)
+            const response = await fetch(`/api/empleados/${empleadoId}/prestamos`)
+            if (!response.ok) throw new Error(await mensajeError(response, 'No se pudieron cargar los préstamos.'))
+            const data = await response.json()
+            setPrestamos(Array.isArray(data) ? data : [])
+        } catch (fetchError) {
+            setError(fetchError instanceof Error ? fetchError.message : 'No se pudieron cargar los préstamos.')
         } finally {
             setLoading(false)
         }
-    }
-
-    useEffect(() => {
-        fetchPrestamos()
     }, [empleadoId])
 
-    const handleUpdateCuota = async (id: string, data: any) => {
+    useEffect(() => {
+        void fetchPrestamos()
+    }, [fetchPrestamos])
+
+    const resumenGeneral = useMemo(() => {
+        const cuotas = prestamos.flatMap(prestamo => prestamo.cuotas)
+        const pagado = cuotas.filter(cuota => cuota.estado === 'pagada').reduce((total, cuota) => total + cuota.monto, 0)
+        const pendiente = cuotas.filter(cuota => cuota.estado === 'pendiente').reduce((total, cuota) => total + cuota.monto, 0)
+        const activos = prestamos.filter(prestamo => prestamo.cuotas.some(cuota => cuota.estado === 'pendiente')).length
+        return { pagado, pendiente, activos }
+    }, [prestamos])
+
+    const abrirEdicion = (cuota: Cuota) => {
+        if (cuota.estado !== 'pendiente' || cuota.liquidacionId) return
+        setEditingCuota(cuota)
+        setEditingMonto(String(cuota.monto))
+    }
+
+    const handleUpdateCuota = async () => {
+        if (!editingCuota) return
+        setSaving(true)
         try {
-            const res = await fetch(`/api/prestamos/cuotas/${id}`, {
+            const response = await fetch(`/api/prestamos/cuotas/${editingCuota.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                body: JSON.stringify({ monto: editingMonto }),
             })
-            if (res.ok) {
-                setEditingCuota(null)
-                fetchPrestamos()
-            } else {
-                alert('Error al actualizar la cuota')
-            }
-        } catch (error) {
-            console.error(error)
+            if (!response.ok) throw new Error(await mensajeError(response, 'No se pudo actualizar la cuota.'))
+            setEditingCuota(null)
+            await fetchPrestamos()
+        } catch (updateError) {
+            alert(updateError instanceof Error ? updateError.message : 'No se pudo actualizar la cuota.')
+        } finally {
+            setSaving(false)
         }
     }
 
-    const handleDeleteCuota = async (id: string) => {
-        if (!confirm('¿Estás seguro de que deseas eliminar esta cuota?')) return
+    const handleCreate = async (event: React.FormEvent) => {
+        event.preventDefault()
+        setSaving(true)
         try {
-            const res = await fetch(`/api/prestamos/cuotas/${id}`, {
-                method: 'DELETE'
-            })
-            if (res.ok) {
-                setEditingCuota(null)
-                fetchPrestamos()
-            } else {
-                const err = await res.json()
-                alert(err.error || 'Error al eliminar la cuota')
-            }
-        } catch (error) {
-            console.error(error)
-        }
-    }
-
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault()
-        try {
-            const res = await fetch(`/api/empleados/${empleadoId}/prestamos`, {
+            const response = await fetch(`/api/empleados/${empleadoId}/prestamos`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
+                body: JSON.stringify(form),
             })
-            if (res.ok) {
-                setForm({ 
-                    montoTotal: '', 
-                    cantidadCuotas: '1', 
-                    observaciones: '',
-                    frecuencia: 'SEMANAL',
-                    modoInicio: 'INMEDIATO',
-                    fechaInicio: '',
-                    cajaOrigen: 'caja_chica'
-                })
-                setShowNew(false)
-                fetchPrestamos()
-            } else {
-                alert('Error al crear el préstamo')
-            }
-        } catch (error) {
-            console.error(error)
+            if (!response.ok) throw new Error(await mensajeError(response, 'No se pudo crear el préstamo.'))
+            setForm(FORM_INICIAL)
+            setShowNew(false)
+            await fetchPrestamos()
+        } catch (createError) {
+            alert(createError instanceof Error ? createError.message : 'No se pudo crear el préstamo.')
+        } finally {
+            setSaving(false)
         }
     }
 
-    const handleDelete = async (id: string, force = false) => {
-        const msg = force 
-            ? 'Este préstamo tiene cuotas descontadas. ¿Deseas eliminarlo del historial de todas formas? (Esto NO afectará la caja ni las liquidaciones pasadas)'
-            : '¿Estás seguro de que deseas eliminar este préstamo? Esta acción borrará todas sus cuotas.'
-        
-        if (!confirm(msg)) return
-
+    const handleAddCuota = async (event: React.FormEvent) => {
+        event.preventDefault()
+        if (!addingCuota) return
+        setSaving(true)
         try {
-            const url = `/api/prestamos/${id}${force ? '?ignorarPagados=true' : ''}`
-            const res = await fetch(url, {
-                method: 'DELETE'
+            const response = await fetch(`/api/prestamos/${addingCuota.prestamoId}/cuotas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(addingCuota),
             })
-            if (res.ok) {
-                fetchPrestamos()
-            } else {
-                const err = await res.json()
-                if (err.hasPaid && !force) {
-                    handleDelete(id, true) // Re-intentar con force si el usuario acepta
-                } else {
-                    alert(err.error || 'Error al eliminar el préstamo')
-                }
-            }
-        } catch (error) {
-            console.error(error)
-            alert('Error técnico al eliminar')
+            if (!response.ok) throw new Error(await mensajeError(response, 'No se pudo agregar la cuota.'))
+            setAddingCuota(null)
+            await fetchPrestamos()
+        } catch (addError) {
+            alert(addError instanceof Error ? addError.message : 'No se pudo agregar la cuota.')
+        } finally {
+            setSaving(false)
         }
     }
 
     if (loading) return <div className="p-10 text-center text-gray-400">Cargando préstamos...</div>
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-            {/* Modal de edición de cuota */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
             {editingCuota && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div className="card shadow-lg" style={{ width: '400px', padding: 'var(--space-6)', background: 'white' }}>
-                        <h4 style={{ marginBottom: 'var(--space-4)', fontWeight: 700 }}>Gestionar Cuota</h4>
+                <div role="dialog" aria-modal="true" aria-label="Editar cuota pendiente" style={overlayStyle}>
+                    <div className="card shadow-lg" style={{ width: 'min(420px, calc(100vw - 32px))', padding: 'var(--space-6)', background: 'white' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+                            <div>
+                                <div style={eyebrowStyle}>CUOTA PENDIENTE</div>
+                                <h4 style={{ margin: '4px 0 0', fontSize: 'var(--text-lg)' }}>Editar cuota {editingCuota.numeroCuota}</h4>
+                            </div>
+                            <button className="btn btn-outline" onClick={() => setEditingCuota(null)} aria-label="Cerrar">×</button>
+                        </div>
                         <div className="form-group">
-                            <label className="form-label">Monto de la Cuota</label>
-                            <input 
-                                type="number" 
-                                className="form-input" 
-                                value={editingCuota.monto} 
-                                onChange={e => setEditingCuota({ ...editingCuota, monto: e.target.value })} 
+                            <label className="form-label">Monto de la cuota</label>
+                            <input
+                                autoFocus
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                className="form-input"
+                                value={editingMonto}
+                                onChange={event => setEditingMonto(event.target.value)}
                             />
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-6)' }}>
-                            <button 
-                                className="btn btn-primary"
-                                onClick={() => handleUpdateCuota(editingCuota.id, { monto: editingCuota.monto })}
-                            >
-                                Guardar Monto
-                            </button>
-                            {editingCuota.estado === 'pagada' && (
-                                <button 
-                                    className="btn btn-secondary"
-                                    onClick={() => handleUpdateCuota(editingCuota.id, { estado: 'pendiente' })}
-                                >
-                                    ↩ Volver a Pendiente
-                                </button>
-                            )}
-                            <button 
-                                className="btn btn-danger-outline"
-                                onClick={() => handleDeleteCuota(editingCuota.id)}
-                            >
-                                🗑️ Eliminar Cuota
-                            </button>
-                            <button 
-                                className="btn btn-outline"
-                                onClick={() => setEditingCuota(null)}
-                                style={{ marginTop: 'var(--space-2)' }}
-                            >
-                                Cerrar
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)', lineHeight: 1.5, margin: 'var(--space-3) 0 var(--space-5)' }}>
+                            Sólo se puede corregir mientras esté pendiente. Una vez descontada quedará vinculada al recibo y será de solo lectura.
+                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+                            <button className="btn btn-outline" onClick={() => setEditingCuota(null)} disabled={saving}>Cancelar</button>
+                            <button className="btn btn-primary" onClick={handleUpdateCuota} disabled={saving}>
+                                {saving ? 'Guardando...' : 'Guardar corrección'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Modal para agregar cuota */}
-            {addingCuotaToPrestamo && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div className="card shadow-lg" style={{ width: '450px', padding: 'var(--space-6)', background: 'white' }}>
-                        <h4 style={{ marginBottom: 'var(--space-4)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <span>➕</span> Agregar Cuota al Préstamo
-                        </h4>
-                        <form onSubmit={async (e) => {
-                            e.preventDefault()
-                            try {
-                                const res = await fetch(`/api/prestamos/${addingCuotaToPrestamo.prestamoId}/cuotas`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        monto: addingCuotaToPrestamo.monto,
-                                        cajaOrigen: addingCuotaToPrestamo.cajaOrigen,
-                                        detalle: addingCuotaToPrestamo.detalle
-                                    })
-                                })
-                                if (res.ok) {
-                                    setAddingCuotaToPrestamo(null)
-                                    fetchPrestamos()
-                                } else {
-                                    const err = await res.json()
-                                    alert(err.error || 'Error al agregar la cuota')
-                                }
-                            } catch (error) {
-                                console.error(error)
-                                alert('Error de red al agregar la cuota')
-                            }
-                        }}>
+            {addingCuota && (
+                <div role="dialog" aria-modal="true" aria-label="Agregar cuota" style={overlayStyle}>
+                    <div className="card shadow-lg" style={{ width: 'min(480px, calc(100vw - 32px))', padding: 'var(--space-6)', background: 'white' }}>
+                        <div style={eyebrowStyle}>AMPLIACIÓN DEL PRÉSTAMO</div>
+                        <h4 style={{ margin: '4px 0 var(--space-5)', fontSize: 'var(--text-lg)' }}>Agregar una nueva cuota</h4>
+                        <form onSubmit={handleAddCuota}>
                             <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                                <label className="form-label">Monto de la Nueva Cuota ($)</label>
-                                <input 
-                                    required
-                                    type="number" 
-                                    className="form-input" 
-                                    value={addingCuotaToPrestamo.monto} 
-                                    onChange={e => setAddingCuotaToPrestamo({ ...addingCuotaToPrestamo, monto: e.target.value })} 
-                                />
+                                <label className="form-label">Monto</label>
+                                <input required type="number" min="0.01" step="0.01" className="form-input" value={addingCuota.monto} onChange={event => setAddingCuota({ ...addingCuota, monto: event.target.value })} />
                             </div>
                             <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
-                                <label className="form-label">Origen / Concepto</label>
-                                <select 
-                                    className="form-select" 
-                                    value={addingCuotaToPrestamo.cajaOrigen} 
-                                    onChange={e => setAddingCuotaToPrestamo({ ...addingCuotaToPrestamo, cajaOrigen: e.target.value })}
-                                >
-                                    <option value="mercaderia">📦 Retiro de Paquetes (Mercadería)</option>
-                                    <option value="caja_chica">💼 Caja Chica (Fábrica)</option>
-                                    <option value="caja_chica_local">💼 Caja Chica Local</option>
-                                    <option value="mercado_pago">💳 Mercado Pago</option>
-                                    <option value="mercado_pago_juani">🔵 MP Juani</option>
-                                    <option value="ninguna">❌ Ninguno (Solo ajuste / Refinanciación)</option>
+                                <label className="form-label">Origen / concepto</label>
+                                <select className="form-select" value={addingCuota.cajaOrigen} onChange={event => setAddingCuota({ ...addingCuota, cajaOrigen: event.target.value })}>
+                                    <option value="mercaderia">Retiro de mercadería</option>
+                                    <option value="caja_chica">Caja Chica (Fábrica)</option>
+                                    <option value="caja_chica_local">Caja Chica Local</option>
+                                    <option value="mercado_pago">Mercado Pago</option>
+                                    <option value="mercado_pago_juani">Mercado Pago Juani</option>
+                                    <option value="ninguna">Sin movimiento de caja / refinanciación</option>
                                 </select>
                             </div>
-                            <div className="form-group" style={{ marginBottom: 'var(--space-6)' }}>
-                                <label className="form-label">Detalle / Concepto específico (Opcional)</label>
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    placeholder="Ej: 16 jamón y queso, adelanto efectivo, etc."
-                                    value={addingCuotaToPrestamo.detalle} 
-                                    onChange={e => setAddingCuotaToPrestamo({ ...addingCuotaToPrestamo, detalle: e.target.value })} 
-                                />
+                            <div className="form-group" style={{ marginBottom: 'var(--space-5)' }}>
+                                <label className="form-label">Detalle opcional</label>
+                                <input type="text" maxLength={200} className="form-input" placeholder="Motivo o concepto de la ampliación" value={addingCuota.detalle} onChange={event => setAddingCuota({ ...addingCuota, detalle: event.target.value })} />
                             </div>
-                            <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
-                                <button 
-                                    type="button"
-                                    className="btn btn-outline"
-                                    onClick={() => setAddingCuotaToPrestamo(null)}
-                                >
-                                    Cancelar
-                                </button>
-                                <button 
-                                    type="submit"
-                                    className="btn btn-primary"
-                                >
-                                    Agregar Cuota
-                                </button>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+                                <button type="button" className="btn btn-outline" onClick={() => setAddingCuota(null)} disabled={saving}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Agregando...' : 'Agregar cuota'}</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
                 <div>
-                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Historial de Préstamos y Adelantos</h3>
+                    <div style={eyebrowStyle}>CUENTA DEL EMPLEADO</div>
+                    <h3 style={{ margin: '4px 0 0', fontSize: 'var(--text-xl)' }}>Préstamos y adelantos</h3>
+                    <p style={{ margin: '6px 0 0', color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>Seguimiento de cuotas, descuentos y saldo pendiente.</p>
                 </div>
-                <button
-                    onClick={() => setShowNew(!showNew)}
-                    className="btn btn-primary"
-                >
-                    {showNew ? 'Cancelar' : '+ Otorgar Préstamo'}
+                <button onClick={() => setShowNew(value => !value)} className={showNew ? 'btn btn-outline' : 'btn btn-primary'}>
+                    {showNew ? 'Cerrar formulario' : '+ Otorgar préstamo'}
                 </button>
             </div>
 
+            {error && (
+                <div style={{ padding: 'var(--space-4)', color: 'var(--color-danger)', background: 'var(--color-danger-bg)', borderRadius: 'var(--radius-lg)' }}>
+                    {error} <button className="btn btn-outline" onClick={() => void fetchPrestamos()} style={{ marginLeft: 'var(--space-3)' }}>Reintentar</button>
+                </div>
+            )}
+
+            {prestamos.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 'var(--space-3)' }}>
+                    <SummaryCard label="Saldo pendiente" value={moneda.format(resumenGeneral.pendiente)} tone="warning" />
+                    <SummaryCard label="Total descontado" value={moneda.format(resumenGeneral.pagado)} tone="success" />
+                    <SummaryCard label="Préstamos activos" value={String(resumenGeneral.activos)} tone="neutral" />
+                </div>
+            )}
+
             {showNew && (
-                <div style={{ backgroundColor: 'var(--color-info-bg)', border: '1px solid var(--color-info)', padding: 'var(--space-5)', borderRadius: 'var(--radius-xl)' }}>
-                    <h4 style={{ color: 'var(--color-info)', fontWeight: 500, marginBottom: 'var(--space-4)' }}>Nuevo Préstamo / Adelanto</h4>
+                <div className="card" style={{ padding: 'var(--space-5)', border: '1px solid var(--color-primary)', background: 'var(--color-info-bg)' }}>
+                    <div style={eyebrowStyle}>NUEVO REGISTRO</div>
+                    <h4 style={{ margin: '4px 0 var(--space-5)' }}>Otorgar préstamo o adelanto</h4>
                     <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
-                        <div className="form-group">
-                            <label className="form-label">Monto Total ($)</label>
-                            <input required type="number" value={form.montoTotal} onChange={e => setForm({ ...form, montoTotal: e.target.value })} className="form-input" />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Cantidad de Cuotas</label>
-                            <input required type="number" min="1" max="24" value={form.cantidadCuotas} onChange={e => setForm({ ...form, cantidadCuotas: e.target.value })} className="form-input" />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Frecuencia</label>
-                            <select value={form.frecuencia} onChange={e => setForm({ ...form, frecuencia: e.target.value })} className="form-select">
+                        <Field label="Monto total">
+                            <input required type="number" min="0.01" step="0.01" value={form.montoTotal} onChange={event => setForm({ ...form, montoTotal: event.target.value })} className="form-input" />
+                        </Field>
+                        <Field label="Cantidad de cuotas">
+                            <input required type="number" min="1" max="60" step="1" value={form.cantidadCuotas} onChange={event => setForm({ ...form, cantidadCuotas: event.target.value })} className="form-input" />
+                        </Field>
+                        <Field label="Frecuencia">
+                            <select value={form.frecuencia} onChange={event => setForm({ ...form, frecuencia: event.target.value })} className="form-select">
                                 <option value="SEMANAL">Semanal</option>
                                 <option value="MENSUAL">Mensual</option>
                             </select>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Modo de Inicio</label>
-                            <select value={form.modoInicio} onChange={e => setForm({ ...form, modoInicio: e.target.value })} className="form-select">
-                                <option value="INMEDIATO">Inmediato (Esta semana)</option>
-                                <option value="FECHA_ESPECIFICA">A partir de fecha...</option>
-                                <option value="AL_FINALIZAR_ANTERIOR">Al finalizar actual (Secuencial)</option>
+                        </Field>
+                        <Field label="Primera cuota">
+                            <select value={form.modoInicio} onChange={event => setForm({ ...form, modoInicio: event.target.value })} className="form-select">
+                                <option value="INMEDIATO">En el período actual</option>
+                                <option value="FECHA_ESPECIFICA">En una fecha específica</option>
+                                <option value="AL_FINALIZAR_ANTERIOR">Después del préstamo anterior</option>
                             </select>
-                        </div>
+                        </Field>
                         {form.modoInicio === 'FECHA_ESPECIFICA' && (
-                            <div className="form-group">
-                                <label className="form-label">Fecha de Inicio</label>
-                                <input type="date" value={form.fechaInicio} onChange={e => setForm({ ...form, fechaInicio: e.target.value })} className="form-input" />
-                            </div>
+                            <Field label="Fecha de la primera cuota">
+                                <input required type="date" value={form.fechaInicio} onChange={event => setForm({ ...form, fechaInicio: event.target.value })} className="form-input" />
+                            </Field>
                         )}
-                        <div className="form-group">
-                            <label className="form-label">Caja de Origen</label>
-                            <select value={form.cajaOrigen} onChange={e => setForm({ ...form, cajaOrigen: e.target.value })} className="form-select">
-                                <option value="caja_chica">💼 Caja Chica (Fábrica)</option>
-                                <option value="caja_chica_local">💼 Caja Chica Local</option>
-                                <option value="mercado_pago">💳 Mercado Pago</option>
-                                <option value="mercado_pago_juani">🔵 MP Juani</option>
-                                <option value="mercaderia">📦 Retiro de Paquetes (Mercadería)</option>
+                        <Field label="Caja de origen">
+                            <select value={form.cajaOrigen} onChange={event => setForm({ ...form, cajaOrigen: event.target.value })} className="form-select">
+                                <option value="caja_chica">Caja Chica (Fábrica)</option>
+                                <option value="caja_chica_local">Caja Chica Local</option>
+                                <option value="mercado_pago">Mercado Pago</option>
+                                <option value="mercado_pago_juani">Mercado Pago Juani</option>
+                                <option value="mercaderia">Retiro de mercadería</option>
                             </select>
-                        </div>
-                        <div className="form-group" style={{ gridColumn: form.modoInicio === 'FECHA_ESPECIFICA' ? 'span 2' : 'span 1' }}>
-                            <label className="form-label">Observaciones</label>
-                            <input type="text" value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} placeholder="Ej: Especial vacaciones" className="form-input" />
-                        </div>
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>
-                            <button type="submit" className="btn btn-primary">Confirmar y Generar Cuotas</button>
+                        </Field>
+                        <Field label="Observaciones">
+                            <input type="text" maxLength={500} value={form.observaciones} onChange={event => setForm({ ...form, observaciones: event.target.value })} placeholder="Motivo o referencia" className="form-input" />
+                        </Field>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creando...' : 'Confirmar y generar cuotas'}</button>
                         </div>
                     </form>
                 </div>
@@ -355,114 +319,131 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                     <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
                         <p style={{ color: 'var(--color-gray-500)' }}>No hay préstamos registrados para este empleado.</p>
                     </div>
-                ) : (
-                    prestamos.map(p => (
-                        <div key={p.id} className="card" style={{ overflow: 'hidden' }}>
-                            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-4)' }}>
-                                <div>
-                                    <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>
-                                        ${p.montoTotal.toLocaleString()} en {p.cantidadCuotas} cuotas {p.frecuencia === 'SEMANAL' ? 'semanales' : 'mensuales'}
-                                    </div>
-                                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)', marginTop: 'var(--space-1)' }}>
-                                        {p.modoInicio === 'AL_FINALIZAR_ANTERIOR' ? '⏳ Secuencial ' : ''}
-                                        Otorgado el {new Date(p.fechaSolicitud).toLocaleDateString()} {p.observaciones && `• ${p.observaciones}`}
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                                    <span className={`badge ${(p.estado === 'pagado' || p.estado === 'saldado') ? 'badge-success' : 'badge-warning'}`}>
-                                        {(p.estado === 'pagado' || p.estado === 'saldado') ? 'Saldado' : 'Activo'}
-                                    </span>
-                                    {p.estado !== 'pagado' && p.estado !== 'saldado' && (
-                                        <button 
-                                            onClick={() => handleDelete(p.id)}
-                                            style={{ 
-                                                border: 'none', 
-                                                background: 'none', 
-                                                color: 'var(--color-danger)', 
-                                                cursor: 'pointer',
-                                                padding: 'var(--space-1)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                opacity: 0.7
-                                            }}
-                                            title="Eliminar préstamo"
-                                        >
-                                            🗑️
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--space-3)' }}>
-                                {p.cuotas.map((c: Cuota) => (
-                                    <div 
-                                        key={c.id} 
-                                        onClick={() => setEditingCuota(c)}
-                                        style={{
-                                            padding: 'var(--space-3)',
-                                            borderRadius: 'var(--radius-lg)',
-                                            border: `1px solid ${c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-gray-200)'}`,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            textAlign: 'center',
-                                            backgroundColor: c.estado === 'pagada' ? 'var(--color-success-bg)' : 'var(--color-white)',
-                                            opacity: c.estado === 'pagada' ? 0.7 : 1,
-                                            boxShadow: c.estado === 'pagada' ? 'none' : 'var(--shadow-sm)',
-                                            cursor: 'pointer',
-                                            transition: 'transform 0.2s',
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                    >
-                                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 500, marginBottom: 'var(--space-1)' }}>Cuota {c.numeroCuota}/{p.cantidadCuotas}</span>
-                                        <span style={{ fontWeight: 700, color: c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-gray-900)' }}>${c.monto.toLocaleString()}</span>
-                                        <span style={{ fontSize: '10px', marginTop: 'var(--space-1)', fontWeight: 600, color: c.estado === 'pagada' ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                                            {c.estado === 'pagada' ? '✓ DESCONTADA' : 'PENDIENTE'}
-                                        </span>
-                                    </div>
-                                ))}
-                                {p.estado !== 'pagado' && p.estado !== 'saldado' && (
-                                    <div 
-                                        onClick={() => setAddingCuotaToPrestamo({
-                                            prestamoId: p.id,
-                                            monto: p.cuotas[0]?.monto?.toString() || '0',
-                                            cajaOrigen: 'mercaderia',
-                                            detalle: ''
-                                        })}
-                                        style={{
-                                            padding: 'var(--space-3)',
-                                            borderRadius: 'var(--radius-lg)',
-                                            border: '2px dashed var(--color-primary-light, #d1d5db)',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            textAlign: 'center',
-                                            backgroundColor: 'var(--color-gray-50)',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            minHeight: '80px',
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'scale(1.05)'
-                                            e.currentTarget.style.backgroundColor = '#f3f4f6'
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'scale(1)'
-                                            e.currentTarget.style.backgroundColor = 'var(--color-gray-50)'
-                                        }}
-                                        title="Agregar nueva cuota a este préstamo"
-                                    >
-                                        <span style={{ fontSize: '1.5rem', color: 'var(--color-primary)', fontWeight: 700 }}>+</span>
-                                        <span style={{ fontSize: '10px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase' }}>Agregar Cuota</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))
-                )}
+                ) : prestamos.map(prestamo => (
+                    <PrestamoCard key={prestamo.id} prestamo={prestamo} instanteReferencia={instanteReferencia} onEdit={abrirEdicion} onAdd={setAddingCuota} />
+                ))}
             </div>
         </div>
     )
+}
+
+function PrestamoCard({ prestamo, instanteReferencia, onEdit, onAdd }: {
+    prestamo: Prestamo
+    instanteReferencia: number
+    onEdit: (cuota: Cuota) => void
+    onAdd: (form: NuevaCuotaForm) => void
+}) {
+    const pagadas = prestamo.cuotas.filter(cuota => cuota.estado === 'pagada')
+    const pendientes = prestamo.cuotas.filter(cuota => cuota.estado === 'pendiente')
+    const montoPagado = pagadas.reduce((total, cuota) => total + cuota.monto, 0)
+    const saldo = pendientes.reduce((total, cuota) => total + cuota.monto, 0)
+    const progreso = prestamo.cuotas.length > 0 ? Math.round((pagadas.length / prestamo.cuotas.length) * 100) : 0
+    const proxima = [...pendientes].sort((a, b) => new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime())[0]
+    const activo = pendientes.length > 0
+
+    return (
+        <div className="card" style={{ overflow: 'hidden', border: '1px solid var(--color-gray-200)' }}>
+            <div style={{ padding: 'var(--space-5)', borderBottom: '1px solid var(--color-gray-200)', background: 'var(--color-gray-50)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 'var(--text-lg)' }}>{moneda.format(prestamo.montoTotal)}</strong>
+                            <span className={`badge ${activo ? 'badge-warning' : 'badge-success'}`}>{activo ? 'Activo' : 'Saldado'}</span>
+                            {prestamo.modoInicio === 'AL_FINALIZAR_ANTERIOR' && <span className="badge">Secuencial</span>}
+                        </div>
+                        <div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', marginTop: '6px' }}>
+                            Otorgado el {formatoFecha.format(new Date(prestamo.fechaSolicitud))} · {prestamo.cuotas.length} cuotas {prestamo.frecuencia === 'SEMANAL' ? 'semanales' : 'mensuales'}
+                        </div>
+                        {prestamo.observaciones && <div style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)', marginTop: '4px' }}>{prestamo.observaciones}</div>}
+                    </div>
+                    {activo && (
+                        <button className="btn btn-outline" onClick={() => onAdd({ prestamoId: prestamo.id, monto: String(proxima?.monto || ''), cajaOrigen: 'mercaderia', detalle: '' })}>
+                            + Agregar cuota
+                        </button>
+                    )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
+                    <Metric label="Saldo pendiente" value={moneda.format(saldo)} />
+                    <Metric label="Ya descontado" value={moneda.format(montoPagado)} />
+                    <Metric label="Próxima cuota" value={proxima ? `${moneda.format(proxima.monto)} · ${formatoFecha.format(new Date(proxima.fechaVencimiento))}` : 'Sin cuotas pendientes'} />
+                </div>
+                <div style={{ marginTop: 'var(--space-4)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', marginBottom: '6px' }}>
+                        <span>{pagadas.length} de {prestamo.cuotas.length} cuotas descontadas</span><strong>{progreso}%</strong>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 999, background: 'var(--color-gray-200)', overflow: 'hidden' }}>
+                        <div style={{ width: `${progreso}%`, height: '100%', background: 'var(--color-success)', transition: 'width .2s ease' }} />
+                    </div>
+                </div>
+            </div>
+            <div style={{ padding: 'var(--space-4)', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--space-3)' }}>
+                {prestamo.cuotas.map(cuota => <CuotaCard key={cuota.id} cuota={cuota} total={prestamo.cuotas.length} instanteReferencia={instanteReferencia} onEdit={onEdit} />)}
+            </div>
+        </div>
+    )
+}
+
+function CuotaCard({ cuota, total, instanteReferencia, onEdit }: { cuota: Cuota; total: number; instanteReferencia: number; onEdit: (cuota: Cuota) => void }) {
+    const pagada = cuota.estado === 'pagada'
+    const editable = !pagada && !cuota.liquidacionId
+    const vencida = editable && new Date(cuota.fechaVencimiento).getTime() < instanteReferencia
+    return (
+        <button
+            type="button"
+            onClick={() => editable && onEdit(cuota)}
+            disabled={!editable}
+            title={pagada ? 'Cuota descontada y vinculada a una liquidación' : 'Editar monto pendiente'}
+            style={{
+                padding: 'var(--space-3)',
+                borderRadius: 'var(--radius-lg)',
+                border: `1px solid ${pagada ? 'var(--color-success)' : vencida ? 'var(--color-warning)' : 'var(--color-gray-200)'}`,
+                background: pagada ? 'var(--color-success-bg)' : 'var(--color-white)',
+                textAlign: 'left',
+                cursor: editable ? 'pointer' : 'default',
+                opacity: pagada ? .82 : 1,
+            }}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>
+                <span>Cuota {cuota.numeroCuota}/{total}</span><span>{editable ? 'Editar' : '🔒'}</span>
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-base)', marginTop: 6, color: 'var(--color-gray-900)' }}>{moneda.format(cuota.monto)}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: 4 }}>
+                Vence {formatoFecha.format(new Date(cuota.fechaVencimiento))}
+            </div>
+            <div style={{ marginTop: 8, fontSize: '10px', fontWeight: 700, color: pagada ? 'var(--color-success)' : vencida ? 'var(--color-warning)' : 'var(--color-gray-600)' }}>
+                {pagada ? `DESCONTADA${cuota.fechaPago ? ` · ${formatoFecha.format(new Date(cuota.fechaPago))}` : ''}` : vencida ? 'VENCIDA · PRÓXIMO DESCUENTO' : 'PROGRAMADA'}
+            </div>
+        </button>
+    )
+}
+
+function SummaryCard({ label, value, tone }: { label: string; value: string; tone: 'warning' | 'success' | 'neutral' }) {
+    const color = tone === 'warning' ? 'var(--color-warning)' : tone === 'success' ? 'var(--color-success)' : 'var(--color-gray-900)'
+    return <div className="card" style={{ padding: 'var(--space-4)' }}><div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{label}</div><div style={{ color, fontSize: 'var(--text-xl)', fontWeight: 750, marginTop: 4 }}>{value}</div></div>
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+    return <div><div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>{label}</div><div style={{ color: 'var(--color-gray-900)', fontSize: 'var(--text-sm)', fontWeight: 650, marginTop: 3 }}>{value}</div></div>
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return <div className="form-group"><label className="form-label">{label}</label>{children}</div>
+}
+
+const overlayStyle: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(17, 24, 39, 0.56)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    zIndex: 1000,
+}
+
+const eyebrowStyle: React.CSSProperties = {
+    color: 'var(--color-primary)',
+    fontSize: 'var(--text-xs)',
+    fontWeight: 750,
+    letterSpacing: '.08em',
 }

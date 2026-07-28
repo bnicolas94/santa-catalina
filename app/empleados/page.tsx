@@ -626,7 +626,7 @@ function EmpleadosContent() {
                 />
             )}
 
-            {expressLiquidationOpen && (
+            {expressLiquidationOpen && selectedEmpleado && (
                 <ExpressLiquidationModal
                     empleado={selectedEmpleado}
                     onClose={() => setExpressLiquidationOpen(false)}

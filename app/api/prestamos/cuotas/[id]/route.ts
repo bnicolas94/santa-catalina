@@ -1,103 +1,79 @@
 import { NextResponse } from 'next/server'
+
+import { estadoPrestamoDesdeCuotas, validarMontoPrestamo } from '@/lib/payroll/prestamos'
 import { prisma } from '@/lib/prisma'
 
-export async function PATCH(
-    req: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    try {
-        const { id } = await params;
-        const body = await req.json()
-        const { estado, monto } = body
-
-        const updateData: any = {}
-        if (estado !== undefined) {
-            updateData.estado = estado
-            if (estado === 'pendiente') {
-                updateData.liquidacionId = null
-                updateData.fechaPago = null
-            }
-        }
-        if (monto !== undefined) {
-            updateData.monto = parseFloat(monto)
-        }
-
-        const cuota = await prisma.cuotaPrestamo.update({
-            where: { id },
-            data: updateData,
-            include: { prestamo: true }
-        })
-
-        // Recalcular montoTotal y cantidadCuotas del préstamo
-        const allCuotas = await prisma.cuotaPrestamo.findMany({
-            where: { prestamoId: cuota.prestamoId }
-        })
-        
-        const newTotal = allCuotas.reduce((acc, c) => acc + c.monto, 0)
-        const newCount = allCuotas.length
-        const allPaid = allCuotas.length > 0 && allCuotas.every(c => c.estado === 'pagada')
-
-        await prisma.prestamoEmpleado.update({
-            where: { id: cuota.prestamoId },
-            data: { 
-                montoTotal: newTotal,
-                cantidadCuotas: newCount,
-                estado: allPaid ? 'pagado' : 'activo' 
-            }
-        })
-
-        return NextResponse.json(cuota)
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+class CuotaApiError extends Error {
+    constructor(message: string, readonly status: number) {
+        super(message)
     }
 }
 
-export async function DELETE(
+export async function PATCH(
     req: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     try {
-        const { id } = await params;
-        
-        const cuota = await prisma.cuotaPrestamo.findUnique({
-            where: { id },
-            include: { prestamo: true }
-        })
-
-        if (!cuota) {
-            return NextResponse.json({ error: 'Cuota no encontrada' }, { status: 404 })
+        const { id } = await params
+        const body = await req.json()
+        if ('estado' in body) {
+            throw new CuotaApiError('El estado de una cuota no se modifica manualmente. Revertí la liquidación de origen si necesitás reabrirla.', 409)
         }
+        const monto = validarMontoPrestamo(body.monto)
 
-        if (cuota.estado === 'pagada') {
-            return NextResponse.json({ error: 'No se puede eliminar una cuota ya pagada' }, { status: 400 })
-        }
+        const cuotaActualizada = await prisma.$transaction(async tx => {
+            const cuotaLockKey = `cuota-prestamo:${id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${cuotaLockKey}))::text AS lock_result`
 
-        const prestamoId = cuota.prestamoId
+            const cuota = await tx.cuotaPrestamo.findUnique({ where: { id } })
+            if (!cuota) throw new CuotaApiError('Cuota no encontrada.', 404)
 
-        await prisma.cuotaPrestamo.delete({
-            where: { id }
-        })
+            const prestamoLockKey = `prestamo:${cuota.prestamoId}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${prestamoLockKey}))::text AS lock_result`
 
-        // Recalcular tras eliminar
-        const remainingCuotas = await prisma.cuotaPrestamo.findMany({
-            where: { prestamoId }
-        })
+            const prestamo = await tx.prestamoEmpleado.findUnique({
+                where: { id: cuota.prestamoId },
+                select: { empleadoId: true },
+            })
+            if (!prestamo) throw new CuotaApiError('Préstamo no encontrado.', 404)
 
-        const newTotal = remainingCuotas.reduce((acc, c) => acc + c.monto, 0)
-        const newCount = remainingCuotas.length
-        const allPaid = remainingCuotas.length > 0 && remainingCuotas.every(c => c.estado === 'pagada')
+            const liquidacionLockKey = `liquidacion:${prestamo.empleadoId}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${liquidacionLockKey}))::text AS lock_result`
 
-        await prisma.prestamoEmpleado.update({
-            where: { id: prestamoId },
-            data: { 
-                montoTotal: newTotal,
-                cantidadCuotas: newCount,
-                estado: allPaid ? 'pagado' : 'activo' 
+            const cuotaVigente = await tx.cuotaPrestamo.findUnique({ where: { id } })
+            if (!cuotaVigente) throw new CuotaApiError('Cuota no encontrada.', 404)
+            if (cuotaVigente.estado === 'pagada' || cuotaVigente.liquidacionId) {
+                throw new CuotaApiError('La cuota ya fue descontada y forma parte de una liquidación. No puede editarse.', 409)
             }
+
+            const actualizada = await tx.cuotaPrestamo.update({
+                where: { id },
+                data: { monto },
+            })
+            const cuotas = await tx.cuotaPrestamo.findMany({ where: { prestamoId: cuotaVigente.prestamoId } })
+            await tx.prestamoEmpleado.update({
+                where: { id: cuotaVigente.prestamoId },
+                data: {
+                    montoTotal: Math.round(cuotas.reduce((total, item) => total + item.monto, 0) * 100) / 100,
+                    cantidadCuotas: cuotas.length,
+                    estado: estadoPrestamoDesdeCuotas(cuotas),
+                },
+            })
+            return actualizada
         })
 
-        return NextResponse.json({ success: true })
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json(cuotaActualizada)
+    } catch (error) {
+        console.error('Error updating cuota:', error)
+        const status = error instanceof CuotaApiError ? error.status : error instanceof Error && error.message.includes('monto') ? 400 : 500
+        const message = error instanceof Error ? error.message : 'No se pudo actualizar la cuota.'
+        return NextResponse.json({ error: status === 500 ? 'No se pudo actualizar la cuota.' : message }, { status })
     }
+}
+
+export async function DELETE() {
+    return NextResponse.json(
+        { error: 'Las cuotas no se eliminan porque pueden afectar Caja y liquidaciones. Corregí el monto si aún está pendiente.' },
+        { status: 409 },
+    )
 }

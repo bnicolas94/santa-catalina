@@ -25,6 +25,11 @@ interface Pendiente {
     observaciones?: string | null
 }
 
+interface Pagado extends Pendiente {
+    liquidacionId: string
+    fechaPago: string
+}
+
 interface Caja {
     id: string
     nombre: string
@@ -158,12 +163,17 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
     const [cantidadHoras, setCantidadHoras] = useState('')
     const [observaciones, setObservaciones] = useState('')
     const [pendientes, setPendientes] = useState<Pendiente[]>([])
+    const [pagados, setPagados] = useState<Pagado[]>([])
     const [valoresHora, setValoresHora] = useState<Record<string, number>>({})
     const [cajas, setCajas] = useState<Caja[]>([])
     const [cajaId, setCajaId] = useState('caja_madre')
     const [cargando, setCargando] = useState(true)
     const [guardando, setGuardando] = useState(false)
     const [pagandoId, setPagandoId] = useState<string | null>(null)
+    const [anulandoId, setAnulandoId] = useState<string | null>(null)
+    const [filtroEstado, setFiltroEstado] = useState<'todos' | 'pendiente' | 'pagado'>('todos')
+    const [filtroEmpleado, setFiltroEmpleado] = useState('')
+    const [filtroSemana, setFiltroSemana] = useState('')
     const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
 
     const cargar = useCallback(async () => {
@@ -179,6 +189,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
             if (!respuestaCajas.ok) throw new Error(saldos.error || 'No se pudieron cargar las cajas.')
 
             setPendientes(deudas.pendientes || [])
+            setPagados(deudas.pagados || [])
             setValoresHora(deudas.valoresHora || {})
             setCajas([
                 { id: 'caja_madre', nombre: 'Caja Madre', saldo: saldos.cajaMadre?.saldo || 0 },
@@ -201,6 +212,24 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
     const valorHora = valoresHora[empleadoId] || 0
     const importeEstimado = Number.isFinite(horas) && horas > 0 ? Math.round(horas * valorHora) : 0
     const totalPendiente = pendientes.reduce((total, pendiente) => total + pendiente.montoCalculado, 0)
+    const totalPagado = pagados.reduce((total, pago) => total + pago.montoCalculado, 0)
+    const semanasDisponibles = useMemo(() => {
+        const semanas = new Map<string, string>()
+        ;[...pendientes, ...pagados].forEach(registro => semanas.set(registro.fechaOrigen, registro.periodoOrigen))
+        return [...semanas.entries()].sort(([fechaA], [fechaB]) => fechaB.localeCompare(fechaA))
+    }, [pendientes, pagados])
+    const registrosFiltrados = useMemo(() => {
+        const registros = [
+            ...pendientes.map(registro => ({ ...registro, estado: 'pendiente' as const, fechaPago: null })),
+            ...pagados.map(registro => ({ ...registro, estado: 'pagado' as const })),
+        ]
+        return registros.filter(registro => {
+            if (filtroEstado !== 'todos' && registro.estado !== filtroEstado) return false
+            if (filtroEmpleado && registro.empleadoId !== filtroEmpleado) return false
+            if (filtroSemana && registro.fechaOrigen !== filtroSemana) return false
+            return true
+        })
+    }, [pendientes, pagados, filtroEstado, filtroEmpleado, filtroSemana])
 
     const registrar = async () => {
         setMensaje(null)
@@ -273,6 +302,36 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
         await cargar()
     }
 
+    const reimprimir = async (pago: Pagado) => {
+        setMensaje(null)
+        try {
+            await imprimirReciboHorasAdeudadas(pago, pago.fechaPago)
+        } catch (error) {
+            setMensaje({ tipo: 'error', texto: error instanceof Error ? error.message : 'No se pudo preparar el recibo.' })
+        }
+    }
+
+    const anularPago = async (pago: Pagado) => {
+        if (!confirm(`¿Anular el pago de ${dinero(pago.montoCalculado)} a ${pago.empleadoNombre}? El importe volverá a la caja y las horas quedarán nuevamente pendientes.`)) return
+        setMensaje(null)
+        setAnulandoId(pago.id)
+        try {
+            const respuesta = await fetch('/api/empleados/horas-extras-pendientes/anular', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: pago.id }),
+            })
+            const data = await respuesta.json()
+            if (!respuesta.ok) throw new Error(data.error || 'No se pudo anular el pago.')
+            setMensaje({ tipo: 'ok', texto: `Pago anulado. ${pago.cantidadHoras.toLocaleString('es-AR')} horas de ${pago.empleadoNombre} volvieron a pendientes y el importe fue reintegrado a la caja.` })
+            await cargar()
+        } catch (error) {
+            setMensaje({ tipo: 'error', texto: error instanceof Error ? error.message : 'No se pudo anular el pago.' })
+        } finally {
+            setAnulandoId(null)
+        }
+    }
+
     return <div className="modal-overlay overtime-overlay" onMouseDown={onClose}>
         <div className="modal overtime-modal" onMouseDown={evento => evento.stopPropagation()}>
             <div className="modal-header" style={{ alignItems: 'flex-start' }}>
@@ -320,23 +379,46 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                                 <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{dinero(totalPendiente)}</div>
                                 <div style={{ opacity: .8, fontSize: 'var(--text-xs)' }}>{pendientes.length} deuda{pendientes.length === 1 ? '' : 's'} sin pagar</div>
                             </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-3)', padding: '12px 14px', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', background: 'white' }}>
+                                <div><div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase' }}>Pagado históricamente</div><div style={{ color: 'var(--color-gray-500)', fontSize: '10px' }}>{pagados.length} comprobante{pagados.length === 1 ? '' : 's'}</div></div>
+                                <strong style={{ color: 'var(--color-success)', fontSize: 'var(--text-lg)' }}>{dinero(totalPagado)}</strong>
+                            </div>
                             <p style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', lineHeight: 1.5, marginBottom: 0 }}>Cada pago crea un comprobante independiente, afecta la caja elegida y queda atribuido a su semana original.</p>
                         </div>
                     </aside>
                 </div>
 
                 <section style={{ marginTop: 'var(--space-5)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: 'var(--space-3)' }}><div><h3 style={{ margin: 0 }}>Pendientes de pago</h3><span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>Sólo aparecen horas registradas que todavía no fueron pagadas.</span></div></div>
+                    <div className="overtime-history-header">
+                        <div><h3 style={{ margin: 0 }}>Historial y pendientes</h3><span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>Consultá, pagá, reimprimí o anulá cada operación desde un único lugar.</span></div>
+                        <div className="overtime-filters">
+                            <select className="form-select" aria-label="Filtrar por estado" value={filtroEstado} onChange={evento => setFiltroEstado(evento.target.value as 'todos' | 'pendiente' | 'pagado')}>
+                                <option value="todos">Todos los estados</option><option value="pendiente">Pendientes</option><option value="pagado">Pagados</option>
+                            </select>
+                            <select className="form-select" aria-label="Filtrar por empleado" value={filtroEmpleado} onChange={evento => setFiltroEmpleado(evento.target.value)}>
+                                <option value="">Todos los empleados</option>{empleados.map(empleado => <option key={empleado.id} value={empleado.id}>{empleado.nombre} {empleado.apellido || ''}</option>)}
+                            </select>
+                            <select className="form-select" aria-label="Filtrar por semana" value={filtroSemana} onChange={evento => setFiltroSemana(evento.target.value)}>
+                                <option value="">Todas las semanas</option>{semanasDisponibles.map(([fecha, etiqueta]) => <option key={fecha} value={fecha}>{etiqueta}</option>)}
+                            </select>
+                        </div>
+                    </div>
                     <div className="table-container overtime-table">
-                        <table className="table"><thead><tr><th>Empleado</th><th>Semana de origen</th><th style={{ textAlign: 'right' }}>Horas</th><th style={{ textAlign: 'right' }}>Importe</th><th>Detalle</th><th style={{ textAlign: 'right' }}>Acciones</th></tr></thead>
-                            <tbody>{cargando ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: 28 }}>Cargando…</td></tr> : pendientes.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--color-gray-500)' }}>No hay horas extras adeudadas pendientes.</td></tr> : pendientes.map(pendiente => <tr key={pendiente.id}>
-                                <td><strong>{pendiente.empleadoNombre}</strong>{!pendiente.empleadoActivo && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Inactivo</span>}</td>
-                                <td><span style={{ fontSize: 'var(--text-sm)' }}>{pendiente.periodoOrigen}</span></td>
-                                <td style={{ textAlign: 'right', fontWeight: 700 }}>{pendiente.cantidadHoras.toLocaleString('es-AR')} h</td>
-                                <td style={{ textAlign: 'right', fontWeight: 800 }}>{dinero(pendiente.montoCalculado)}</td>
-                                <td style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>{pendiente.observaciones || '—'}</td>
-                                <td><div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 6 }}><button className="btn btn-ghost btn-sm" disabled={pagandoId !== null} onClick={() => void eliminar(pendiente)}>Eliminar</button><button className="btn btn-outline btn-sm" disabled={pagandoId !== null || !cajaId} onClick={() => void pagar(pendiente)}>{pagandoId === pendiente.id ? 'Pagando…' : 'Sólo pagar'}</button><button className="btn btn-primary btn-sm" disabled={pagandoId !== null || !cajaId} onClick={() => void pagar(pendiente, true)}>{pagandoId === pendiente.id ? 'Pagando…' : 'Pagar e imprimir'}</button></div></td>
-                            </tr>)}</tbody>
+                        <table className="table"><thead><tr><th>Estado</th><th>Empleado</th><th>Semana de origen</th><th style={{ textAlign: 'right' }}>Horas</th><th style={{ textAlign: 'right' }}>Importe</th><th>Pago</th><th style={{ textAlign: 'right' }}>Acciones</th></tr></thead>
+                            <tbody>{cargando ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: 28 }}>Cargando…</td></tr> : registrosFiltrados.length === 0 ? <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--color-gray-500)' }}>No hay operaciones que coincidan con los filtros.</td></tr> : registrosFiltrados.map(registro => {
+                                const esPagado = registro.estado === 'pagado'
+                                const pago = esPagado ? registro as Pagado : null
+                                const operando = pagandoId !== null || anulandoId !== null
+                                return <tr key={`${registro.estado}-${registro.id}`}>
+                                    <td><span className={`badge ${esPagado ? 'badge-success' : 'badge-warning'}`}>{esPagado ? 'PAGADO' : 'PENDIENTE'}</span></td>
+                                    <td><strong>{registro.empleadoNombre}</strong>{!registro.empleadoActivo && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Inactivo</span>}<div style={{ color: 'var(--color-gray-500)', fontSize: '10px', marginTop: 2 }}>{registro.observaciones || 'Sin detalle'}</div></td>
+                                    <td><span style={{ fontSize: 'var(--text-sm)' }}>{registro.periodoOrigen}</span></td>
+                                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{registro.cantidadHoras.toLocaleString('es-AR')} h</td>
+                                    <td style={{ textAlign: 'right', fontWeight: 800 }}>{dinero(registro.montoCalculado)}</td>
+                                    <td style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>{pago ? new Date(pago.fechaPago).toLocaleDateString('es-AR') : '—'}</td>
+                                    <td><div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 6 }}>{pago ? <><button className="btn btn-outline btn-sm" disabled={operando} onClick={() => void reimprimir(pago)}>Reimprimir</button><button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} disabled={operando} onClick={() => void anularPago(pago)}>{anulandoId === pago.id ? 'Anulando…' : 'Anular'}</button></> : <><button className="btn btn-ghost btn-sm" disabled={operando} onClick={() => void eliminar(registro)}>Eliminar</button><button className="btn btn-outline btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro)}>{pagandoId === registro.id ? 'Pagando…' : 'Sólo pagar'}</button><button className="btn btn-primary btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro, true)}>{pagandoId === registro.id ? 'Pagando…' : 'Pagar e imprimir'}</button></>}</div></td>
+                                </tr>
+                            })}</tbody>
                         </table>
                     </div>
                 </section>
@@ -404,7 +486,27 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
             }
 
             .overtime-table :global(table) {
-                min-width: 820px;
+                min-width: 1050px;
+            }
+
+            .overtime-history-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                gap: var(--space-4);
+                margin-bottom: var(--space-3);
+            }
+
+            .overtime-filters {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(150px, 1fr));
+                gap: 8px;
+                min-width: min(590px, 62%);
+            }
+
+            .overtime-filters :global(.form-select) {
+                min-width: 0;
+                font-size: var(--text-xs);
             }
 
             @media (max-width: 820px) {
@@ -416,6 +518,8 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                     border-radius: var(--radius-lg);
                 }
                 .overtime-layout { grid-template-columns: 1fr; }
+                .overtime-history-header { align-items: stretch; flex-direction: column; }
+                .overtime-filters { width: 100%; min-width: 0; }
             }
 
             @media (max-width: 560px) {
@@ -426,6 +530,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                     flex-direction: column;
                 }
                 .overtime-form-total :global(.btn) { width: 100%; }
+                .overtime-filters { grid-template-columns: 1fr; }
             }
         `}</style>
     </div>

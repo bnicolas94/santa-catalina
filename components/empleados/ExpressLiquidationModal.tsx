@@ -1,11 +1,84 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
+
+interface CuotaPrestamoExpress {
+    id: string
+    numeroCuota: number
+    monto: number
+    estado: string
+    fechaVencimiento: string
+    liquidacionId: string | null
+    prestamoId: string
+}
+
+interface PrestamoExpress {
+    id: string
+    cuotas: Omit<CuotaPrestamoExpress, 'prestamoId'>[]
+}
+
+interface LiquidacionExpressCreada {
+    descuentosPrestamos: number
+    totalNeto: number
+    cuotasDescontadas?: Array<{
+        id: string
+        numeroCuota: number
+        monto: number
+        prestamoId: string
+    }>
+}
+
+interface EmpleadoExpress {
+    id: string
+    nombre: string
+    apellido?: string | null
+    dni?: string | null
+    sueldoBaseMensual: number
+    cicloPago?: string | null
+    valorHoraExtra?: number | null
+    rolRel?: {
+        nombre: string
+        jornal: number
+        valorHoraExtra: number
+    } | null
+}
+
+interface TipoLicenciaExpress {
+    id: string
+    nombre: string
+    activo: boolean
+    conGoceSueldo: boolean
+}
+
+interface ConceptoSalarialExpress {
+    id: string
+    nombre: string
+    activo: boolean
+    tipo: string
+    valorPorDefecto?: number | null
+    esPorcentaje?: boolean
+}
+
+interface CajaExpress {
+    id: string
+    nombre: string
+    saldo: number
+}
+
+function escaparHtml(valor: unknown): string {
+    return String(valor ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;')
+}
 
 interface ExpressLiquidationModalProps {
-    empleado: any
+    empleado: EmpleadoExpress
     onClose: () => void
     onSuccess: () => void
 }
@@ -14,12 +87,14 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const [sueldoBase, setSueldoBase] = useState<number | ''>('')
     const [horasExtras, setHorasExtras] = useState<number | ''>('')
     const [montoHsExtras, setMontoHsExtras] = useState<number | ''>('')
-    const [descuentoPrestamos, setDescuentoPrestamos] = useState<number | ''>('')
+    const [prestamos, setPrestamos] = useState<PrestamoExpress[]>([])
+    const [prestamosLoading, setPrestamosLoading] = useState(true)
+    const [prestamosError, setPrestamosError] = useState('')
     const [licenciaId, setLicenciaId] = useState<string>('')
-    const [tiposLicencias, setTiposLicencias] = useState<any[]>([])
+    const [tiposLicencias, setTiposLicencias] = useState<TipoLicenciaExpress[]>([])
     
     // Conceptos Salariales Adicionales
-    const [conceptosConfig, setConceptosConfig] = useState<any[]>([])
+    const [conceptosConfig, setConceptosConfig] = useState<ConceptoSalarialExpress[]>([])
     const [adicionales, setAdicionales] = useState<{ conceptoSalarialId: string, nombre: string, montoCalculado: number }[]>([])
     const [nuevoAdicionalId, setNuevoAdicionalId] = useState('')
     const [nuevoAdicionalMonto, setNuevoAdicionalMonto] = useState<number | ''>('')
@@ -42,7 +117,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const [fechaImpresion, setFechaImpresion] = useState(new Date().toISOString().split('T')[0])
     
     // Cajas
-    const [cajas, setCajas] = useState<any[]>([])
+    const [cajas, setCajas] = useState<CajaExpress[]>([])
     const [cajaSeleccionada, setCajaSeleccionada] = useState('caja_madre')
     
     const [guardando, setGuardando] = useState(false)
@@ -50,7 +125,11 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     useEffect(() => {
         const fetchCajas = async () => {
             const res = await fetch('/api/caja/saldos')
-            const data = await res.json()
+            const data = await res.json() as {
+                cajaMadre?: { saldo?: number }
+                cajaChica?: { saldo?: number }
+                local?: { saldo?: number }
+            }
             setCajas([
                 { id: 'caja_madre', nombre: 'Caja Madre', saldo: data.cajaMadre?.saldo || 0 },
                 { id: 'caja_chica', nombre: 'Caja Chica', saldo: data.cajaChica?.saldo || 0 },
@@ -60,19 +139,35 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
 
         const fetchLicencias = async () => {
             const res = await fetch('/api/licencias')
-            const data = await res.json()
-            setTiposLicencias(data.filter((l: any) => l.activo))
+            const data = await res.json() as TipoLicenciaExpress[]
+            setTiposLicencias(data.filter(licencia => licencia.activo))
         }
 
         const fetchConceptos = async () => {
             const res = await fetch('/api/conceptos-salariales')
-            const data = await res.json()
-            setConceptosConfig(data.filter((c: any) => c.activo))
+            const data = await res.json() as ConceptoSalarialExpress[]
+            setConceptosConfig(data.filter(concepto => concepto.activo))
+        }
+
+        const fetchPrestamos = async () => {
+            setPrestamosLoading(true)
+            setPrestamosError('')
+            try {
+                const res = await fetch(`/api/empleados/${empleado.id}/prestamos`)
+                if (!res.ok) throw new Error('No se pudieron consultar las cuotas del empleado.')
+                const data = await res.json()
+                setPrestamos(Array.isArray(data) ? data : [])
+            } catch (error) {
+                setPrestamosError(error instanceof Error ? error.message : 'No se pudieron consultar las cuotas del empleado.')
+            } finally {
+                setPrestamosLoading(false)
+            }
         }
 
         fetchCajas()
         fetchLicencias()
         fetchConceptos()
+        fetchPrestamos()
         
         // Cargar valores por defecto del empleado si existen
         if (empleado) {
@@ -98,10 +193,21 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
     const valorHoraExtraEfectivo = (empleado?.valorHoraExtra && empleado.valorHoraExtra > 0)
         ? empleado.valorHoraExtra
         : (empleado?.rolRel?.valorHoraExtra || 0)
+    const jornalRolEfectivo = empleado.rolRel?.jornal || 0
+    const usaValorHoraExtraRol = (empleado.rolRel?.valorHoraExtra || 0) > 0 && !(empleado.valorHoraExtra && empleado.valorHoraExtra > 0)
 
     const valSueldo = Number(sueldoBase) || 0
     const valExtras = Number(montoHsExtras) || 0
-    const valPrestamos = Number(descuentoPrestamos) || 0
+    const cuotasADescontar = useMemo(() => {
+        if (!fechaHasta) return []
+        const finPeriodo = new Date(`${fechaHasta}T00:00:00-03:00`)
+        const finExclusivo = new Date(finPeriodo.getTime() + 24 * 60 * 60 * 1000)
+        const cuotas = prestamos.flatMap(prestamo =>
+            prestamo.cuotas.map(cuota => ({ ...cuota, prestamoId: prestamo.id })),
+        )
+        return seleccionarCuotasVencidasPorPrestamo(cuotas, finExclusivo)
+    }, [fechaHasta, prestamos])
+    const valPrestamos = cuotasADescontar.reduce((total, cuota) => total + cuota.monto, 0)
     const valAdicionales = adicionales.reduce((acc, ad) => acc + ad.montoCalculado, 0)
 
     const totalNeto = valSueldo + valExtras + valAdicionales - valPrestamos
@@ -130,15 +236,16 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                 body: JSON.stringify({
                     empleadoId: empleado.id,
                     periodo: `Express ${fechaDesde.split('-').reverse().join('/')} - ${fechaHasta.split('-').reverse().join('/')}`,
-                    fechaInicio: `${fechaDesde}T00:00:00.000Z`,
-                    fechaFin: `${fechaHasta}T23:59:59.999Z`,
+                    fechaInicio: fechaDesde,
+                    fechaFin: fechaHasta,
                     cajaId: cajaSeleccionada,
                     concepto: 'pago_sueldo',
+                    aplicarCuotasPrestamo: true,
                     manualData: {
+                        origen: 'LIQUIDACION_EXPRESS',
                         sueldoBase: valSueldo,
                         horasExtras: Number(horasExtras) || 0,
                         montoHsExtras: valExtras,
-                        descuentoPrestamos: valPrestamos,
                         diasTrabajados: 6 // Placeholder
                     },
                     adicionales: adicionales.map(a => ({
@@ -166,7 +273,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         }
     }
 
-    const printRecibo = async (liq: any) => {
+    const printRecibo = async (liq: LiquidacionExpressCreada) => {
         const dImp = new Date(fechaImpresion + 'T12:00:00')
         const dia = dImp.getDate()
         const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -176,15 +283,18 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
         const fDesde = fechaDesde.split('-').reverse().join('/')
         const fHasta = `${fechaHasta.split('-')[2]}/${fechaHasta.split('-')[1]}/${fechaHasta.split('-')[0]}`
 
-        const sueldoBaseLetras = formatCurrencyToWords(valSueldo)
-        const montoHsExtrasLetras = formatCurrencyToWords(valExtras)
-        const totalBruto = valSueldo + valExtras
-        const totalLetras = formatCurrencyToWords(totalBruto)
+        const descuentoPrestamosReal = Number(liq.descuentosPrestamos) || 0
+        const totalNetoReal = Number(liq.totalNeto) || 0
+        const totalLetras = formatCurrencyToWords(totalNetoReal)
 
         const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
 
         const licenciaActiva = tiposLicencias.find(l => l.id === licenciaId)
-        const textoLicencia = licenciaActiva ? ` Asimismo, se contemplan días correspondientes a licencia por ${licenciaActiva.nombre}.` : ''
+        const textoLicencia = licenciaActiva ? ` Asimismo, se contemplan días correspondientes a licencia por ${escaparHtml(licenciaActiva.nombre)}.` : ''
+        const detalleAdicionales = adicionales.map(adicional => `
+            <div class="detalle-fila"><span>${escaparHtml(adicional.nombre)}</span><strong>${adicional.montoCalculado >= 0 ? '+' : '-'}$${Math.abs(adicional.montoCalculado).toLocaleString('es-AR')}</strong></div>
+        `).join('')
+        const detalleCuotas = (liq.cuotasDescontadas || []).map(cuota => `Cuota ${cuota.numeroCuota}: $${cuota.monto.toLocaleString('es-AR')}`).join(' · ')
 
         const html = `
             <html>
@@ -208,6 +318,10 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     }
                     .header { margin-bottom: 40px; position: relative; z-index: 10; }
                     .texto { text-align: justify; margin-bottom: 60px; position: relative; z-index: 10; }
+                    .detalle { position: relative; z-index: 10; margin: 28px 0; border: 1px solid #bbb; border-radius: 8px; overflow: hidden; }
+                    .detalle-fila { display: flex; justify-content: space-between; gap: 24px; padding: 8px 12px; border-bottom: 1px solid #ddd; }
+                    .detalle-fila:last-child { border-bottom: 0; }
+                    .total-neto { background: #f3f4f6; font-size: 16pt; }
                     .firma-section { display: flex; flex-direction: column; align-items: flex-end; gap: 20px; margin-top: 80px; position: relative; z-index: 10; }
                     .firma-line { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
                     .data-label { font-weight: bold; }
@@ -228,19 +342,23 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     </div>
 
                     <div class="texto">
-                        Recibo la cantidad de <span class="amount">$${valSueldo.toLocaleString()}</span> 
-                        (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral y 
-                        <span class="amount">$${valExtras.toLocaleString()}</span> 
-                        (pesos ${montoHsExtrasLetras}) en concepto de horas extras al 100% más de su valor 
-                        del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>.${textoLicencia} 
-                        Recibiendo un total de <span class="amount">$${totalBruto.toLocaleString()}</span> 
-                        (pesos ${totalLetras}).
+                        Recibo correspondiente al período del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>.${textoLicencia}
                     </div>
+
+                    <div class="detalle">
+                        <div class="detalle-fila"><span>Sueldo / semana</span><strong>$${valSueldo.toLocaleString('es-AR')}</strong></div>
+                        ${valExtras > 0 ? `<div class="detalle-fila"><span>Horas extras (${Number(horasExtras) || 0} h)</span><strong>+$${valExtras.toLocaleString('es-AR')}</strong></div>` : ''}
+                        ${detalleAdicionales}
+                        ${descuentoPrestamosReal > 0 ? `<div class="detalle-fila"><span>Cuotas de préstamos${detalleCuotas ? `<br><small>${detalleCuotas}</small>` : ''}</span><strong>-$${descuentoPrestamosReal.toLocaleString('es-AR')}</strong></div>` : ''}
+                        <div class="detalle-fila total-neto"><span>Total neto recibido</span><strong>$${totalNetoReal.toLocaleString('es-AR')}</strong></div>
+                    </div>
+
+                    <div class="texto">Son pesos ${totalLetras}.</div>
 
                     <div class="firma-section">
                         <div class="firma-line">Firma</div>
-                        <div style="width: 250px;">Aclaración: ${empleado.nombre} ${empleado.apellido || ''}</div>
-                        <div style="width: 250px;">D.N.I: ${empleado.dni || ''}</div>
+                        <div style="width: 250px;">Aclaración: ${escaparHtml(empleado.nombre)} ${escaparHtml(empleado.apellido || '')}</div>
+                        <div style="width: 250px;">D.N.I: ${escaparHtml(empleado.dni || '')}</div>
                     </div>
                 </div>
                 <script>
@@ -285,8 +403,8 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-2)' }}>
                         <div style={{ fontWeight: 600 }}>{empleado.nombre} {empleado.apellido}</div>
                         <div style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>
-                            {empleado.rolRel?.jornal > 0 ? (
-                                <>Sueldo Base del Rol: ${empleado.rolRel.jornal.toLocaleString()} ({empleado.cicloPago})</>
+                            {jornalRolEfectivo > 0 ? (
+                                <>Sueldo Base del Rol: ${jornalRolEfectivo.toLocaleString()} ({empleado.cicloPago})</>
                             ) : (
                                 <>Sueldo Base Indiv.: ${empleado.sueldoBaseMensual.toLocaleString()} ({empleado.cicloPago})</>
                             )}
@@ -329,7 +447,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                             {valorHoraExtraEfectivo > 0 && (
                                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '2px', display: 'block' }}>
                                     Valor/hora: ${valorHoraExtraEfectivo.toLocaleString('es-AR')}
-                                    {empleado?.rolRel?.valorHoraExtra > 0 && !(empleado?.valorHoraExtra > 0) && (
+                                    {usaValorHoraExtraRol && empleado.rolRel && (
                                         <> (según rol {empleado.rolRel.nombre})</>
                                     )}
                                 </span>
@@ -344,12 +462,37 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                         </div>
                     </div>
 
-                    <div className="form-group">
-                        <label className="form-label">Descuento Préstamos/Adelantos</label>
-                        <div style={{ position: 'relative' }}>
-                            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-danger)' }}>-$</span>
-                            <input type="number" className="form-input" style={{ paddingLeft: '25px', color: 'var(--color-danger)' }} value={descuentoPrestamos} onChange={e => setDescuentoPrestamos(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <div style={{ border: '1px solid var(--color-gray-200)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', background: 'var(--color-gray-50)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+                            <div>
+                                <div className="form-label" style={{ margin: 0 }}>Préstamos y adelantos</div>
+                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: 3 }}>
+                                    El sistema vincula automáticamente una cuota vencida por préstamo.
+                                </div>
+                            </div>
+                            <strong style={{ color: valPrestamos > 0 ? 'var(--color-danger)' : 'var(--color-gray-500)', whiteSpace: 'nowrap' }}>
+                                -${valPrestamos.toLocaleString('es-AR')}
+                            </strong>
                         </div>
+
+                        {prestamosLoading ? (
+                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)', marginTop: 'var(--space-3)' }}>Consultando cuotas...</div>
+                        ) : prestamosError ? (
+                            <div style={{ padding: 'var(--space-3)', color: 'var(--color-danger)', background: 'var(--color-danger-bg)', borderRadius: 'var(--radius-md)', marginTop: 'var(--space-3)', fontSize: 'var(--text-sm)' }}>
+                                {prestamosError}
+                            </div>
+                        ) : cuotasADescontar.length === 0 ? (
+                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-success)', marginTop: 'var(--space-3)', fontWeight: 600 }}>Sin cuotas vencidas para este período.</div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'var(--space-3)' }}>
+                                {cuotasADescontar.map(cuota => (
+                                    <div key={cuota.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', padding: '8px 10px', background: 'white', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}>
+                                        <span>Cuota {cuota.numeroCuota} · vence {new Date(cuota.fechaVencimiento).toLocaleDateString('es-AR', { timeZone: 'America/Buenos_Aires' })}</span>
+                                        <strong>${cuota.monto.toLocaleString('es-AR')}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-group" style={{ border: '1px dashed var(--color-gray-300)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)' }}>
@@ -412,7 +555,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                     </div>
 
                     <div className="form-group">
-                        <label className="form-label">Fecha de "Impresión"</label>
+                        <label className="form-label">Fecha de impresión</label>
                         <input type="date" className="form-input" value={fechaImpresion} onChange={e => setFechaImpresion(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} />
                     </div>
 
@@ -444,7 +587,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                 </div>
                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
                     <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-                    <button className="btn btn-primary" disabled={guardando} onClick={handleGuardarYImprimir}>
+                    <button className="btn btn-primary" disabled={guardando || prestamosLoading || Boolean(prestamosError)} onClick={handleGuardarYImprimir}>
                         {guardando ? 'Guardando...' : 'Guardar e Imprimir Recibo'}
                     </button>
                 </div>

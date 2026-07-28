@@ -15,7 +15,7 @@ function mensajeError(error: unknown) {
 
 export async function GET() {
     try {
-        const [pendientes, empleados] = await Promise.all([
+        const [pendientes, empleados, liquidacionesPagadas] = await Promise.all([
             prisma.horaExtraPendiente.findMany({
                 where: { pagado: false },
                 include: { empleado: { select: { nombre: true, apellido: true, dni: true, activo: true } } },
@@ -26,7 +26,20 @@ export async function GET() {
                 include: { rolRel: true },
                 orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
             }),
+            prisma.liquidacionSueldo.findMany({
+                where: { tipo: 'HORAS_EXTRAS_ADEUDADAS', estado: 'pagado' },
+                select: { id: true, fechaGeneracion: true },
+                orderBy: { fechaGeneracion: 'desc' },
+            }),
         ])
+
+        const deudasPagadas = liquidacionesPagadas.length > 0
+            ? await prisma.horaExtraPendiente.findMany({
+                where: { liquidacionId: { in: liquidacionesPagadas.map(liquidacion => liquidacion.id) }, pagado: true },
+                include: { empleado: { select: { nombre: true, apellido: true, dni: true, activo: true } } },
+            })
+            : []
+        const deudaPorLiquidacion = new Map(deudasPagadas.map(deuda => [deuda.liquidacionId, deuda]))
 
         return NextResponse.json({
             pendientes: pendientes.map(pendiente => ({
@@ -41,6 +54,24 @@ export async function GET() {
                 periodoOrigen: etiquetaSemanaOrigen(fechaClaveRRHH(pendiente.fechaOrigen)),
                 observaciones: pendiente.observaciones,
             })),
+            pagados: liquidacionesPagadas.flatMap(liquidacion => {
+                const deuda = deudaPorLiquidacion.get(liquidacion.id)
+                if (!deuda) return []
+                return [{
+                    id: deuda.id,
+                    empleadoId: deuda.empleadoId,
+                    empleadoNombre: `${deuda.empleado.nombre} ${deuda.empleado.apellido || ''}`.trim(),
+                    empleadoDni: deuda.empleado.dni,
+                    empleadoActivo: deuda.empleado.activo,
+                    cantidadHoras: deuda.cantidadHoras,
+                    montoCalculado: deuda.montoCalculado,
+                    fechaOrigen: fechaClaveRRHH(deuda.fechaOrigen),
+                    periodoOrigen: etiquetaSemanaOrigen(fechaClaveRRHH(deuda.fechaOrigen)),
+                    observaciones: deuda.observaciones,
+                    liquidacionId: liquidacion.id,
+                    fechaPago: liquidacion.fechaGeneracion,
+                }]
+            }),
             valoresHora: Object.fromEntries(
                 empleados.map(empleado => [empleado.id, valorHoraExtraAdeudada(empleado)]),
             ),

@@ -6,6 +6,7 @@ import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/pa
 import { fechaClaveRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
 import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
 import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
+import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ export interface LiquidacionInput {
     concepto?: string
     manualData?: any
     calculatedData?: any
+    aplicarCuotasPrestamo?: boolean
     tipo?: string
     adicionales?: { conceptoSalarialId: string; montoCalculado: number; detalle?: string }[]
     estadosDiarios?: Array<{
@@ -262,23 +264,23 @@ export class PayrollService {
         // 4. Buscar Préstamos/Cuotas del período
         const todasPendientes = await prisma.cuotaPrestamo.findMany({
             where: {
-                prestamo: { empleadoId, estado: 'activo' },
+                prestamo: { empleadoId },
                 estado: 'pendiente',
-                fechaVencimiento: { lte: end }
+                liquidacionId: null,
+                fechaVencimiento: { lt: rangoDiasRRHH(fechaInicio, fechaFin).lt }
             },
-            orderBy: { numeroCuota: 'asc' }
+            orderBy: [
+                { fechaVencimiento: 'asc' },
+                { numeroCuota: 'asc' },
+            ]
         })
 
-        // Una cuota por préstamo (acoplamiento paralelo)
-        const porPrestamo: Record<string, any> = {}
-        todasPendientes.forEach(c => {
-            if (!porPrestamo[c.prestamoId]) {
-                porPrestamo[c.prestamoId] = c
-            }
-        })
-
-        const cuotasADescontar = Object.values(porPrestamo)
-        const descuentoPrestamos = cuotasADescontar.reduce((acc: number, c: any) => acc + c.monto, 0)
+        // Como máximo una cuota vencida por préstamo en cada liquidación.
+        const cuotasADescontar = seleccionarCuotasVencidasPorPrestamo(
+            todasPendientes,
+            rangoDiasRRHH(fechaInicio, fechaFin).lt,
+        )
+        const descuentoPrestamos = cuotasADescontar.reduce((acc, cuota) => acc + cuota.monto, 0)
 
         // 5. Consolidar Resumen
         const diasTrabajados = desglosePorDia.filter(d => d.horasTrabajadas > 0).length
@@ -329,7 +331,7 @@ export class PayrollService {
      * Soporta 3 modos: automático (fichadas), calculado (WeeklyPayroll), manual (Express).
      */
     static async ejecutarLiquidacion(input: LiquidacionInput) {
-        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData, adicionales, tipo, estadosDiarios } = input
+        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData, aplicarCuotasPrestamo = false, adicionales, tipo, estadosDiarios } = input
 
         if (!empleadoId || !periodo) {
             throw new Error('Faltan datos obligatorios')
@@ -358,11 +360,17 @@ export class PayrollService {
                     orderBy: { fechaHora: 'asc' }
                 },
                 prestamos: {
-                    where: { estado: 'activo' },
                     include: {
                         cuotas: {
-                            where: { estado: 'pendiente' },
-                            orderBy: { numeroCuota: 'asc' }
+                            where: {
+                                estado: 'pendiente',
+                                liquidacionId: null,
+                                fechaVencimiento: { lt: rangoPeriodo.lt },
+                            },
+                            orderBy: [
+                                { fechaVencimiento: 'asc' },
+                                { numeroCuota: 'asc' },
+                            ]
                         }
                     }
                 },
@@ -395,7 +403,12 @@ export class PayrollService {
             sueldoProporcional = manualData.sueldoBase || 0
             horasExtras = manualData.horasExtras || 0
             montoHsExtra = manualData.montoHsExtras || 0
-            deduccionCuotas = manualData.descuentoPrestamos || 0
+            // Un descuento de préstamo nunca se acepta como monto libre. En las
+            // liquidaciones manuales sólo puede provenir de cuotas reales que
+            // el servidor vinculará al recibo generado.
+            deduccionCuotas = aplicarCuotasPrestamo
+                ? empleado.prestamos.reduce((total, prestamo) => total + (prestamo.cuotas[0]?.monto || 0), 0)
+                : 0
             diasTrabajados = manualData.diasTrabajados || 0
         } else if (calculatedData) {
             // Reconstruir los importes desde el desglose. Los totales enviados por
@@ -512,7 +525,7 @@ export class PayrollService {
         }
 
         const cuotasAfectadas: string[] = []
-        const debeDescontarPrestamos = (!manualData && !calculatedData) || (!!calculatedData && deduccionCuotas > 0)
+        const debeDescontarPrestamos = manualData ? aplicarCuotasPrestamo : true
         
         if (debeDescontarPrestamos) {
             empleado.prestamos.forEach((prestamo: any) => {
@@ -563,16 +576,30 @@ export class PayrollService {
                 }
             }
 
-            if (calculatedData) {
-                const cuotasTodaviaPendientes = cuotasAfectadas.length > 0
-                    ? await tx.cuotaPrestamo.count({
-                        where: { id: { in: cuotasAfectadas }, estado: 'pendiente' }
-                    })
-                    : 0
-                if (cuotasTodaviaPendientes !== cuotasAfectadas.length) {
+            if (debeDescontarPrestamos) {
+                const cuotasPendientesActuales = await tx.cuotaPrestamo.findMany({
+                    where: {
+                        prestamo: { empleadoId: empleado.id },
+                        estado: 'pendiente',
+                        liquidacionId: null,
+                        fechaVencimiento: { lt: rangoPeriodo.lt },
+                    },
+                    orderBy: [
+                        { fechaVencimiento: 'asc' },
+                        { numeroCuota: 'asc' },
+                    ],
+                })
+                const cuotasEsperadas = seleccionarCuotasVencidasPorPrestamo(cuotasPendientesActuales, rangoPeriodo.lt)
+                const idsActuales = cuotasEsperadas.map(cuota => cuota.id).sort()
+                const idsCalculados = [...cuotasAfectadas].sort()
+                const montoActual = cuotasEsperadas.reduce((total, cuota) => total + cuota.monto, 0)
+                const cambiaronCuotas = idsActuales.length !== idsCalculados.length
+                    || idsActuales.some((id, indice) => id !== idsCalculados[indice])
+                    || Math.abs(montoActual - deduccionCuotas) > 0.009
+
+                if (cambiaronCuotas) {
                     throw new Error('Las cuotas pendientes cambiaron mientras se calculaba la liquidación. Recalculá antes de confirmar.')
                 }
-
             }
 
             // El borrador, la liquidación, los préstamos y Caja deben
@@ -597,7 +624,11 @@ export class PayrollService {
                     totalNeto: neto,
                     estado: 'pagado',
                     tipo: tipo || 'NORMAL',
-                    desglose: calculatedData?.desglosePorDia || manualData || null,
+                    desglose: calculatedData?.desglosePorDia || (manualData ? {
+                        ...manualData,
+                        descuentoPrestamos: deduccionCuotas,
+                        cuotasPrestamoIds: cuotasAfectadas,
+                    } : null),
                     items: (adicionales && adicionales.length > 0) ? {
                         create: adicionales.map(ad => ({
                             conceptoSalarialId: ad.conceptoSalarialId,
@@ -662,7 +693,24 @@ export class PayrollService {
                 })
             }
 
-            return nuevaLiquidacion
+            return tx.liquidacionSueldo.findUniqueOrThrow({
+                where: { id: nuevaLiquidacion.id },
+                include: {
+                    cuotasDescontadas: {
+                        select: {
+                            id: true,
+                            numeroCuota: true,
+                            monto: true,
+                            fechaVencimiento: true,
+                            prestamoId: true,
+                        },
+                        orderBy: [
+                            { fechaVencimiento: 'asc' },
+                            { numeroCuota: 'asc' },
+                        ],
+                    },
+                },
+            })
         })
 
         // Evento de dominio
@@ -682,6 +730,9 @@ export class PayrollService {
      */
     static async revertirLiquidacion(id: string) {
         const liq = await prisma.$transaction(async (tx) => {
+            const lockKey = `revertir-liquidacion:${id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
+
             const liquidacion = await tx.liquidacionSueldo.findUnique({
                 where: { id },
                 include: { cuotasDescontadas: true }
@@ -720,6 +771,10 @@ export class PayrollService {
                     tipo: 'egreso'
                 }
             })
+
+            if (liquidacion.tipo === 'HORAS_EXTRAS_ADEUDADAS' && !movCaja) {
+                throw new Error('No se encontró el movimiento de caja del pago. La anulación fue cancelada para evitar inconsistencias.')
+            }
 
             if (movCaja) {
                 await CajaService.revertirMovimientoEnTx(tx, movCaja.id)

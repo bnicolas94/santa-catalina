@@ -1,107 +1,112 @@
-import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { CajaService } from '@/lib/services/caja.service'
 
-// POST /api/prestamos/[id]/cuotas
+import { CajaService } from '@/lib/services/caja.service'
+import { sumarMesesFechaCivil, validarMontoPrestamo } from '@/lib/payroll/prestamos'
+import { prisma } from '@/lib/prisma'
+import { fechaClaveRRHH, instanteRRHH, sumarDiasRRHH } from '@/lib/rrhh/fechas'
+
+const CAJAS_VALIDAS = new Set(['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani', 'mercaderia', 'ninguna'])
+
+class CuotaApiError extends Error {
+    constructor(message: string, readonly status: number) {
+        super(message)
+    }
+}
+
 export async function POST(
     request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await params
         const body = await request.json()
-        const { monto, cajaOrigen, detalle } = body
+        const monto = validarMontoPrestamo(body.monto)
+        const cajaOrigen = String(body.cajaOrigen || '')
+        const detalle = typeof body.detalle === 'string' ? body.detalle.trim().slice(0, 200) : ''
 
-        if (!monto || parseFloat(monto) <= 0) {
-            return NextResponse.json({ error: 'El monto debe ser mayor a 0' }, { status: 400 })
+        if (!CAJAS_VALIDAS.has(cajaOrigen)) {
+            throw new CuotaApiError('Seleccioná un origen o concepto válido.', 400)
         }
 
-        const validBoxes = ['caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani', 'mercaderia', 'ninguna']
-        if (!cajaOrigen || !validBoxes.includes(cajaOrigen)) {
-            return NextResponse.json({ error: 'Debe especificar una opción válida (Caja Chica, Mercado Pago, Retiro de Mercadería o Ninguna)' }, { status: 400 })
-        }
+        const nuevaCuota = await prisma.$transaction(async tx => {
+            const lockKey = `prestamo:${id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
 
-        const numericMonto = parseFloat(monto)
-
-        const result = await prisma.$transaction(async (tx) => {
-            // 1. Obtener el préstamo
             const prestamo = await tx.prestamoEmpleado.findUnique({
                 where: { id },
-                include: { 
+                include: {
                     empleado: { select: { nombre: true, apellido: true } },
-                    cuotas: true
-                }
+                    cuotas: {
+                        orderBy: [
+                            { fechaVencimiento: 'asc' },
+                            { numeroCuota: 'asc' },
+                        ],
+                    },
+                },
             })
+            if (!prestamo) throw new CuotaApiError('Préstamo no encontrado.', 404)
 
-            if (!prestamo) {
-                throw new Error('Préstamo no encontrado')
+            const liquidacionLockKey = `liquidacion:${prestamo.empleadoId}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${liquidacionLockKey}))::text AS lock_result`
+
+            if (!prestamo.cuotas.some(cuota => cuota.estado === 'pendiente')) {
+                throw new CuotaApiError('El préstamo ya está saldado. Registrá un préstamo nuevo para conservar el historial cerrado.', 409)
             }
 
-            // 2. Determinar número de cuota
-            let nextNumero = 1
-            if (prestamo.cuotas.length > 0) {
-                nextNumero = Math.max(...prestamo.cuotas.map(c => c.numeroCuota)) + 1
-            }
+            const ultimaCuota = prestamo.cuotas.at(-1)
+            const nextNumero = prestamo.cuotas.reduce((maximo, cuota) => Math.max(maximo, cuota.numeroCuota), 0) + 1
+            const ultimaFecha = ultimaCuota ? fechaClaveRRHH(ultimaCuota.fechaVencimiento) : fechaClaveRRHH(new Date())
+            const nextFecha = ultimaCuota
+                ? prestamo.frecuencia === 'SEMANAL'
+                    ? sumarDiasRRHH(ultimaFecha, 7)
+                    : sumarMesesFechaCivil(ultimaFecha, 1)
+                : ultimaFecha
+            const [anio, mes] = nextFecha.split('-')
 
-            // 3. Determinar fecha de vencimiento
-            let nextFecha = new Date()
-            if (prestamo.cuotas.length > 0) {
-                const maxFecha = new Date(Math.max(...prestamo.cuotas.map(c => new Date(c.fechaVencimiento).getTime())))
-                nextFecha = new Date(maxFecha)
-                if (prestamo.frecuencia === 'SEMANAL') {
-                    nextFecha.setDate(maxFecha.getDate() + 7)
-                } else {
-                    nextFecha.setMonth(maxFecha.getMonth() + 1)
-                }
-            }
-
-            const mesAnio = `${(nextFecha.getMonth() + 1).toString().padStart(2, '0')}-${nextFecha.getFullYear()}`
-
-            // 4. Crear la cuota
-            const nuevaCuota = await tx.cuotaPrestamo.create({
+            const cuota = await tx.cuotaPrestamo.create({
                 data: {
                     prestamoId: id,
                     numeroCuota: nextNumero,
-                    monto: numericMonto,
-                    mesAnio,
-                    fechaVencimiento: nextFecha,
-                    estado: 'pendiente'
-                }
+                    monto,
+                    mesAnio: `${mes}-${anio}`,
+                    fechaVencimiento: instanteRRHH(nextFecha),
+                    estado: 'pendiente',
+                },
             })
 
-            // 5. Recalcular préstamo
-            const updatedObservaciones = prestamo.observaciones
-                ? `${prestamo.observaciones} | Cuota ${nextNumero}: ${detalle || (cajaOrigen === 'mercaderia' ? 'Retiro Mercadería' : 'Ampliación')}`
-                : `Cuota ${nextNumero}: ${detalle || (cajaOrigen === 'mercaderia' ? 'Retiro Mercadería' : 'Ampliación')}`
+            const conceptoDetalle = detalle || (cajaOrigen === 'mercaderia' ? 'Retiro de mercadería' : 'Ampliación')
+            const observaciones = prestamo.observaciones
+                ? `${prestamo.observaciones} | Cuota ${nextNumero}: ${conceptoDetalle}`
+                : `Cuota ${nextNumero}: ${conceptoDetalle}`
 
             await tx.prestamoEmpleado.update({
                 where: { id },
                 data: {
-                    montoTotal: prestamo.montoTotal + numericMonto,
-                    cantidadCuotas: prestamo.cantidadCuotas + 1,
-                    estado: 'activo', // Vuelve a estar activo ya que agregamos una cuota pendiente
-                    observaciones: updatedObservaciones.substring(0, 500) // Limitar tamaño de string defensivamente
-                }
+                    montoTotal: Math.round((prestamo.montoTotal + monto) * 100) / 100,
+                    cantidadCuotas: prestamo.cuotas.length + 1,
+                    estado: 'activo',
+                    observaciones: observaciones.slice(0, 500),
+                },
             })
 
-            // 6. Si no es mercadería ni ninguna, registrar movimiento de caja
             if (cajaOrigen !== 'mercaderia' && cajaOrigen !== 'ninguna') {
-                const desc = `Ampliación Préstamo: ${prestamo.empleado.nombre} ${prestamo.empleado.apellido || ''} (Cuota ${nextNumero})${detalle ? ` - ${detalle}` : ''}`
                 await CajaService.createMovimiento({
                     tipo: 'egreso',
                     concepto: 'prestamo_empleado',
-                    monto: numericMonto,
-                    cajaOrigen: cajaOrigen,
-                    descripcion: desc,
+                    monto,
+                    cajaOrigen,
+                    descripcion: `Ampliación préstamo: ${prestamo.empleado.nombre} ${prestamo.empleado.apellido || ''} (Cuota ${nextNumero})${detalle ? ` - ${detalle}` : ''}`,
                 }, tx)
             }
 
-            return nuevaCuota
+            return cuota
         })
 
-        return NextResponse.json(result, { status: 201 })
-    } catch (error: any) {
+        return NextResponse.json(nuevaCuota, { status: 201 })
+    } catch (error) {
         console.error('Error al agregar cuota:', error)
-        return NextResponse.json({ error: error.message || 'Error al agregar cuota' }, { status: 500 })
+        const status = error instanceof CuotaApiError ? error.status : error instanceof Error && error.message.includes('monto') ? 400 : 500
+        const message = error instanceof Error ? error.message : 'No se pudo agregar la cuota.'
+        return NextResponse.json({ error: status === 500 ? 'No se pudo agregar la cuota.' : message }, { status })
     }
 }
