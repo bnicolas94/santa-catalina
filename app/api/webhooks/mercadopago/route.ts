@@ -23,7 +23,9 @@ export async function POST(req: Request) {
 
     const url = new URL(req.url);
     const queryTopic = url.searchParams.get('topic');
-    const queryId = url.searchParams.get('id') || url.searchParams.get('data.id');
+    // En Webhooks, Mercado Pago calcula la firma con `data.id`.
+    // `id` queda solo como compatibilidad con notificaciones IPN antiguas.
+    const queryId = url.searchParams.get('data.id') || url.searchParams.get('id');
 
     const topic = body.type || body.action || queryTopic;
     const paymentId = body?.data?.id || queryId;
