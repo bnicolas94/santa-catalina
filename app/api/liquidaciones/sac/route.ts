@@ -34,6 +34,7 @@ export async function POST(request: Request) {
             fechaInicio: startStr,
             fechaFin: endStr,
             cajaId: cajaId || 'caja_chica',
+            tipo: 'SAC',
             manualData: {
                 sueldoBase: monto,
                 horasExtras: 0,
@@ -42,10 +43,6 @@ export async function POST(request: Request) {
                 diasTrabajados: 180
             }
         })
-
-        // Marcamos el tipo como SAC
-        // Nota: ejecutarLiquidacion crea una NORMAL por defecto, pero podemos actualizarla o extender el servicio
-        // Por ahora, lo dejamos así y el periodo indica que es SAC.
 
         return NextResponse.json(liquidacion)
     } catch (error: any) {

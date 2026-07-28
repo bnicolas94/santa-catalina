@@ -14,6 +14,7 @@ export function formatearFechaCivil(fecha: string): string {
 }
 
 export function textoEstadoAsistencia(status: string): string {
+    if (status === 'VACACIONES') return 'Vacaciones'
     return ESTADOS_ASISTENCIA.find(estado => estado.value === status)?.label || status
 }
 
@@ -25,6 +26,7 @@ export function tonoEstadoAsistencia(status: string): { backgroundColor: string;
         ENFERMEDAD: { backgroundColor: '#f3e8ff', color: '#6b21a8', border: '1px solid #e9d5ff' },
         SIN_AVISO: { backgroundColor: '#fce8e6', color: '#c5221f', border: '1px solid #fad2cf' },
         CON_AVISO: { backgroundColor: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' },
+        VACACIONES: { backgroundColor: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' },
     }
     return tonos[status] || tonos.FRANCO
 }

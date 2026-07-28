@@ -26,6 +26,8 @@ export interface AnalyticsConcepto {
 export interface AnalyticsLiquidacion {
     id: string
     empleado: string
+    tipo: string
+    tipoLabel: string
     periodo: string
     fecha: string
     hsExtras: number
@@ -71,6 +73,8 @@ export interface AnalyticsData {
     }
     asistencia: {
         totalFichadas: number
+        totalEntradas: number
+        jornadasEsperadas: number
         tardanzas: number
         detalleTardanzas: AnalyticsTardanza[]
         ausencias: number
@@ -84,6 +88,8 @@ export interface AnalyticsData {
     }
     nomina: {
         total: number
+        totalGeneral: number
+        porTipo: Array<{ tipo: string; etiqueta: string; total: number; cantidad: number }>
         totalHsExtras: number
         totalMontoHsExtras: number
         totalHorasFeriado: number

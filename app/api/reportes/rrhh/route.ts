@@ -1,9 +1,56 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { periodoAnalyticsValido, periodoMesActual } from '@/lib/analytics/fechas'
-import { rangoDiasRRHH } from '@/lib/rrhh/fechas'
+import { fechaClaveRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
+import { calcularAusentismoRRHH, calcularPuntualidadRRHH } from '@/lib/analytics/metricas-rrhh'
+import { agruparLiquidacionesPorTipo, etiquetaTipoLiquidacion, normalizarTipoLiquidacion } from '@/lib/analytics/liquidaciones'
+import { fechasDeRangoVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
+import type { Sancion } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
+
+interface PrestamoAgrupado {
+    id: string
+    empleado: string
+    montoTotal: number
+    pagado: number
+    saldo: number
+    cuotasPagadas: number
+    cuotasTotales: number
+    prestamosActivos: number
+    listaPrestamos: Array<{
+        id: string
+        montoTotal: number
+        pagado: number
+        saldo: number
+        cuotas: string
+        fecha: Date
+        observaciones: string | null
+        progreso: number
+    }>
+}
+
+interface DesgloseHistorico {
+    diaSemana?: string
+    horasTrabajadas?: number
+    horasExtras?: number
+    esJustificado?: boolean
+    [campo: string]: unknown
+}
+
+interface DiaAsistenciaReporte {
+    fecha: string
+    diaSemana: string
+    esFeriado: boolean
+    nombreFeriado: string | null
+    esFranco: boolean
+    status: string
+    horasTrabajadas: number
+    entrada: string | null
+    salida: string | null
+    inasistenciaId: string | null
+    motivoInasistencia: string | null
+}
 
 export async function GET(request: Request) {
     try {
@@ -32,7 +79,17 @@ export async function GET(request: Request) {
         // Lista de empleados activos para el selector
         const empleadosActivos = await prisma.empleado.findMany({
             where: { activo: true },
-            select: { id: true, nombre: true, apellido: true, fechaIngreso: true, jornal: true },
+            select: {
+                id: true,
+                nombre: true,
+                apellido: true,
+                fechaIngreso: true,
+                jornal: true,
+                sueldoBaseMensual: true,
+                cicloPago: true,
+                diasTrabajoSemana: true,
+                rolRel: { select: { jornal: true, cicloPago: true } },
+            },
             orderBy: [{ nombre: 'asc' }]
         })
 
@@ -67,101 +124,80 @@ export async function GET(request: Request) {
         ])
 
         // 3. Ausentismo y Tardanzas (Rango seleccionado)
-        const fichadas = await prisma.fichadaEmpleado.findMany({
-            where: {
-                fechaHora: { gte: desde, lte: hasta }
-            },
-            include: {
-                empleado: {
-                    select: {
-                        id: true,
-                        nombre: true,
-                        apellido: true,
-                        horarioEntrada: true,
-                        jornal: true,
-                        turno: {
-                            select: {
-                                horaInicio: true,
-                                toleranciaMinutos: true
-                            }
+        const [fichadas, inasistenciasPeriodo, feriadosPeriodo, vacacionesHistoricas] = await Promise.all([
+            prisma.fichadaEmpleado.findMany({
+                where: { fechaHora: { gte: desde, lte: hasta } },
+                include: {
+                    empleado: {
+                        select: {
+                            id: true,
+                            nombre: true,
+                            apellido: true,
+                            horarioEntrada: true,
+                            turno: { select: { horaInicio: true, toleranciaMinutos: true } },
                         }
                     }
                 }
-            }
-        })
+            }),
+            prisma.inasistencia.findMany({
+                where: { fecha: { gte: desde, lte: hasta } },
+                select: { empleadoId: true, fecha: true, tipo: true },
+            }),
+            prisma.feriado.findMany({
+                where: { fecha: { gte: desde, lte: hasta } },
+                select: { fecha: true },
+            }),
+            prisma.liquidacionSueldo.findMany({
+                where: { tipo: 'VACACIONES', estado: { not: 'anulado' } },
+                select: { empleadoId: true, desglose: true },
+            }),
+        ])
 
         const totalFichadas = fichadas.length
-        
-        // Cálculo de tardanzas dinámico + índice de puntualidad por empleado
-        let tardanzas = 0
-        const detalleTardanzas: any[] = []
-        const puntualidadPorEmpleado: Record<string, { nombre: string, entradas: number, puntuales: number }> = {}
 
-        fichadas.forEach(f => {
-            if (f.tipo !== 'entrada') return
-            
-            const empId = f.empleadoId
-            const empNombre = f.empleado ? `${f.empleado.nombre} ${f.empleado.apellido || ''}`.trim() : 'Empleado'
-            
-            if (!puntualidadPorEmpleado[empId]) {
-                puntualidadPorEmpleado[empId] = { nombre: empNombre, entradas: 0, puntuales: 0 }
-            }
-            puntualidadPorEmpleado[empId].entradas++
+        const puntualidad = calcularPuntualidadRRHH(fichadas
+            .filter(fichada => fichada.tipo === 'entrada')
+            .map(fichada => ({
+                empleadoId: fichada.empleadoId,
+                empleadoNombre: `${fichada.empleado.nombre} ${fichada.empleado.apellido || ''}`.trim(),
+                fechaHora: fichada.fechaHora,
+                horaObjetivo: fichada.empleado.turno?.horaInicio || fichada.empleado.horarioEntrada,
+                toleranciaMinutos: fichada.empleado.turno?.toleranciaMinutos,
+            })))
 
-            const horaObjetivo = f.empleado?.turno?.horaInicio || f.empleado?.horarioEntrada
-            if (!horaObjetivo) {
-                puntualidadPorEmpleado[empId].puntuales++
-                return
-            }
-
-            const [h, m] = horaObjetivo.split(':').map(Number)
-            const limiteTolerancia = f.empleado?.turno?.toleranciaMinutos ?? 10
-            
-            const horaEntradaEsperada = new Date(f.fechaHora)
-            horaEntradaEsperada.setHours(h, m, 0, 0)
-
-            const limiteConTolerancia = new Date(f.fechaHora)
-            limiteConTolerancia.setHours(h, m + limiteTolerancia, 0, 0)
-
-            if (f.fechaHora > limiteConTolerancia) {
-                tardanzas++
-                const diffMs = f.fechaHora.getTime() - horaEntradaEsperada.getTime()
-                const minutosRetraso = Math.floor(diffMs / 60000)
-
-                detalleTardanzas.push({
-                    empleadoId: f.empleadoId,
-                    empleadoNombre: empNombre,
-                    fecha: f.fechaHora,
-                    horaFichada: f.fechaHora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
-                    horaEsperada: horaObjetivo,
-                    minutosRetraso
-                })
-            } else {
-                puntualidadPorEmpleado[empId].puntuales++
-            }
+        const vacacionesLegacy = vacacionesHistoricas.flatMap(liquidacion => {
+            const rango = rangoVacacionesDesdeDesglose(liquidacion.desglose)
+            if (!rango) return []
+            return fechasDeRangoVacaciones(rango.desde, rango.hasta)
+                .filter(fecha => fecha >= desdeCivil && fecha <= hastaCivil)
+                .map(fecha => ({ empleadoId: liquidacion.empleadoId, fecha, tipo: 'VACACIONES' }))
         })
 
-        const ausencias = fichadas.filter(f => f.tipo === 'ausencia').length
+        const ausentismo = calcularAusentismoRRHH({
+            empleados: empleadosActivos,
+            ausencias: [
+                ...inasistenciasPeriodo,
+                ...vacacionesLegacy,
+                ...fichadas.filter(fichada => fichada.tipo === 'ausencia').map(fichada => ({
+                    empleadoId: fichada.empleadoId,
+                    fecha: fichada.fechaHora,
+                    tipo: 'LICENCIA',
+                })),
+            ],
+            feriados: feriadosPeriodo.map(feriado => feriado.fecha),
+            desde: desdeCivil,
+            hasta: hastaCivil,
+        })
 
-        // Índice de puntualidad y ranking
-        const indicePuntualidad = Object.entries(puntualidadPorEmpleado)
-            .map(([id, p]) => ({
-                empleadoId: id,
-                nombre: p.nombre,
-                entradas: p.entradas,
-                puntuales: p.puntuales,
-                porcentaje: p.entradas > 0 ? parseFloat(((p.puntuales / p.entradas) * 100).toFixed(1)) : 100
-            }))
-            .sort((a, b) => b.porcentaje - a.porcentaje)
-
-        const rankingMejores = indicePuntualidad.slice(0, 5)
-        const rankingPeores = [...indicePuntualidad].sort((a, b) => a.porcentaje - b.porcentaje).slice(0, 5)
-
-        // Costo del ausentismo
-        const jornalPromedio = empleadosActivos.length > 0 
-            ? empleadosActivos.reduce((acc, e) => acc + (e.jornal || 0), 0) / empleadosActivos.length 
-            : 0
-        const costoAusentismo = ausencias * jornalPromedio
+        const {
+            tardanzas,
+            detalleTardanzas,
+            indicePuntualidad,
+            rankingMejores,
+            rankingPeores,
+            porcentajeTardanzas,
+        } = puntualidad
+        const { ausencias, porcentajeAusentismo, costoAusentismo, jornadasEsperadas } = ausentismo
 
         // Sanciones del período
         let sancionesCount = 0
@@ -194,14 +230,20 @@ export async function GET(request: Request) {
             orderBy: { fechaGeneracion: 'desc' }
         })
 
-        const totalMasaSalarial = liquidaciones.reduce((acc, l) => acc + l.totalNeto, 0)
-        const totalHorasExtras = liquidaciones.reduce((acc, l) => acc + (l.horasExtras || 0), 0)
-        const totalMontoHorasExtras = liquidaciones.reduce((acc, l) => acc + (l.montoHorasExtras || 0), 0)
-        const totalHorasNormales = liquidaciones.reduce((acc, l) => acc + (l.horasNormales || 0), 0)
-        const totalMontoFeriados = liquidaciones.reduce((acc, l) => acc + (l.montoHorasFeriado || 0), 0)
-        const totalHorasFeriado = liquidaciones.reduce((acc, l) => acc + (l.horasFeriado || 0), 0)
-        const totalSueldoBase = liquidaciones.reduce((acc, l) => acc + (l.sueldoProporcional || 0), 0)
-        const totalDescuentosPrestamos = liquidaciones.reduce((acc, l) => acc + (l.descuentosPrestamos || 0), 0)
+        // Los indicadores operativos representan nómina habitual. SAC,
+        // vacaciones y liquidaciones finales se informan aparte para evitar
+        // sumar conceptos de distinta naturaleza.
+        const liquidacionesNomina = liquidaciones.filter(liquidacion => normalizarTipoLiquidacion(liquidacion.tipo, liquidacion.periodo) === 'NORMAL')
+        const totalGeneralLiquidado = liquidaciones.reduce((acc, liquidacion) => acc + liquidacion.totalNeto, 0)
+        const porTipoLiquidacion = agruparLiquidacionesPorTipo(liquidaciones)
+        const totalMasaSalarial = liquidacionesNomina.reduce((acc, l) => acc + l.totalNeto, 0)
+        const totalHorasExtras = liquidacionesNomina.reduce((acc, l) => acc + (l.horasExtras || 0), 0)
+        const totalMontoHorasExtras = liquidacionesNomina.reduce((acc, l) => acc + (l.montoHorasExtras || 0), 0)
+        const totalHorasNormales = liquidacionesNomina.reduce((acc, l) => acc + (l.horasNormales || 0), 0)
+        const totalMontoFeriados = liquidacionesNomina.reduce((acc, l) => acc + (l.montoHorasFeriado || 0), 0)
+        const totalHorasFeriado = liquidacionesNomina.reduce((acc, l) => acc + (l.horasFeriado || 0), 0)
+        const totalSueldoBase = liquidacionesNomina.reduce((acc, l) => acc + (l.sueldoProporcional || 0), 0)
+        const totalDescuentosPrestamos = liquidacionesNomina.reduce((acc, l) => acc + (l.descuentosPrestamos || 0), 0)
         
         // KPIs de inversión
         const inversionBruta = totalSueldoBase + totalMontoHorasExtras + totalMontoFeriados
@@ -211,7 +253,7 @@ export async function GET(request: Request) {
 
         // Tendencia semanal (agrupar liquidaciones por periodo)
         const tendenciaPorPeriodo: Record<string, { periodo: string, totalNeto: number, montoExtras: number, montoFeriados: number, count: number }> = {}
-        liquidaciones.forEach(l => {
+        liquidacionesNomina.forEach(l => {
             const periodo = l.periodo
             if (!tendenciaPorPeriodo[periodo]) {
                 tendenciaPorPeriodo[periodo] = { periodo, totalNeto: 0, montoExtras: 0, montoFeriados: 0, count: 0 }
@@ -225,7 +267,7 @@ export async function GET(request: Request) {
 
         // Agrupar masa salarial por área
         const masaPorArea: Record<string, number> = {}
-        liquidaciones.forEach(l => {
+        liquidacionesNomina.forEach(l => {
             const areaId = l.empleado?.areaId || 'Sin Área'
             masaPorArea[areaId] = (masaPorArea[areaId] || 0) + l.totalNeto
         })
@@ -250,6 +292,8 @@ export async function GET(request: Request) {
         const detallePlanilla = liquidaciones.map(l => ({
             id: l.id,
             empleado: `${l.empleado?.nombre} ${l.empleado?.apellido || ''}`,
+            tipo: normalizarTipoLiquidacion(l.tipo, l.periodo),
+            tipoLabel: etiquetaTipoLiquidacion(l.tipo, l.periodo),
             periodo: l.periodo,
             fecha: l.fechaGeneracion,
             hsExtras: l.horasExtras || 0,
@@ -284,7 +328,7 @@ export async function GET(request: Request) {
             }
         })
 
-        const agrupadosPorEmpleado: Record<string, any> = {}
+        const agrupadosPorEmpleado: Record<string, PrestamoAgrupado> = {}
 
         prestamosActivos.forEach(p => {
             const empId = p.empleadoId
@@ -382,15 +426,15 @@ export async function GET(request: Request) {
             // Analizar ausencias desde el desglose de cada liquidación
             const historialSemanas = todasLiquidaciones.map(liq => {
                 const desgloseRaw = liq.desglose || []
-                const desglose = Array.isArray(desgloseRaw) ? (desgloseRaw as any[]) : []
+                const desglose = Array.isArray(desgloseRaw) ? (desgloseRaw as DesgloseHistorico[]) : []
                 
                 // Días laborales: Lun-Sáb (excluir Domingo)
                 const diasLaborales = desglose.filter(d => d.diaSemana !== 'Domingo')
-                const diasTrabajados = diasLaborales.filter(d => d.horasTrabajadas > 0).length
-                const diasJustificados = diasLaborales.filter(d => d.horasTrabajadas === 0 && d.esJustificado).length
-                const diasAusentes = diasLaborales.filter(d => d.horasTrabajadas === 0 && !d.esJustificado).length
-                const hsExtras = desglose.reduce((acc: number, d: any) => acc + (d.horasExtras || 0), 0)
-                const hsTotales = desglose.reduce((acc: number, d: any) => acc + (d.horasTrabajadas || 0), 0)
+                const diasTrabajados = diasLaborales.filter(d => (d.horasTrabajadas ?? 0) > 0).length
+                const diasJustificados = diasLaborales.filter(d => (d.horasTrabajadas ?? 0) === 0 && d.esJustificado).length
+                const diasAusentes = diasLaborales.filter(d => (d.horasTrabajadas ?? 0) === 0 && !d.esJustificado).length
+                const hsExtras = desglose.reduce((acc, d) => acc + (d.horasExtras || 0), 0)
+                const hsTotales = desglose.reduce((acc, d) => acc + (d.horasTrabajadas || 0), 0)
 
                 return {
                     id: liq.id,
@@ -428,14 +472,11 @@ export async function GET(request: Request) {
             const totalDiasJustificados = historialSemanas.reduce((acc, s) => acc + s.diasJustificados, 0)
 
             // Puntualidad individual
-            const puntInd = puntualidadPorEmpleado[empleadoId]
-            const puntualidadIndividual = puntInd 
-                ? parseFloat(((puntInd.puntuales / puntInd.entradas) * 100).toFixed(1))
-                : 100
+            const puntualidadIndividual = indicePuntualidad.find(indice => indice.empleadoId === empleadoId)?.porcentaje ?? 100
 
             // Sanciones individuales
             let sancionesIndividuales = 0
-            let listaSanciones: any[] = []
+            let listaSanciones: Sancion[] = []
             try {
                 const sancionesFetched = await prisma.sancion.findMany({
                     where: { empleadoId },
@@ -461,7 +502,7 @@ export async function GET(request: Request) {
                 }, 0)
 
             // Generar desglose de asistencia diaria para el período seleccionado
-            const diasAsistencia: any[] = []
+            const diasAsistencia: DiaAsistenciaReporte[] = []
             
             const inasistenciasRango = await prisma.inasistencia.findMany({
                 where: {
@@ -499,12 +540,19 @@ export async function GET(request: Request) {
                 fichadasPorDia[dateStr].push(f)
             })
 
-            const inasistenciasPorDia = new Map(inasistenciasRango.map(i => [
-                i.fecha.toISOString().split('T')[0],
-                i
-            ]))
+            const inasistenciasPorDia = new Map<string, typeof inasistenciasRango[number]>()
+            inasistenciasRango.forEach(inasistencia => {
+                const clave = fechaClaveRRHH(inasistencia.fecha)
+                const actual = inasistenciasPorDia.get(clave)
+                if (!actual || inasistencia.tipo === 'VACACIONES') inasistenciasPorDia.set(clave, inasistencia)
+            })
+            const fechasVacacionesEmpleado = new Set(
+                vacacionesLegacy
+                    .filter(vacacion => vacacion.empleadoId === empleadoId)
+                    .map(vacacion => vacacion.fecha)
+            )
 
-            let current = new Date(desde)
+            const current = new Date(desde)
             const end = new Date(hasta)
             const nombresDias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
@@ -525,6 +573,7 @@ export async function GET(request: Request) {
                 if (dayOfWeekNum === 6 && diasTrabajo.includes('lunes a viernes')) esFranco = true
 
                 const inasistencia = inasistenciasPorDia.get(fechaStr)
+                const esVacaciones = inasistencia?.tipo === 'VACACIONES' || fechasVacacionesEmpleado.has(fechaStr)
                 const marcas = fichadasPorDia[fechaStr] || []
                 const primerEntrada = marcas.find(m => m.tipo === 'entrada')?.fechaHora || null
                 const ultimaSalida = [...marcas].reverse().find(m => m.tipo === 'salida')?.fechaHora || null
@@ -536,8 +585,12 @@ export async function GET(request: Request) {
                 }
 
                 let status = 'TRABAJO'
-                if (inasistencia) {
-                    if (inasistencia.motivo === 'Enfermedad') {
+                if (esVacaciones) {
+                    status = 'VACACIONES'
+                } else if (inasistencia) {
+                    if (inasistencia.tipo === 'VACACIONES') {
+                        status = 'VACACIONES'
+                    } else if (inasistencia.motivo === 'Enfermedad') {
                         status = 'ENFERMEDAD'
                     } else if (inasistencia.motivo === 'Franco' || inasistencia.tipo === 'FRANCO') {
                         status = 'FRANCO'
@@ -614,11 +667,13 @@ export async function GET(request: Request) {
             },
             asistencia: {
                 totalFichadas,
+                totalEntradas: puntualidad.totalEntradas,
+                jornadasEsperadas,
                 tardanzas,
                 detalleTardanzas: detalleTardanzas.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()),
                 ausencias,
-                porcentajeTardanzas: totalFichadas > 0 ? (tardanzas / totalFichadas) * 100 : 0,
-                porcentajeAusentismo: totalFichadas > 0 ? (ausencias / totalFichadas) * 100 : 0,
+                porcentajeTardanzas,
+                porcentajeAusentismo,
                 indicePuntualidad,
                 rankingMejores,
                 rankingPeores,
@@ -627,6 +682,8 @@ export async function GET(request: Request) {
             },
             nomina: {
                 total: totalMasaSalarial,
+                totalGeneral: totalGeneralLiquidado,
+                porTipo: porTipoLiquidacion,
                 totalHsExtras: totalHorasExtras,
                 totalMontoHsExtras: totalMontoHorasExtras,
                 totalHorasFeriado,

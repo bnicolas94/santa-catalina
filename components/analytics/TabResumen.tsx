@@ -1,83 +1,117 @@
 'use client'
 
-import { Pie } from 'react-chartjs-2'
+import { Doughnut } from 'react-chartjs-2'
 import type { AnalyticsData } from './analytics.types'
+import styles from './analytics.module.css'
 
 interface TabResumenProps {
     data: AnalyticsData
 }
 
-export default function TabResumen({ data }: TabResumenProps) {
-    const areaChartData = {
-        labels: data.distribucion.area.map(a => a.nombre),
-        datasets: [{
-            label: 'Empleados por Área',
-            data: data.distribucion.area.map(a => a.cantidad),
-            backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
-            borderWidth: 1
-        }]
-    }
+const palette = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 
+const money = (value: number) => `$${value.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`
+
+export default function TabResumen({ data }: TabResumenProps) {
+    const puntualidad = Math.max(0, 100 - data.asistencia.porcentajeTardanzas)
+    const areaChartData = {
+        labels: data.distribucion.area.map(area => area.nombre),
+        datasets: [{ data: data.distribucion.area.map(area => area.cantidad), backgroundColor: palette, borderColor: '#ffffff', borderWidth: 3 }]
+    }
     const puestoChartData = {
-        labels: data.distribucion.puesto.map(p => p.nombre),
-        datasets: [{
-            label: 'Empleados por Puesto',
-            data: data.distribucion.puesto.map(p => p.cantidad),
-            backgroundColor: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6'],
-            borderWidth: 1
-        }]
+        labels: data.distribucion.puesto.map(puesto => puesto.nombre),
+        datasets: [{ data: data.distribucion.puesto.map(puesto => puesto.cantidad), backgroundColor: palette.map((color, index) => palette[(index + 2) % palette.length]), borderColor: '#ffffff', borderWidth: 3 }]
+    }
+    const chartOptions = {
+        maintainAspectRatio: false,
+        cutout: '66%',
+        plugins: {
+            legend: {
+                position: 'bottom' as const,
+                labels: { usePointStyle: true, pointStyle: 'circle' as const, boxWidth: 7, padding: 14, font: { size: 10 } }
+            }
+        }
     }
 
     return (
         <div>
-            {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #3b82f6' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Empleados Activos</div>
-                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)' }}>{data.stats.activos}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>Total Legajos: {data.stats.total}</div>
+            <div className={styles.sectionIntro}>
+                <div>
+                    <h2>Panorama general</h2>
+                    <p>Los indicadores esenciales del período, sin mezclar el detalle operativo.</p>
                 </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #10b981' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Inversión del Período</div>
-                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: 'var(--color-success)' }}>${data.nomina.total.toLocaleString()}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>Masa salarial neta</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #8b5cf6' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Horas Extras Pagadas</div>
-                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: '#8b5cf6' }}>{data.nomina.totalHsExtras.toLocaleString()} hs</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>Inversión: ${data.nomina.totalMontoHsExtras.toLocaleString()}</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #f59e0b' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Tardanzas</div>
-                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: data.asistencia.porcentajeTardanzas > 15 ? 'var(--color-danger)' : 'inherit' }}>{data.asistencia.porcentajeTardanzas.toFixed(1)}%</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{data.asistencia.tardanzas} fichadas con retraso</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #ef4444' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Ausentismo</div>
-                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)', color: data.asistencia.porcentajeAusentismo > 10 ? 'var(--color-danger)' : 'inherit' }}>{data.asistencia.porcentajeAusentismo.toFixed(1)}%</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>{data.asistencia.ausencias} ausencias</div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #ec4899' }}>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 600 }}>Antigüedad Promedio</div>
-                    <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 800, marginTop: 'var(--space-2)' }}>{data.estructura.antiguedadPromedio} <span style={{ fontSize: 'var(--text-sm)', fontWeight: 400 }}>meses</span></div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-gray-400)' }}>Min: {data.estructura.antiguedadMinima} / Max: {data.estructura.antiguedadMaxima}</div>
-                </div>
+                <span className={styles.sectionTag}>{data.stats.activos} personas activas</span>
             </div>
 
-            {/* Charts */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Área</h3>
-                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
-                        <Pie data={areaChartData} options={{ maintainAspectRatio: false }} />
+            <section className={styles.primaryGrid} aria-label="Indicadores principales">
+                <article className={styles.metricCard}>
+                    <div className={styles.metricTop}><span className={styles.metricLabel}>Dotación activa</span><span className={styles.metricIcon}>RH</span></div>
+                    <div className={styles.metricValue}>{data.stats.activos}</div>
+                    <div className={styles.metricHint}>{data.stats.total} legajos totales · {data.stats.nuevosMes} altas en el mes</div>
+                </article>
+                <article className={styles.metricCard}>
+                    <div className={styles.metricTop}><span className={styles.metricLabel}>Inversión del período</span><span className={`${styles.metricIcon} ${styles.metricIconSuccess}`}>$</span></div>
+                    <div className={`${styles.metricValue} ${styles.positive}`}>{money(data.nomina.total)}</div>
+                    <div className={styles.metricHint}>Masa salarial neta consolidada</div>
+                </article>
+                <article className={styles.metricCard}>
+                    <div className={styles.metricTop}><span className={styles.metricLabel}>Puntualidad</span><span className={`${styles.metricIcon} ${puntualidad < 85 ? styles.metricIconWarning : styles.metricIconSuccess}`}>OK</span></div>
+                    <div className={`${styles.metricValue} ${puntualidad < 85 ? styles.warningText : styles.positive}`}>{puntualidad.toFixed(1)}%</div>
+                    <div className={styles.metricHint}>{data.asistencia.tardanzas} tardanzas sobre {data.asistencia.totalEntradas} entradas</div>
+                </article>
+                <article className={styles.metricCard}>
+                    <div className={styles.metricTop}><span className={styles.metricLabel}>Ausentismo</span><span className={`${styles.metricIcon} ${data.asistencia.porcentajeAusentismo > 10 ? styles.metricIconDanger : styles.metricIconWarning}`}>AU</span></div>
+                    <div className={`${styles.metricValue} ${data.asistencia.porcentajeAusentismo > 10 ? styles.dangerText : styles.warningText}`}>{data.asistencia.porcentajeAusentismo.toFixed(1)}%</div>
+                    <div className={styles.metricHint}>{data.asistencia.ausencias} de {data.asistencia.jornadasEsperadas} jornadas esperadas</div>
+                </article>
+            </section>
+
+            <div className={styles.summaryLayout}>
+                <section className={styles.panel}>
+                    <div className={styles.panelHeader}>
+                        <div><h3>Composición de la dotación</h3><p>Distribución actual por estructura organizativa.</p></div>
+                        <span className={styles.panelBadge}>Estructura</span>
                     </div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
-                    <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 700, marginBottom: 'var(--space-4)' }}>Distribución por Puesto</h3>
-                    <div style={{ height: '300px', display: 'flex', justifyContent: 'center' }}>
-                        <Pie data={puestoChartData} options={{ maintainAspectRatio: false }} />
+                    <div className={styles.distributionGrid}>
+                        <div>
+                            <div className={styles.metricLabel}>Por área</div>
+                            <div className={styles.chartFrame}><Doughnut data={areaChartData} options={chartOptions} /></div>
+                        </div>
+                        <div>
+                            <div className={styles.metricLabel}>Por puesto</div>
+                            <div className={styles.chartFrame}><Doughnut data={puestoChartData} options={chartOptions} /></div>
+                        </div>
                     </div>
-                </div>
+                </section>
+
+                <aside className={styles.panel}>
+                    <div className={styles.panelHeader}>
+                        <div><h3>Señales operativas</h3><p>Datos que conviene vigilar en el período.</p></div>
+                        <span className={styles.panelBadge}>4 claves</span>
+                    </div>
+                    <div className={styles.signals}>
+                        <div className={styles.signalRow}>
+                            <span className={styles.signalIcon}>HE</span>
+                            <div className={styles.signalCopy}><strong>Horas extras</strong><span>{data.nomina.totalHsExtras.toLocaleString('es-AR')} horas pagadas</span></div>
+                            <span className={styles.signalValue}>{money(data.nomina.totalMontoHsExtras)}</span>
+                        </div>
+                        <div className={styles.signalRow}>
+                            <span className={styles.signalIcon}>AU</span>
+                            <div className={styles.signalCopy}><strong>Costo del ausentismo</strong><span>Impacto estimado del período</span></div>
+                            <span className={`${styles.signalValue} ${styles.dangerText}`}>{money(data.asistencia.costoAusentismo)}</span>
+                        </div>
+                        <div className={styles.signalRow}>
+                            <span className={styles.signalIcon}>AN</span>
+                            <div className={styles.signalCopy}><strong>Antigüedad promedio</strong><span>Rango {data.estructura.antiguedadMinima}–{data.estructura.antiguedadMaxima} meses</span></div>
+                            <span className={styles.signalValue}>{data.estructura.antiguedadPromedio} meses</span>
+                        </div>
+                        <div className={styles.signalRow}>
+                            <span className={styles.signalIcon}>MV</span>
+                            <div className={styles.signalCopy}><strong>Movimientos</strong><span>Altas y bajas del mes</span></div>
+                            <span className={styles.signalValue}>+{data.stats.nuevosMes} / −{data.stats.bajasMes}</span>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
     )

@@ -1,11 +1,22 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
 interface VacacionesSACModalProps {
     onClose: () => void
-    empleados: any[]
+    empleados: Array<{ id: string; nombre: string; apellido?: string | null }>
+}
+
+interface PreviewLiquidacionEspecial {
+    error?: string
+    sac?: number
+    monto?: number
+    diasTrabajados?: number
+    dias: number
+    brutoMaximo?: number
+    mesesConsiderados?: number
+    antiguedad?: number
 }
 
 export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalProps) {
@@ -15,20 +26,14 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
     const [semestre, setSemestre] = useState<1 | 2>(new Date().getMonth() < 6 ? 1 : 2)
     const [cajaId, setCajaId] = useState('caja_chica')
     const [loading, setLoading] = useState(false)
-    const [previewData, setPreviewData] = useState<any>(null)
+    const [previewData, setPreviewData] = useState<PreviewLiquidacionEspecial | null>(null)
     const [montoManual, setMontoManual] = useState<number | null>(null)
     const [diasManual, setDiasManual] = useState<number>(0)
     const [baseManual, setBaseManual] = useState<number | null>(null)
     const [fechaInicioGoce, setFechaInicioGoce] = useState('')
     const [fechaFinGoce, setFechaFinGoce] = useState('')
 
-    useEffect(() => {
-        if (selectedEmpleado) {
-            handlePreview()
-        }
-    }, [selectedEmpleado, anio, semestre, tab])
-
-    const handlePreview = async () => {
+    const handlePreview = useCallback(async () => {
         setLoading(true)
         setPreviewData(null)
         setMontoManual(null)
@@ -55,10 +60,22 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
         } finally {
             setLoading(false)
         }
-    }
+    }, [anio, selectedEmpleado, semestre, tab])
+
+    useEffect(() => {
+        if (selectedEmpleado) void handlePreview()
+    }, [handlePreview, selectedEmpleado])
 
     const handleLiquidar = async () => {
         if (!selectedEmpleado || !montoManual) return
+        if (tab === 'vacaciones' && (!fechaInicioGoce || !fechaFinGoce)) {
+            toast.error('Indicá el inicio y el fin del goce de vacaciones')
+            return
+        }
+        if (tab === 'vacaciones' && fechaInicioGoce > fechaFinGoce) {
+            toast.error('La fecha de inicio no puede ser posterior a la fecha de fin')
+            return
+        }
         setLoading(true)
         try {
             const url = tab === 'sac' ? '/api/liquidaciones/sac' : '/api/liquidaciones/vacaciones'
@@ -87,7 +104,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                 const err = await res.json()
                 toast.error(err.error || 'Error al liquidar')
             }
-        } catch (error) {
+        } catch {
             toast.error('Error de red')
         } finally {
             setLoading(false)
@@ -96,7 +113,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
 
     const handleDiasManualChange = (val: number) => {
         setDiasManual(val);
-        if (tab === 'vacaciones' && previewData && previewData.dias > 0) {
+        if (tab === 'vacaciones' && previewData?.monto && previewData.dias > 0) {
             const valorDia = previewData.monto / previewData.dias;
             setMontoManual(Math.round(valorDia * val));
         } else if (tab === 'sac' && baseManual) {
@@ -294,7 +311,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                     <button 
                         className="btn btn-primary" 
                         onClick={handleLiquidar}
-                        disabled={loading || !selectedEmpleado || !montoManual}
+                        disabled={loading || !selectedEmpleado || !montoManual || (tab === 'vacaciones' && (!fechaInicioGoce || !fechaFinGoce || fechaInicioGoce > fechaFinGoce))}
                     >
                         🚀 Procesar Liquidación
                     </button>

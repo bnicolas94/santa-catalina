@@ -5,6 +5,7 @@ import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
 import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/payroll/validacionLiquidacion'
 import { fechaClaveRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
 import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
+import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,8 @@ export interface ResumenSemanal {
     horasPendientes: number
     montoHorasPendientes: number
     totalNeto: number
+    diasVacaciones: number
+    excluirLiquidacionSemanal: boolean
     desglosePorDia: DiaTrabajado[]
 }
 
@@ -59,6 +62,12 @@ export interface LiquidacionInput {
     calculatedData?: any
     tipo?: string
     adicionales?: { conceptoSalarialId: string; montoCalculado: number; detalle?: string }[]
+    estadosDiarios?: Array<{
+        fecha: Date
+        tipo: string
+        motivo?: string
+        observaciones?: string
+    }>
 }
 
 // ─── Servicio ────────────────────────────────────────────────────────────────
@@ -98,6 +107,10 @@ export class PayrollService {
                         }
                     }
                 },
+                liquidaciones: {
+                    where: { tipo: 'VACACIONES', estado: { not: 'anulado' } },
+                    select: { desglose: true }
+                },
                 horasPendientes: {
                     where: { pagado: false }
                 }
@@ -105,6 +118,19 @@ export class PayrollService {
         })
 
         if (!empleado) throw new Error('Empleado no encontrado')
+
+        // Vacaciones nuevas: estado diario. Vacaciones históricas: rango guardado
+        // dentro del comprobante, para no perder compatibilidad con lo ya liquidado.
+        const fechasVacaciones = new Set(
+            empleado.inasistencias
+                .filter(inasistencia => inasistencia.tipo === 'VACACIONES')
+                .map(inasistencia => fechaClaveRRHH(inasistencia.fecha))
+        )
+        empleado.liquidaciones.forEach(liquidacion => {
+            const rango = rangoVacacionesDesdeDesglose(liquidacion.desglose)
+            if (!rango) return
+            fechasDeRangoVacaciones(rango.desde, rango.hasta).forEach(fecha => fechasVacaciones.add(fecha))
+        })
 
         // 1. Obtener feriados en el periodo
         const feriados = await prisma.feriado.findMany({
@@ -195,6 +221,8 @@ export class PayrollService {
             const inasistencia = empleado.inasistencias.find(i => 
                 fechaClaveRRHH(i.fecha) === fechaStr
             )
+            const esVacaciones = fechasVacaciones.has(fechaStr)
+            const tipoInasistencia = esVacaciones ? 'VACACIONES' : inasistencia?.tipo
 
             const calculoDia = calcularDiaSemanal({
                 horasTrabajadas: resumen.horasTrabajadas,
@@ -205,7 +233,7 @@ export class PayrollService {
                 valorHoraExtra,
                 tieneMarcas: marcas.length > 0,
                 esFeriado,
-                tipoInasistencia: inasistencia?.tipo,
+                tipoInasistencia,
             })
 
             const primerEntrada = marcas.find((m: any) => m.tipo === 'entrada')?.fechaHora
@@ -226,9 +254,9 @@ export class PayrollService {
                 valorExtra: Math.round(calculoDia.valorExtra),
                 valorFeriado: Math.round(calculoDia.valorFeriado),
                 totalDia: Math.round(calculoDia.totalDia),
-                esJustificado: marcas.some((m: any) => m.origen === 'justificada') || (!!inasistencia && inasistencia.tipo.startsWith('JUSTIFICADA')),
-                tipoInasistencia: inasistencia?.tipo,
-                motivoInasistencia: inasistencia?.motivo || null
+                esJustificado: esVacaciones || marcas.some((m: any) => m.origen === 'justificada') || (!!inasistencia && inasistencia.tipo.startsWith('JUSTIFICADA')),
+                tipoInasistencia,
+                motivoInasistencia: esVacaciones ? 'Vacaciones' : inasistencia?.motivo || null
             })
 
             current.setDate(current.getDate() + 1)
@@ -268,6 +296,13 @@ export class PayrollService {
         const horasPendientesTotales = (empleado.horasPendientes || []).reduce((acc: number, hp: any) => acc + hp.cantidadHoras, 0)
 
         const totalNeto = sueldoBase + montoHorasExtras + montoHorasFeriado + montoHorasPendientes - descuentoPrestamos
+        const diasVacaciones = desglosePorDia.filter(dia => dia.tipoInasistencia === 'VACACIONES').length
+        const excluirLiquidacionSemanal = periodoLaboralCubiertoPorVacaciones(
+            fechaInicio,
+            fechaFin,
+            empleado.diasTrabajoSemana,
+            fechasVacaciones,
+        ) && desglosePorDia.every(dia => dia.horasTrabajadas <= 0)
 
         return {
             empleadoId: empleado.id,
@@ -286,6 +321,8 @@ export class PayrollService {
             horasPendientes: horasPendientesTotales,
             montoHorasPendientes,
             totalNeto,
+            diasVacaciones,
+            excluirLiquidacionSemanal,
             desglosePorDia
         }
     }
@@ -296,7 +333,7 @@ export class PayrollService {
      * Soporta 3 modos: automático (fichadas), calculado (WeeklyPayroll), manual (Express).
      */
     static async ejecutarLiquidacion(input: LiquidacionInput) {
-        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData, adicionales, tipo } = input
+        const { empleadoId, periodo, fechaInicio, fechaFin, cajaId, concepto, manualData, calculatedData, adicionales, tipo, estadosDiarios } = input
 
         if (!empleadoId || !periodo) {
             throw new Error('Faltan datos obligatorios')
@@ -339,6 +376,13 @@ export class PayrollService {
         })
 
         if (!empleado) throw new Error('Empleado no encontrado')
+
+        if (calculatedData) {
+            const estadoActual = await PayrollService.calcularSueldoSemanal(empleadoId, fechaInicio, fechaFin)
+            if (estadoActual.excluirLiquidacionSemanal) {
+                throw new Error('El empleado está de vacaciones durante toda su semana laboral y no corresponde generar una liquidación semanal.')
+            }
+        }
 
         let sueldoProporcional = 0
         let horasNormales = 0
@@ -513,6 +557,30 @@ export class PayrollService {
             }
 
             if (calculatedData) {
+                const [vacacionesDiarias, vacacionesPrevias, marcasPeriodo] = await Promise.all([
+                    tx.inasistencia.findMany({
+                        where: { empleadoId: empleado.id, tipo: 'VACACIONES', fecha: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt } },
+                        select: { fecha: true },
+                    }),
+                    tx.liquidacionSueldo.findMany({
+                        where: { empleadoId: empleado.id, tipo: 'VACACIONES', estado: { not: 'anulado' } },
+                        select: { desglose: true },
+                    }),
+                    tx.fichadaEmpleado.count({
+                        where: { empleadoId: empleado.id, fechaHora: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt }, tipo: { in: ['entrada', 'salida'] } },
+                    }),
+                ])
+                const fechasVacacionesActuales = new Set(vacacionesDiarias.map(dia => fechaClaveRRHH(dia.fecha)))
+                vacacionesPrevias.forEach(vacacion => {
+                    const rango = rangoVacacionesDesdeDesglose(vacacion.desglose)
+                    if (rango) fechasDeRangoVacaciones(rango.desde, rango.hasta).forEach(fecha => fechasVacacionesActuales.add(fecha))
+                })
+                if (marcasPeriodo === 0 && periodoLaboralCubiertoPorVacaciones(fechaInicio, fechaFin, empleado.diasTrabajoSemana, fechasVacacionesActuales)) {
+                    throw new Error('El empleado está de vacaciones durante toda su semana laboral y no corresponde generar una liquidación semanal.')
+                }
+            }
+
+            if (calculatedData) {
                 const cuotasTodaviaPendientes = cuotasAfectadas.length > 0
                     ? await tx.cuotaPrestamo.count({
                         where: { id: { in: cuotasAfectadas }, estado: 'pendiente' }
@@ -567,6 +635,22 @@ export class PayrollService {
                     } : undefined
                 }
             })
+
+            if (estadosDiarios?.length) {
+                const fechas = estadosDiarios.map(estado => estado.fecha)
+                await tx.inasistencia.deleteMany({
+                    where: { empleadoId: empleado.id, tipo: 'VACACIONES', fecha: { in: fechas } }
+                })
+                await tx.inasistencia.createMany({
+                    data: estadosDiarios.map(estado => ({
+                        empleadoId: empleado.id,
+                        fecha: estado.fecha,
+                        tipo: estado.tipo,
+                        motivo: estado.motivo,
+                        observaciones: estado.observaciones,
+                    }))
+                })
+            }
 
             const prestamosAfectados = new Set<string>()
             for (const cuotaId of cuotasAfectadas) {

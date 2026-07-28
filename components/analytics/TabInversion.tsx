@@ -1,8 +1,9 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { Line, Bar } from 'react-chartjs-2'
 import type { AnalyticsData } from './analytics.types'
+import styles from './analytics.module.css'
 
 interface TabInversionProps {
     data: AnalyticsData
@@ -13,9 +14,11 @@ interface TabInversionProps {
 }
 
 export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, expandedRow, setExpandedRow }: TabInversionProps) {
+    const [filtroTipo, setFiltroTipo] = useState('NORMAL')
     const filteredDetalle = data.nomina.detalle.filter(liq => {
-        if (filtroConcepto === 'todos') return true
-        return liq.conceptos.some(c => c.nombre === filtroConcepto)
+        const coincideTipo = filtroTipo === 'todos' || liq.tipo === filtroTipo
+        const coincideConcepto = filtroConcepto === 'todos' || liq.conceptos.some(c => c.nombre === filtroConcepto)
+        return coincideTipo && coincideConcepto
     })
 
     // Tendencia semanal chart
@@ -55,7 +58,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
 
     // Top extras employees
     const topExtrasEmployees = [...(data.nomina?.detalle || [])]
-        .filter(l => l.hsExtras > 0)
+        .filter(l => l.tipo === 'NORMAL' && l.hsExtras > 0)
         .sort((a, b) => b.montoExtras - a.montoExtras)
         .slice(0, 8)
 
@@ -90,6 +93,24 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
 
     return (
         <div>
+            <div className={styles.sectionIntro}>
+                <div>
+                    <h2>Inversión y nómina</h2>
+                    <p>Los indicadores operativos usan únicamente sueldo habitual; los pagos especiales se muestran por separado.</p>
+                </div>
+                <span className={styles.sectionTag}>Total general: ${data.nomina.totalGeneral.toLocaleString('es-AR')}</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+                {data.nomina.porTipo.map(grupo => (
+                    <button key={grupo.tipo} type="button" onClick={() => setFiltroTipo(grupo.tipo)} style={{ textAlign: 'left', padding: 'var(--space-4)', borderRadius: '12px', border: filtroTipo === grupo.tipo ? '2px solid var(--color-primary)' : '1px solid var(--color-gray-200)', background: filtroTipo === grupo.tipo ? '#eff6ff' : 'white', cursor: 'pointer', boxShadow: '0 4px 14px rgba(15,23,42,.04)' }}>
+                        <span style={{ display: 'block', color: 'var(--color-gray-500)', fontSize: '10px', fontWeight: 750, textTransform: 'uppercase', letterSpacing: '.05em' }}>{grupo.etiqueta}</span>
+                        <strong style={{ display: 'block', marginTop: '7px', color: 'var(--color-gray-900)', fontSize: '20px' }}>${grupo.total.toLocaleString('es-AR')}</strong>
+                        <small style={{ color: 'var(--color-gray-400)' }}>{grupo.cantidad} {grupo.cantidad === 1 ? 'liquidación' : 'liquidaciones'}</small>
+                    </button>
+                ))}
+            </div>
+
             {/* KPIs */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 <div className="card shadow-sm" style={{ padding: 'var(--space-5)', borderLeft: '4px solid #8b5cf6' }}>
@@ -163,14 +184,22 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
             {/* Planilla de Liquidaciones */}
             <div className="card shadow-sm" style={{ padding: 'var(--space-6)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-                    <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>📋 Planilla de Liquidaciones</h3>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
+                    <div><h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>Planilla de Liquidaciones</h3><p style={{ margin: '3px 0 0', color: 'var(--color-gray-500)', fontSize: '11px' }}>Filtrá primero por naturaleza del pago y luego por concepto adicional.</p></div>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <select aria-label="Tipo de liquidación" className="form-select" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ height: '36px', padding: '4px 12px' }}>
+                                <option value="todos">Todos los tipos</option>
+                                {data.nomina.porTipo.map(grupo => <option key={grupo.tipo} value={grupo.tipo}>{grupo.etiqueta}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
                         <select className="form-select" value={filtroConcepto} onChange={e => setFiltroConcepto(e.target.value)} style={{ height: '36px', padding: '4px 12px' }}>
                             <option value="todos">Todos los conceptos</option>
                             {data.nomina.conceptos.map((c: string) => (
                                 <option key={c} value={c}>{c}</option>
                             ))}
                         </select>
+                        </div>
                     </div>
                 </div>
                 <div className="table-container">
@@ -179,6 +208,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                             <tr>
                                 <th></th>
                                 <th>Empleado</th>
+                                <th>Tipo</th>
                                 <th>Hs Extras</th>
                                 <th>Ingresos</th>
                                 <th>Descuentos</th>
@@ -186,7 +216,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredDetalle.map(l => (
+                            {filteredDetalle.length === 0 ? <tr><td colSpan={7} style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--color-gray-400)' }}>No hay liquidaciones para los filtros seleccionados.</td></tr> : filteredDetalle.map(l => (
                                 <Fragment key={l.id}>
                                     <tr>
                                         <td>
@@ -195,6 +225,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                                             </button>
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{l.empleado}</td>
+                                        <td><span className="badge" style={{ fontSize: '9px', background: l.tipo === 'NORMAL' ? '#eff6ff' : l.tipo === 'SAC' ? '#f5f3ff' : l.tipo === 'VACACIONES' ? '#ecfdf5' : 'var(--color-gray-100)', color: l.tipo === 'NORMAL' ? '#1d4ed8' : l.tipo === 'SAC' ? '#6d28d9' : l.tipo === 'VACACIONES' ? '#047857' : 'var(--color-gray-600)' }}>{l.tipoLabel}</span></td>
                                         <td>
                                             <div style={{ fontWeight: 600 }}>{l.hsExtras} hs</div>
                                             {l.montoExtras > 0 && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>${l.montoExtras.toLocaleString()}</div>}
@@ -205,7 +236,7 @@ export default function TabInversion({ data, filtroConcepto, setFiltroConcepto, 
                                     </tr>
                                     {expandedRow === l.id && (
                                         <tr>
-                                            <td colSpan={6} style={{ padding: '0', background: 'var(--color-gray-50)' }}>
+                                            <td colSpan={7} style={{ padding: '0', background: 'var(--color-gray-50)' }}>
                                                 <div style={{ padding: 'var(--space-4)', borderLeft: '4px solid var(--color-primary)' }}>
                                                     <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 800, marginBottom: 'var(--space-2)' }}>Desglose de Conceptos</div>
                                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)' }}>

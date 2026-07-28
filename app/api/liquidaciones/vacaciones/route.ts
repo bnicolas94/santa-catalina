@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { PayrollService } from '@/lib/services/payroll.service'
+import { fechasDeRangoVacaciones } from '@/lib/payroll/vacaciones'
+import { instanteRRHH } from '@/lib/rrhh/fechas'
 
 export async function GET(request: Request) {
     try {
@@ -11,8 +13,8 @@ export async function GET(request: Request) {
 
         const preview = await PayrollService.calcularVacacionesPreview(empleadoId, anio)
         return NextResponse.json(preview)
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'No se pudo calcular vacaciones.' }, { status: 500 })
     }
 }
 
@@ -21,7 +23,19 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { empleadoId, anio, monto, dias, cajaId, fechaInicioGoce, fechaFinGoce } = body
 
-        if (!empleadoId || !monto) return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
+        if (!empleadoId || !Number.isFinite(Number(monto)) || Number(monto) <= 0) {
+            return NextResponse.json({ error: 'El empleado y el monto son obligatorios.' }, { status: 400 })
+        }
+        if (!fechaInicioGoce || !fechaFinGoce) {
+            return NextResponse.json({ error: 'Indicá las fechas de inicio y fin del goce de vacaciones.' }, { status: 400 })
+        }
+
+        let fechasVacaciones: string[]
+        try {
+            fechasVacaciones = fechasDeRangoVacaciones(fechaInicioGoce, fechaFinGoce)
+        } catch (error: unknown) {
+            return NextResponse.json({ error: error instanceof Error ? error.message : 'El período de vacaciones es inválido.' }, { status: 400 })
+        }
 
         // Creamos una liquidación especial de tipo VACACIONES
         const liquidacion = await PayrollService.ejecutarLiquidacion({
@@ -40,11 +54,17 @@ export async function POST(request: Request) {
                 fechaInicioGoce,
                 fechaFinGoce,
                 esVacaciones: true
-            }
+            },
+            estadosDiarios: fechasVacaciones.map(fecha => ({
+                fecha: instanteRRHH(fecha),
+                tipo: 'VACACIONES',
+                motivo: 'Vacaciones',
+                observaciones: `Registrado al liquidar vacaciones ${anio}`,
+            })),
         })
 
         return NextResponse.json(liquidacion)
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+    } catch (error: unknown) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'No se pudo liquidar vacaciones.' }, { status: 500 })
     }
 }

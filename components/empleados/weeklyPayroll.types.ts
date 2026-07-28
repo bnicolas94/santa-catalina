@@ -59,6 +59,8 @@ export interface ResultadoLiquidacionUI {
     horasPendientes: number
     montoHorasPendientes: number
     totalNeto: number
+    diasVacaciones?: number
+    excluirLiquidacionSemanal?: boolean
     desglosePorDia: DiaLiquidacionUI[]
     ajusteHorasExtras?: number
     adicionales: AdicionalLiquidacionUI[]

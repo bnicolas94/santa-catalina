@@ -42,6 +42,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [borradorCargado, setBorradorCargado] = useState(false)
     const [empleadosExcluidos, setEmpleadosExcluidos] = useState<EmpleadoLiquidable[]>([])
+    const [empleadosDeVacaciones, setEmpleadosDeVacaciones] = useState<EmpleadoLiquidable[]>([])
     const [conceptos, setConceptos] = useState<ConceptoSalarialUI[]>([])
     const [updatingStatusDate, setUpdatingStatusDate] = useState<string | null>(null)
 
@@ -61,6 +62,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setLoading(true)
         setResultados([])
         setEmpleadosExcluidos([])
+        setEmpleadosDeVacaciones([])
         
         try {
             // 1. Determinar nombre del periodo para buscar liquidaciones existentes
@@ -116,7 +118,18 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     fechaFin
                 })
             })
+            if (!res.ok) throw new Error('No se pudo calcular la liquidación semanal.')
             const data: Omit<ResultadoLiquidacionUI, 'adicionales'>[] = await res.json()
+            const idsDeVacaciones = new Set(data.filter(resultado => resultado.excluirLiquidacionSemanal).map(resultado => resultado.empleadoId))
+            const vacaciones = empleadosParaLiquidar.filter(empleado => idsDeVacaciones.has(empleado.id))
+            const dataLiquidable = data.filter(resultado => !resultado.excluirLiquidacionSemanal)
+            setEmpleadosDeVacaciones(vacaciones)
+
+            if (dataLiquidable.length === 0) {
+                setResultados([])
+                setBorradorCargado(false)
+                return
+            }
             
             // 5. Buscar borradores guardados para este periodo
             try {
@@ -124,7 +137,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 if (bRes.ok) {
                     const borradores: BorradorLiquidacionUI[] = await bRes.json()
                     if (borradores.length > 0) {
-                        const merged: ResultadoLiquidacionUI[] = data.map(r => {
+                        const merged: ResultadoLiquidacionUI[] = dataLiquidable.map(r => {
                             const b = borradores.find(borrador => borrador.empleadoId === r.empleadoId)
                             const extraItems = b?.items || []
                             const montoExtrasItems = extraItems.reduce((acc, item) => acc + item.montoCalculado, 0)
@@ -160,14 +173,14 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         setResultados(merged)
                         setBorradorCargado(true)
                     } else {
-                        setResultados(data.map(r => ({ ...r, adicionales: [] })))
+                        setResultados(dataLiquidable.map(r => ({ ...r, adicionales: [] })))
                         setBorradorCargado(false)
                     }
                 } else {
-                    setResultados(data.map(r => ({ ...r, adicionales: [] })))
+                    setResultados(dataLiquidable.map(r => ({ ...r, adicionales: [] })))
                 }
             } catch {
-                setResultados(data.map(r => ({ ...r, adicionales: [] })))
+                setResultados(dataLiquidable.map(r => ({ ...r, adicionales: [] })))
             }
         } catch (error) {
             console.error(error)
@@ -390,6 +403,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     }
 
     const getDiaStatus = (dia: DiaLiquidacionUI) => {
+        if (dia.tipoInasistencia === 'VACACIONES') {
+            return 'VACACIONES'
+        }
         if (dia.motivoInasistencia === 'Enfermedad') {
             return 'ENFERMEDAD'
         }
@@ -596,6 +612,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         cajaId={cajaId}
                         loading={loading}
                         empleadosExcluidos={empleadosExcluidos}
+                        empleadosDeVacaciones={empleadosDeVacaciones}
                         onFechaInicioChange={setFechaInicio}
                         onFechaFinChange={setFechaFin}
                         onCajaChange={setCajaId}

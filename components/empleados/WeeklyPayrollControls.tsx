@@ -6,6 +6,7 @@ interface Props {
     cajaId: string
     loading: boolean
     empleadosExcluidos: EmpleadoLiquidable[]
+    empleadosDeVacaciones: EmpleadoLiquidable[]
     onFechaInicioChange: (fecha: string) => void
     onFechaFinChange: (fecha: string) => void
     onCajaChange: (cajaId: string) => void
@@ -44,6 +45,16 @@ export function WeeklyPayrollControls(props: Props) {
                 <strong>{props.empleadosExcluidos.length} empleados</strong> ya tienen una liquidación finalizada en este periodo y fueron omitidos:
                 <span style={{ marginLeft: 'var(--space-2)', fontWeight: 400, fontStyle: 'italic' }}>
                     {props.empleadosExcluidos.map(empleado => `${empleado.nombre} ${empleado.apellido || ''}`).join(', ')}
+                </span>
+            </div>
+        </div>}
+
+        {props.empleadosDeVacaciones.length > 0 && <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
+            <span>🏖️</span>
+            <div style={{ color: '#166534', fontWeight: 500 }}>
+                <strong>{props.empleadosDeVacaciones.length} {props.empleadosDeVacaciones.length === 1 ? 'empleada/o está' : 'empleadas/os están'} de vacaciones</strong> durante toda su semana laboral y no se incluirán en esta liquidación:
+                <span style={{ marginLeft: 'var(--space-2)', fontWeight: 400, fontStyle: 'italic' }}>
+                    {props.empleadosDeVacaciones.map(empleado => `${empleado.nombre} ${empleado.apellido || ''}`).join(', ')}
                 </span>
             </div>
         </div>}

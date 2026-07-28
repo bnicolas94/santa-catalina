@@ -454,6 +454,11 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                         🚨 Falta Injustificada
                                                     </span>
                                                 )}
+                                                {d.status === 'VACACIONES' && (
+                                                    <span style={{ color: '#047857', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
+                                                        Vacaciones programadas
+                                                    </span>
+                                                )}
                                                 {d.status === 'TRABAJO' && !d.entrada && !d.esFeriado && !d.esFranco && (
                                                     <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-xs)' }}>
                                                         Día hábil sin fichadas
@@ -485,6 +490,8 @@ export default function TabLegajo({ data, onRefresh }: TabLegajoProps) {
                                                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
                                                         <span className="spinner-small"></span> Guardando...
                                                     </span>
+                                                ) : d.status === 'VACACIONES' ? (
+                                                    <span style={{ color: '#047857', fontSize: 'var(--text-xs)', fontWeight: 600 }}>Gestionado desde Vacaciones</span>
                                                 ) : (
                                                     <select
                                                         value={d.status}
