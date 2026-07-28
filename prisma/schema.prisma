@@ -9,60 +9,61 @@ datasource db {
 }
 
 model Empleado {
-  id                   String               @id @default(uuid())
-  nombre               String
-  apellido             String?
-  dni                  String?              @unique
-  email                String?              @unique
-  password             String?
-  rol                  String
-  telefono             String?
-  activo               Boolean              @default(true)
-  fechaIngreso         DateTime?            @map("fecha_ingreso")
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  sueldoBaseMensual    Float                @default(0) @map("sueldo_base_mensual")
-  jornal               Float                @default(0)
-  valorHoraNormal      Float?               @map("valor_hora_normal")
-  cicloPago            String               @default("SEMANAL") @map("ciclo_pago")
-  porcentajeHoraExtra  Float                @default(50) @map("porcentaje_hora_extra")
-  valorHoraExtra       Float                @default(0) @map("valor_hora_extra")
-  porcentajeFeriado    Float                @default(100) @map("porcentaje_feriado")
-  horasTrabajoDiarias  Float                @default(8) @map("horas_trabajo_diarias")
-  diasTrabajoSemana    String               @default("Lunes a Viernes") @map("dias_trabajo_semana")
-  horarioEntrada       String?              @map("horario_entrada")
-  horarioSalida        String?              @map("horario_salida")
-  codigoBiometrico     String?              @unique @map("codigo_biometrico")
-  ubicacionId          String?              @map("id_ubicacion")
-  rolId                String?              @map("id_rol")
-  preferenciasReporte  Json?                @map("preferencias_reporte")
-  areaId               String?              @map("id_area")
-  puestoId             String?              @map("id_puesto")
-  turnoId              String?              @map("id_turno")
-  areasResponsable     Area[]               @relation("ResponsableArea")
-  asignaciones         AsignacionOperario[]
-  asignacionesVehiculo AsignacionVehiculo[] @relation("AsignacionesVehiculo")
-  documentos           DocumentoEmpleado[]
-  area                 Area?                @relation("EmpleadoArea", fields: [areaId], references: [id])
-  puesto               Puesto?              @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
-  rolRel               RolEmpleado?         @relation(fields: [rolId], references: [id])
-  turno                TurnoTrabajo?        @relation("EmpleadoTurno", fields: [turnoId], references: [id])
-  ubicacion            Ubicacion?           @relation(fields: [ubicacionId], references: [id])
-  evaluaciones         Evaluacion[]         @relation("EmpleadoEvaluado")
-  evaluacionesHechas   Evaluacion[]         @relation("Evaluador")
-  fichadas             FichadaEmpleado[]
-  horasPendientes      HoraExtraPendiente[]
-  inasistencias        Inasistencia[]
-  liquidacionesFinales LiquidacionFinal[]
-  liquidaciones        LiquidacionSueldo[]
-  lotesCoordinados     Lote[]               @relation("CoordinadorLote")
-  prestamos            PrestamoEmpleado[]
-  prestamosAnulados    PrestamoEmpleado[]   @relation("PrestamoAnuladoPor")
-  rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
-  rutasChofer          Ruta[]               @relation("ChoferRuta")
-  sanciones            Sancion[]
-  talleUniforme        TalleUniforme?
-  entregasUniforme     EntregaUniforme[]    @relation("EmpleadoEntregasUniforme")
+  id                    String               @id @default(uuid())
+  nombre                String
+  apellido              String?
+  dni                   String?              @unique
+  email                 String?              @unique
+  password              String?
+  rol                   String
+  telefono              String?
+  activo                Boolean              @default(true)
+  fechaIngreso          DateTime?            @map("fecha_ingreso")
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  sueldoBaseMensual     Float                @default(0) @map("sueldo_base_mensual")
+  jornal                Float                @default(0)
+  valorHoraNormal       Float?               @map("valor_hora_normal")
+  cicloPago             String               @default("SEMANAL") @map("ciclo_pago")
+  porcentajeHoraExtra   Float                @default(50) @map("porcentaje_hora_extra")
+  valorHoraExtra        Float                @default(0) @map("valor_hora_extra")
+  porcentajeFeriado     Float                @default(100) @map("porcentaje_feriado")
+  horasTrabajoDiarias   Float                @default(8) @map("horas_trabajo_diarias")
+  diasTrabajoSemana     String               @default("Lunes a Viernes") @map("dias_trabajo_semana")
+  horarioEntrada        String?              @map("horario_entrada")
+  horarioSalida         String?              @map("horario_salida")
+  codigoBiometrico      String?              @unique @map("codigo_biometrico")
+  ubicacionId           String?              @map("id_ubicacion")
+  rolId                 String?              @map("id_rol")
+  preferenciasReporte   Json?                @map("preferencias_reporte")
+  areaId                String?              @map("id_area")
+  puestoId              String?              @map("id_puesto")
+  turnoId               String?              @map("id_turno")
+  areasResponsable      Area[]               @relation("ResponsableArea")
+  asignaciones          AsignacionOperario[]
+  asignacionesVehiculo  AsignacionVehiculo[] @relation("AsignacionesVehiculo")
+  documentos            DocumentoEmpleado[]
+  area                  Area?                @relation("EmpleadoArea", fields: [areaId], references: [id])
+  puesto                Puesto?              @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
+  rolRel                RolEmpleado?         @relation(fields: [rolId], references: [id])
+  turno                 TurnoTrabajo?        @relation("EmpleadoTurno", fields: [turnoId], references: [id])
+  ubicacion             Ubicacion?           @relation(fields: [ubicacionId], references: [id])
+  evaluaciones          Evaluacion[]         @relation("EmpleadoEvaluado")
+  evaluacionesHechas    Evaluacion[]         @relation("Evaluador")
+  fichadas              FichadaEmpleado[]
+  horasPendientes       HoraExtraPendiente[]
+  inasistencias         Inasistencia[]
+  liquidacionesFinales  LiquidacionFinal[]
+  liquidaciones         LiquidacionSueldo[]
+  liquidacionesAnuladas LiquidacionSueldo[]  @relation("LiquidacionAnuladaPor")
+  lotesCoordinados      Lote[]               @relation("CoordinadorLote")
+  prestamos             PrestamoEmpleado[]
+  prestamosAnulados     PrestamoEmpleado[]   @relation("PrestamoAnuladoPor")
+  rendiciones           RendicionChofer[]    @relation("RendicionesChofer")
+  rutasChofer           Ruta[]               @relation("ChoferRuta")
+  sanciones             Sancion[]
+  talleUniforme         TalleUniforme?
+  entregasUniforme      EntregaUniforme[]    @relation("EmpleadoEntregasUniforme")
 
   @@map("empleados")
 }
@@ -479,29 +480,31 @@ model GastoOperativo {
 }
 
 model MovimientoCaja {
-  id           String                 @id @default(uuid())
-  fecha        DateTime               @default(now())
-  tipo         String
-  concepto     String
-  monto        Float
-  medioPago    String                 @default("efectivo") @map("medio_pago")
-  cajaOrigen   String?                @map("caja_origen")
-  descripcion  String?
-  createdAt    DateTime               @default(now())
-  pedidoId     String?                @map("id_pedido")
-  gastoId      String?                @map("id_gasto")
-  rendicionId  String?                @map("id_rendicion")
-  prestamoId   String?                @map("id_prestamo")
-  cuotaPrestamoId String?             @unique @map("id_cuota_prestamo")
-  movimientoReversaDeId String?       @unique @map("id_movimiento_reversado")
-  pedido       Pedido?                @relation(fields: [pedidoId], references: [id])
-  rendicion    RendicionChofer?       @relation(fields: [rendicionId], references: [id])
-  gasto        GastoOperativo?        @relation(fields: [gastoId], references: [id])
-  movimientoMp MovimientoMercadoPago?
-  prestamo     PrestamoEmpleado?      @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
-  cuotaPrestamo CuotaPrestamo?        @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
-  movimientoReversaDe MovimientoCaja? @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
-  movimientoReversion MovimientoCaja? @relation("ReversionMovimientoCaja")
+  id                    String                 @id @default(uuid())
+  fecha                 DateTime               @default(now())
+  tipo                  String
+  concepto              String
+  monto                 Float
+  medioPago             String                 @default("efectivo") @map("medio_pago")
+  cajaOrigen            String?                @map("caja_origen")
+  descripcion           String?
+  createdAt             DateTime               @default(now())
+  pedidoId              String?                @map("id_pedido")
+  gastoId               String?                @map("id_gasto")
+  rendicionId           String?                @map("id_rendicion")
+  prestamoId            String?                @map("id_prestamo")
+  cuotaPrestamoId       String?                @unique @map("id_cuota_prestamo")
+  liquidacionSueldoId   String?                @map("id_liquidacion_sueldo")
+  movimientoReversaDeId String?                @unique @map("id_movimiento_reversado")
+  pedido                Pedido?                @relation(fields: [pedidoId], references: [id])
+  rendicion             RendicionChofer?       @relation(fields: [rendicionId], references: [id])
+  gasto                 GastoOperativo?        @relation(fields: [gastoId], references: [id])
+  movimientoMp          MovimientoMercadoPago?
+  prestamo              PrestamoEmpleado?      @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
+  cuotaPrestamo         CuotaPrestamo?         @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
+  liquidacionSueldo     LiquidacionSueldo?     @relation(fields: [liquidacionSueldoId], references: [id], onDelete: SetNull)
+  movimientoReversaDe   MovimientoCaja?        @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
+  movimientoReversion   MovimientoCaja?        @relation("ReversionMovimientoCaja")
 
   @@map("movimientos_caja")
 }
@@ -622,24 +625,24 @@ model Feriado {
 }
 
 model PrestamoEmpleado {
-  id             String          @id @default(uuid())
-  fechaSolicitud DateTime        @default(now()) @map("fecha_solicitud")
-  montoTotal     Float           @map("monto_total")
-  cantidadCuotas Int             @map("cantidad_cuotas")
-  estado         String          @default("activo")
-  frecuencia     String          @default("SEMANAL")
-  modoInicio     String          @default("INMEDIATO")
-  observaciones  String?
-  origenEntrega  String?          @map("origen_entrega")
-  motivoAnulacion String?         @map("motivo_anulacion")
-  anuladoAt      DateTime?        @map("anulado_at")
-  anuladoPorId   String?          @map("id_anulado_por")
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  empleadoId     String          @map("id_empleado")
-  cuotas         CuotaPrestamo[]
-  empleado       Empleado        @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
-  anuladoPor     Empleado?       @relation("PrestamoAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  id              String           @id @default(uuid())
+  fechaSolicitud  DateTime         @default(now()) @map("fecha_solicitud")
+  montoTotal      Float            @map("monto_total")
+  cantidadCuotas  Int              @map("cantidad_cuotas")
+  estado          String           @default("activo")
+  frecuencia      String           @default("SEMANAL")
+  modoInicio      String           @default("INMEDIATO")
+  observaciones   String?
+  origenEntrega   String?          @map("origen_entrega")
+  motivoAnulacion String?          @map("motivo_anulacion")
+  anuladoAt       DateTime?        @map("anulado_at")
+  anuladoPorId    String?          @map("id_anulado_por")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  empleadoId      String           @map("id_empleado")
+  cuotas          CuotaPrestamo[]
+  empleado        Empleado         @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  anuladoPor      Empleado?        @relation("PrestamoAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
   movimientosCaja MovimientoCaja[]
 
   @@map("prestamos_empleados")
@@ -679,12 +682,22 @@ model LiquidacionSueldo {
   totalNeto           Float             @default(0) @map("total_neto")
   estado              String            @default("generado")
   empleadoId          String            @map("id_empleado")
+  periodoDesde        DateTime?         @map("periodo_desde")
+  periodoHasta        DateTime?         @map("periodo_hasta")
+  registradaEnCaja    Boolean?          @map("registrada_en_caja")
+  motivoAnulacion     String?           @map("motivo_anulacion")
+  detalleAnulacion    Json?             @map("detalle_anulacion")
+  anuladoAt           DateTime?         @map("anulado_at")
+  anuladoPorId        String?           @map("id_anulado_por")
   desglose            Json?             @map("desglose")
   tipo                String            @default("NORMAL")
   cuotasDescontadas   CuotaPrestamo[]
   items               ItemLiquidacion[]
   empleado            Empleado          @relation(fields: [empleadoId], references: [id])
+  anuladoPor          Empleado?         @relation("LiquidacionAnuladaPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  movimientosCaja     MovimientoCaja[]
 
+  @@index([empleadoId, tipo, periodoDesde, periodoHasta])
   @@map("liquidaciones_sueldos")
 }
 
@@ -851,7 +864,7 @@ model Sancion {
   id            String   @id @default(uuid())
   empleadoId    String   @map("id_empleado")
   fecha         DateTime @default(now())
-  tipo          String   // e.g., "SANCION", "APERCIBIMIENTO", "SUSPENSION"
+  tipo          String // e.g., "SANCION", "APERCIBIMIENTO", "SUSPENSION"
   motivo        String
   observaciones String?
   alertaId      String?  @map("id_alerta") // Referencia opcional a la alerta que lo disparó
@@ -1006,28 +1019,28 @@ enum CicloPago {
 }
 
 model TalleUniforme {
-  id          String   @id @default(uuid())
-  empleadoId  String   @unique @map("id_empleado")
-  remera      String?
-  buzo        String?
-  impreso     Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  empleadoId String   @unique @map("id_empleado")
+  remera     String?
+  buzo       String?
+  impreso    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  empleado   Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("talles_uniforme")
 }
 
 model EntregaUniforme {
-  id          String   @id @default(uuid())
-  empleadoId  String   @map("id_empleado")
-  fecha       DateTime @default(now())
-  remera      Int      @default(0)
-  buzo        Int      @default(0)
+  id            String   @id @default(uuid())
+  empleadoId    String   @map("id_empleado")
+  fecha         DateTime @default(now())
+  remera        Int      @default(0)
+  buzo          Int      @default(0)
   observaciones String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  empleado    Empleado @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  empleado      Empleado @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("entregas_uniforme")
 }

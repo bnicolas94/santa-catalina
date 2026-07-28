@@ -41,8 +41,8 @@ export async function POST(request: Request) {
         const liquidacion = await PayrollService.ejecutarLiquidacion({
             empleadoId,
             periodo: `Vacaciones ${anio} (${dias} días)`,
-            fechaInicio: `${anio}-01-01`,
-            fechaFin: `${anio}-12-31`,
+            fechaInicio: fechaInicioGoce,
+            fechaFin: fechaFinGoce,
             cajaId: cajaId || 'caja_chica',
             tipo: 'VACACIONES',
             manualData: {

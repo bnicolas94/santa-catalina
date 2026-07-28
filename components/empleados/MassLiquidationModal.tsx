@@ -36,10 +36,9 @@ export function MassLiquidationModal({ empleados, onClose, onSuccess }: MassLiqu
         setResultados([])
         setSelectedIds([])
 
-        const start = `${mes}-01T00:00:00.000Z`
-        let d = new Date(start)
-        d.setMonth(d.getMonth() + 1)
-        const end = d.toISOString()
+        const start = `${mes}-01`
+        const [anio, numeroMes] = mes.split('-').map(Number)
+        const end = new Date(Date.UTC(anio, numeroMes, 0)).toISOString().slice(0, 10)
 
         try {
             const scanPromises = empleados.filter(e => e.activo).map(async (emp) => {
@@ -91,10 +90,9 @@ export function MassLiquidationModal({ empleados, onClose, onSuccess }: MassLiqu
         let exitos = 0
         let errores = 0
 
-        const start = `${mes}-01T00:00:00.000Z`
-        let d = new Date(start)
-        d.setMonth(d.getMonth() + 1)
-        const end = d.toISOString()
+        const start = `${mes}-01`
+        const [anio, numeroMes] = mes.split('-').map(Number)
+        const end = new Date(Date.UTC(anio, numeroMes, 0)).toISOString().slice(0, 10)
 
         for (const id of selectedIds) {
             try {

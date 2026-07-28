@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 
 import { eventBus } from '@/lib/events'
-import { etiquetaSemanaOrigen } from '@/lib/payroll/horasExtrasAdeudadas'
+import { etiquetaSemanaOrigen, semanaLaboralDeOrigen } from '@/lib/payroll/horasExtrasAdeudadas'
 import { prisma } from '@/lib/prisma'
-import { fechaClaveRRHH } from '@/lib/rrhh/fechas'
+import { fechaClaveRRHH, instanteRRHH } from '@/lib/rrhh/fechas'
 import { CajaService } from '@/lib/services/caja.service'
 
 export async function POST(request: Request) {
@@ -34,11 +34,15 @@ export async function POST(request: Request) {
 
             const fechaOrigen = fechaClaveRRHH(pendiente.fechaOrigen)
             const semanaOrigen = etiquetaSemanaOrigen(fechaOrigen)
+            const rangoOrigen = semanaLaboralDeOrigen(fechaOrigen)
             const nombreEmpleado = `${pendiente.empleado.nombre} ${pendiente.empleado.apellido || ''}`.trim()
             const nuevaLiquidacion = await tx.liquidacionSueldo.create({
                 data: {
                     empleadoId: pendiente.empleadoId,
                     periodo: `Pago de horas extras adeudadas · ${semanaOrigen}`,
+                    periodoDesde: instanteRRHH(rangoOrigen.desde),
+                    periodoHasta: instanteRRHH(rangoOrigen.hasta),
+                    registradaEnCaja: true,
                     sueldoProporcional: 0,
                     horasNormales: 0,
                     montoHorasNormales: 0,
@@ -68,6 +72,7 @@ export async function POST(request: Request) {
                 concepto: 'pago_horas_extras_adeudadas',
                 monto: pendiente.montoCalculado,
                 cajaOrigen: cajaId,
+                liquidacionSueldoId: nuevaLiquidacion.id,
                 descripcion: `Horas extras adeudadas: ${nombreEmpleado} - ${semanaOrigen} (ID: ${nuevaLiquidacion.id})`,
             })
 

@@ -19,7 +19,8 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const empleadoId = searchParams.get('empleadoId') || undefined
         const periodo = searchParams.get('periodo') || undefined
-        const liquidaciones = await PayrollService.findLiquidaciones(empleadoId, periodo)
+        const incluirAnuladas = searchParams.get('incluirAnuladas') === 'true'
+        const liquidaciones = await PayrollService.findLiquidaciones(empleadoId, periodo, incluirAnuladas)
         return NextResponse.json(liquidaciones)
     } catch (error) {
         console.error('Error listando liquidaciones:', error)
@@ -27,20 +28,9 @@ export async function GET(request: Request) {
     }
 }
 
-// DELETE /api/liquidaciones — Revertir liquidación
-export async function DELETE(request: Request) {
-    try {
-        const { searchParams } = new URL(request.url)
-        const id = searchParams.get('id')
-
-        if (!id) {
-            return NextResponse.json({ error: 'ID de liquidación requerido' }, { status: 400 })
-        }
-
-        const result = await PayrollService.revertirLiquidacion(id)
-        return NextResponse.json(result)
-    } catch (error: any) {
-        console.error('Error eliminando liquidación:', error)
-        return NextResponse.json({ error: error.message || 'Error al eliminar la liquidación' }, { status: 500 })
-    }
+// Las liquidaciones forman parte del historial contable y no se eliminan.
+export async function DELETE() {
+    return NextResponse.json({
+        error: 'Las liquidaciones no se eliminan. Usá la acción de anulación trazable.',
+    }, { status: 405 })
 }

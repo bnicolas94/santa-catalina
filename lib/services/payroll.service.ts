@@ -3,10 +3,17 @@ import { eventBus } from '@/lib/events'
 import { CajaService } from '@/lib/services/caja.service'
 import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
 import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/payroll/validacionLiquidacion'
-import { fechaClaveRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
+import { fechaClaveRRHH, instanteRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
 import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
 import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
 import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
+import {
+    normalizarRangoLiquidacion,
+    rangoHistoricoLiquidacion,
+    rangosLiquidacionSeSuperponen,
+    validarLiquidacionAnulable,
+    validarMotivoAnulacionLiquidacion,
+} from '@/lib/payroll/liquidaciones'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -70,6 +77,56 @@ export interface LiquidacionInput {
         motivo?: string
         observaciones?: string
     }>
+}
+
+type ClienteLiquidaciones = {
+    liquidacionSueldo: typeof prisma.liquidacionSueldo
+}
+
+async function encontrarLiquidacionDuplicada(
+    cliente: ClienteLiquidaciones,
+    input: {
+        empleadoId: string
+        periodo: string
+        tipo: string
+        desde: string
+        hasta: string
+    },
+) {
+    if (!['NORMAL', 'VACACIONES', 'SAC'].includes(input.tipo)) {
+        return cliente.liquidacionSueldo.findFirst({
+            where: { empleadoId: input.empleadoId, periodo: input.periodo, estado: 'pagado' },
+            select: { id: true, periodo: true },
+        })
+    }
+
+    const conRango = await cliente.liquidacionSueldo.findFirst({
+        where: {
+            empleadoId: input.empleadoId,
+            tipo: input.tipo,
+            estado: 'pagado',
+            periodoDesde: { lte: instanteRRHH(input.hasta) },
+            periodoHasta: { gte: instanteRRHH(input.desde) },
+        },
+        select: { id: true, periodo: true },
+    })
+    if (conRango) return conRango
+
+    const historicas = await cliente.liquidacionSueldo.findMany({
+        where: {
+            empleadoId: input.empleadoId,
+            tipo: input.tipo,
+            estado: 'pagado',
+            periodoDesde: null,
+            periodoHasta: null,
+        },
+        select: { id: true, periodo: true, desglose: true },
+    })
+    const rangoNuevo = { desde: input.desde, hasta: input.hasta }
+    return historicas.find(liquidacion => {
+        const rangoHistorico = rangoHistoricoLiquidacion(liquidacion.periodo, liquidacion.desglose)
+        return rangoHistorico ? rangosLiquidacionSeSuperponen(rangoNuevo, rangoHistorico) : false
+    }) || null
 }
 
 // ─── Servicio ────────────────────────────────────────────────────────────────
@@ -337,19 +394,26 @@ export class PayrollService {
             throw new Error('Faltan datos obligatorios')
         }
 
-        // Verificar duplicación de liquidación pagada
-        const existente = await prisma.liquidacionSueldo.findFirst({
-            where: { empleadoId, periodo, estado: 'pagado' }
-        })
-        if (existente) {
-            throw new Error(`El empleado ya tiene una liquidación pagada para el periodo ${periodo}.`)
-        }
-
         if (!fechaInicio || !fechaFin) {
             throw new Error('Faltan datos para la liquidación')
         }
 
-        const rangoPeriodo = rangoDiasRRHH(fechaInicio, fechaFin)
+        const rangoCivil = normalizarRangoLiquidacion(fechaInicio, fechaFin)
+        const tipoLiquidacion = tipo || 'NORMAL'
+
+        // Salida rápida; la misma validación se repite dentro del bloqueo
+        // transaccional para evitar pagos simultáneos del mismo período.
+        const existente = await encontrarLiquidacionDuplicada(prisma, {
+            empleadoId,
+            periodo,
+            tipo: tipoLiquidacion,
+            ...rangoCivil,
+        })
+        if (existente) {
+            throw new Error(`El empleado ya tiene una liquidación pagada que se superpone con ${periodo}: ${existente.periodo}.`)
+        }
+
+        const rangoPeriodo = rangoDiasRRHH(rangoCivil.desde, rangoCivil.hasta)
         const empleado = await prisma.empleado.findUnique({
             where: { id: empleadoId },
             include: {
@@ -545,11 +609,14 @@ export class PayrollService {
 
             // La verificación definitiva ocurre dentro del bloqueo. La consulta
             // previa sólo funciona como salida rápida para el caso habitual.
-            const liquidacionPagada = await tx.liquidacionSueldo.findFirst({
-                where: { empleadoId: empleado.id, periodo, estado: 'pagado' }
+            const liquidacionPagada = await encontrarLiquidacionDuplicada(tx as unknown as ClienteLiquidaciones, {
+                empleadoId: empleado.id,
+                periodo,
+                tipo: tipoLiquidacion,
+                ...rangoCivil,
             })
             if (liquidacionPagada) {
-                throw new Error(`El empleado ya tiene una liquidación pagada para el periodo ${periodo}.`)
+                throw new Error(`El empleado ya tiene una liquidación pagada que se superpone con ${periodo}: ${liquidacionPagada.periodo}.`)
             }
 
             if (calculatedData) {
@@ -612,6 +679,9 @@ export class PayrollService {
                 data: {
                     empleadoId: empleado.id,
                     periodo: (manualData || calculatedData) ? periodo : `${periodo} (${diasTrabajados} d. trab.)`,
+                    periodoDesde: instanteRRHH(rangoCivil.desde),
+                    periodoHasta: instanteRRHH(rangoCivil.hasta),
+                    registradaEnCaja: Boolean(cajaId && neto > 0),
                     sueldoProporcional,
                     horasNormales,
                     montoHorasNormales: montoHsNorm,
@@ -623,7 +693,7 @@ export class PayrollService {
                     descuentosPrestamos: deduccionCuotas,
                     totalNeto: neto,
                     estado: 'pagado',
-                    tipo: tipo || 'NORMAL',
+                    tipo: tipoLiquidacion,
                     desglose: calculatedData?.desglosePorDia || (manualData ? {
                         ...manualData,
                         descuentoPrestamos: deduccionCuotas,
@@ -689,6 +759,7 @@ export class PayrollService {
                     concepto: concepto || 'pago_sueldo',
                     monto: neto,
                     cajaOrigen: cajaId,
+                    liquidacionSueldoId: nuevaLiquidacion.id,
                     descripcion: `Liquidación Sueldo: ${empleado.nombre} ${empleado.apellido || ''} - Periodo: ${periodo} (ID: ${nuevaLiquidacion.id})`,
                 })
             }
@@ -723,26 +794,53 @@ export class PayrollService {
         return liquidacion
     }
 
-    // ─── Revertir Liquidación ────────────────────────────────────────────────
+    // ─── Anular Liquidación ──────────────────────────────────────────────────
     /**
-     * Revierte una liquidación: reabre cuotas, restaura movimiento de caja, elimina registro.
-     * NUNCA pierde datos históricos — las cuotas vuelven a pendiente, no se borran.
+     * Conserva el recibo y el movimiento original, reabre los recursos
+     * asociados y crea una contrapartida de Caja dentro de la misma transacción.
      */
-    static async revertirLiquidacion(id: string) {
+    static async anularLiquidacion(id: string, motivoInformado: unknown, usuarioId: string) {
+        const motivo = validarMotivoAnulacionLiquidacion(motivoInformado)
         const liq = await prisma.$transaction(async (tx) => {
-            const lockKey = `revertir-liquidacion:${id}`
-            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
+            const liquidacionLockKey = `anular-liquidacion:${id}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${liquidacionLockKey}))::text AS lock_result`
+
+            const referencia = await tx.liquidacionSueldo.findUnique({
+                where: { id },
+                select: { empleadoId: true },
+            })
+            if (!referencia) throw new Error('Liquidación no encontrada.')
+
+            const empleadoLockKey = `liquidacion:${referencia.empleadoId}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${empleadoLockKey}))::text AS lock_result`
 
             const liquidacion = await tx.liquidacionSueldo.findUnique({
                 where: { id },
-                include: { cuotasDescontadas: true }
+                include: {
+                    empleado: { select: { nombre: true, apellido: true } },
+                    cuotasDescontadas: true,
+                    movimientosCaja: {
+                        where: { movimientoReversaDeId: null },
+                        include: { movimientoReversion: { select: { id: true } } },
+                    },
+                }
             })
 
-            if (!liquidacion) throw new Error('Liquidación no encontrada')
+            if (!liquidacion) throw new Error('Liquidación no encontrada.')
+            validarLiquidacionAnulable({
+                estado: liquidacion.estado,
+                totalNeto: liquidacion.totalNeto,
+                registradaEnCaja: liquidacion.registradaEnCaja,
+                movimientos: liquidacion.movimientosCaja,
+            })
 
             const prestamosAfectados = [...new Set(
                 liquidacion.cuotasDescontadas.map(cuota => cuota.prestamoId)
             )]
+            const horasExtrasRestauradas = await tx.horaExtraPendiente.findMany({
+                where: { liquidacionId: id },
+                select: { id: true, cantidadHoras: true, montoCalculado: true },
+            })
 
             if (liquidacion.cuotasDescontadas.length > 0) {
                 await tx.cuotaPrestamo.updateMany({
@@ -765,42 +863,69 @@ export class PayrollService {
                 data: { pagado: false, liquidacionId: null }
             })
 
-            const movCaja = await tx.movimientoCaja.findFirst({
-                where: {
-                    descripcion: { contains: `(ID: ${id})` },
-                    tipo: 'egreso'
-                }
+            for (const movimiento of liquidacion.movimientosCaja) {
+                await CajaService.createMovimientoEnTx(tx, {
+                    tipo: 'ingreso',
+                    concepto: 'anulacion_liquidacion_sueldo',
+                    monto: movimiento.monto,
+                    cajaOrigen: movimiento.cajaOrigen,
+                    liquidacionSueldoId: liquidacion.id,
+                    movimientoReversaDeId: movimiento.id,
+                    descripcion: `Anulación liquidación: ${liquidacion.empleado.nombre} ${liquidacion.empleado.apellido || ''} - ${motivo} (Movimiento original: ${movimiento.id})`,
+                })
+            }
+
+            return tx.liquidacionSueldo.update({
+                where: { id },
+                data: {
+                    estado: 'anulado',
+                    motivoAnulacion: motivo,
+                    detalleAnulacion: {
+                        cuotasRestauradas: liquidacion.cuotasDescontadas.map(cuota => ({
+                            id: cuota.id,
+                            prestamoId: cuota.prestamoId,
+                            numeroCuota: cuota.numeroCuota,
+                            monto: cuota.monto,
+                        })),
+                        horasExtrasRestauradas,
+                        movimientosCompensados: liquidacion.movimientosCaja.map(movimiento => ({
+                            id: movimiento.id,
+                            cajaOrigen: movimiento.cajaOrigen,
+                            monto: movimiento.monto,
+                        })),
+                    },
+                    anuladoAt: new Date(),
+                    anuladoPorId: usuarioId,
+                },
+                include: {
+                    anuladoPor: { select: { id: true, nombre: true, apellido: true } },
+                    movimientosCaja: { orderBy: { createdAt: 'asc' } },
+                },
             })
-
-            if (liquidacion.tipo === 'HORAS_EXTRAS_ADEUDADAS' && !movCaja) {
-                throw new Error('No se encontró el movimiento de caja del pago. La anulación fue cancelada para evitar inconsistencias.')
-            }
-
-            if (movCaja) {
-                await CajaService.revertirMovimientoEnTx(tx, movCaja.id)
-            }
-
-            await tx.liquidacionSueldo.delete({ where: { id } })
-            return liquidacion
         })
 
         eventBus.emit('liquidacion:reverted', { liquidacionId: id, empleadoId: liq.empleadoId })
 
-        return { ok: true }
+        return liq
     }
 
     // ─── Listar Liquidaciones ────────────────────────────────────────────────
-    static async findLiquidaciones(empleadoId?: string, periodo?: string) {
+    static async findLiquidaciones(empleadoId?: string, periodo?: string, incluirAnuladas = false) {
         return prisma.liquidacionSueldo.findMany({
             where: {
                 ...(empleadoId ? { empleadoId } : {}),
                 ...(periodo ? { periodo } : {}),
-                estado: 'pagado'
+                estado: incluirAnuladas ? { in: ['pagado', 'anulado'] } : 'pagado'
             },
             orderBy: { fechaGeneracion: 'desc' },
             include: { 
                 cuotasDescontadas: true,
-                items: { include: { concepto: true } }
+                items: { include: { concepto: true } },
+                anuladoPor: { select: { id: true, nombre: true, apellido: true } },
+                movimientosCaja: {
+                    select: { id: true, tipo: true, cajaOrigen: true, movimientoReversaDeId: true },
+                    orderBy: { createdAt: 'asc' },
+                },
             }
         })
     }

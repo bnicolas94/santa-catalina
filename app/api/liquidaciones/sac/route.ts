@@ -22,7 +22,10 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { empleadoId, anio, semestre, monto, cajaId } = body
 
-        if (!empleadoId || !monto) return NextResponse.json({ error: 'Faltan datos' }, { status: 400 })
+        if (!empleadoId || !Number.isInteger(Number(anio)) || ![1, 2].includes(Number(semestre))
+            || !Number.isFinite(Number(monto)) || Number(monto) <= 0) {
+            return NextResponse.json({ error: 'El empleado, año, semestre e importe deben ser válidos.' }, { status: 400 })
+        }
 
         const startStr = semestre === 1 ? `${anio}-01-01` : `${anio}-07-01`;
         const endStr = semestre === 1 ? `${anio}-06-30` : `${anio}-12-31`;

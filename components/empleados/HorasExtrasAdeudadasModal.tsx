@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
@@ -157,6 +158,8 @@ async function imprimirReciboHorasAdeudadas(pendiente: Pendiente, fechaPago: str
 }
 
 export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const activos = useMemo(() => empleados.filter(empleado => empleado.activo), [empleados])
     const [empleadoId, setEmpleadoId] = useState('')
     const [fechaOrigen, setFechaOrigen] = useState(lunesSemanaAnterior)
@@ -312,6 +315,12 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
     }
 
     const anularPago = async (pago: Pagado) => {
+        const motivo = window.prompt('Indicá el motivo de la anulación (entre 10 y 500 caracteres):', '')
+        if (motivo === null) return
+        if (motivo.trim().length < 10 || motivo.trim().length > 500) {
+            setMensaje({ tipo: 'error', texto: 'El motivo de anulación debe tener entre 10 y 500 caracteres.' })
+            return
+        }
         if (!confirm(`¿Anular el pago de ${dinero(pago.montoCalculado)} a ${pago.empleadoNombre}? El importe volverá a la caja y las horas quedarán nuevamente pendientes.`)) return
         setMensaje(null)
         setAnulandoId(pago.id)
@@ -319,7 +328,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
             const respuesta = await fetch('/api/empleados/horas-extras-pendientes/anular', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: pago.id }),
+                body: JSON.stringify({ id: pago.id, motivo: motivo.trim() }),
             })
             const data = await respuesta.json()
             if (!respuesta.ok) throw new Error(data.error || 'No se pudo anular el pago.')
@@ -416,7 +425,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{registro.cantidadHoras.toLocaleString('es-AR')} h</td>
                                     <td style={{ textAlign: 'right', fontWeight: 800 }}>{dinero(registro.montoCalculado)}</td>
                                     <td style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>{pago ? new Date(pago.fechaPago).toLocaleDateString('es-AR') : '—'}</td>
-                                    <td><div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 6 }}>{pago ? <><button className="btn btn-outline btn-sm" disabled={operando} onClick={() => void reimprimir(pago)}>Reimprimir</button><button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} disabled={operando} onClick={() => void anularPago(pago)}>{anulandoId === pago.id ? 'Anulando…' : 'Anular'}</button></> : <><button className="btn btn-ghost btn-sm" disabled={operando} onClick={() => void eliminar(registro)}>Eliminar</button><button className="btn btn-outline btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro)}>{pagandoId === registro.id ? 'Pagando…' : 'Sólo pagar'}</button><button className="btn btn-primary btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro, true)}>{pagandoId === registro.id ? 'Pagando…' : 'Pagar e imprimir'}</button></>}</div></td>
+                                    <td><div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 6 }}>{pago ? <><button className="btn btn-outline btn-sm" disabled={operando} onClick={() => void reimprimir(pago)}>Reimprimir</button>{esAdmin && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} disabled={operando} onClick={() => void anularPago(pago)}>{anulandoId === pago.id ? 'Anulando…' : 'Anular'}</button>}</> : <><button className="btn btn-ghost btn-sm" disabled={operando} onClick={() => void eliminar(registro)}>Eliminar</button><button className="btn btn-outline btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro)}>{pagandoId === registro.id ? 'Pagando…' : 'Sólo pagar'}</button><button className="btn btn-primary btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro, true)}>{pagandoId === registro.id ? 'Pagando…' : 'Pagar e imprimir'}</button></>}</div></td>
                                 </tr>
                             })}</tbody>
                         </table>
