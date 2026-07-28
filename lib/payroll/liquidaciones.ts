@@ -123,18 +123,18 @@ export function validarLiquidacionAnulable(input: {
 
     const requiereMovimiento = input.registradaEnCaja === true || input.movimientos.length > 0
     if (!requiereMovimiento) return
-    if (input.movimientos.length !== 1) {
-        throw new Error('El movimiento de Caja vinculado a la liquidación no es único.')
+    if (input.movimientos.length < 1) {
+        throw new Error('La liquidación no tiene movimientos de Caja vinculados.')
     }
 
-    const movimiento = input.movimientos[0]
-    if (movimiento.tipo !== 'egreso' || !movimiento.cajaOrigen) {
+    if (input.movimientos.some(movimiento => movimiento.tipo !== 'egreso' || !movimiento.cajaOrigen)) {
         throw new Error('La liquidación contiene un movimiento de Caja inválido para revertir.')
     }
-    if (Math.abs(movimiento.monto - input.totalNeto) > 0.009) {
+    const montoCaja = input.movimientos.reduce((total, movimiento) => total + movimiento.monto, 0)
+    if (Math.abs(montoCaja - input.totalNeto) > 0.009) {
         throw new Error('El importe de Caja no coincide con el neto de la liquidación.')
     }
-    if (movimiento.movimientoReversion) {
+    if (input.movimientos.some(movimiento => movimiento.movimientoReversion)) {
         throw new Error('El movimiento de Caja de la liquidación ya fue revertido.')
     }
 }

@@ -10,6 +10,7 @@ interface MovCaja {
     pedido: { id: string; totalImporte: number; cliente: { nombreComercial: string } } | null
     rendicion: { id: string; chofer: { id: string, nombre: string } } | null
     movimientoMp?: { mpId: string; comisionMp: number; montoNeto: number; estado: string; metodoPago: string | null } | null
+    gestionadoPorRRHH?: boolean
 }
 
 interface PendingPedido {
@@ -1035,7 +1036,7 @@ export default function CajaPage() {
                             <th>Medio</th>
                             <th>Descripción</th>
                             <th>Hora</th>
-                            <th style={{ width: 80 }}>Acciones</th>
+                            <th style={{ width: 110 }}>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1086,11 +1087,17 @@ export default function CajaPage() {
                                     {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                                 </td>
                                 <td>
-                                    <div style={{ display: 'flex', gap: '2px' }}>
+                                    <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                                        {m.gestionadoPorRRHH ? <span
+                                            className="badge"
+                                            title="Este movimiento se gestiona desde Empleados. Podés corregir su caja o anularlo desde RR. HH."
+                                            style={{ color: '#175cd3', background: '#eff8ff', fontSize: '10px', whiteSpace: 'nowrap' }}
+                                        >🔒 RRHH</span> : <>
                                         <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '0.8rem', padding: '2px 6px' }}
                                             onClick={() => startEdit(m)}>✏️</button>
                                         <button className="btn btn-ghost btn-sm" title="Eliminar" style={{ fontSize: '0.8rem', padding: '2px 6px', color: 'var(--color-danger)' }}
                                             onClick={() => handleDelete(m.id)}>🗑️</button>
+                                        </>}
                                     </div>
                                 </td>
                             </tr>

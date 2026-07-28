@@ -16,6 +16,7 @@ export interface CreateEmpleadoInput {
     fechaIngreso?: string | null
     sueldoBaseMensual?: number
     cicloPago?: string
+    modalidadPago?: string
     porcentajeHoraExtra?: number
     valorHoraExtra?: number
     porcentajeFeriado?: number
@@ -43,6 +44,7 @@ export interface UpdateEmpleadoInput {
     fechaIngreso?: string | null
     sueldoBaseMensual?: number
     cicloPago?: string
+    modalidadPago?: string
     porcentajeHoraExtra?: number
     valorHoraExtra?: number
     porcentajeFeriado?: number
@@ -82,6 +84,7 @@ const EMPLEADO_SELECT = {
     fechaIngreso: true,
     sueldoBaseMensual: true,
     cicloPago: true,
+    modalidadPago: true,
     porcentajeHoraExtra: true,
     valorHoraExtra: true,
     porcentajeFeriado: true,
@@ -232,6 +235,7 @@ export class EmpleadoService {
                 fechaIngreso: input.fechaIngreso ? new Date(input.fechaIngreso) : null,
                 sueldoBaseMensual: input.sueldoBaseMensual ? parseFloat(String(input.sueldoBaseMensual)) : 0,
                 cicloPago: input.cicloPago || 'SEMANAL',
+                modalidadPago: input.modalidadPago === 'MENSUAL_MIXTA' ? 'MENSUAL_MIXTA' : 'SEMANAL_EFECTIVO',
                 porcentajeHoraExtra: input.porcentajeHoraExtra ? parseFloat(String(input.porcentajeHoraExtra)) : 50,
                 valorHoraExtra: input.valorHoraExtra ? parseFloat(String(input.valorHoraExtra)) : 0,
                 porcentajeFeriado: input.porcentajeFeriado ? parseFloat(String(input.porcentajeFeriado)) : 100,
@@ -286,6 +290,11 @@ export class EmpleadoService {
             fechaIngreso: validatedFechaIngreso,
             sueldoBaseMensual: !isNaN(parseFloat(String(input.sueldoBaseMensual))) ? parseFloat(String(input.sueldoBaseMensual)) : undefined,
             cicloPago: input.cicloPago || undefined,
+            modalidadPago: input.modalidadPago === 'MENSUAL_MIXTA'
+                ? 'MENSUAL_MIXTA'
+                : input.modalidadPago === 'SEMANAL_EFECTIVO'
+                    ? 'SEMANAL_EFECTIVO'
+                    : undefined,
             porcentajeHoraExtra: !isNaN(parseFloat(String(input.porcentajeHoraExtra))) ? parseFloat(String(input.porcentajeHoraExtra)) : undefined,
             valorHoraExtra: !isNaN(parseFloat(String(input.valorHoraExtra))) ? parseFloat(String(input.valorHoraExtra)) : undefined,
             porcentajeFeriado: !isNaN(parseFloat(String(input.porcentajeFeriado))) ? parseFloat(String(input.porcentajeFeriado)) : undefined,

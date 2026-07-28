@@ -14,6 +14,7 @@ import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
 import FeriadosConfigModal from '@/components/empleados/FeriadosConfigModal'
 import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
 import { HorasExtrasAdeudadasModal } from '@/components/empleados/HorasExtrasAdeudadasModal'
+import { CierresMensualesMixtosModal } from '@/components/empleados/CierresMensualesMixtosModal'
 import OrganigramaModal from '@/components/empleados/OrganigramaModal'
 import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
 import ConceptosSalarialesModal from '@/components/empleados/ConceptosSalarialesModal'
@@ -51,6 +52,7 @@ function EmpleadosContent() {
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
     const [weeklyPayrollOpen, setWeeklyPayrollOpen] = useState(false)
     const [horasAdeudadasOpen, setHorasAdeudadasOpen] = useState(false)
+    const [cierresMensualesOpen, setCierresMensualesOpen] = useState(false)
     const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
     const [showFeriadosModal, setShowFeriadosModal] = useState(false)
     const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
@@ -111,6 +113,7 @@ function EmpleadosContent() {
         // Sincronizar parámetros de URL con estados de modales
         if (openParam === 'weekly') setWeeklyPayrollOpen(true)
         if (openParam === 'horas-adeudadas') setHorasAdeudadasOpen(true)
+        if (openParam === 'cierres-mensuales') setCierresMensualesOpen(true)
         if (openParam === 'vacaciones') setVacacionesSacOpen(true)
         if (openParam === 'mass') setMassLiquidationOpen(true)
         if (openParam === 'recibos') setShowReportePagos(true)
@@ -137,6 +140,7 @@ function EmpleadosContent() {
         // También cerramos los estados locales
         setWeeklyPayrollOpen(false)
         setHorasAdeudadasOpen(false)
+        setCierresMensualesOpen(false)
         setVacacionesSacOpen(false)
         setMassLiquidationOpen(false)
         setShowReportePagos(false)
@@ -488,6 +492,11 @@ function EmpleadosContent() {
                                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
                                             ${(emp as any).sueldoBaseMensual?.toLocaleString() || '0'}
                                         </div>
+                                        {(emp as any).modalidadPago === 'MENSUAL_MIXTA' && (
+                                            <span className="badge" style={{ marginTop: 4, color: '#175cd3', background: '#eff8ff', fontSize: 10 }}>
+                                                Mensual mixta
+                                            </span>
+                                        )}
                                     </td>
                                     <td>
                                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -672,6 +681,9 @@ function EmpleadosContent() {
             )}
             {horasAdeudadasOpen && (
                 <HorasExtrasAdeudadasModal empleados={empleados} onClose={closeModal} />
+            )}
+            {cierresMensualesOpen && (
+                <CierresMensualesMixtosModal onClose={closeModal} />
             )}
             {showOrganigramaModal && (
                 <OrganigramaModal

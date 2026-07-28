@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 
 const escaparHtml = (valor: string) => valor
     .replaceAll('&', '&amp;')
@@ -487,6 +488,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-4)' }}>
                         {liquidaciones.map(liq => {
                             const anulada = liq.estado === 'anulado'
+                            const movimientoPago = liq.movimientosCaja?.find((movimiento: any) => movimiento.tipo === 'egreso' && !movimiento.movimientoReversaDeId)
                             return (
                             <div key={liq.id} className="card" style={{ transition: 'border-color 0.2s', opacity: anulada ? .78 : 1, ':hover': { borderColor: 'var(--color-primary)' } } as React.CSSProperties}>
                                 <div className="card-body" style={{ padding: 'var(--space-5)' }}>
@@ -505,6 +507,16 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                                             >
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                             </button>
+                                            {esAdmin && !anulada && movimientoPago && <CambiarCajaPagoButton
+                                                compact
+                                                label="Caja"
+                                                movimientoId={movimientoPago.id}
+                                                cajaActual={movimientoPago.cajaOrigen}
+                                                onSuccess={async () => {
+                                                    await fetchLiquidaciones()
+                                                    await fetchCajas()
+                                                }}
+                                            />}
                                             {esAdmin && !anulada && <button
                                                 onClick={() => {
                                                     setLiquidacionAAnular(liq)

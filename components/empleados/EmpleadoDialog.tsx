@@ -35,6 +35,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         fechaIngreso: empleado?.fechaIngreso ? new Date(empleado.fechaIngreso).toISOString().split('T')[0] : '',
         sueldoBaseMensual: empleado?.sueldoBaseMensual?.toString() || '0',
         cicloPago: empleado?.cicloPago || 'SEMANAL',
+        modalidadPago: empleado?.modalidadPago || 'SEMANAL_EFECTIVO',
         porcentajeHoraExtra: empleado?.porcentajeHoraExtra?.toString() || '50',
         porcentajeFeriado: empleado?.porcentajeFeriado?.toString() || '100',
         horasTrabajoDiarias: empleado?.horasTrabajoDiarias?.toString() || '8',
@@ -521,6 +522,18 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                         <option value="QUINCENAL">QUINCENAL (x2)</option>
                                         <option value="MENSUAL">MENSUAL</option>
                                     </select>
+                                </div>
+                                <div className="form-group" style={{ gridColumn: '1 / -1', padding: 'var(--space-4)', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', background: 'var(--color-gray-50)' }}>
+                                    <label className="form-label">Modalidad de liquidación y pago</label>
+                                    <select name="modalidadPago" value={formData.modalidadPago} onChange={handleChange} className="form-select">
+                                        <option value="SEMANAL_EFECTIVO">Semanal habitual</option>
+                                        <option value="MENSUAL_MIXTA">Mensual mixta: transferencia del recibo + diferencia en efectivo</option>
+                                    </select>
+                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', marginTop: 6, marginBottom: 0 }}>
+                                        {formData.modalidadPago === 'MENSUAL_MIXTA'
+                                            ? 'Se acumula por días del mes calendario. La empleada se excluye de los pagos semanales, masivos y Express.'
+                                            : 'Se mantiene el circuito actual de liquidación semanal.'}
+                                    </p>
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Valor Hora Extra (%)</label>

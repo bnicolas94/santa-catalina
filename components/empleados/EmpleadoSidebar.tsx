@@ -39,6 +39,12 @@ const menuItems: MenuItem[] = [
         openModal: 'weekly'
     },
     {
+        label: 'Cierres Mensuales Mixtos',
+        href: '/empleados?open=cierres-mensuales',
+        icon: '🗓️',
+        openModal: 'cierres-mensuales'
+    },
+    {
         label: 'Horas Extras Adeudadas',
         href: '/empleados?open=horas-adeudadas',
         icon: '⏱️',

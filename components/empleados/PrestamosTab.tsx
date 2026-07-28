@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
+import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 
 interface Cuota {
     id: string
@@ -393,20 +394,21 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                         <p style={{ color: 'var(--color-gray-500)' }}>No hay préstamos registrados para este empleado.</p>
                     </div>
                 ) : prestamos.map(prestamo => (
-                    <PrestamoCard key={prestamo.id} prestamo={prestamo} instanteReferencia={instanteReferencia} esAdmin={esAdmin} onEdit={abrirEdicion} onAdd={setAddingCuota} onAnular={setAnulandoPrestamo} />
+                    <PrestamoCard key={prestamo.id} prestamo={prestamo} instanteReferencia={instanteReferencia} esAdmin={esAdmin} onEdit={abrirEdicion} onAdd={setAddingCuota} onAnular={setAnulandoPrestamo} onCajaCambiada={fetchPrestamos} />
                 ))}
             </div>
         </div>
     )
 }
 
-function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, onAnular }: {
+function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, onAnular, onCajaCambiada }: {
     prestamo: Prestamo
     instanteReferencia: number
     esAdmin: boolean
     onEdit: (cuota: Cuota) => void
     onAdd: (form: NuevaCuotaForm) => void
     onAnular: (prestamo: Prestamo) => void
+    onCajaCambiada: () => void | Promise<void>
 }) {
     const pagadas = prestamo.cuotas.filter(cuota => cuota.estado === 'pagada')
     const pendientes = prestamo.cuotas.filter(cuota => cuota.estado === 'pendiente')
@@ -419,6 +421,7 @@ function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, on
     const anulable = activo
         && Boolean(prestamo.origenEntrega)
         && !prestamo.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)
+    const movimientoEntrega = prestamo.movimientosCaja.find(movimiento => movimiento.tipo === 'egreso' && !movimiento.movimientoReversaDeId)
 
     return (
         <div className="card" style={{ overflow: 'hidden', border: '1px solid var(--color-gray-200)' }}>
@@ -438,6 +441,7 @@ function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, on
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                         {activo && <button className="btn btn-outline" onClick={() => onAdd({ prestamoId: prestamo.id, monto: String(proxima?.monto || ''), cajaOrigen: 'mercaderia', detalle: '' })}>+ Agregar cuota</button>}
+                        {esAdmin && movimientoEntrega && !anulado && <CambiarCajaPagoButton compact movimientoId={movimientoEntrega.id} cajaActual={movimientoEntrega.cajaOrigen} onSuccess={onCajaCambiada} />}
                         {esAdmin && anulable && <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => onAnular(prestamo)}>Anular préstamo</button>}
                     </div>
                 </div>

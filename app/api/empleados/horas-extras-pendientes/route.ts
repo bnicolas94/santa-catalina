@@ -28,7 +28,14 @@ export async function GET() {
             }),
             prisma.liquidacionSueldo.findMany({
                 where: { tipo: 'HORAS_EXTRAS_ADEUDADAS', estado: 'pagado' },
-                select: { id: true, fechaGeneracion: true },
+                select: {
+                    id: true,
+                    fechaGeneracion: true,
+                    movimientosCaja: {
+                        where: { movimientoReversaDeId: null },
+                        select: { id: true, cajaOrigen: true },
+                    },
+                },
                 orderBy: { fechaGeneracion: 'desc' },
             }),
         ])
@@ -70,6 +77,7 @@ export async function GET() {
                     observaciones: deuda.observaciones,
                     liquidacionId: liquidacion.id,
                     fechaPago: liquidacion.fechaGeneracion,
+                    movimientoCaja: liquidacion.movimientosCaja[0] || null,
                 }]
             }),
             valoresHora: Object.fromEntries(

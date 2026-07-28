@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { CajaService } from '@/lib/services/caja.service'
+import { esMovimientoGestionadoPorRRHH } from '@/lib/caja/movimientosProtegidos'
 
 // ─── Helpers de Autorización ─────────────────────────────────────────────────
 
@@ -82,7 +83,10 @@ export async function GET(request: Request) {
         }
 
         return NextResponse.json({
-            movimientos,
+            movimientos: movimientos.map(movimiento => ({
+                ...movimiento,
+                gestionadoPorRRHH: esMovimientoGestionadoPorRRHH(movimiento),
+            })),
             resumen: {
                 ingresosEfectivo,
                 ingresosTransferencia,
@@ -217,7 +221,9 @@ export async function PUT(request: Request) {
         return NextResponse.json(result)
     } catch (error) {
         console.error('Error editando movimiento:', error)
-        return NextResponse.json({ error: 'Error al editar movimiento' }, { status: 500 })
+        const mensaje = error instanceof Error ? error.message : 'Error al editar movimiento'
+        const status = mensaje.includes('pertenece a RR. HH.') ? 409 : 500
+        return NextResponse.json({ error: mensaje }, { status })
     }
 }
 
@@ -252,6 +258,8 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ ok: true })
     } catch (error) {
         console.error('Error eliminando movimiento:', error)
-        return NextResponse.json({ error: 'Error al eliminar movimiento' }, { status: 500 })
+        const mensaje = error instanceof Error ? error.message : 'Error al eliminar movimiento'
+        const status = mensaje.includes('pertenece a RR. HH.') ? 409 : 500
+        return NextResponse.json({ error: mensaje }, { status })
     }
 }

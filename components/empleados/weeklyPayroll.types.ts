@@ -3,6 +3,7 @@ export interface EmpleadoLiquidable {
     nombre: string
     apellido?: string | null
     activo: boolean
+    modalidadPago?: string
 }
 
 export interface ConceptoSalarialUI {
@@ -66,6 +67,9 @@ export interface ResultadoLiquidacionUI {
     adicionales: AdicionalLiquidacionUI[]
     borradorId?: string
     error?: string
+    esSeguimientoMensualMixto?: boolean
+    seguimientoGuardado?: boolean
+    diasSeguimientoGuardados?: number
 }
 
 export interface LiquidacionPagadaUI {

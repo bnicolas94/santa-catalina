@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import type { PrismaClient, Prisma } from '@prisma/client'
 
+import { esMovimientoGestionadoPorRRHH, validarMotivoReasignacionCaja } from '@/lib/caja/movimientosProtegidos'
+
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
 
@@ -17,6 +19,8 @@ export interface CreateMovimientoInput {
     prestamoId?: string | null
     cuotaPrestamoId?: string | null
     liquidacionSueldoId?: string | null
+    liquidacionFinalId?: string | null
+    pagoCierreMensualId?: string | null
     movimientoReversaDeId?: string | null
     fecha?: Date | string | null
 }
@@ -131,6 +135,8 @@ export class CajaService {
                     prestamoId: input.prestamoId || null,
                     cuotaPrestamoId: input.cuotaPrestamoId || null,
                     liquidacionSueldoId: input.liquidacionSueldoId || null,
+                    liquidacionFinalId: input.liquidacionFinalId || null,
+                    pagoCierreMensualId: input.pagoCierreMensualId || null,
                     movimientoReversaDeId: input.movimientoReversaDeId || null,
                     fecha: normalizeFecha(input.fecha),
                 },
@@ -159,6 +165,9 @@ export class CajaService {
         return prisma.$transaction(async (tx) => {
             const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!oldMov) throw new Error('Movimiento no encontrado')
+            if (esMovimientoGestionadoPorRRHH(oldMov)) {
+                throw new Error('Este movimiento pertenece a RR. HH. y sólo puede corregirse desde el módulo Empleados.')
+            }
 
             const finalCajaOrigen = input.cajaOrigen !== undefined ? input.cajaOrigen : oldMov.cajaOrigen
             let finalMedioPago = input.medioPago !== undefined ? input.medioPago : oldMov.medioPago
@@ -203,6 +212,9 @@ export class CajaService {
         return prisma.$transaction(async (tx) => {
             const mov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!mov) return
+            if (esMovimientoGestionadoPorRRHH(mov)) {
+                throw new Error('Este movimiento pertenece a RR. HH. y no puede eliminarse desde Caja. Anulá el pago desde Empleados.')
+            }
 
             // Revertir impacto de saldo
             if (mov.cajaOrigen) {
@@ -244,6 +256,85 @@ export class CajaService {
 
             await tx.movimientoCaja.delete({ where: { id } })
             return mov
+        })
+    }
+
+    static async reasignarCajaMovimientoRRHH(input: {
+        movimientoId: string
+        cajaNueva: string
+        motivo: unknown
+        usuarioId: string
+    }) {
+        const motivo = validarMotivoReasignacionCaja(input.motivo)
+        if (!input.cajaNueva) throw new Error('Seleccioná la nueva caja de origen.')
+
+        return prisma.$transaction(async tx => {
+            const lockKey = `reasignar-caja-rrhh:${input.movimientoId}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
+
+            const movimiento = await tx.movimientoCaja.findUnique({
+                where: { id: input.movimientoId },
+                include: { movimientoReversion: { select: { id: true } } },
+            })
+            if (!movimiento || !esMovimientoGestionadoPorRRHH(movimiento)) {
+                throw new Error('El movimiento no existe o no pertenece a un pago gestionado por RR. HH.')
+            }
+            if (movimiento.tipo !== 'egreso' || !movimiento.cajaOrigen) {
+                throw new Error('Sólo se puede reasignar la caja de un egreso original de RR. HH.')
+            }
+            if (movimiento.movimientoReversaDeId || movimiento.movimientoReversion) {
+                throw new Error('El movimiento fue anulado o es una contrapartida y ya no puede reasignarse.')
+            }
+            if (movimiento.cajaOrigen === input.cajaNueva) {
+                throw new Error('La nueva caja debe ser diferente de la caja actual.')
+            }
+            const caja = await tx.saldoCaja.findUnique({ where: { tipo: input.cajaNueva } })
+            if (!caja) throw new Error(`La caja '${input.cajaNueva}' no existe.`)
+
+            const cajaAnterior = movimiento.cajaOrigen
+            const medioAnterior = movimiento.medioPago
+            const medioNuevo = ['mercado_pago', 'mercado_pago_juani'].includes(input.cajaNueva)
+                ? 'transferencia'
+                : 'efectivo'
+
+            await revertirImpactoSaldo(tx, cajaAnterior, movimiento.tipo, movimiento.monto)
+            const actualizado = await tx.movimientoCaja.update({
+                where: { id: movimiento.id },
+                data: { cajaOrigen: input.cajaNueva, medioPago: medioNuevo },
+            })
+            await aplicarImpactoSaldo(tx, input.cajaNueva, movimiento.tipo, movimiento.monto)
+
+            if (movimiento.pagoCierreMensualId) {
+                await tx.pagoCierreMensual.update({
+                    where: { id: movimiento.pagoCierreMensualId },
+                    data: { cajaOrigen: input.cajaNueva },
+                })
+            }
+            if (movimiento.prestamoId) {
+                await tx.prestamoEmpleado.update({
+                    where: { id: movimiento.prestamoId },
+                    data: { origenEntrega: input.cajaNueva },
+                })
+            }
+            if (movimiento.cuotaPrestamoId) {
+                await tx.cuotaPrestamo.update({
+                    where: { id: movimiento.cuotaPrestamoId },
+                    data: { origenEntrega: input.cajaNueva },
+                })
+            }
+
+            const auditoria = await tx.reasignacionCajaRRHH.create({
+                data: {
+                    movimientoId: movimiento.id,
+                    usuarioId: input.usuarioId,
+                    cajaAnterior,
+                    cajaNueva: input.cajaNueva,
+                    medioAnterior,
+                    medioNuevo,
+                    motivo,
+                },
+            })
+            return { movimiento: actualizado, auditoria }
         })
     }
 

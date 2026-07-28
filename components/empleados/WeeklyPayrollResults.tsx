@@ -29,18 +29,24 @@ export function WeeklyPayrollResults(props: Props) {
         <p>Presiona &quot;Calcular Sueldos&quot; para generar la previsualización del periodo.</p>
     </div>
 
-    const totalGeneral = props.resultados.reduce((total, resultado) => total + resultado.totalNeto, 0)
-    const totalBase = props.resultados.reduce((total, resultado) => total + resultado.sueldoBase, 0)
-    const totalExtras = props.resultados.reduce((total, resultado) => total + resultado.montoHorasExtras + resultado.montoHorasFeriado, 0)
-    const totalDeducciones = props.resultados.reduce((total, resultado) => total + resultado.descuentoPrestamos, 0)
+    const liquidables = props.resultados.filter(resultado => !resultado.esSeguimientoMensualMixto)
+    const seguimientos = props.resultados.filter(resultado => resultado.esSeguimientoMensualMixto)
+    const totalGeneral = liquidables.reduce((total, resultado) => total + resultado.totalNeto, 0)
+    const totalSeguimiento = seguimientos.reduce((total, resultado) => total + resultado.totalNeto, 0)
+    const totalBase = liquidables.reduce((total, resultado) => total + resultado.sueldoBase, 0)
+    const totalExtras = liquidables.reduce((total, resultado) => total + resultado.montoHorasExtras + resultado.montoHorasFeriado, 0)
+    const totalDeducciones = liquidables.reduce((total, resultado) => total + resultado.descuentoPrestamos, 0)
     const ajustesManuales = props.resultados.reduce((total, resultado) => total + resultado.desglosePorDia.filter(dia => dia.ajusteManual).length, 0)
     return <>
+        {seguimientos.length > 0 && <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-info-bg)', color: 'var(--color-info)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+            Seguimiento mensual mixto: {seguimientos.length} empleado{seguimientos.length === 1 ? '' : 's'} · {totalSeguimiento.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })} devengados como referencia. No se incluyen en el total a pagar de esta semana.
+        </div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
             {[
                 ['Sueldo base', totalBase, 'var(--color-gray-900)'],
                 ['Extras', totalExtras, 'var(--color-success)'],
                 ['Deducciones', -totalDeducciones, 'var(--color-danger)'],
-                ['Total a pagar', totalGeneral, 'var(--color-primary)'],
+                [seguimientos.length > 0 ? 'Total semanal a pagar' : 'Total a pagar', totalGeneral, 'var(--color-primary)'],
             ].map(([etiqueta, monto, color]) => <div key={String(etiqueta)} style={{ padding: 'var(--space-4)', background: 'white', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)' }}>
                 <div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{etiqueta}</div>
                 <div style={{ color: String(color), fontSize: 'var(--text-xl)', fontWeight: 800, marginTop: '4px' }}>${Number(monto).toLocaleString()}</div>
@@ -64,12 +70,17 @@ export function WeeklyPayrollResults(props: Props) {
                     <td style={{ fontWeight: 600 }}>
                         {resultado.empleadoNombre || props.empleados.find(empleado => empleado.id === resultado.empleadoId)?.nombre || 'Empleado'}
                         {resultado.error && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '10px' }}>ERROR</span>}
+                        {resultado.esSeguimientoMensualMixto && <span className="badge badge-info" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>
+                            {resultado.seguimientoGuardado ? 'SEGUIMIENTO GUARDADO' : 'SOLO SEGUIMIENTO'}
+                        </span>}
                         {errores > 0 && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{errores} BLOQUEO{errores === 1 ? '' : 'S'}</span>}
                         {advertencias > 0 && <span className="badge badge-warning" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{advertencias} REVISAR</span>}
                     </td>
                     {resultado.error ? <td colSpan={7} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>Error: {resultado.error}</td> : <>
                         <td style={{ textAlign: 'center' }}>{resultado.diasTrabajados}</td><td style={{ textAlign: 'right' }}>${resultado.sueldoBase.toLocaleString()}</td>
-                        <td style={{ textAlign: 'center' }}><input type="number" step="0.5" className="form-input" style={{ padding: '2px 5px', fontSize: '11px', textAlign: 'center', height: '24px' }} value={resultado.ajusteHorasExtras || ''} onChange={evento => props.onAjusteChange(resultado.empleadoId, evento.target.value)} onClick={evento => evento.stopPropagation()} placeholder="0" /></td>
+                        <td style={{ textAlign: 'center' }}>{resultado.esSeguimientoMensualMixto
+                            ? <span title="Ajustá las horas dentro de cada día para conservar su fecha exacta.">Por día</span>
+                            : <input type="number" step="0.5" className="form-input" style={{ padding: '2px 5px', fontSize: '11px', textAlign: 'center', height: '24px' }} value={resultado.ajusteHorasExtras || ''} onChange={evento => props.onAjusteChange(resultado.empleadoId, evento.target.value)} onClick={evento => evento.stopPropagation()} placeholder="0" />}</td>
                         <td style={{ textAlign: 'right', color: 'var(--color-success)' }}><span style={{ fontSize: '10px', display: 'block' }}>({resultado.horasExtras + (resultado.ajusteHorasExtras || 0)}h){(resultado.ajusteHorasExtras || 0) !== 0 && <span style={{ color: (resultado.ajusteHorasExtras || 0) > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}> {(resultado.ajusteHorasExtras || 0) > 0 ? '+' : ''}{resultado.ajusteHorasExtras}</span>}</span>${resultado.montoHorasExtras.toLocaleString()}</td>
                         <td style={{ textAlign: 'right' }}>{resultado.montoHorasFeriado > 0 && <span className="badge badge-warning" style={{ fontSize: '9px' }}>FER</span>}${resultado.montoHorasFeriado.toLocaleString()}</td>
                         <td style={{ textAlign: 'right', color: 'var(--color-danger)' }}>{resultado.descuentoPrestamos > 0 && <span style={{ fontSize: '10px' }}>Préstamos</span>}-${resultado.descuentoPrestamos.toLocaleString()}</td>
@@ -79,10 +90,17 @@ export function WeeklyPayrollResults(props: Props) {
                 {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={9} style={{ padding: 'var(--space-4)' }}>
                     {alertas.length > 0 && <div style={{ display: 'grid', gap: '6px', marginBottom: 'var(--space-3)' }}>{alertas.map((alerta, indice) => <div key={`${alerta.fecha || 'general'}-${indice}`} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: alerta.nivel === 'error' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', color: alerta.nivel === 'error' ? 'var(--color-danger)' : 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{alerta.fecha ? `${alerta.fecha}: ` : ''}{alerta.mensaje}</div>)}</div>}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>{resultado.desglosePorDia.map(dia => <WeeklyPayrollDayCard key={dia.fecha} dia={dia} empleadoId={resultado.empleadoId} actualizandoEstado={props.updatingStatusDate === `${resultado.empleadoId}-${dia.fecha}`} estado={props.getDiaStatus(dia)} onTimeChange={props.onTimeChange} onHoursChange={props.onHoursChange} onJustificar={props.onJustificar} onQuitarJustificacion={props.onQuitarJustificacion} onStatusChange={props.onStatusChange} />)}</div>
-                    <WeeklyPayrollAdditionals empleadoId={resultado.empleadoId} adicionales={resultado.adicionales} conceptos={props.conceptos} onAdd={props.onAddAdicional} onRemove={props.onRemoveAdicional} />
+                    {resultado.esSeguimientoMensualMixto
+                        ? <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', color: 'var(--color-info)', background: 'var(--color-info-bg)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
+                            Este cálculo es informativo: podés corregir las horas de cada día, pero no genera Caja, recibo ni pago semanal. Los días guardados alimentan el cierre de su mes calendario.
+                        </div>
+                        : <WeeklyPayrollAdditionals empleadoId={resultado.empleadoId} adicionales={resultado.adicionales} conceptos={props.conceptos} onAdd={props.onAddAdicional} onRemove={props.onRemoveAdicional} />}
                 </td></tr>}
             </Fragment>})}</tbody>
-            <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}><tr><td colSpan={8} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td><td style={{ textAlign: 'right', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr></tfoot>
+            <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}>
+                <tr><td colSpan={8} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td><td style={{ textAlign: 'right', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
+                {seguimientos.length > 0 && <tr><td colSpan={8} style={{ textAlign: 'right', color: 'var(--color-info)' }}>SEGUIMIENTO MENSUAL MIXTO (NO SE PAGA AHORA):</td><td style={{ textAlign: 'right', color: 'var(--color-info)' }}>${totalSeguimiento.toLocaleString()}</td></tr>}
+            </tfoot>
         </table>
         </div>
     </>

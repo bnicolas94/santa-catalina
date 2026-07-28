@@ -22,7 +22,7 @@ export function normalizarTipoLiquidacion(tipo: string | null | undefined, perio
     if (valor === 'VACACIONES' || descripcion.includes('VACACIONES')) return 'VACACIONES'
     if (valor === 'FINAL' || valor === 'LIQUIDACION_FINAL' || descripcion.includes('LIQUIDACIÓN FINAL') || descripcion.includes('LIQUIDACION FINAL')) return 'FINAL'
     if (valor === 'HORAS_EXTRAS_ADEUDADAS' || descripcion.includes('HORAS EXTRAS ADEUDADAS')) return 'HORAS_EXTRAS_ADEUDADAS'
-    if (valor === 'NORMAL' || valor === 'SEMANAL' || valor === 'MENSUAL' || valor === 'QUINCENAL') return 'NORMAL'
+    if (valor === 'NORMAL' || valor === 'SEMANAL' || valor === 'MENSUAL' || valor === 'QUINCENAL' || valor === 'MENSUAL_MIXTA') return 'NORMAL'
     return 'OTRA'
 }
 

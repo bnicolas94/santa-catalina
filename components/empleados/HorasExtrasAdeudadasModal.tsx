@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 
 interface EmpleadoPago {
     id: string
@@ -29,6 +30,7 @@ interface Pendiente {
 interface Pagado extends Pendiente {
     liquidacionId: string
     fechaPago: string
+    movimientoCaja?: { id: string; cajaOrigen: string | null } | null
 }
 
 interface Caja {
@@ -425,7 +427,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{registro.cantidadHoras.toLocaleString('es-AR')} h</td>
                                     <td style={{ textAlign: 'right', fontWeight: 800 }}>{dinero(registro.montoCalculado)}</td>
                                     <td style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-500)' }}>{pago ? new Date(pago.fechaPago).toLocaleDateString('es-AR') : '—'}</td>
-                                    <td><div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 6 }}>{pago ? <><button className="btn btn-outline btn-sm" disabled={operando} onClick={() => void reimprimir(pago)}>Reimprimir</button>{esAdmin && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} disabled={operando} onClick={() => void anularPago(pago)}>{anulandoId === pago.id ? 'Anulando…' : 'Anular'}</button>}</> : <><button className="btn btn-ghost btn-sm" disabled={operando} onClick={() => void eliminar(registro)}>Eliminar</button><button className="btn btn-outline btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro)}>{pagandoId === registro.id ? 'Pagando…' : 'Sólo pagar'}</button><button className="btn btn-primary btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro, true)}>{pagandoId === registro.id ? 'Pagando…' : 'Pagar e imprimir'}</button></>}</div></td>
+                                    <td><div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 6 }}>{pago ? <><button className="btn btn-outline btn-sm" disabled={operando} onClick={() => void reimprimir(pago)}>Reimprimir</button>{esAdmin && pago.movimientoCaja && <CambiarCajaPagoButton compact movimientoId={pago.movimientoCaja.id} cajaActual={pago.movimientoCaja.cajaOrigen} disabled={operando} onSuccess={cargar} />}{esAdmin && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} disabled={operando} onClick={() => void anularPago(pago)}>{anulandoId === pago.id ? 'Anulando…' : 'Anular'}</button>}</> : <><button className="btn btn-ghost btn-sm" disabled={operando} onClick={() => void eliminar(registro)}>Eliminar</button><button className="btn btn-outline btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro)}>{pagandoId === registro.id ? 'Pagando…' : 'Sólo pagar'}</button><button className="btn btn-primary btn-sm" disabled={operando || !cajaId} onClick={() => void pagar(registro, true)}>{pagandoId === registro.id ? 'Pagando…' : 'Pagar e imprimir'}</button></>}</div></td>
                                 </tr>
                             })}</tbody>
                         </table>

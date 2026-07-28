@@ -219,6 +219,7 @@ export class LiquidacionFinalService {
                 monto: totalNeto,
                 cajaOrigen: 'caja_madre', // O la que corresponda por defecto
                 descripcion: `Liquidación Final Empleado: ${calculoBase.nombreEmpleado} (${input.causaEgreso})`,
+                liquidacionFinalId: liquidacion.id,
                 fecha: new Date(input.fechaEgreso)
             })
 

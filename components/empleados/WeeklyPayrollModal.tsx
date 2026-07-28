@@ -94,8 +94,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             )
 
             // 3. Filtrar empleados: Solo activos y que NO tengan liquidación pagada en este rango
-            const empleadosParaLiquidar = empleados.filter(e => e.activo && !idsPagados.has(e.id))
-            const excluidos = empleados.filter(e => e.activo && idsPagados.has(e.id))
+            const empleadosMixtos = empleados.filter(e => e.activo && e.modalidadPago === 'MENSUAL_MIXTA')
+            const idsMixtos = new Set(empleadosMixtos.map(empleado => empleado.id))
+            const empleadosSemanales = empleados.filter(e => e.activo && e.modalidadPago !== 'MENSUAL_MIXTA' && !idsPagados.has(e.id))
+            const empleadosParaLiquidar = [...empleadosSemanales, ...empleadosMixtos]
+            const excluidos = empleados.filter(e => e.activo && e.modalidadPago !== 'MENSUAL_MIXTA' && idsPagados.has(e.id))
             setEmpleadosExcluidos(excluidos)
 
             if (empleadosParaLiquidar.length === 0) {
@@ -103,7 +106,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 if (excluidos.length > 0) {
                     alert('Todos los empleados activos ya tienen una liquidación procesada para este periodo.')
                 } else {
-                    alert('No hay empleados activos para liquidar.')
+                    alert('No hay empleados activos para calcular.')
                 }
                 return
             }
@@ -120,9 +123,15 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             })
             if (!res.ok) throw new Error('No se pudo calcular la liquidación semanal.')
             const data: Omit<ResultadoLiquidacionUI, 'adicionales'>[] = await res.json()
-            const idsDeVacaciones = new Set(data.filter(resultado => resultado.excluirLiquidacionSemanal).map(resultado => resultado.empleadoId))
-            const vacaciones = empleadosParaLiquidar.filter(empleado => idsDeVacaciones.has(empleado.id))
-            const dataLiquidable = data.filter(resultado => !resultado.excluirLiquidacionSemanal)
+            const dataConModalidad = data.map(resultado => ({
+                ...resultado,
+                esSeguimientoMensualMixto: idsMixtos.has(resultado.empleadoId),
+            }))
+            const idsDeVacaciones = new Set(dataConModalidad
+                .filter(resultado => resultado.excluirLiquidacionSemanal && !resultado.esSeguimientoMensualMixto)
+                .map(resultado => resultado.empleadoId))
+            const vacaciones = empleadosSemanales.filter(empleado => idsDeVacaciones.has(empleado.id))
+            const dataLiquidable = dataConModalidad.filter(resultado => resultado.esSeguimientoMensualMixto || !resultado.excluirLiquidacionSemanal)
             setEmpleadosDeVacaciones(vacaciones)
 
             if (dataLiquidable.length === 0) {
@@ -138,6 +147,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     const borradores: BorradorLiquidacionUI[] = await bRes.json()
                     if (borradores.length > 0) {
                         const merged: ResultadoLiquidacionUI[] = dataLiquidable.map(r => {
+                            if (r.esSeguimientoMensualMixto) return { ...r, adicionales: [] }
                             const b = borradores.find(borrador => borrador.empleadoId === r.empleadoId)
                             const extraItems = b?.items || []
                             const montoExtrasItems = extraItems.reduce((acc, item) => acc + item.montoCalculado, 0)
@@ -191,8 +201,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     }
 
     const handleConfirmarTodo = async () => {
-        const validResults = resultados.filter(r => !r.error)
-        if (validResults.length === 0) return
+        const validResults = resultados.filter(r => !r.error && !r.esSeguimientoMensualMixto)
+        if (validResults.length === 0) {
+            alert('No hay liquidaciones semanales para pagar. Guardá los seguimientos mixtos desde el botón de la izquierda.')
+            return
+        }
 
         const bloqueos = validResults.flatMap(resultado => obtenerAlertasLiquidacion(resultado)
             .filter(alerta => alerta.nivel === 'error')
@@ -244,7 +257,22 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         try {
             for (const result of resultados) {
                 if (result.error) continue;
-                await fetch('/api/liquidaciones/borrador', {
+                if (result.esSeguimientoMensualMixto) {
+                    const respuesta = await fetch('/api/empleados/seguimientos-semanales', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            empleadoId: result.empleadoId,
+                            fechaInicio,
+                            fechaFin,
+                            calculatedData: result,
+                        }),
+                    })
+                    const data = await respuesta.json()
+                    if (!respuesta.ok) throw new Error(`${result.empleadoNombre}: ${data.error || 'no se pudo guardar el seguimiento'}`)
+                    continue
+                }
+                const respuesta = await fetch('/api/liquidaciones/borrador', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -256,11 +284,15 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         }
                     })
                 })
+                if (!respuesta.ok) throw new Error(`${result.empleadoNombre}: no se pudo guardar el borrador`)
             }
             setBorradorCargado(true)
-            alert('¡Borrador guardado correctamente!')
-        } catch {
-            alert('Error al guardar borrador')
+            setResultados(actual => actual.map(resultado => resultado.esSeguimientoMensualMixto
+                ? { ...resultado, seguimientoGuardado: true, diasSeguimientoGuardados: resultado.desglosePorDia.length }
+                : resultado))
+            alert('Borradores y seguimientos semanales guardados correctamente.')
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Error al guardar la información semanal')
         } finally {
             setGuardandoBorrador(false)
         }
@@ -335,6 +367,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
 
                     return {
                         ...newData,
+                        esSeguimientoMensualMixto: r.esSeguimientoMensualMixto,
+                        seguimientoGuardado: r.esSeguimientoMensualMixto ? false : r.seguimientoGuardado,
                         desglosePorDia: nuevoDesglose,
                         sueldoBase: currentSueldoBase,
                         horasExtras: currentHsExtrasBase,
@@ -512,7 +546,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 }, newHorasTrabajadas, r.horasJornada || 8, r.valorHoraExtra)
             })
 
-            return recalcularResultado({ ...r, desglosePorDia: nuevoDesglose })
+            return recalcularResultado({
+                ...r,
+                desglosePorDia: nuevoDesglose,
+                seguimientoGuardado: r.esSeguimientoMensualMixto ? false : r.seguimientoGuardado,
+            })
         }))
         setBorradorCargado(false)
     }
@@ -525,7 +563,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             const desglosePorDia = resultado.desglosePorDia.map(dia => dia.fecha === fecha
                 ? recalcularDiaPorHoras(dia, horas, resultado.horasJornada || 8, resultado.valorHoraExtra)
                 : dia)
-            return recalcularResultado({ ...resultado, desglosePorDia })
+            return recalcularResultado({
+                ...resultado,
+                desglosePorDia,
+                seguimientoGuardado: resultado.esSeguimientoMensualMixto ? false : resultado.seguimientoGuardado,
+            })
         }))
         setBorradorCargado(false)
     }
@@ -565,6 +607,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 </div>
                 <WeeklyPayrollFooter
                     cantidadResultados={resultados.length}
+                    cantidadLiquidables={resultados.filter(resultado => !resultado.error && !resultado.esSeguimientoMensualMixto).length}
+                    cantidadSeguimientos={resultados.filter(resultado => !resultado.error && resultado.esSeguimientoMensualMixto).length}
                     confirmando={confirmando}
                     guardandoBorrador={guardandoBorrador}
                     borradorCargado={borradorCargado}

@@ -45,6 +45,12 @@ test('valida anulaciones con Caja trazable y protege las históricas ambiguas', 
         estado: 'pagado', totalNeto: 10_000, registradaEnCaja: true, movimientos: [movimiento],
     }))
     assert.doesNotThrow(() => validarLiquidacionAnulable({
+        estado: 'pagado', totalNeto: 10_000, registradaEnCaja: true, movimientos: [
+            { ...movimiento, monto: 7_500 },
+            { ...movimiento, monto: 2_500 },
+        ],
+    }))
+    assert.doesNotThrow(() => validarLiquidacionAnulable({
         estado: 'pagado', totalNeto: 10_000, registradaEnCaja: false, movimientos: [],
     }))
     assert.throws(() => validarLiquidacionAnulable({

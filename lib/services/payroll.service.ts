@@ -35,6 +35,7 @@ export interface DiaTrabajado {
     esJustificado: boolean
     tipoInasistencia?: string
     motivoInasistencia?: string | null
+    ajusteManual?: boolean
 }
 
 export interface ResumenSemanal {
@@ -57,6 +58,8 @@ export interface ResumenSemanal {
     diasVacaciones: number
     excluirLiquidacionSemanal: boolean
     desglosePorDia: DiaTrabajado[]
+    seguimientoGuardado?: boolean
+    diasSeguimientoGuardados?: number
 }
 
 export interface LiquidacionInput {
@@ -318,6 +321,27 @@ export class PayrollService {
             current.setDate(current.getDate() + 1)
         }
 
+        let diasSeguimientoGuardados = 0
+        if (empleado.modalidadPago === 'MENSUAL_MIXTA') {
+            const seguimientos = await prisma.seguimientoDiarioMixto.findMany({
+                where: {
+                    empleadoId,
+                    fecha: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt },
+                },
+                select: { fecha: true, detalle: true },
+            })
+            const detallePorFecha = new Map(seguimientos.flatMap(registro => {
+                if (!registro.detalle || typeof registro.detalle !== 'object' || Array.isArray(registro.detalle)) return []
+                return [[fechaClaveRRHH(registro.fecha), registro.detalle as unknown as DiaTrabajado] as const]
+            }))
+            desglosePorDia.forEach((dia, indice) => {
+                const guardado = detallePorFecha.get(dia.fecha)
+                if (!guardado) return
+                desglosePorDia[indice] = { ...dia, ...guardado, fecha: dia.fecha }
+                diasSeguimientoGuardados += 1
+            })
+        }
+
         // 4. Buscar Préstamos/Cuotas del período
         const todasPendientes = await prisma.cuotaPrestamo.findMany({
             where: {
@@ -378,7 +402,9 @@ export class PayrollService {
             totalNeto,
             diasVacaciones,
             excluirLiquidacionSemanal,
-            desglosePorDia
+            desglosePorDia,
+            seguimientoGuardado: diasSeguimientoGuardados === desglosePorDia.length,
+            diasSeguimientoGuardados,
         }
     }
 
@@ -443,6 +469,9 @@ export class PayrollService {
         })
 
         if (!empleado) throw new Error('Empleado no encontrado')
+        if (empleado.modalidadPago === 'MENSUAL_MIXTA' && tipoLiquidacion === 'NORMAL') {
+            throw new Error('Esta empleada utiliza cierre mensual mixto y no puede pagarse desde una liquidación semanal, masiva o Express.')
+        }
 
         if (calculatedData) {
             const estadoActual = await PayrollService.calcularSueldoSemanal(empleadoId, fechaInicio, fechaFin)
@@ -862,6 +891,25 @@ export class PayrollService {
                 where: { liquidacionId: id },
                 data: { pagado: false, liquidacionId: null }
             })
+
+            const cierreMensual = await tx.cierreMensualMixto.findUnique({
+                where: { liquidacionSueldoId: id },
+                select: { id: true },
+            })
+            if (cierreMensual) {
+                await tx.seguimientoDiarioMixto.updateMany({
+                    where: { cierreMensualId: cierreMensual.id },
+                    data: { cierreMensualId: null },
+                })
+                await tx.pagoCierreMensual.updateMany({
+                    where: { cierreId: cierreMensual.id, estado: { not: 'ANULADO' } },
+                    data: { estado: 'ANULADO' },
+                })
+                await tx.cierreMensualMixto.update({
+                    where: { id: cierreMensual.id },
+                    data: { estado: 'ANULADO' },
+                })
+            }
 
             for (const movimiento of liquidacion.movimientosCaja) {
                 await CajaService.createMovimientoEnTx(tx, {
