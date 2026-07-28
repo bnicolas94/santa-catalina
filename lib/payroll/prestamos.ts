@@ -1,5 +1,6 @@
 export const MONTO_MAXIMO_PRESTAMO = 1_000_000_000
 export const CUOTAS_MAXIMAS_PRESTAMO = 60
+const ORIGENES_SIN_CAJA = new Set(['mercaderia', 'ninguna'])
 
 export type CuotaPrestamoComparable = {
     id: string
@@ -91,4 +92,48 @@ export function seleccionarCuotasVencidasPorPrestamo<T extends CuotaPrestamoComp
 
 export function estadoPrestamoDesdeCuotas(cuotas: Array<{ estado: string }>): 'activo' | 'saldado' {
     return cuotas.some(cuota => cuota.estado === 'pendiente') ? 'activo' : 'saldado'
+}
+
+export function validarMotivoAnulacionPrestamo(valor: unknown): string {
+    const motivo = typeof valor === 'string' ? valor.trim() : ''
+    if (motivo.length < 10 || motivo.length > 500) {
+        throw new Error('El motivo de anulación debe tener entre 10 y 500 caracteres.')
+    }
+    return motivo
+}
+
+export function origenRequiereMovimientoCaja(origen: string): boolean {
+    return !ORIGENES_SIN_CAJA.has(origen)
+}
+
+export function validarPrestamoAnulable(input: {
+    estado: string
+    origenEntrega: string | null
+    cuotas: Array<{ estado: string; liquidacionId: string | null; origenEntrega: string | null }>
+    movimientos: Array<{
+        tipo: string
+        cajaOrigen: string | null
+        movimientoReversion: { id: string } | null
+    }>
+}): void {
+    if (input.estado === 'anulado') throw new Error('El préstamo ya fue anulado.')
+    if (input.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)) {
+        throw new Error('El préstamo tiene cuotas vinculadas a liquidaciones y no puede anularse.')
+    }
+    if (!input.origenEntrega) {
+        throw new Error('Este préstamo es anterior a la trazabilidad de Caja y no puede anularse automáticamente.')
+    }
+
+    const movimientosEsperados = (origenRequiereMovimientoCaja(input.origenEntrega) ? 1 : 0)
+        + input.cuotas.filter(cuota => cuota.origenEntrega && origenRequiereMovimientoCaja(cuota.origenEntrega)).length
+
+    if (input.movimientos.length !== movimientosEsperados) {
+        throw new Error('Los movimientos de Caja vinculados no coinciden con las entregas del préstamo.')
+    }
+    if (input.movimientos.some(movimiento => movimiento.tipo !== 'egreso' || !movimiento.cajaOrigen)) {
+        throw new Error('El préstamo contiene un movimiento de Caja inválido para revertir.')
+    }
+    if (input.movimientos.some(movimiento => movimiento.movimientoReversion)) {
+        throw new Error('Uno de los movimientos del préstamo ya fue revertido.')
+    }
 }

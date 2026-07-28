@@ -14,6 +14,9 @@ export interface CreateMovimientoInput {
     pedidoId?: string | null
     gastoId?: string | null
     rendicionId?: string | null
+    prestamoId?: string | null
+    cuotaPrestamoId?: string | null
+    movimientoReversaDeId?: string | null
     fecha?: Date | string | null
 }
 
@@ -124,6 +127,9 @@ export class CajaService {
                     pedidoId: input.pedidoId || null,
                     gastoId: input.gastoId || null,
                     rendicionId: input.rendicionId || null,
+                    prestamoId: input.prestamoId || null,
+                    cuotaPrestamoId: input.cuotaPrestamoId || null,
+                    movimientoReversaDeId: input.movimientoReversaDeId || null,
                     fecha: normalizeFecha(input.fecha),
                 },
             })

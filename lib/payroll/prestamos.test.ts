@@ -8,6 +8,8 @@ import {
     sumarMesesFechaCivil,
     validarCantidadCuotas,
     validarMontoPrestamo,
+    validarMotivoAnulacionPrestamo,
+    validarPrestamoAnulable,
 } from './prestamos'
 
 test('divide el préstamo sin perder centavos', () => {
@@ -47,4 +49,30 @@ test('elige sólo la primera cuota vencida de cada préstamo', () => {
 test('deriva el estado desde las cuotas reales y no desde el valor histórico', () => {
     assert.equal(estadoPrestamoDesdeCuotas([{ estado: 'pagada' }, { estado: 'pendiente' }]), 'activo')
     assert.equal(estadoPrestamoDesdeCuotas([{ estado: 'pagada' }]), 'saldado')
+})
+
+test('valida una anulación trazable sin cuotas liquidadas', () => {
+    assert.doesNotThrow(() => validarPrestamoAnulable({
+        estado: 'activo',
+        origenEntrega: 'caja_chica',
+        cuotas: [
+            { estado: 'pendiente', liquidacionId: null, origenEntrega: null },
+            { estado: 'pendiente', liquidacionId: null, origenEntrega: 'mercaderia' },
+        ],
+        movimientos: [{ tipo: 'egreso', cajaOrigen: 'caja_chica', movimientoReversion: null }],
+    }))
+    assert.equal(validarMotivoAnulacionPrestamo('Carga duplicada del préstamo'), 'Carga duplicada del préstamo')
+})
+
+test('bloquea préstamos históricos, pagados o con Caja incompleta', () => {
+    const base = {
+        estado: 'activo',
+        origenEntrega: 'caja_chica',
+        cuotas: [{ estado: 'pendiente', liquidacionId: null, origenEntrega: null }],
+        movimientos: [{ tipo: 'egreso', cajaOrigen: 'caja_chica', movimientoReversion: null }],
+    }
+    assert.throws(() => validarPrestamoAnulable({ ...base, origenEntrega: null }))
+    assert.throws(() => validarPrestamoAnulable({ ...base, cuotas: [{ estado: 'pagada', liquidacionId: 'liq', origenEntrega: null }] }))
+    assert.throws(() => validarPrestamoAnulable({ ...base, movimientos: [] }))
+    assert.throws(() => validarMotivoAnulacionPrestamo('corto'))
 })

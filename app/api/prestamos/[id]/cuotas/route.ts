@@ -45,6 +45,9 @@ export async function POST(
                 },
             })
             if (!prestamo) throw new CuotaApiError('Préstamo no encontrado.', 404)
+            if (prestamo.estado === 'anulado') {
+                throw new CuotaApiError('El préstamo está anulado y no admite nuevas cuotas.', 409)
+            }
 
             const liquidacionLockKey = `liquidacion:${prestamo.empleadoId}`
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${liquidacionLockKey}))::text AS lock_result`
@@ -71,6 +74,7 @@ export async function POST(
                     mesAnio: `${mes}-${anio}`,
                     fechaVencimiento: instanteRRHH(nextFecha),
                     estado: 'pendiente',
+                    origenEntrega: cajaOrigen,
                 },
             })
 
@@ -95,6 +99,8 @@ export async function POST(
                     concepto: 'prestamo_empleado',
                     monto,
                     cajaOrigen,
+                    prestamoId: id,
+                    cuotaPrestamoId: cuota.id,
                     descripcion: `Ampliación préstamo: ${prestamo.empleado.nombre} ${prestamo.empleado.apellido || ''} (Cuota ${nextNumero})${detalle ? ` - ${detalle}` : ''}`,
                 }, tx)
             }

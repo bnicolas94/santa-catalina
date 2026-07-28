@@ -42,6 +42,21 @@ export async function GET(
                         { numeroCuota: 'asc' },
                     ],
                 },
+                anuladoPor: {
+                    select: { id: true, nombre: true, apellido: true },
+                },
+                movimientosCaja: {
+                    select: {
+                        id: true,
+                        tipo: true,
+                        concepto: true,
+                        monto: true,
+                        cajaOrigen: true,
+                        fecha: true,
+                        movimientoReversaDeId: true,
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
             },
         })
         return NextResponse.json(prestamos)
@@ -116,6 +131,7 @@ export async function POST(
                     frecuencia,
                     modoInicio,
                     observaciones: observaciones || null,
+                    origenEntrega: cajaOrigen,
                 },
             })
 
@@ -125,6 +141,7 @@ export async function POST(
                     concepto: 'prestamo_empleado',
                     monto: montoTotal,
                     cajaOrigen,
+                    prestamoId: nuevoPrestamo.id,
                     descripcion: `Préstamo a empleado: ${empleado.nombre} ${empleado.apellido || ''} (${cantidadCuotas} cuotas)${observaciones ? ` - ${observaciones}` : ''}`,
                 }, tx)
             }

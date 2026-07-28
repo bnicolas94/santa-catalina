@@ -57,6 +57,7 @@ model Empleado {
   liquidaciones        LiquidacionSueldo[]
   lotesCoordinados     Lote[]               @relation("CoordinadorLote")
   prestamos            PrestamoEmpleado[]
+  prestamosAnulados    PrestamoEmpleado[]   @relation("PrestamoAnuladoPor")
   rendiciones          RendicionChofer[]    @relation("RendicionesChofer")
   rutasChofer          Ruta[]               @relation("ChoferRuta")
   sanciones            Sancion[]
@@ -490,10 +491,17 @@ model MovimientoCaja {
   pedidoId     String?                @map("id_pedido")
   gastoId      String?                @map("id_gasto")
   rendicionId  String?                @map("id_rendicion")
+  prestamoId   String?                @map("id_prestamo")
+  cuotaPrestamoId String?             @unique @map("id_cuota_prestamo")
+  movimientoReversaDeId String?       @unique @map("id_movimiento_reversado")
   pedido       Pedido?                @relation(fields: [pedidoId], references: [id])
   rendicion    RendicionChofer?       @relation(fields: [rendicionId], references: [id])
   gasto        GastoOperativo?        @relation(fields: [gastoId], references: [id])
   movimientoMp MovimientoMercadoPago?
+  prestamo     PrestamoEmpleado?      @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
+  cuotaPrestamo CuotaPrestamo?        @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
+  movimientoReversaDe MovimientoCaja? @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
+  movimientoReversion MovimientoCaja? @relation("ReversionMovimientoCaja")
 
   @@map("movimientos_caja")
 }
@@ -622,11 +630,17 @@ model PrestamoEmpleado {
   frecuencia     String          @default("SEMANAL")
   modoInicio     String          @default("INMEDIATO")
   observaciones  String?
+  origenEntrega  String?          @map("origen_entrega")
+  motivoAnulacion String?         @map("motivo_anulacion")
+  anuladoAt      DateTime?        @map("anulado_at")
+  anuladoPorId   String?          @map("id_anulado_por")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   empleadoId     String          @map("id_empleado")
   cuotas         CuotaPrestamo[]
   empleado       Empleado        @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  anuladoPor     Empleado?       @relation("PrestamoAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  movimientosCaja MovimientoCaja[]
 
   @@map("prestamos_empleados")
 }
@@ -641,8 +655,10 @@ model CuotaPrestamo {
   fechaPago        DateTime?          @map("fecha_pago")
   prestamoId       String             @map("id_prestamo")
   liquidacionId    String?            @map("id_liquidacion")
+  origenEntrega    String?            @map("origen_entrega")
   liquidacion      LiquidacionSueldo? @relation(fields: [liquidacionId], references: [id])
   prestamo         PrestamoEmpleado   @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  movimientoCaja   MovimientoCaja?
 
   @@map("cuotas_prestamos")
 }

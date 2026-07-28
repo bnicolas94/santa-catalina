@@ -42,8 +42,8 @@ export async function PATCH(
 
             const cuotaVigente = await tx.cuotaPrestamo.findUnique({ where: { id } })
             if (!cuotaVigente) throw new CuotaApiError('Cuota no encontrada.', 404)
-            if (cuotaVigente.estado === 'pagada' || cuotaVigente.liquidacionId) {
-                throw new CuotaApiError('La cuota ya fue descontada y forma parte de una liquidación. No puede editarse.', 409)
+            if (cuotaVigente.estado !== 'pendiente' || cuotaVigente.liquidacionId) {
+                throw new CuotaApiError('Sólo puede editarse una cuota pendiente y sin liquidación asociada.', 409)
             }
 
             const actualizada = await tx.cuotaPrestamo.update({

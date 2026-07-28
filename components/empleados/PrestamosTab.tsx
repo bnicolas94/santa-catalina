@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 interface Cuota {
     id: string
@@ -22,6 +23,19 @@ interface Prestamo {
     frecuencia: string
     modoInicio: string
     observaciones: string | null
+    origenEntrega: string | null
+    motivoAnulacion: string | null
+    anuladoAt: string | null
+    anuladoPor: { id: string; nombre: string; apellido: string | null } | null
+    movimientosCaja: Array<{
+        id: string
+        tipo: string
+        concepto: string
+        monto: number
+        cajaOrigen: string | null
+        fecha: string
+        movimientoReversaDeId: string | null
+    }>
     cuotas: Cuota[]
 }
 
@@ -65,6 +79,8 @@ async function mensajeError(response: Response, fallback: string): Promise<strin
 }
 
 export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const [prestamos, setPrestamos] = useState<Prestamo[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -75,6 +91,8 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
     const [editingCuota, setEditingCuota] = useState<Cuota | null>(null)
     const [editingMonto, setEditingMonto] = useState('')
     const [addingCuota, setAddingCuota] = useState<NuevaCuotaForm | null>(null)
+    const [anulandoPrestamo, setAnulandoPrestamo] = useState<Prestamo | null>(null)
+    const [motivoAnulacion, setMotivoAnulacion] = useState('')
 
     const fetchPrestamos = useCallback(async () => {
         setLoading(true)
@@ -168,10 +186,65 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
         }
     }
 
+    const handleAnularPrestamo = async (event: React.FormEvent) => {
+        event.preventDefault()
+        if (!anulandoPrestamo) return
+        setSaving(true)
+        try {
+            const response = await fetch(`/api/prestamos/${anulandoPrestamo.id}/anular`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motivo: motivoAnulacion }),
+            })
+            if (!response.ok) throw new Error(await mensajeError(response, 'No se pudo anular el préstamo.'))
+            setAnulandoPrestamo(null)
+            setMotivoAnulacion('')
+            await fetchPrestamos()
+        } catch (annulError) {
+            alert(annulError instanceof Error ? annulError.message : 'No se pudo anular el préstamo.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
     if (loading) return <div className="p-10 text-center text-gray-400">Cargando préstamos...</div>
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+            {anulandoPrestamo && (
+                <div role="dialog" aria-modal="true" aria-label="Anular préstamo" style={overlayStyle}>
+                    <div className="card shadow-lg" style={{ width: 'min(480px, calc(100vw - 32px))', padding: 'var(--space-6)', background: 'white' }}>
+                        <div style={eyebrowStyle}>ANULACIÓN CONTABLE</div>
+                        <h4 style={{ margin: '4px 0 var(--space-3)', fontSize: 'var(--text-lg)' }}>Anular préstamo de {moneda.format(anulandoPrestamo.montoTotal)}</h4>
+                        <p style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)', lineHeight: 1.55, margin: '0 0 var(--space-4)' }}>
+                            Se anularán sus cuotas pendientes y se crearán movimientos compensatorios en las cajas originales. El préstamo y los movimientos previos permanecerán visibles para auditoría.
+                        </p>
+                        <form onSubmit={handleAnularPrestamo}>
+                            <div className="form-group">
+                                <label className="form-label">Motivo obligatorio</label>
+                                <textarea
+                                    autoFocus
+                                    required
+                                    minLength={10}
+                                    maxLength={500}
+                                    className="form-input"
+                                    rows={4}
+                                    placeholder="Ej. Préstamo cargado por duplicado"
+                                    value={motivoAnulacion}
+                                    onChange={event => setMotivoAnulacion(event.target.value)}
+                                />
+                                <div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', marginTop: 4 }}>{motivoAnulacion.trim().length}/500 · mínimo 10 caracteres</div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
+                                <button type="button" className="btn btn-outline" disabled={saving} onClick={() => { setAnulandoPrestamo(null); setMotivoAnulacion('') }}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" disabled={saving || motivoAnulacion.trim().length < 10} style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}>
+                                    {saving ? 'Anulando...' : 'Confirmar anulación'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             {editingCuota && (
                 <div role="dialog" aria-modal="true" aria-label="Editar cuota pendiente" style={overlayStyle}>
                     <div className="card shadow-lg" style={{ width: 'min(420px, calc(100vw - 32px))', padding: 'var(--space-6)', background: 'white' }}>
@@ -320,18 +393,20 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                         <p style={{ color: 'var(--color-gray-500)' }}>No hay préstamos registrados para este empleado.</p>
                     </div>
                 ) : prestamos.map(prestamo => (
-                    <PrestamoCard key={prestamo.id} prestamo={prestamo} instanteReferencia={instanteReferencia} onEdit={abrirEdicion} onAdd={setAddingCuota} />
+                    <PrestamoCard key={prestamo.id} prestamo={prestamo} instanteReferencia={instanteReferencia} esAdmin={esAdmin} onEdit={abrirEdicion} onAdd={setAddingCuota} onAnular={setAnulandoPrestamo} />
                 ))}
             </div>
         </div>
     )
 }
 
-function PrestamoCard({ prestamo, instanteReferencia, onEdit, onAdd }: {
+function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, onAnular }: {
     prestamo: Prestamo
     instanteReferencia: number
+    esAdmin: boolean
     onEdit: (cuota: Cuota) => void
     onAdd: (form: NuevaCuotaForm) => void
+    onAnular: (prestamo: Prestamo) => void
 }) {
     const pagadas = prestamo.cuotas.filter(cuota => cuota.estado === 'pagada')
     const pendientes = prestamo.cuotas.filter(cuota => cuota.estado === 'pendiente')
@@ -339,7 +414,11 @@ function PrestamoCard({ prestamo, instanteReferencia, onEdit, onAdd }: {
     const saldo = pendientes.reduce((total, cuota) => total + cuota.monto, 0)
     const progreso = prestamo.cuotas.length > 0 ? Math.round((pagadas.length / prestamo.cuotas.length) * 100) : 0
     const proxima = [...pendientes].sort((a, b) => new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime())[0]
-    const activo = pendientes.length > 0
+    const anulado = prestamo.estado === 'anulado'
+    const activo = !anulado && pendientes.length > 0
+    const anulable = activo
+        && Boolean(prestamo.origenEntrega)
+        && !prestamo.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)
 
     return (
         <div className="card" style={{ overflow: 'hidden', border: '1px solid var(--color-gray-200)' }}>
@@ -348,20 +427,27 @@ function PrestamoCard({ prestamo, instanteReferencia, onEdit, onAdd }: {
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: 'var(--text-lg)' }}>{moneda.format(prestamo.montoTotal)}</strong>
-                            <span className={`badge ${activo ? 'badge-warning' : 'badge-success'}`}>{activo ? 'Activo' : 'Saldado'}</span>
+                            <span className={`badge ${anulado ? 'badge-danger' : activo ? 'badge-warning' : 'badge-success'}`}>{anulado ? 'Anulado' : activo ? 'Activo' : 'Saldado'}</span>
                             {prestamo.modoInicio === 'AL_FINALIZAR_ANTERIOR' && <span className="badge">Secuencial</span>}
+                            {!prestamo.origenEntrega && !anulado && <span className="badge">Registro histórico</span>}
                         </div>
                         <div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', marginTop: '6px' }}>
                             Otorgado el {formatoFecha.format(new Date(prestamo.fechaSolicitud))} · {prestamo.cuotas.length} cuotas {prestamo.frecuencia === 'SEMANAL' ? 'semanales' : 'mensuales'}
                         </div>
                         {prestamo.observaciones && <div style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)', marginTop: '4px' }}>{prestamo.observaciones}</div>}
                     </div>
-                    {activo && (
-                        <button className="btn btn-outline" onClick={() => onAdd({ prestamoId: prestamo.id, monto: String(proxima?.monto || ''), cajaOrigen: 'mercaderia', detalle: '' })}>
-                            + Agregar cuota
-                        </button>
-                    )}
+                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        {activo && <button className="btn btn-outline" onClick={() => onAdd({ prestamoId: prestamo.id, monto: String(proxima?.monto || ''), cajaOrigen: 'mercaderia', detalle: '' })}>+ Agregar cuota</button>}
+                        {esAdmin && anulable && <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => onAnular(prestamo)}>Anular préstamo</button>}
+                    </div>
                 </div>
+                {anulado && (
+                    <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
+                        <strong>Anulado{prestamo.anuladoAt ? ` el ${formatoFecha.format(new Date(prestamo.anuladoAt))}` : ''}</strong>
+                        {prestamo.anuladoPor && ` por ${prestamo.anuladoPor.nombre} ${prestamo.anuladoPor.apellido || ''}`}
+                        {prestamo.motivoAnulacion && <div style={{ marginTop: 4 }}>{prestamo.motivoAnulacion}</div>}
+                    </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
                     <Metric label="Saldo pendiente" value={moneda.format(saldo)} />
                     <Metric label="Ya descontado" value={moneda.format(montoPagado)} />
@@ -385,22 +471,23 @@ function PrestamoCard({ prestamo, instanteReferencia, onEdit, onAdd }: {
 
 function CuotaCard({ cuota, total, instanteReferencia, onEdit }: { cuota: Cuota; total: number; instanteReferencia: number; onEdit: (cuota: Cuota) => void }) {
     const pagada = cuota.estado === 'pagada'
-    const editable = !pagada && !cuota.liquidacionId
+    const anulada = cuota.estado === 'anulada'
+    const editable = cuota.estado === 'pendiente' && !cuota.liquidacionId
     const vencida = editable && new Date(cuota.fechaVencimiento).getTime() < instanteReferencia
     return (
         <button
             type="button"
             onClick={() => editable && onEdit(cuota)}
             disabled={!editable}
-            title={pagada ? 'Cuota descontada y vinculada a una liquidación' : 'Editar monto pendiente'}
+            title={pagada ? 'Cuota descontada y vinculada a una liquidación' : anulada ? 'Cuota anulada' : 'Editar monto pendiente'}
             style={{
                 padding: 'var(--space-3)',
                 borderRadius: 'var(--radius-lg)',
-                border: `1px solid ${pagada ? 'var(--color-success)' : vencida ? 'var(--color-warning)' : 'var(--color-gray-200)'}`,
-                background: pagada ? 'var(--color-success-bg)' : 'var(--color-white)',
+                border: `1px solid ${pagada ? 'var(--color-success)' : anulada ? 'var(--color-danger)' : vencida ? 'var(--color-warning)' : 'var(--color-gray-200)'}`,
+                background: pagada ? 'var(--color-success-bg)' : anulada ? 'var(--color-danger-bg)' : 'var(--color-white)',
                 textAlign: 'left',
                 cursor: editable ? 'pointer' : 'default',
-                opacity: pagada ? .82 : 1,
+                opacity: pagada || anulada ? .82 : 1,
             }}
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>
@@ -410,8 +497,8 @@ function CuotaCard({ cuota, total, instanteReferencia, onEdit }: { cuota: Cuota;
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: 4 }}>
                 Vence {formatoFecha.format(new Date(cuota.fechaVencimiento))}
             </div>
-            <div style={{ marginTop: 8, fontSize: '10px', fontWeight: 700, color: pagada ? 'var(--color-success)' : vencida ? 'var(--color-warning)' : 'var(--color-gray-600)' }}>
-                {pagada ? `DESCONTADA${cuota.fechaPago ? ` · ${formatoFecha.format(new Date(cuota.fechaPago))}` : ''}` : vencida ? 'VENCIDA · PRÓXIMO DESCUENTO' : 'PROGRAMADA'}
+            <div style={{ marginTop: 8, fontSize: '10px', fontWeight: 700, color: pagada ? 'var(--color-success)' : anulada ? 'var(--color-danger)' : vencida ? 'var(--color-warning)' : 'var(--color-gray-600)' }}>
+                {pagada ? `DESCONTADA${cuota.fechaPago ? ` · ${formatoFecha.format(new Date(cuota.fechaPago))}` : ''}` : anulada ? 'ANULADA' : vencida ? 'VENCIDA · PRÓXIMO DESCUENTO' : 'PROGRAMADA'}
             </div>
         </button>
     )
