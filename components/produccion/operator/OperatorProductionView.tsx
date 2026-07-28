@@ -5,7 +5,6 @@
 import { useMemo, useState } from 'react'
 import styles from './operator-production.module.css'
 
-type Destination = 'TODOS' | 'FABRICA' | 'LOCAL'
 type Notice = { type: 'success' | 'error'; text: string } | null
 
 interface Props {
@@ -17,14 +16,17 @@ interface Props {
     onRefresh: () => void | Promise<unknown>
 }
 
-interface PlannedItem {
+interface ProductionOption {
     key: string; productId: string; presentationId: string; name: string; code: string
-    presentationSize: number; requested: number; stock: number; inProduction: number
-    missing: number; rounds: number; packagesPerRound: number; destination: string
+    presentationSize: number; packagesPerRound: number
 }
 
-const SHIFTS = ['Mañana', 'Siesta', 'Tarde']
-const rounded = (value: number) => Math.round(value * 10) / 10
+const PRODUCTION_OPTIONS = [
+    { code: 'JQ', size: 48 },
+    { code: 'ESP', size: 48 },
+    { code: 'CLA', size: 48 },
+    { code: 'JQ', size: 24 },
+]
 
 function localDate(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -36,13 +38,10 @@ function formatDate(value: string) {
 }
 
 export function OperatorProductionView({ userName, userLocationId, date, onDateChange, data, onRefresh }: Props) {
-    const planning = data?.planning
     const lots = data?.lotes || []
     const locations = data?.ubicaciones || []
     const coordinators = data?.coordinadores || []
-    const [shift, setShift] = useState('Mañana')
-    const [destination, setDestination] = useState<Destination>('TODOS')
-    const [selected, setSelected] = useState<PlannedItem | null>(null)
+    const [selected, setSelected] = useState<ProductionOption | null>(null)
     const [rounds, setRounds] = useState(1)
     const [closing, setClosing] = useState<any>(null)
     const [produced, setProduced] = useState(0)
@@ -51,50 +50,26 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
     const [busy, setBusy] = useState(false)
     const [notice, setNotice] = useState<Notice>(null)
 
-    const shifts = useMemo(() => {
-        const available = Object.keys(planning?.necesidades || {})
-        const ordered = SHIFTS.filter(value => available.includes(value))
-        return ordered.length ? ordered : SHIFTS
-    }, [planning])
-
-    const items = useMemo<PlannedItem[]>(() => {
-        if (!planning) return []
-        const needs = planning.necesidades?.[shift] || {}
-        const routes = planning.demandaRutas?.[shift] || {}
-        const manual = planning.manualesDetalle?.[shift] || {}
-        const keys = Array.from(new Set([...Object.keys(needs), ...Object.keys(routes)]))
-
-        return keys.map(key => {
-            const info = planning.infoProductos?.[key]
-            if (!info || ['ELE', 'PRE'].includes(info.codigoInterno)) return null
-            const route = routes[key] || { fabrica: 0, local: 0 }
-            const manualDetail = manual[key] || { fabrica: 0, local: 0 }
-            const routeUnits = destination === 'TODOS' ? route.fabrica + route.local : destination === 'LOCAL' ? route.local : route.fabrica
-            const manualUnits = destination === 'TODOS' ? manualDetail.fabrica + manualDetail.local : destination === 'LOCAL' ? manualDetail.local : manualDetail.fabrica
-            const requestedUnits = Math.max(routeUnits, manualUnits)
-            if (requestedUnits <= 0) return null
-            const presentationSize = info.presentacion?.cantidad || 48
-            const factoryStock = planning.stockFabricacion?.[key] || 0
-            const localStock = planning.stockLocal?.[key] || 0
-            const stockUnits = destination === 'FABRICA' ? factoryStock : destination === 'LOCAL' ? localStock : factoryStock + localStock
-            const processUnits = planning.enProduccion?.[key]?.total || 0
-            const missingUnits = Math.max(0, requestedUnits - stockUnits - processUnits)
-            const packagesPerRound = info.paquetesPorRonda || 14
+    const productionOptions = useMemo<ProductionOption[]>(() => {
+        const availableProducts = data?.productos || []
+        return PRODUCTION_OPTIONS.map(option => {
+            const product = availableProducts.find((item: any) => item.codigoInterno === option.code)
+            const presentation = product?.presentaciones?.find((item: any) => item.cantidad === option.size)
+            if (!product || !presentation) return null
             return {
-                key, productId: info.id, presentationId: info.presentacion?.id || '', name: info.nombre,
-                code: info.codigoInterno, presentationSize, packagesPerRound,
-                requested: rounded(requestedUnits / presentationSize), stock: rounded(stockUnits / presentationSize),
-                inProduction: rounded(processUnits / presentationSize), missing: rounded(missingUnits / presentationSize),
-                rounds: Math.ceil(missingUnits / (packagesPerRound * presentationSize)),
-                destination: destination === 'TODOS' ? 'Fábrica y Local' : destination === 'FABRICA' ? 'Fábrica' : 'Local',
+                key: `${product.id}-${presentation.id}`,
+                productId: product.id,
+                presentationId: presentation.id,
+                name: product.nombre,
+                code: product.codigoInterno,
+                presentationSize: presentation.cantidad,
+                packagesPerRound: product.paquetesPorRonda || 14,
             }
-        }).filter(Boolean).sort((a, b) => b!.missing - a!.missing) as PlannedItem[]
-    }, [planning, shift, destination])
+        }).filter(Boolean) as ProductionOption[]
+    }, [data?.productos])
 
     const dateLots = lots.filter((lot: any) => lot.fechaProduccion?.split('T')[0] === date)
     const activeLots = dateLots.filter((lot: any) => lot.estado === 'en_produccion')
-    const finishedLots = dateLots.filter((lot: any) => lot.estado !== 'en_produccion')
-    const pending = items.filter(item => item.missing > 0)
 
     function changeDay(offset: number) {
         const next = new Date(`${date}T12:00:00`)
@@ -102,8 +77,8 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
         onDateChange(localDate(next))
     }
 
-    function openStart(item: PlannedItem) {
-        setSelected(item); setRounds(Math.max(1, item.rounds)); setNotice(null)
+    function openStart(item: ProductionOption) {
+        setSelected(item); setRounds(1); setNotice(null)
     }
 
     async function startProduction() {
@@ -163,11 +138,9 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
             <label><span>Fecha de producción</span><input type="date" value={date} onChange={event => onDateChange(event.target.value)} /></label>
             <button onClick={() => changeDay(1)} aria-label="Día siguiente">→</button>
         </section>
-        <section className={styles.stats} aria-label="Resumen del día">
-            <article><span>Pendientes</span><strong>{pending.length}</strong><small>productos por cubrir</small></article>
-            <article className={styles.green}><span>En producción</span><strong>{activeLots.length}</strong><small>lotes activos</small></article>
-            <article><span>Terminados</span><strong>{finishedLots.length}</strong><small>lotes del día</small></article>
-            <article className={pending.some(item => item.stock === 0) ? styles.alert : ''}><span>Atención</span><strong>{pending.filter(item => item.stock === 0).length}</strong><small>sin stock disponible</small></article>
+        <section className={styles.section}>
+            <div className={styles.sectionTitle}><div><span className={styles.eyebrow}>Producción · {formatDate(date)}</span><h2>Elegí qué producir</h2></div></div>
+            <div className={styles.productGrid}>{productionOptions.map(item => <ProductCard key={item.key} item={item} onStart={openStart} />)}{!productionOptions.length && <div className={styles.empty}>No hay productos habilitados para producción.</div>}</div>
         </section>
         {activeLots.length > 0 && <section className={styles.section}>
             <div className={styles.sectionTitle}><div><span className={styles.eyebrow}>Ahora</span><h2>Lotes en producción</h2></div></div>
@@ -176,25 +149,16 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                 <button onClick={() => openClose(lot)}>Finalizar lote</button>
             </article>)}</div>
         </section>}
-        <section className={styles.section}>
-            <div className={styles.sectionTitle}><div><span className={styles.eyebrow}>Planificación · {formatDate(date)}</span><h2>¿Qué producimos?</h2></div><span>{items.length} productos</span></div>
-            <div className={styles.filters}>
-                <div>{shifts.map(value => <button key={value} className={shift === value ? styles.selected : ''} onClick={() => setShift(value)}>{value}</button>)}</div>
-                <div>{(['TODOS','FABRICA','LOCAL'] as Destination[]).map(value => <button key={value} className={destination === value ? styles.selected : ''} onClick={() => setDestination(value)}>{value === 'TODOS' ? 'Todos' : value === 'FABRICA' ? 'Fábrica' : 'Local'}</button>)}</div>
-            </div>
-            <div className={styles.productGrid}>{items.map(item => <ProductCard key={item.key} item={item} onStart={openStart} />)}{!items.length && <div className={styles.empty}>No hay requerimientos para este turno y destino.</div>}</div>
-        </section>
         {selected && <StartModal item={selected} rounds={rounds} setRounds={setRounds} busy={busy} onClose={() => setSelected(null)} onStart={startProduction} />}
         {closing && <FinishModal lot={closing} produced={produced} setProduced={setProduced} rejected={rejected} setRejected={setRejected} reason={reason} setReason={setReason} busy={busy} onClose={() => setClosing(null)} onFinish={finishProduction} />}
     </main>
 }
 
-function ProductCard({ item, onStart }: { item: PlannedItem; onStart: (item: PlannedItem) => void }) {
-    const covered = item.missing <= 0
-    return <article className={`${styles.card} ${covered ? styles.covered : ''}`}>
-        <div className={styles.cardTop}><div className={styles.icon}>{item.code.slice(0,2)}</div><div><span>{item.code} · x{item.presentationSize}</span><h3>{item.name}</h3><small>{item.destination}</small></div><strong>{covered ? '✓' : `−${item.missing}`}</strong></div>
-        <dl><div><dt>Solicitado</dt><dd>{item.requested} paq</dd></div><div><dt>Stock</dt><dd>{item.stock} paq</dd></div><div><dt>En proceso</dt><dd>{item.inProduction} paq</dd></div></dl>
-        {covered ? <div className={styles.coveredLabel}>✓ Necesidad cubierta</div> : <button className={styles.primary} onClick={() => onStart(item)}>▷ Producir {item.rounds} ronda{item.rounds === 1 ? '' : 's'}</button>}
+function ProductCard({ item, onStart }: { item: ProductionOption; onStart: (item: ProductionOption) => void }) {
+    return <article className={styles.card}>
+        <div className={styles.cardTop}><div className={styles.icon}>{item.code.slice(0,2)}</div><div><span>{item.code}</span><h3>{item.name}</h3><small>Presentación x{item.presentationSize}</small></div></div>
+        <div className={styles.optionSummary}><span>Paquetes por ronda</span><strong>{item.packagesPerRound}</strong></div>
+        <button className={styles.primary} onClick={() => onStart(item)}>Seleccionar para producir</button>
     </article>
 }
 
@@ -202,7 +166,7 @@ function StartModal({ item, rounds, setRounds, busy, onClose, onStart }: any) {
     return <div className={styles.overlay} onMouseDown={onClose}><section className={styles.modal} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true">
         <header><div><span className={styles.eyebrow}>Nuevo lote</span><h2>Iniciar producción</h2><p>{item.name} · x{item.presentationSize}</p></div><button onClick={onClose}>×</button></header>
         <div className={styles.rounds}><span>Rondas de producción</span><div><button onClick={() => setRounds(Math.max(1, rounds - 1))}>−</button><strong>{rounds}<small>rondas</small></strong><button onClick={() => setRounds(rounds + 1)}>+</button></div></div>
-        <div className={styles.quick}><button onClick={() => setRounds(rounds + 1)}>+1 ronda</button><button onClick={() => setRounds(rounds + 5)}>+5 rondas</button><button onClick={() => setRounds(Math.max(1,item.rounds))}>Recomendado: {item.rounds}</button></div>
+        <div className={styles.quick}><button onClick={() => setRounds(rounds + 1)}>+1 ronda</button><button onClick={() => setRounds(rounds + 5)}>+5 rondas</button></div>
         <div className={styles.estimate}><span>Total estimado</span><strong>{rounds * item.packagesPerRound} paquetes</strong></div>
         <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onStart} disabled={busy}>{busy ? 'Iniciando…' : '▷ Iniciar producción'}</button></footer>
     </section></div>
