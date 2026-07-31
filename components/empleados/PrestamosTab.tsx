@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
+import {
+    EmpleadoReciboPrestamo,
+    imprimirReciboPrestamo,
+} from '@/components/empleados/imprimirReciboPrestamo'
 
 interface Cuota {
     id: string
@@ -79,13 +83,14 @@ async function mensajeError(response: Response, fallback: string): Promise<strin
     }
 }
 
-export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
+export function PrestamosTab({ empleadoId, empleado }: { empleadoId: string; empleado: EmpleadoReciboPrestamo }) {
     const { data: session } = useSession()
     const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const [prestamos, setPrestamos] = useState<Prestamo[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
     const [saving, setSaving] = useState(false)
+    const [accionCreacion, setAccionCreacion] = useState<'guardar' | 'imprimir' | null>(null)
     const [instanteReferencia] = useState(() => Date.now())
     const [showNew, setShowNew] = useState(false)
     const [form, setForm] = useState(FORM_INICIAL)
@@ -149,7 +154,10 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
 
     const handleCreate = async (event: React.FormEvent) => {
         event.preventDefault()
+        const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+        const imprimir = submitter?.value === 'imprimir'
         setSaving(true)
+        setAccionCreacion(imprimir ? 'imprimir' : 'guardar')
         try {
             const response = await fetch(`/api/empleados/${empleadoId}/prestamos`, {
                 method: 'POST',
@@ -157,13 +165,23 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                 body: JSON.stringify(form),
             })
             if (!response.ok) throw new Error(await mensajeError(response, 'No se pudo crear el préstamo.'))
+            const nuevoPrestamo = await response.json() as Prestamo
             setForm(FORM_INICIAL)
             setShowNew(false)
             await fetchPrestamos()
+            if (imprimir) {
+                try {
+                    await imprimirReciboPrestamo(nuevoPrestamo, empleado)
+                } catch (printError) {
+                    console.error('No se pudo imprimir el recibo del préstamo:', printError)
+                    alert('El préstamo se creó correctamente, pero no se pudo abrir la impresión. Podés reimprimir el recibo desde la tarjeta del préstamo.')
+                }
+            }
         } catch (createError) {
             alert(createError instanceof Error ? createError.message : 'No se pudo crear el préstamo.')
         } finally {
             setSaving(false)
+            setAccionCreacion(null)
         }
     }
 
@@ -381,8 +399,13 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                         <Field label="Observaciones">
                             <input type="text" maxLength={500} value={form.observaciones} onChange={event => setForm({ ...form, observaciones: event.target.value })} placeholder="Motivo o referencia" className="form-input" />
                         </Field>
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
-                            <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creando...' : 'Confirmar y generar cuotas'}</button>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                            <button type="submit" name="accion" value="guardar" className="btn btn-outline" disabled={saving}>
+                                {saving && accionCreacion === 'guardar' ? 'Creando...' : 'Crear sin imprimir'}
+                            </button>
+                            <button type="submit" name="accion" value="imprimir" className="btn btn-primary" disabled={saving}>
+                                {saving && accionCreacion === 'imprimir' ? 'Creando recibo...' : 'Crear e imprimir recibo'}
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -394,15 +417,16 @@ export function PrestamosTab({ empleadoId }: { empleadoId: string }) {
                         <p style={{ color: 'var(--color-gray-500)' }}>No hay préstamos registrados para este empleado.</p>
                     </div>
                 ) : prestamos.map(prestamo => (
-                    <PrestamoCard key={prestamo.id} prestamo={prestamo} instanteReferencia={instanteReferencia} esAdmin={esAdmin} onEdit={abrirEdicion} onAdd={setAddingCuota} onAnular={setAnulandoPrestamo} onCajaCambiada={fetchPrestamos} />
+                    <PrestamoCard key={prestamo.id} prestamo={prestamo} empleado={empleado} instanteReferencia={instanteReferencia} esAdmin={esAdmin} onEdit={abrirEdicion} onAdd={setAddingCuota} onAnular={setAnulandoPrestamo} onCajaCambiada={fetchPrestamos} />
                 ))}
             </div>
         </div>
     )
 }
 
-function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, onAnular, onCajaCambiada }: {
+function PrestamoCard({ prestamo, empleado, instanteReferencia, esAdmin, onEdit, onAdd, onAnular, onCajaCambiada }: {
     prestamo: Prestamo
+    empleado: EmpleadoReciboPrestamo
     instanteReferencia: number
     esAdmin: boolean
     onEdit: (cuota: Cuota) => void
@@ -422,6 +446,14 @@ function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, on
         && Boolean(prestamo.origenEntrega)
         && !prestamo.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)
     const movimientoEntrega = prestamo.movimientosCaja.find(movimiento => movimiento.tipo === 'egreso' && !movimiento.movimientoReversaDeId)
+    const handleImprimir = async () => {
+        try {
+            await imprimirReciboPrestamo(prestamo, empleado)
+        } catch (printError) {
+            console.error('No se pudo imprimir el recibo del préstamo:', printError)
+            alert('No se pudo abrir la impresión del recibo. Verificá los permisos de impresión del navegador e intentá nuevamente.')
+        }
+    }
 
     return (
         <div className="card" style={{ overflow: 'hidden', border: '1px solid var(--color-gray-200)' }}>
@@ -440,6 +472,7 @@ function PrestamoCard({ prestamo, instanteReferencia, esAdmin, onEdit, onAdd, on
                         {prestamo.observaciones && <div style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)', marginTop: '4px' }}>{prestamo.observaciones}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        {!anulado && <button className="btn btn-outline" onClick={() => void handleImprimir()}>Imprimir recibo</button>}
                         {activo && <button className="btn btn-outline" onClick={() => onAdd({ prestamoId: prestamo.id, monto: String(proxima?.monto || ''), cajaOrigen: 'mercaderia', detalle: '' })}>+ Agregar cuota</button>}
                         {esAdmin && movimientoEntrega && !anulado && <CambiarCajaPagoButton compact movimientoId={movimientoEntrega.id} cajaActual={movimientoEntrega.cajaOrigen} onSuccess={onCajaCambiada} />}
                         {esAdmin && anulable && <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => onAnular(prestamo)}>Anular préstamo</button>}

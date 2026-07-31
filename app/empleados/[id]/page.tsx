@@ -220,7 +220,7 @@ export default function EmpleadoDetailPage() {
                     )}
 
                     {activeTab === 'prestamos' && (
-                        <PrestamosTab empleadoId={empleado.id} />
+                        <PrestamosTab empleadoId={empleado.id} empleado={empleado} />
                     )}
 
                     {activeTab === 'liquidaciones' && (
