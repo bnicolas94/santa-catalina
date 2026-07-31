@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { unstable_cache } from 'next/cache'
 import { getLiquidacionFetchRange, liquidacionBelongsToPeriod } from './reportes-costos'
+import { calcularResultadoConMerma, getMermasPeriodo } from './mermas-costos'
 
 /**
  * SERVICIOS DE CONFIGURACIÓN Y METADATA
@@ -156,7 +157,16 @@ export const getRentabilidadReport = unstable_cache(
             .filter((g) => g.categoria.esOperativo)
             .reduce((acc: number, g: any) => acc + g.monto, 0)
 
-        const rentabilidadNeta = margenBruto - totalGastos
+        const mermasPeriodo = await getMermasPeriodo(startOfMonth, endOfMonth, ubicacionId)
+        const perdidaPorMerma = mermasPeriodo.resumen.costoTotal
+        // El fallback de compras no distingue consumo, inventario y descarte.
+        // Restar la merma además de ese valor produciría un resultado inconsistente.
+        const { mermaImpactaResultado, rentabilidadNeta } = calcularResultadoConMerma(
+            margenBruto,
+            totalGastos,
+            perdidaPorMerma,
+            isCmvFallback
+        )
         const gastosPorCategoria: Record<string, number> = {}
 
         for (const g of gastos as any[]) {
@@ -175,6 +185,9 @@ export const getRentabilidadReport = unstable_cache(
             isCmvFallback,
             margenBruto,
             totalGastos,
+            perdidaPorMerma,
+            mermaImpactaResultado,
+            costosMermaEstimados: mermasPeriodo.resumen.estimados,
             rentabilidadNeta,
             gastosPorCategoria,
             margenEbitda: ingresosTotales > 0 ? (rentabilidadNeta / ingresosTotales) * 100 : 0

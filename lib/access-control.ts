@@ -37,6 +37,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/mercadopago/movimientos', permissions: ['permisoCaja'], legacyRoles: ['ADMIN'] },
     { path: '/api/conceptos', permissions: ['permisoCaja', 'permisoCostos'], legacyRoles: ['ADMIN'] },
     { path: '/api/gastos', permissions: ['permisoCaja', 'permisoCostos'], legacyRoles: ['ADMIN'] },
+    { path: '/api/costos/mermas', permissions: ['permisoCostos'], legacyRoles: ['ADMIN'] },
 
     // Producción. El descuento de planificación puede ser operado también desde Stock.
     { path: '/api/produccion/planificacion/descontar', permissions: ['permisoProduccion', 'permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD'] },

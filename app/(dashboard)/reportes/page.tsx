@@ -33,6 +33,9 @@ interface RentabilidadData {
     isCmvFallback?: boolean
     margenBruto: number
     totalGastos: number
+    perdidaPorMerma: number
+    mermaImpactaResultado: boolean
+    costosMermaEstimados: number
     rentabilidadNeta: number
     margenEbitda: number
     gastosPorCategoria: Record<string, number>

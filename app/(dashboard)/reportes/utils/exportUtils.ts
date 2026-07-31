@@ -48,6 +48,8 @@ function exportEconomico(wb: XLSX.WorkBook, data: any, mes: string, anio: string
         ['Costo de Mercadería Vendida', data.costoMercaderiaVendida],
         ['Margen de Contribución', data.margenBruto],
         ['Gastos Operativos', data.totalGastos],
+        ['Pérdida por Merma', data.perdidaPorMerma || 0],
+        ['Impacta en Resultado', data.mermaImpactaResultado ? 'Sí' : 'No — CMV basado en compras'],
         ['EBITDA', data.rentabilidadNeta],
         ['Margen EBITDA (%)', data.margenEbitda?.toFixed(2) + '%'],
         [''],
@@ -158,6 +160,7 @@ function exportCostos(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
         ['Costo Total', k.costoTotal, k.costoTotalAnterior],
         ['Compra Insumos', k.costoInsumosActual, k.costoInsumosAnterior],
         ['Gastos Operativos', k.gastosTotalActual, k.gastosTotalAnterior],
+        ['Pérdida por Merma (separada del total basado en compras)', k.costoMermaActual || 0, k.costoMermaAnterior || 0],
         ['Margen Promedio Productos', (k.margenPromedioProductos || 0).toFixed(1) + '%', ''],
     ]
     const wsResumen = XLSX.utils.aoa_to_sheet(resumen)
@@ -184,6 +187,19 @@ function exportCostos(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
     const wsInsumos = XLSX.utils.aoa_to_sheet(insumos)
     setColumnWidths(wsInsumos, [30, 14, 10, 10, 14])
     XLSX.utils.book_append_sheet(wb, wsInsumos, 'Top Insumos')
+
+    if (data.mermasDetalle?.length > 0) {
+        const mermas = [
+            ['Fecha', 'Origen', 'Ítem', 'Motivo', 'Ubicación', 'Cantidad', 'Unidad', 'Costo Unitario', 'Pérdida', 'Costo Histórico'],
+            ...data.mermasDetalle.map((m: any) => [
+                m.fecha, m.origenLabel, m.item, m.motivo, m.ubicacion,
+                m.cantidad, m.unidad, m.costoUnitario, m.costoTotal, m.costoHistorico ? 'Sí' : 'Estimado'
+            ])
+        ]
+        const wsMermas = XLSX.utils.aoa_to_sheet(mermas)
+        setColumnWidths(wsMermas, [14, 22, 28, 24, 20, 12, 10, 16, 16, 16])
+        XLSX.utils.book_append_sheet(wb, wsMermas, 'Mermas')
+    }
 }
 
 function exportDesperdicio(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
@@ -196,11 +212,25 @@ function exportDesperdicio(wb: XLSX.WorkBook, data: any, mes: string, anio: stri
         ['% Merma Mes Anterior', (k.mermaAnterior || 0).toFixed(1) + '%'],
         ['Rechazos Producción', k.totalRechazadosProduccion],
         ['Rechazos Entrega', k.totalRechazadosEntrega],
-        ['Costo Estimado Desperdicio', k.costoDesperdicioTotal],
+        ['Costo Total Desperdicio', k.costoDesperdicioTotal],
+        ['Costo Desperdicio Período Anterior', k.costoDesperdicioAnterior || 0],
     ]
     const wsResumen = XLSX.utils.aoa_to_sheet(resumen)
     setColumnWidths(wsResumen, [30, 18])
     XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen')
+
+    if (data.detalleMermas?.length > 0) {
+        const detalle = [
+            ['Fecha', 'Origen', 'Ítem', 'Motivo', 'Ubicación', 'Cantidad', 'Unidad', 'Costo Unitario', 'Pérdida', 'Costo Histórico'],
+            ...data.detalleMermas.map((m: any) => [
+                m.fecha, m.origenLabel, m.item, m.motivo, m.ubicacion,
+                m.cantidad, m.unidad, m.costoUnitario, m.costoTotal, m.costoHistorico ? 'Sí' : 'Estimado'
+            ])
+        ]
+        const wsDetalle = XLSX.utils.aoa_to_sheet(detalle)
+        setColumnWidths(wsDetalle, [14, 22, 28, 24, 20, 12, 10, 16, 16, 16])
+        XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle Mermas')
+    }
 
     if (data.rankingProductos?.length > 0) {
         const prods = [

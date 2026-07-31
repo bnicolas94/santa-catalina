@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getGlobalConfig } from './reportes'
+import { getMermasPeriodo } from './mermas-costos'
 
 /**
  * Extrae la fecha de INICIO del período trabajado desde el campo `periodo` de una liquidación.
@@ -84,6 +85,13 @@ export async function getCostosReport(
     startAnterior.setHours(0, 0, 0, 0)
 
     const whereUbi = ubicacionId ? { ubicacionId } : {}
+
+    const [mermasActuales, mermasAnteriores] = await Promise.all([
+        getMermasPeriodo(startOfCurrent, endOfCurrent, ubicacionId),
+        getMermasPeriodo(startAnterior, endAnterior, ubicacionId)
+    ])
+    const costoMermaActual = mermasActuales.resumen.costoTotal
+    const costoMermaAnterior = mermasAnteriores.resumen.costoTotal
 
     // ── 1. Costo total de insumos comprados ──
     const [comprasActual, comprasAnterior] = await Promise.all([
@@ -772,6 +780,13 @@ export async function getCostosReport(
             costoInsumosAnterior,
             gastosTotalActual,
             gastosTotalAnterior,
+            costoMermaActual,
+            costoMermaAnterior,
+            variacionMermaPct: costoMermaAnterior > 0
+                ? ((costoMermaActual - costoMermaAnterior) / costoMermaAnterior) * 100
+                : null,
+            costosMermaEstimados: mermasActuales.resumen.estimados,
+            mermaSeparadaDelTotal: true,
             costoTotal: costoTotalActual,
             costoTotalAnterior,
             // Margen real: ventas vs costos totales
@@ -795,7 +810,9 @@ export async function getCostosReport(
         rankingInsumos,
         gastoPorProveedor,
         comprasDetalle: comprasFormateadas,
-        gastosDetalle
+        gastosDetalle,
+        mermasDetalle: mermasActuales.registros,
+        mermasPorOrigen: mermasActuales.resumen.porOrigen,
+        mermasPorMotivo: mermasActuales.resumen.porMotivo
     }
 }
-

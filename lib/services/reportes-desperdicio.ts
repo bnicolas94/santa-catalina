@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getGlobalConfig } from './reportes'
+import { getMermasPeriodo } from './mermas-costos'
 
 /**
  * Servicio de reportes de desperdicio.
@@ -25,6 +26,11 @@ export async function getDesperdicioReport(
     startAnterior.setHours(0, 0, 0, 0)
 
     const whereUbi = ubicacionId ? { ubicacionId } : {}
+
+    const [mermasActuales, mermasAnteriores] = await Promise.all([
+        getMermasPeriodo(startOfCurrent, endOfCurrent, ubicacionId),
+        getMermasPeriodo(startAnterior, endAnterior, ubicacionId)
+    ])
 
     // ── 1. Rechazos en producción (Lotes) ──
     const lotesActual = await prisma.lote.findMany({
@@ -111,8 +117,7 @@ export async function getDesperdicioReport(
     const producidosAnterior = lotesAnterior._sum.unidadesProducidas || 0
     const mermaAnterior = producidosAnterior > 0 ? (rechazadosAnterior / producidosAnterior) * 100 : 0
 
-    const costoDesperdicioTotal = Object.values(rechazoPorProducto)
-        .reduce((sum, p) => sum + p.costoDesperdicio, 0)
+    const costoDesperdicioTotal = mermasActuales.resumen.costoTotal
 
     // ── 2. Rechazos en entregas ──
     const entregas = await prisma.entrega.findMany({
@@ -162,7 +167,10 @@ export async function getDesperdicioReport(
             label: `Sem -${i}`,
             producidos: prod,
             rechazados: rech,
-            merma: mermaSem
+            merma: mermaSem,
+            costo: mermasActuales.registros
+                .filter(registro => registro.fecha >= start && registro.fecha <= end)
+                .reduce((total, registro) => total + registro.costoTotal, 0)
         })
     }
 
@@ -174,12 +182,20 @@ export async function getDesperdicioReport(
             mermaActual,
             mermaAnterior,
             costoDesperdicioTotal,
+            costoDesperdicioAnterior: mermasAnteriores.resumen.costoTotal,
+            costoDesperdicioVariacion: mermasAnteriores.resumen.costoTotal > 0
+                ? ((costoDesperdicioTotal - mermasAnteriores.resumen.costoTotal) / mermasAnteriores.resumen.costoTotal) * 100
+                : null,
+            costosEstimados: mermasActuales.resumen.estimados,
             totalProducidos
         },
         rankingProductos: Object.values(rechazoPorProducto)
             .filter(p => p.rechazados > 0)
             .sort((a, b) => b.rechazados - a.rechazados),
         rechazosEntrega,
-        tendencia
+        tendencia,
+        detalleMermas: mermasActuales.registros,
+        desgloseOrigen: mermasActuales.resumen.porOrigen,
+        desgloseMotivos: mermasActuales.resumen.porMotivo
     }
 }

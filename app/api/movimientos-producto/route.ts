@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { calcularCostoReceta, extraerMotivoMerma } from '@/lib/services/mermas-costos'
+import type { Prisma } from '@prisma/client'
+import { revalidateTag } from 'next/cache'
 
 // GET /api/movimientos-producto
 export async function GET(req: NextRequest) {
@@ -9,7 +12,7 @@ export async function GET(req: NextRequest) {
         const ubicacionId = searchParams.get('ubicacionId')
         const limit = parseInt(searchParams.get('limit') || '200')
 
-        const where: any = {}
+        const where: Prisma.MovimientoProductoWhereInput = {}
         if (productoId) where.productoId = productoId
         if (ubicacionId) where.ubicacionId = ubicacionId
 
@@ -35,7 +38,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { productoId, presentacionId, tipo, cantidad, observaciones, ubicacionId, destinoUbicacionId } = body
+        const { productoId, presentacionId, tipo, cantidad, observaciones, ubicacionId, destinoUbicacionId, motivo } = body
 
         const cant = parseInt(cantidad)
         const tiposPermitidos = ['traslado', 'venta_local', 'reparto', 'merma', 'ajuste', 'ajuste_fabrica', 'ajuste_local']
@@ -82,6 +85,14 @@ export async function POST(req: NextRequest) {
 
                 const stock = await tx.stockProducto.findUnique({
                     where: { productoId_presentacionId_ubicacionId: { productoId, presentacionId, ubicacionId } },
+                    include: {
+                        presentacion: { select: { cantidad: true } },
+                        producto: {
+                            select: {
+                                fichasTecnicas: { include: { insumo: { select: { precioUnitario: true } } } }
+                            }
+                        }
+                    }
                 })
                 if (!stock || stock.cantidad < cant) {
                     throw new Error(`Stock insuficiente. Disponible: ${stock?.cantidad || 0} paq`)
@@ -90,8 +101,22 @@ export async function POST(req: NextRequest) {
                     where: { productoId_presentacionId_ubicacionId: { productoId, presentacionId, ubicacionId } },
                     data: { cantidad: { decrement: cant } },
                 })
+                const costoUnitario = tipo === 'merma'
+                    ? calcularCostoReceta(stock.producto.fichasTecnicas) * stock.presentacion.cantidad
+                    : null
                 await tx.movimientoProducto.create({
-                    data: { productoId, presentacionId, tipo, cantidad: cant, ubicacionId, signo: 'salida', observaciones: observaciones || tipo },
+                    data: {
+                        productoId,
+                        presentacionId,
+                        tipo,
+                        cantidad: cant,
+                        ubicacionId,
+                        signo: 'salida',
+                        observaciones: observaciones || tipo,
+                        motivoMerma: tipo === 'merma' ? (motivo || extraerMotivoMerma(observaciones)) : null,
+                        costoUnitario,
+                        costoTotal: costoUnitario !== null ? costoUnitario * cant : null
+                    },
                 })
                 return { ok: true, mensaje: `${cant} paquetes descontados correctamente` }
 
@@ -131,6 +156,7 @@ export async function POST(req: NextRequest) {
             throw new Error('Tipo no implementado')
         })
 
+        if (tipo === 'merma') revalidateTag('reportes', 'default')
         return NextResponse.json(result, { status: 201 })
     } catch (error) {
         console.error('Error en movimiento producto:', error)

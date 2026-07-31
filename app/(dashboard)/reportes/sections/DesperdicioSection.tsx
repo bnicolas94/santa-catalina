@@ -43,6 +43,7 @@ export default function DesperdicioSection({ rango, ubicacionId, incluirTodo = f
 
     const k = data.kpis
     const deltaMerma = formatDelta(k.mermaActual, k.mermaAnterior, { invertColor: true })
+    const deltaCosto = formatDelta(k.costoDesperdicioTotal, k.costoDesperdicioAnterior, { invertColor: true })
 
     const productoColumns = [
         { key: 'nombre', label: 'Producto', sortable: true },
@@ -68,6 +69,19 @@ export default function DesperdicioSection({ rango, ubicacionId, incluirTodo = f
             format: (v: number) => <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>{formatNumber(v)}</span>
         },
         { key: 'motivo', label: 'Motivo' },
+    ]
+
+    const mermaColumns = [
+        { key: 'fecha', label: 'Fecha', sortable: true, format: (v: string) => new Date(v).toLocaleDateString('es-AR') },
+        { key: 'origenLabel', label: 'Origen', sortable: true },
+        { key: 'item', label: 'Ítem', sortable: true },
+        { key: 'motivo', label: 'Motivo', sortable: true },
+        { key: 'ubicacion', label: 'Ubicación', sortable: true },
+        { key: 'cantidad', label: 'Cantidad', align: 'right' as const, sortable: true, format: (v: number, row: any) => `${formatNumber(v)} ${row.unidad}` },
+        {
+            key: 'costoTotal', label: 'Pérdida', align: 'right' as const, sortable: true,
+            format: (v: number, row: any) => <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>{formatCurrency(v)}{!row.costoHistorico ? ' *' : ''}</span>
+        }
     ]
 
     return (
@@ -105,7 +119,9 @@ export default function DesperdicioSection({ rango, ubicacionId, incluirTodo = f
                     value={formatCurrency(k.costoDesperdicioTotal)}
                     icon="💸"
                     color="var(--color-danger)"
-                    footer="Estimado s/ ficha técnica"
+                    delta={deltaCosto}
+                    previousLabel="período ant."
+                    footer="Insumos + productos + producción"
                 />
             </div>
 
@@ -154,6 +170,31 @@ export default function DesperdicioSection({ rango, ubicacionId, incluirTodo = f
 
             {/* Tables */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+                {/* Detalle unificado */}
+                {data.detalleMermas.length > 0 && (
+                    <div className="card" style={{ padding: 'var(--space-6)' }}>
+                        <h3 style={{
+                            fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)',
+                            marginBottom: 'var(--space-4)', fontFamily: 'var(--font-heading)',
+                            letterSpacing: '0.03em'
+                        }}>
+                            Pérdidas Valorizadas — Todos los Orígenes
+                        </h3>
+                        <DataTable
+                            columns={mermaColumns}
+                            data={data.detalleMermas}
+                            showTotals={true}
+                            totalColumns={['costoTotal']}
+                            exportFilename={`Desperdicio_Detalle_${rango.label.replace(/\s+/g, "_")}`}
+                        />
+                        {k.costosEstimados > 0 && (
+                            <p style={{ marginTop: 'var(--space-3)', color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>
+                                * {k.costosEstimados} registro(s) histórico(s) valorizado(s) con costos vigentes.
+                            </p>
+                        )}
+                    </div>
+                )}
+
                 {/* Ranking producción */}
                 {data.rankingProductos.length > 0 && (
                     <div className="card" style={{ padding: 'var(--space-6)' }}>
@@ -194,7 +235,7 @@ export default function DesperdicioSection({ rango, ubicacionId, incluirTodo = f
                     </div>
                 )}
 
-                {data.rankingProductos.length === 0 && data.rechazosEntrega.length === 0 && (
+                {data.detalleMermas.length === 0 && data.rechazosEntrega.length === 0 && (
                     <div className="card" style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
                         <div style={{ fontSize: '48px', marginBottom: 'var(--space-4)' }}>✅</div>
                         <p style={{ color: 'var(--color-success)', fontSize: 'var(--text-lg)', fontWeight: 600 }}>

@@ -44,6 +44,17 @@ test('Caja queda aislada de usuarios con otros permisos', () => {
     )
 })
 
+test('las mermas de Costos requieren permisoCostos', () => {
+    assert.equal(
+        canAccessPath('/api/costos/mermas', { rol: 'OPERARIO', permisos: { permisoCostos: true } }),
+        true
+    )
+    assert.equal(
+        canAccessPath('/api/costos/mermas', { rol: 'OPERARIO', permisos: { permisoStock: true } }),
+        false
+    )
+})
+
 test('las operaciones compartidas aceptan cualquiera de sus permisos válidos', () => {
     assert.equal(
         canAccessPath('/api/produccion/planificacion/descontar', { permisos: { permisoStock: true } }),

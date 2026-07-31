@@ -269,6 +269,9 @@ model MovimientoProducto {
   signo          String
   fecha          DateTime     @default(now())
   observaciones  String?
+  motivoMerma    String?      @map("motivo_merma")
+  costoUnitario  Float?       @map("costo_unitario")
+  costoTotal     Float?       @map("costo_total")
   createdAt      DateTime     @default(now())
   ubicacionId    String       @map("id_ubicacion")
   productoId     String       @map("id_producto")
@@ -283,6 +286,7 @@ model MovimientoProducto {
   ruta           Ruta?        @relation(fields: [rutaId], references: [id])
   ubicacion      Ubicacion    @relation(fields: [ubicacionId], references: [id])
 
+  @@index([tipo, fecha])
   @@map("movimientos_producto")
 }
 
@@ -292,6 +296,7 @@ model MovimientoStock {
   cantidad           Float
   fecha              DateTime        @default(now())
   observaciones      String?
+  motivoMerma        String?         @map("motivo_merma")
   costoTotal         Float?          @map("costo_total")
   estadoPago         String?         @default("pagado")
   createdAt          DateTime        @default(now())
@@ -311,6 +316,7 @@ model MovimientoStock {
   proveedor          Proveedor?      @relation(fields: [proveedorId], references: [id])
   ubicacion          Ubicacion?      @relation(fields: [ubicacionId], references: [id])
 
+  @@index([tipo, fecha])
   @@map("movimientos_stock")
 }
 

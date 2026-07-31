@@ -14,7 +14,7 @@ interface Props {
     incluirTodo?: boolean
 }
 
-type SubTab = 'resumen' | 'insumos' | 'gastos' | 'proveedores' | 'compras' | 'margenes'
+type SubTab = 'resumen' | 'insumos' | 'gastos' | 'mermas' | 'proveedores' | 'compras' | 'margenes'
 
 export default function CostosSection({ rango, ubicacionId, incluirTodo = false }: Props) {
     const [data, setData] = useState<any>(null)
@@ -56,6 +56,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
     const deltaCostoTotal = formatDelta(k.costoTotal, k.costoTotalAnterior, { invertColor: true })
     const deltaInsumos = formatDelta(k.costoInsumosActual, k.costoInsumosAnterior, { invertColor: true })
     const deltaGastos = formatDelta(k.gastosTotalActual, k.gastosTotalAnterior, { invertColor: true })
+    const deltaMermas = formatDelta(k.costoMermaActual, k.costoMermaAnterior, { invertColor: true })
     const deltaGanancia = formatDelta(k.gananciaActual, k.gananciaAnterior)
     const deltaVentas = formatDelta(k.ventasTotalActual, k.ventasTotalAnterior)
 
@@ -65,6 +66,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
         { key: 'resumen', label: 'Resumen', icon: '📊' },
         { key: 'insumos', label: 'Insumos', icon: '🍎' },
         { key: 'gastos', label: 'Gastos Op.', icon: '💸' },
+        { key: 'mermas', label: 'Mermas', icon: '🗑️' },
         { key: 'proveedores', label: 'Proveedores', icon: '🏪' },
         { key: 'compras', label: 'Facturas/Remitos', icon: '🧾' },
         { key: 'margenes', label: 'Resultado', icon: '📈' },
@@ -131,6 +133,16 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     previousLabel="período ant."
                     onClick={() => setSubTab('gastos')}
                 />
+                <KpiCardEnhanced
+                    label="Pérdida por Merma"
+                    value={formatCurrency(k.costoMermaActual)}
+                    icon="🗑️"
+                    color="var(--color-danger)"
+                    delta={deltaMermas}
+                    previousLabel="período ant."
+                    footer="Indicador separado; no se suma dos veces"
+                    onClick={() => setSubTab('mermas')}
+                />
             </div>
 
             {/* Sub-tabs */}
@@ -192,6 +204,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
                     }}
                 />
             )}
+            {subTab === 'mermas' && <MermasView data={data} rango={rango} />}
             {subTab === 'proveedores' && (
                 <ProveedoresView 
                     data={data} 
@@ -284,6 +297,66 @@ function ResumenView({ data, rango, onSelectCategory }: { data: any; rango: Rang
                     exportFilename={`Costos_Gastos_${rango.label.replace(/\s+/g, "_")}`}
                     maxHeight="300px"
                 />
+            </div>
+        </>
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUB-TAB: MERMAS / PÉRDIDAS
+// ═══════════════════════════════════════════════════════════════
+function MermasView({ data, rango }: { data: any; rango: RangoFechas }) {
+    const columns = [
+        { key: 'fecha', label: 'Fecha', sortable: true, format: (v: string) => formatDate(v) },
+        { key: 'origenLabel', label: 'Origen', sortable: true },
+        { key: 'item', label: 'Ítem', sortable: true },
+        { key: 'motivo', label: 'Motivo', sortable: true },
+        { key: 'ubicacion', label: 'Ubicación', sortable: true },
+        { key: 'cantidad', label: 'Cantidad', align: 'right' as const, sortable: true, format: (v: number, row: any) => `${formatDecimal(v, 2)} ${row.unidad}` },
+        { key: 'costoUnitario', label: 'Costo/u', align: 'right' as const, sortable: true, format: (v: number) => formatCurrencyDecimals(v) },
+        {
+            key: 'costoTotal', label: 'Pérdida', align: 'right' as const, sortable: true,
+            format: (v: number, row: any) => <span style={{ color: 'var(--color-danger)', fontWeight: 700 }}>{formatCurrency(v)}{!row.costoHistorico ? ' *' : ''}</span>
+        }
+    ]
+
+    return (
+        <>
+            <div style={{
+                padding: 'var(--space-4)', marginBottom: 'var(--space-5)', borderRadius: 'var(--radius-md)',
+                background: '#FFF8E6', border: '1px solid #F6C453', color: '#6B4A00', fontSize: 'var(--text-sm)'
+            }}>
+                La merma se presenta como pérdida operativa separada. No se suma a “Costo Total” porque ese indicador está basado en compras y no distingue consumo, inventario y descarte.
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+                {(data.mermasPorOrigen || []).map((origen: any) => (
+                    <div key={origen.origen} className="card" style={{ padding: 'var(--space-4)' }}>
+                        <div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', fontWeight: 700 }}>{origen.nombre}</div>
+                        <div style={{ color: 'var(--color-danger)', fontSize: 'var(--text-xl)', fontWeight: 700, marginTop: 4 }}>{formatCurrency(origen.costo)}</div>
+                        <small style={{ color: 'var(--color-gray-500)' }}>{origen.registros} registro(s)</small>
+                    </div>
+                ))}
+            </div>
+
+            <div className="card" style={{ padding: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
+                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)', margin: 0 }}>Detalle de pérdidas valorizadas</h3>
+                    <a href="/costos/mermas" className="btn btn-outline btn-sm">Gestionar mermas</a>
+                </div>
+                <DataTable
+                    columns={columns}
+                    data={data.mermasDetalle || []}
+                    showTotals={true}
+                    totalColumns={['costoTotal']}
+                    exportFilename={`Costos_Mermas_${rango.label.replace(/\s+/g, '_')}`}
+                    emptyMessage="No se registraron mermas en el período."
+                />
+                {data.kpis.costosMermaEstimados > 0 && (
+                    <p style={{ marginTop: 'var(--space-3)', color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>
+                        * {data.kpis.costosMermaEstimados} registro(s) histórico(s) valorizado(s) con costos vigentes por no contar con costo congelado.
+                    </p>
+                )}
             </div>
         </>
     )

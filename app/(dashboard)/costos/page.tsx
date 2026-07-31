@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface CategoriaGasto {
     id: string
@@ -141,6 +142,7 @@ export default function CostosPage() {
                             <option value="2028">2028</option>
                         </select>
                     </div>
+                    <Link href="/costos/mermas" className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center' }}>🗑️ Mermas / Desperdicio</Link>
                     <a href="/costos/categorias" className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center' }}>⚙️ Categorías</a>
                     <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Registrar Gasto</button>
                 </div>

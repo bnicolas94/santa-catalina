@@ -89,6 +89,14 @@ export default function DashboardSection({ rango, ubicacionId,
                     onClick={() => onDrillDown('gastos', 'Gastos Operativos')}
                 />
                 <KpiCardEnhanced
+                    label="Pérdida por Merma"
+                    value={r ? formatCurrency(r.perdidaPorMerma || 0) : '—'}
+                    icon="🗑️"
+                    color="var(--color-danger)"
+                    footer={r?.mermaImpactaResultado ? 'Descontada del resultado' : 'Informativa: CMV usa compras'}
+                    loading={loading && !r}
+                />
+                <KpiCardEnhanced
                     label="Margen EBITDA"
                     value={r ? formatPercent(r.margenEbitda) : '—'}
                     icon="📈"
@@ -133,6 +141,7 @@ export default function DashboardSection({ rango, ubicacionId,
                                 { label: 'Facturación', data: [r.ingresosTotales], color: '#3498DB' },
                                 { label: 'CMV', data: [r.costoMercaderiaVendida], color: '#F39C12' },
                                 { label: 'Gastos', data: [r.totalGastos], color: '#E74C3C' },
+                                { label: 'Merma', data: [r.perdidaPorMerma || 0], color: '#9B59B6' },
                                 {
                                     label: 'EBITDA',
                                     data: [r.rentabilidadNeta],

@@ -30,6 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# database backups (may contain sensitive production data)
+/backups/backup_pre_migracion_*.json
+
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example

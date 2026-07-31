@@ -1,51 +1,84 @@
 import { PrismaClient } from '@prisma/client'
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const prisma = new PrismaClient()
 
+type Tabla = { table_name: string }
+
+function jsonReplacer(_key: string, value: unknown) {
+    return typeof value === 'bigint' ? value.toString() : value
+}
+
+function quoteIdentifier(identifier: string) {
+    return `"${identifier.replaceAll('"', '""')}"`
+}
+
 async function main() {
-    console.log('🚀 Iniciando backup de base de datos...')
-    
-    // Directorio de backups
+    console.log('Iniciando backup completo de la base de datos...')
+
     const backupDir = path.join(process.cwd(), 'backups')
-    if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir)
-    }
+    fs.mkdirSync(backupDir, { recursive: true })
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const fileName = `backup_pre_v2_reportes_${timestamp}.json`
+    const fileName = `backup_pre_migracion_${timestamp}.json`
     const filePath = path.join(backupDir, fileName)
 
-    // Lista de modelos a respaldar (excluimos métodos internos de prisma)
-    const models = Object.keys(prisma).filter(key => 
-        !key.startsWith('_') && 
-        !key.startsWith('$') && 
-        typeof (prisma as any)[key].findMany === 'function'
-    )
+    // Consultar las tablas reales evita depender del cliente generado, que puede
+    // contener columnas de una migración que todavía no fue aplicada.
+    const tablas = await prisma.$queryRaw<Tabla[]>`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+    `
 
-    const fullDump: Record<string, any> = {}
+    if (tablas.length === 0) throw new Error('La base no contiene tablas públicas para respaldar')
 
-    for (const model of models) {
-        console.log(`📦 Respaldando tabla: ${model}...`)
-        try {
-            fullDump[model] = await (prisma as any)[model].findMany()
-        } catch (error) {
-            console.error(`❌ Error respaldando ${model}:`, error)
-        }
+    const datos: Record<string, unknown[]> = {}
+    let totalRegistros = 0
+
+    for (const { table_name: tabla } of tablas) {
+        const nombreSeguro = quoteIdentifier(tabla)
+        const filas = await prisma.$queryRawUnsafe<unknown[]>(`SELECT * FROM ${nombreSeguro}`)
+        datos[tabla] = filas
+        totalRegistros += filas.length
+        console.log(`Respaldada ${tabla}: ${filas.length} registro(s)`)
     }
 
-    fs.writeFileSync(filePath, JSON.stringify(fullDump, null, 2))
-    
-    console.log('\n✅ Backup completado con éxito!')
-    console.log(`📄 Archivo: ${filePath}`)
-    console.log(`📊 Total de tablas: ${models.length}`)
+    const contenido = {
+        _metadata: {
+            formato: 2,
+            creadoEn: new Date().toISOString(),
+            tablas: tablas.length,
+            registros: totalRegistros
+        },
+        datos
+    }
+
+    fs.writeFileSync(filePath, JSON.stringify(contenido, jsonReplacer, 2), { flag: 'wx' })
+
+    // Verificación inmediata: el archivo debe poder leerse y conservar todos los conteos.
+    const verificacion = JSON.parse(fs.readFileSync(filePath, 'utf8')) as typeof contenido
+    if (verificacion._metadata.tablas !== tablas.length || verificacion._metadata.registros !== totalRegistros) {
+        throw new Error('El archivo generado no superó la verificación de integridad')
+    }
+
+    const size = fs.statSync(filePath).size
+    if (size === 0) throw new Error('El archivo de backup quedó vacío')
+
+    console.log('\nBackup completado y verificado.')
+    console.log(`Archivo: ${filePath}`)
+    console.log(`Tablas: ${tablas.length}`)
+    console.log(`Registros: ${totalRegistros}`)
+    console.log(`Tamaño: ${size} bytes`)
 }
 
 main()
-    .catch((e) => {
-        console.error('❌ Error fatal en backup:', e)
-        process.exit(1)
+    .catch((error) => {
+        console.error('Error fatal en backup:', error)
+        process.exitCode = 1
     })
     .finally(async () => {
         await prisma.$disconnect()
