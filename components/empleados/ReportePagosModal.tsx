@@ -1,8 +1,8 @@
 "use client"
 
-import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
 import { useState, useEffect, useMemo } from 'react'
+import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
 
 interface ReportePagosModalProps {
     onClose: () => void
@@ -31,13 +31,6 @@ interface ReporteFila {
     totalNeto: number
 }
 
-const escaparHtml = (valor: string) => valor
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-
 export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     const [fechaDesde, setFechaDesde] = useState(new Date().toISOString().split('T')[0])
     const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
@@ -45,6 +38,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     const [loading, setLoading] = useState(false)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [filtroNombre, setFiltroNombre] = useState('')
+    const [modeloRecibo, setModeloRecibo] = useState<ModeloRecibo>('A')
 
     useEffect(() => {
         fetchReporte()
@@ -94,7 +88,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         const fDesdeStr = fechaDesde.split('-').reverse().join('/')
         const fHastaStr = fechaHasta.split('-').reverse().join('/')
 
-        const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
+        const { logo: logoBase64 } = await getPrintLogos()
 
         const html = `
             <html>
@@ -196,244 +190,22 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
     const handlePrintReceipts = async () => {
         if (selectedIds.size === 0) return
-
         const selectedLiquidaciones = datos.filter(d => selectedIds.has(d.id))
-
-        const { logo: logoBase64, watermark: watermarkBase64 } = await getPrintLogos()
-        
-        let allHtml = `
-            <html>
-            <head>
-                <title>Batch Recibos de Sueldo</title>
-                <style>
-                    @page { size: A4; margin: 20mm; }
-                    body { font-family: 'Times New Roman', serif; line-height: 1.6; color: #000; padding: 0; margin: 0; font-size: 14pt; }
-                    .page-break { page-break-after: always; }
-                    .recibo-container { border: 1px solid #eee; padding: 40px; max-width: 800px; margin: 0 auto 20px auto; position: relative; z-index: 1; background: transparent !important; }
-                    .watermark {
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        width: 80%;
-                        max-width: 500px;
-                        height: auto;
-                        opacity: 0.35;
-                        z-index: 0;
-                        pointer-events: none;
-                    }
-                    .header { margin-bottom: 40px; position: relative; z-index: 10; }
-                    .texto { text-align: justify; margin-bottom: 60px; position: relative; z-index: 10; padding-top: 20px; }
-                    .firma-section { display: flex; flex-direction: column; align-items: flex-end; gap: 20px; margin-top: 80px; position: relative; z-index: 10; }
-                    .firma-line { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 5px; }
-                    .data-label { font-weight: bold; }
-                    .amount { font-weight: bold; }
-                    .header-logo { width: 140px; height: auto; margin-bottom: 15px; }
-                    @media print { 
-                        .no-print { display: none; } 
-                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                    }
-                </style>
-            </head>
-            <body>
-        `
-
-        selectedLiquidaciones.forEach((liq, index) => {
-            const dImp = new Date(liq.fechaGeneracion || new Date())
-            const dia = dImp.getDate()
-            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-            const mesNombre = meses[dImp.getMonth()]
-            const anio = dImp.getFullYear()
-
-            let fDesde = '', fHasta = ''
-            const matchExpress = liq.periodo.match(/Express\s+([\d\/]+)\s+-\s+([\d\/]+)/)
-            if (matchExpress) {
-                fDesde = matchExpress[1]; fHasta = matchExpress[2]
-            } else {
-                const matchNormal = liq.periodo.match(/del\s+([\d\/]+)\s+al\s+([\d\/]+)/i)
-                if (matchNormal) {
-                    fDesde = matchNormal[1]; fHasta = matchNormal[2]
-                } else {
-                    fDesde = liq.periodo; fHasta = liq.periodo
-                }
-            }
-
-            const sueldoBaseLetras = formatCurrencyToWords(liq.sueldoProporcional || 0)
-            const montoHsExtrasLetras = formatCurrencyToWords(liq.montoHorasExtras || 0)
-            const montoOtrosLetras = formatCurrencyToWords(liq.montoAdicionales || 0)
-            const totalBruto = (liq.sueldoProporcional || 0) + (liq.montoHorasExtras || 0) + (liq.montoHorasNormales || 0) + (liq.montoHorasFeriado || 0) + (liq.montoAdicionales || 0)
-            const totalLetrasBruto = formatCurrencyToWords(totalBruto)
-            const totalLetrasNeto = formatCurrencyToWords(liq.totalNeto || 0)
-
-            const isVacaciones = liq.tipo === 'VACACIONES' || 
-                                liq.manualData?.esVacaciones === true || 
-                                liq.periodo.toLowerCase().includes('vacaciones')
-            
-            const isFinal = liq.tipo === 'FINAL' || liq.manualData?.esLiquidacionFinal === true
-            const isHorasAdeudadas = liq.tipo === 'HORAS_EXTRAS_ADEUDADAS' || liq.manualData?.origen === 'HORAS_EXTRAS_ADEUDADAS'
-
-            const manualData = liq.manualData || {}
-            const goceInicio = manualData.fechaInicioGoce ? manualData.fechaInicioGoce.split('-').reverse().join('/') : '___'
-            const goceFin = manualData.fechaFinGoce ? manualData.fechaFinGoce.split('-').reverse().join('/') : '___'
-            const diasVacas = manualData.diasTrabajados || '___'
-
-            let textoHtml = ''
-            if (isHorasAdeudadas) {
-                const semanaOrigen = escaparHtml(manualData.semanaOrigen || liq.periodo)
-                const horasAdeudadas = Number(manualData.cantidadHoras || liq.horasExtras || 0)
-                const montoAdeudado = Number(manualData.monto || liq.montoHorasExtras || liq.totalNeto || 0)
-                const valorHoraAdeudada = Number(manualData.valorHoraExtra || (horasAdeudadas > 0 ? montoAdeudado / horasAdeudadas : 0))
-                const observaciones = escaparHtml(manualData.observaciones || 'Sin observaciones')
-                textoHtml = `
-                    <div style="text-align: center; margin-bottom: 24px;">
-                        <h2 style="text-decoration: underline; margin-bottom: 4px;">Recibo de horas extras adeudadas</h2>
-                        <p style="font-size: 10pt; margin-top: 0;">Pago extraordinario independiente de la liquidación semanal en curso</p>
-                    </div>
-                    <p>Se deja constancia de la recepción de <span class="amount">$${montoAdeudado.toLocaleString('es-AR')}</span> (pesos ${formatCurrencyToWords(montoAdeudado)}) en concepto exclusivo de horas extras omitidas de una liquidación anterior.</p>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 11pt; margin: 22px 0;">
-                        <thead><tr style="background: #f2f2f2;"><th style="border: 1px solid #555; padding: 7px; text-align: left;">Semana de origen</th><th style="border: 1px solid #555; padding: 7px;">Horas</th><th style="border: 1px solid #555; padding: 7px; text-align: right;">Valor hora</th><th style="border: 1px solid #555; padding: 7px; text-align: right;">Total</th></tr></thead>
-                        <tbody><tr><td style="border: 1px solid #555; padding: 7px;">${semanaOrigen}</td><td style="border: 1px solid #555; padding: 7px; text-align: center;">${horasAdeudadas.toLocaleString('es-AR')} h</td><td style="border: 1px solid #555; padding: 7px; text-align: right;">$${valorHoraAdeudada.toLocaleString('es-AR')}</td><td style="border: 1px solid #555; padding: 7px; text-align: right; font-weight: bold;">$${montoAdeudado.toLocaleString('es-AR')}</td></tr></tbody>
-                    </table>
-                    <p style="font-size: 10pt;"><strong>Detalle:</strong> ${observaciones}</p>
-                `
-            } else if (isFinal) {
-                const conceptos = manualData.conceptos || []
-                textoHtml = `
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <h2 style="text-decoration: underline; margin-bottom: 5px;">Liquidación Final de Haberes</h2>
-                        <p style="font-size: 11pt; margin-top: 0;">Ley de Contrato de Trabajo N° 20.744</p>
-                    </div>
-                    <p style="margin-bottom: 15px;">
-                        Certifico haber recibido de la firma la suma de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                        (pesos ${totalLetrasNeto}), en concepto de liquidación final por <span class="data-label">${manualData.tipoEgreso || 'Egreso'}</span>, 
-                        con una antigüedad de <span class="data-label">${manualData.antiguedadAnios || 0}</span> años, según el siguiente detalle:
-                    </p>
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12pt; margin-bottom: 20px; border: 1px solid #000;">
-                        <thead>
-                            <tr style="background-color: #f2f2f2;">
-                                <th style="border: 1px solid #000; padding: 5px; text-align: left;">Concepto</th>
-                                <th style="border: 1px solid #000; padding: 5px; text-align: right;">Haberes ($)</th>
-                                <th style="border: 1px solid #000; padding: 5px; text-align: right;">Descuentos ($)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${conceptos.map((c: any) => {
-                                const showMetodologia = c.metodologia && !c.nombre.toLowerCase().includes('vacaciones no gozadas');
-                                return `
-                                <tr>
-                                    <td style="border: 1px solid #000; padding: 5px;">
-                                        ${c.nombre}
-                                        ${showMetodologia ? `<div style="font-size: 9pt; color: #555;">${c.metodologia}</div>` : ''}
-                                    </td>
-                                    <td style="border: 1px solid #000; padding: 5px; text-align: right;">
-                                        ${c.monto > 0 ? c.monto.toLocaleString() : '-'}
-                                    </td>
-                                    <td style="border: 1px solid #000; padding: 5px; text-align: right;">
-                                        ${c.monto < 0 ? Math.abs(c.monto).toLocaleString() : '-'}
-                                    </td>
-                                </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                        <tfoot>
-                            <tr style="font-weight: bold;">
-                                <td style="border: 1px solid #000; padding: 8px; text-align: right;">TOTALES:</td>
-                                <td style="border: 1px solid #000; padding: 8px; text-align: right;">$${(liq.totalBruto || 0).toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 8px; text-align: right;">$${(liq.descuentos || 0).toLocaleString()}</td>
-                            </tr>
-                            <tr style="font-weight: bold; font-size: 14pt; background-color: #eee;">
-                                <td colspan="2" style="border: 1px solid #000; padding: 10px; text-align: right;">NETO A PERCIBIR:</td>
-                                <td style="border: 1px solid #000; padding: 10px; text-align: right;">$${(liq.totalNeto || 0).toLocaleString()}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                    <p style="font-size: 10pt; font-style: italic; margin-top: 10px;">
-                        Con la percepción del importe neto arriba indicado, el empleado manifiesta que no tiene nada más que reclamar a la empresa por ningún concepto derivado de la relación laboral que los unió y que hoy queda definitivamente extinguida.
-                    </p>
-                `
-            } else if (isVacaciones) {
-                textoHtml = `
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h2 style="text-decoration: underline;">Vacaciones anuales</h2>
-                    </div>
-                    <p>
-                        Se abona la suma <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                        (pesos ${totalLetrasNeto}) correspondiente a <span class="data-label">${diasVacas}</span> días corridos 
-                        de vacaciones anuales, conforme a la Ley de Contrato de Trabajo N° 20.744.
-                    </p>
-                    <p>
-                        El período de goce fue desde <span class="data-label">${goceInicio}</span> hasta <span class="data-label">${goceFin}</span>, 
-                        inclusive, habiendo el empleado usufructuado su licencia anual ordinaria.
-                    </p>
-                `
-            } else {
-                textoHtml = `
-                    Recibo la cantidad de <span class="amount">$${(liq.sueldoProporcional || 0).toLocaleString()}</span> 
-                    (pesos ${sueldoBaseLetras}) en concepto de pago por semana laboral, 
-                    <span class="amount">$${(liq.montoHorasExtras || 0).toLocaleString()}</span> 
-                    (pesos ${montoHsExtrasLetras}) en concepto de <span class="data-label">${liq.horasExtras}</span> horas extras al 100% más de su valor, 
-                    ${(liq.montoAdicionales || 0) !== 0 ? `y <span class="amount">$${(liq.montoAdicionales || 0).toLocaleString()}</span> (pesos ${montoOtrosLetras}) en concepto de adicionales/otros, ` : ''}
-                    del <span class="data-label">${fDesde}</span> al <span class="data-label">${fHasta}</span>. 
-                    Recibiendo un total de <span class="amount">$${(liq.totalNeto || 0).toLocaleString()}</span> 
-                    (pesos ${totalLetrasNeto}).
-                `
-            }
-
-            allHtml += `
-                <div class="recibo-container ${index < selectedLiquidaciones.length - 1 ? 'page-break' : ''}">
-                    <img src="${watermarkBase64}" class="watermark" alt="Logo Santa Catalina" />
-                    <div class="header" style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <img src="${logoBase64}" style="height: 60px;" />
-                        <p style="margin: 0;">Berazategui, ${dia} de ${mesNombre} de ${anio}</p>
-                    </div>
-                    <div class="texto">
-                        ${textoHtml}
-                    </div>
-                    <div class="firma-section">
-                        <div class="firma-line">Firma</div>
-                        <div style="width: 250px;">Aclaración: ${liq.empleadoDatos.nombre} ${liq.empleadoDatos.apellido || ''}</div>
-                        <div style="width: 250px;">D.N.I: ${liq.empleadoDatos.dni || ''}</div>
-                    </div>
-                </div>
-            `
-        })
-
-        allHtml += `
-                <script>
-                    window.onload = () => {
-                        const images = document.querySelectorAll('img');
-                        let loaded = 0;
-                        if (images.length === 0) return triggerPrint();
-                        images.forEach(img => {
-                            if (img.complete) {
-                                loaded++;
-                                if (loaded === images.length) triggerPrint();
-                            } else {
-                                img.addEventListener('load', () => {
-                                    loaded++;
-                                    if (loaded === images.length) triggerPrint();
-                                });
-                                img.addEventListener('error', () => {
-                                    loaded++;
-                                    if (loaded === images.length) triggerPrint();
-                                });
-                            }
-                        });
-                    }
-                    function triggerPrint() {
-                        window.print();
-                        setTimeout(() => window.close(), 100);
-                    }
-                </script>
-            </body>
-            </html>
-        `
-
-        const win = window.open('', '_blank')
-        if (win) {
-            win.document.write(allHtml)
-            win.document.close()
-        }
+        await imprimirRecibosLiquidacion(selectedLiquidaciones.map(liq => ({
+            empleado: liq.empleadoDatos,
+            periodo: liq.periodo,
+            fechaGeneracion: liq.fechaGeneracion,
+            tipo: liq.tipo,
+            horasExtras: liq.horasExtras,
+            sueldoProporcional: liq.sueldoProporcional,
+            montoHorasNormales: liq.montoHorasNormales,
+            montoHorasExtras: liq.montoHorasExtras,
+            montoHorasFeriado: liq.montoHorasFeriado,
+            montoAdicionales: liq.montoAdicionales,
+            descuentos: liq.descuentos,
+            totalNeto: liq.totalNeto,
+            desglose: liq.manualData,
+        })), modeloRecibo)
     }
 
     return (
@@ -545,8 +317,14 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                         </div>
                     )}
                 </div>
-                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                     <button className="btn btn-outline" onClick={onClose}>Cerrar</button>
+                    <label style={{ display: 'grid', gap: '4px', minWidth: '210px' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', fontWeight: 600 }}>Modelo de recibo</span>
+                        <select className="form-select" value={modeloRecibo} onChange={e => setModeloRecibo(e.target.value as ModeloRecibo)}>
+                            {MODELOS_RECIBO.map(modelo => <option key={modelo.value} value={modelo.value}>{modelo.label}</option>)}
+                        </select>
+                    </label>
                     <button className="btn btn-outline" onClick={handlePrintReceipts} disabled={loading || selectedIds.size === 0}>
                         🖨️ Imprimir Recibos Seleccionados ({selectedIds.size})
                     </button>
