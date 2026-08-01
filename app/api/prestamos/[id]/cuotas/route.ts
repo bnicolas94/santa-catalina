@@ -45,8 +45,8 @@ export async function POST(
                 },
             })
             if (!prestamo) throw new CuotaApiError('Préstamo no encontrado.', 404)
-            if (prestamo.estado === 'anulado') {
-                throw new CuotaApiError('El préstamo está anulado y no admite nuevas cuotas.', 409)
+            if (prestamo.estado === 'anulado' || prestamo.estado === 'cancelado_saldo') {
+                throw new CuotaApiError('El préstamo está cerrado y no admite nuevas cuotas.', 409)
             }
 
             const liquidacionLockKey = `liquidacion:${prestamo.empleadoId}`

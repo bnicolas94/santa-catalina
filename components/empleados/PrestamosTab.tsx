@@ -226,6 +226,10 @@ export function PrestamosTab({ empleadoId, empleado }: { empleadoId: string; emp
         }
     }
 
+    const cuotasPendientesAnulacion = anulandoPrestamo?.cuotas.filter(cuota => cuota.estado === 'pendiente' && !cuota.liquidacionId) || []
+    const montoPendienteAnulacion = cuotasPendientesAnulacion.reduce((total, cuota) => total + cuota.monto, 0)
+    const esCancelacionSaldo = Boolean(anulandoPrestamo?.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId))
+
     if (loading) return <div className="p-10 text-center text-gray-400">Cargando préstamos...</div>
 
     return (
@@ -233,10 +237,14 @@ export function PrestamosTab({ empleadoId, empleado }: { empleadoId: string; emp
             {anulandoPrestamo && (
                 <div role="dialog" aria-modal="true" aria-label="Anular préstamo" style={overlayStyle}>
                     <div className="card shadow-lg" style={{ width: 'min(480px, calc(100vw - 32px))', padding: 'var(--space-6)', background: 'white' }}>
-                        <div style={eyebrowStyle}>ANULACIÓN CONTABLE</div>
-                        <h4 style={{ margin: '4px 0 var(--space-3)', fontSize: 'var(--text-lg)' }}>Anular préstamo de {moneda.format(anulandoPrestamo.montoTotal)}</h4>
+                        <div style={eyebrowStyle}>{esCancelacionSaldo ? 'CIERRE DE DEUDA' : 'ANULACIÓN CONTABLE'}</div>
+                        <h4 style={{ margin: '4px 0 var(--space-3)', fontSize: 'var(--text-lg)' }}>
+                            {esCancelacionSaldo ? `Cancelar saldo pendiente de ${moneda.format(montoPendienteAnulacion)}` : `Anular préstamo de ${moneda.format(anulandoPrestamo.montoTotal)}`}
+                        </h4>
                         <p style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)', lineHeight: 1.55, margin: '0 0 var(--space-4)' }}>
-                            Se anularán sus cuotas pendientes y se crearán movimientos compensatorios en las cajas originales. El préstamo y los movimientos previos permanecerán visibles para auditoría.
+                            {esCancelacionSaldo
+                                ? `Se anularán ${cuotasPendientesAnulacion.length} cuotas todavía no descontadas. Las cuotas pagadas y los movimientos de Caja permanecerán intactos para conservar la historia real.`
+                                : 'Se anularán sus cuotas pendientes y se crearán movimientos compensatorios en las cajas originales. El préstamo y los movimientos previos permanecerán visibles para auditoría.'}
                         </p>
                         <form onSubmit={handleAnularPrestamo}>
                             <div className="form-group">
@@ -248,7 +256,7 @@ export function PrestamosTab({ empleadoId, empleado }: { empleadoId: string; emp
                                     maxLength={500}
                                     className="form-input"
                                     rows={4}
-                                    placeholder="Ej. Préstamo cargado por duplicado"
+                                    placeholder={esCancelacionSaldo ? 'Ej. Saldo restante condonado por autorización' : 'Ej. Préstamo cargado por duplicado'}
                                     value={motivoAnulacion}
                                     onChange={event => setMotivoAnulacion(event.target.value)}
                                 />
@@ -257,7 +265,7 @@ export function PrestamosTab({ empleadoId, empleado }: { empleadoId: string; emp
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
                                 <button type="button" className="btn btn-outline" disabled={saving} onClick={() => { setAnulandoPrestamo(null); setMotivoAnulacion('') }}>Cancelar</button>
                                 <button type="submit" className="btn btn-primary" disabled={saving || motivoAnulacion.trim().length < 10} style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}>
-                                    {saving ? 'Anulando...' : 'Confirmar anulación'}
+                                    {saving ? 'Procesando...' : esCancelacionSaldo ? 'Confirmar cancelación del saldo' : 'Confirmar anulación'}
                                 </button>
                             </div>
                         </form>
@@ -436,15 +444,20 @@ function PrestamoCard({ prestamo, empleado, instanteReferencia, esAdmin, onEdit,
 }) {
     const pagadas = prestamo.cuotas.filter(cuota => cuota.estado === 'pagada')
     const pendientes = prestamo.cuotas.filter(cuota => cuota.estado === 'pendiente')
+    const canceladas = prestamo.cuotas.filter(cuota => cuota.estado === 'anulada')
     const montoPagado = pagadas.reduce((total, cuota) => total + cuota.monto, 0)
     const saldo = pendientes.reduce((total, cuota) => total + cuota.monto, 0)
     const progreso = prestamo.cuotas.length > 0 ? Math.round((pagadas.length / prestamo.cuotas.length) * 100) : 0
     const proxima = [...pendientes].sort((a, b) => new Date(a.fechaVencimiento).getTime() - new Date(b.fechaVencimiento).getTime())[0]
     const anulado = prestamo.estado === 'anulado'
-    const activo = !anulado && pendientes.length > 0
-    const anulable = activo
+    const saldoCancelado = prestamo.estado === 'cancelado_saldo'
+    const cerrado = anulado || saldoCancelado
+    const activo = !cerrado && pendientes.length > 0
+    const anulableTotal = activo
         && Boolean(prestamo.origenEntrega)
         && !prestamo.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)
+    const tieneCuotasAplicadas = prestamo.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)
+    const puedeCerrar = activo && (anulableTotal || tieneCuotasAplicadas)
     const movimientoEntrega = prestamo.movimientosCaja.find(movimiento => movimiento.tipo === 'egreso' && !movimiento.movimientoReversaDeId)
     const handleImprimir = async () => {
         try {
@@ -462,9 +475,9 @@ function PrestamoCard({ prestamo, empleado, instanteReferencia, esAdmin, onEdit,
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                             <strong style={{ fontSize: 'var(--text-lg)' }}>{moneda.format(prestamo.montoTotal)}</strong>
-                            <span className={`badge ${anulado ? 'badge-danger' : activo ? 'badge-warning' : 'badge-success'}`}>{anulado ? 'Anulado' : activo ? 'Activo' : 'Saldado'}</span>
+                            <span className={`badge ${cerrado ? 'badge-danger' : activo ? 'badge-warning' : 'badge-success'}`}>{anulado ? 'Anulado' : saldoCancelado ? 'Saldo cancelado' : activo ? 'Activo' : 'Saldado'}</span>
                             {prestamo.modoInicio === 'AL_FINALIZAR_ANTERIOR' && <span className="badge">Secuencial</span>}
-                            {!prestamo.origenEntrega && !anulado && <span className="badge">Registro histórico</span>}
+                            {!prestamo.origenEntrega && !cerrado && <span className="badge">Registro histórico</span>}
                         </div>
                         <div style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)', marginTop: '6px' }}>
                             Otorgado el {formatoFecha.format(new Date(prestamo.fechaSolicitud))} · {prestamo.cuotas.length} cuotas {prestamo.frecuencia === 'SEMANAL' ? 'semanales' : 'mensuales'}
@@ -472,15 +485,15 @@ function PrestamoCard({ prestamo, empleado, instanteReferencia, esAdmin, onEdit,
                         {prestamo.observaciones && <div style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)', marginTop: '4px' }}>{prestamo.observaciones}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                        {!anulado && <button className="btn btn-outline" onClick={() => void handleImprimir()}>Imprimir recibo</button>}
+                        {!cerrado && <button className="btn btn-outline" onClick={() => void handleImprimir()}>Imprimir recibo</button>}
                         {activo && <button className="btn btn-outline" onClick={() => onAdd({ prestamoId: prestamo.id, monto: String(proxima?.monto || ''), cajaOrigen: 'mercaderia', detalle: '' })}>+ Agregar cuota</button>}
-                        {esAdmin && movimientoEntrega && !anulado && <CambiarCajaPagoButton compact movimientoId={movimientoEntrega.id} cajaActual={movimientoEntrega.cajaOrigen} onSuccess={onCajaCambiada} />}
-                        {esAdmin && anulable && <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => onAnular(prestamo)}>Anular préstamo</button>}
+                        {esAdmin && movimientoEntrega && !cerrado && <CambiarCajaPagoButton compact movimientoId={movimientoEntrega.id} cajaActual={movimientoEntrega.cajaOrigen} onSuccess={onCajaCambiada} />}
+                        {esAdmin && puedeCerrar && <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} onClick={() => onAnular(prestamo)}>{tieneCuotasAplicadas ? 'Cancelar saldo pendiente' : 'Anular préstamo'}</button>}
                     </div>
                 </div>
-                {anulado && (
+                {cerrado && (
                     <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
-                        <strong>Anulado{prestamo.anuladoAt ? ` el ${formatoFecha.format(new Date(prestamo.anuladoAt))}` : ''}</strong>
+                        <strong>{saldoCancelado ? 'Saldo pendiente cancelado' : 'Anulado'}{prestamo.anuladoAt ? ` el ${formatoFecha.format(new Date(prestamo.anuladoAt))}` : ''}</strong>
                         {prestamo.anuladoPor && ` por ${prestamo.anuladoPor.nombre} ${prestamo.anuladoPor.apellido || ''}`}
                         {prestamo.motivoAnulacion && <div style={{ marginTop: 4 }}>{prestamo.motivoAnulacion}</div>}
                     </div>
@@ -488,6 +501,7 @@ function PrestamoCard({ prestamo, empleado, instanteReferencia, esAdmin, onEdit,
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
                     <Metric label="Saldo pendiente" value={moneda.format(saldo)} />
                     <Metric label="Ya descontado" value={moneda.format(montoPagado)} />
+                    {canceladas.length > 0 && <Metric label="Saldo cancelado" value={moneda.format(canceladas.reduce((total, cuota) => total + cuota.monto, 0))} />}
                     <Metric label="Próxima cuota" value={proxima ? `${moneda.format(proxima.monto)} · ${formatoFecha.format(new Date(proxima.fechaVencimiento))}` : 'Sin cuotas pendientes'} />
                 </div>
                 <div style={{ marginTop: 'var(--space-4)' }}>

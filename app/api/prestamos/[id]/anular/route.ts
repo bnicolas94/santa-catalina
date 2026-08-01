@@ -2,7 +2,11 @@ import { getServerSession } from 'next-auth'
 import { NextResponse } from 'next/server'
 
 import { authOptions } from '@/lib/auth'
-import { validarMotivoAnulacionPrestamo, validarPrestamoAnulable } from '@/lib/payroll/prestamos'
+import {
+    planificarCancelacionPrestamo,
+    validarMotivoAnulacionPrestamo,
+    validarPrestamoAnulable,
+} from '@/lib/payroll/prestamos'
 import { prisma } from '@/lib/prisma'
 import { CajaService } from '@/lib/services/caja.service'
 
@@ -53,23 +57,30 @@ export async function POST(
             })
             if (!prestamo) throw new AnulacionPrestamoError('Préstamo no encontrado.', 404)
 
-            validarPrestamoAnulable({
-                estado: prestamo.estado,
-                origenEntrega: prestamo.origenEntrega,
-                cuotas: prestamo.cuotas,
-                movimientos: prestamo.movimientosCaja,
-            })
+            if (prestamo.estado === 'anulado' || prestamo.estado === 'cancelado_saldo') {
+                throw new AnulacionPrestamoError('El préstamo ya fue cerrado.', 409)
+            }
 
-            for (const movimiento of prestamo.movimientosCaja) {
-                await CajaService.createMovimientoEnTx(tx, {
-                    tipo: 'ingreso',
-                    concepto: 'anulacion_prestamo_empleado',
-                    monto: movimiento.monto,
-                    cajaOrigen: movimiento.cajaOrigen,
-                    prestamoId: prestamo.id,
-                    movimientoReversaDeId: movimiento.id,
-                    descripcion: `Anulación préstamo: ${prestamo.empleado.nombre} ${prestamo.empleado.apellido || ''} - ${motivo} (Movimiento original: ${movimiento.id})`,
+            const plan = planificarCancelacionPrestamo(prestamo.cuotas)
+            if (plan.tipo === 'anulacion_total') {
+                validarPrestamoAnulable({
+                    estado: prestamo.estado,
+                    origenEntrega: prestamo.origenEntrega,
+                    cuotas: prestamo.cuotas,
+                    movimientos: prestamo.movimientosCaja,
                 })
+
+                for (const movimiento of prestamo.movimientosCaja) {
+                    await CajaService.createMovimientoEnTx(tx, {
+                        tipo: 'ingreso',
+                        concepto: 'anulacion_prestamo_empleado',
+                        monto: movimiento.monto,
+                        cajaOrigen: movimiento.cajaOrigen,
+                        prestamoId: prestamo.id,
+                        movimientoReversaDeId: movimiento.id,
+                        descripcion: `Anulación préstamo: ${prestamo.empleado.nombre} ${prestamo.empleado.apellido || ''} - ${motivo} (Movimiento original: ${movimiento.id})`,
+                    })
+                }
             }
 
             await tx.cuotaPrestamo.updateMany({
@@ -77,10 +88,10 @@ export async function POST(
                 data: { estado: 'anulada' },
             })
 
-            return tx.prestamoEmpleado.update({
+            const actualizado = await tx.prestamoEmpleado.update({
                 where: { id: prestamo.id },
                 data: {
-                    estado: 'anulado',
+                    estado: plan.tipo === 'anulacion_total' ? 'anulado' : 'cancelado_saldo',
                     motivoAnulacion: motivo,
                     anuladoAt: new Date(),
                     anuladoPorId: usuario.id,
@@ -91,6 +102,12 @@ export async function POST(
                     movimientosCaja: { orderBy: { createdAt: 'asc' } },
                 },
             })
+            return {
+                ...actualizado,
+                tipoCierre: plan.tipo,
+                cuotasCanceladas: plan.cantidadCuotas,
+                montoCancelado: plan.monto,
+            }
         })
 
         return NextResponse.json(prestamoAnulado)

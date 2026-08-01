@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
     dividirMontoEnCuotas,
     estadoPrestamoDesdeCuotas,
+    planificarCancelacionPrestamo,
     seleccionarCuotasVencidasPorPrestamo,
     sumarMesesFechaCivil,
     validarCantidadCuotas,
@@ -62,6 +63,31 @@ test('valida una anulación trazable sin cuotas liquidadas', () => {
         movimientos: [{ tipo: 'egreso', cajaOrigen: 'caja_chica', movimientoReversion: null }],
     }))
     assert.equal(validarMotivoAnulacionPrestamo('Carga duplicada del préstamo'), 'Carga duplicada del préstamo')
+})
+
+test('cancela sólo el saldo cuando el préstamo ya tiene cuotas descontadas', () => {
+    assert.deepEqual(planificarCancelacionPrestamo([
+        { estado: 'pagada', monto: 1_000, liquidacionId: 'liq-1' },
+        { estado: 'pendiente', monto: 1_000, liquidacionId: null },
+        { estado: 'pendiente', monto: 1_000.25, liquidacionId: null },
+    ]), {
+        tipo: 'cancelacion_saldo',
+        cantidadCuotas: 2,
+        monto: 2_000.25,
+    })
+})
+
+test('mantiene la anulación total cuando ninguna cuota fue aplicada', () => {
+    assert.deepEqual(planificarCancelacionPrestamo([
+        { estado: 'pendiente', monto: 500, liquidacionId: null },
+    ]), {
+        tipo: 'anulacion_total',
+        cantidadCuotas: 1,
+        monto: 500,
+    })
+    assert.throws(() => planificarCancelacionPrestamo([
+        { estado: 'pagada', monto: 500, liquidacionId: 'liq-1' },
+    ]), /no tiene cuotas pendientes/)
 })
 
 test('bloquea préstamos históricos, pagados o con Caja incompleta', () => {

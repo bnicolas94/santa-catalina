@@ -102,6 +102,30 @@ export function validarMotivoAnulacionPrestamo(valor: unknown): string {
     return motivo
 }
 
+export type PlanCancelacionPrestamo = {
+    tipo: 'anulacion_total' | 'cancelacion_saldo'
+    cantidadCuotas: number
+    monto: number
+}
+
+export function planificarCancelacionPrestamo(cuotas: Array<{
+    estado: string
+    monto: number
+    liquidacionId: string | null
+}>): PlanCancelacionPrestamo {
+    const pendientes = cuotas.filter(cuota => cuota.estado === 'pendiente' && !cuota.liquidacionId)
+    if (pendientes.length === 0) {
+        throw new Error('El préstamo no tiene cuotas pendientes para cancelar.')
+    }
+
+    const tieneCuotasAplicadas = cuotas.some(cuota => cuota.estado === 'pagada' || Boolean(cuota.liquidacionId))
+    return {
+        tipo: tieneCuotasAplicadas ? 'cancelacion_saldo' : 'anulacion_total',
+        cantidadCuotas: pendientes.length,
+        monto: Math.round(pendientes.reduce((total, cuota) => total + cuota.monto, 0) * 100) / 100,
+    }
+}
+
 export function origenRequiereMovimientoCaja(origen: string): boolean {
     return !ORIGENES_SIN_CAJA.has(origen)
 }
@@ -116,7 +140,9 @@ export function validarPrestamoAnulable(input: {
         movimientoReversion: { id: string } | null
     }>
 }): void {
-    if (input.estado === 'anulado') throw new Error('El préstamo ya fue anulado.')
+    if (input.estado === 'anulado' || input.estado === 'cancelado_saldo') {
+        throw new Error('El préstamo ya fue cerrado.')
+    }
     if (input.cuotas.some(cuota => cuota.estado === 'pagada' || cuota.liquidacionId)) {
         throw new Error('El préstamo tiene cuotas vinculadas a liquidaciones y no puede anularse.')
     }
