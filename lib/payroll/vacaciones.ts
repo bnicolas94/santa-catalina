@@ -34,7 +34,7 @@ export function esDiaLaboralConfigurado(configuracion: string | null | undefined
     const diaSemana = new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay()
     const normalizada = (configuracion || 'Lunes a Viernes').toLowerCase()
 
-    if (normalizada.includes('todos')) return true
+    if (normalizada.includes('todos') || normalizada.includes('lunes a domingo')) return true
     if (normalizada.includes('lunes a sábado') || normalizada.includes('lunes a sabado')) return diaSemana >= 1 && diaSemana <= 6
     if (normalizada.includes('lunes a viernes')) return diaSemana >= 1 && diaSemana <= 5
 
@@ -48,6 +48,15 @@ export function periodoLaboralCubiertoPorVacaciones(
     diasTrabajoSemana: string | null | undefined,
     fechasVacaciones: ReadonlySet<string>,
 ): boolean {
+    return periodoLaboralCubiertoPorFechas(desde, hasta, diasTrabajoSemana, fechasVacaciones)
+}
+
+export function periodoLaboralCubiertoPorFechas(
+    desde: string,
+    hasta: string,
+    diasTrabajoSemana: string | null | undefined,
+    fechasCubiertas: ReadonlySet<string>,
+): boolean {
     const laborales = fechasDeRangoVacaciones(desde, hasta).filter(fecha => esDiaLaboralConfigurado(diasTrabajoSemana, fecha))
-    return laborales.length > 0 && laborales.every(fecha => fechasVacaciones.has(fecha))
+    return laborales.length > 0 && laborales.every(fecha => fechasCubiertas.has(fecha))
 }

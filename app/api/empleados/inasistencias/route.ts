@@ -4,6 +4,7 @@ import { SancionService } from '@/lib/services/sancion.service'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
+import { instanteRRHH, rangoDiaRRHH, rangoDiasRRHH, sumarDiasRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 
 export async function GET(request: Request) {
     try {
@@ -15,9 +16,9 @@ export async function GET(request: Request) {
         const where: any = {}
         if (empleadoId) where.empleadoId = empleadoId
         if (desde || hasta) {
-            where.fecha = {}
-            if (desde) where.fecha.gte = new Date(desde)
-            if (hasta) where.fecha.lte = new Date(hasta)
+            const inicio = validarFechaCivilRRHH(desde || hasta || '')
+            const fin = validarFechaCivilRRHH(hasta || desde || '')
+            where.fecha = rangoDiasRRHH(inicio, fin)
         }
 
         const inasistencias = await prisma.inasistencia.findMany({
@@ -91,25 +92,37 @@ export async function POST(request: Request) {
         }
 
         const results = []
-        const startDate = new Date(fecha)
-        const endDate = fechaHasta ? new Date(fechaHasta) : startDate
+        const inicio = validarFechaCivilRRHH(String(fecha))
+        const fin = validarFechaCivilRRHH(String(fechaHasta || fecha))
+        if (inicio > fin) {
+            return NextResponse.json({ error: 'La fecha desde debe ser anterior o igual a la fecha hasta' }, { status: 400 })
+        }
 
-        let current = new Date(startDate)
-        while (current <= endDate) {
-            const inasistencia = await prisma.inasistencia.create({
-                data: {
-                    empleadoId,
-                    fecha: new Date(current),
-                    tipo,
-                    motivo,
-                    tieneCertificado: !!tieneCertificado,
-                    observaciones,
-                    minutosRetraso: minutosRetraso ? parseInt(String(minutosRetraso)) : null,
-                    archivoUrl: archivoUrl
-                }
+        for (let actual = inicio; actual <= fin; actual = sumarDiasRRHH(actual, 1)) {
+            const rangoDia = rangoDiaRRHH(actual)
+            const inasistencia = await prisma.$transaction(async tx => {
+                // Un empleado solo puede tener un estado efectivo por día. La carga
+                // manual reemplaza la detección automática o cualquier intento previo.
+                await tx.inasistencia.deleteMany({
+                    where: {
+                        empleadoId,
+                        fecha: { gte: rangoDia.gte, lt: rangoDia.lt },
+                    },
+                })
+                return tx.inasistencia.create({
+                    data: {
+                        empleadoId,
+                        fecha: instanteRRHH(actual, '12:00:00'),
+                        tipo,
+                        motivo,
+                        tieneCertificado: !!tieneCertificado,
+                        observaciones,
+                        minutosRetraso: minutosRetraso ? parseInt(String(minutosRetraso)) : null,
+                        archivoUrl,
+                    },
+                })
             })
             results.push(inasistencia)
-            current.setDate(current.getDate() + 1)
         }
 
         try {

@@ -3,8 +3,11 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
     calcularDistribucionMixta,
+    consolidarDevengadoMensual,
     estadoCierreDesdePagos,
     MODALIDAD_MENSUAL_MIXTA,
+    montoDevengadoReferenciaEnPeriodo,
+    resolverConciliacionSemanal,
     montoPorMedio,
     periodoMensualCerrable,
     rangoMesLiquidacion,
@@ -16,9 +19,16 @@ import { fechaClaveRRHH, instanteRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
 import { CajaService } from '@/lib/services/caja.service'
 import { PayrollService } from '@/lib/services/payroll.service'
 
-async function liquidacionesSemanalesSuperpuestas(empleadoId: string, periodo: string) {
+type ClienteConciliacion = Pick<Prisma.TransactionClient, 'liquidacionSueldo'>
+
+async function liquidacionesSemanalesSuperpuestas(
+    empleadoId: string,
+    periodo: string,
+    diasTrabajoSemana: string,
+    cliente: ClienteConciliacion = prisma,
+) {
     const rango = rangoMesLiquidacion(periodo)
-    const liquidaciones = await prisma.liquidacionSueldo.findMany({
+    const liquidaciones = await cliente.liquidacionSueldo.findMany({
         where: { empleadoId, tipo: 'NORMAL', estado: 'pagado' },
         select: {
             id: true,
@@ -27,16 +37,42 @@ async function liquidacionesSemanalesSuperpuestas(empleadoId: string, periodo: s
             periodoDesde: true,
             periodoHasta: true,
             desglose: true,
+            movimientosCaja: {
+                where: { tipo: 'egreso', movimientoReversaDeId: null },
+                select: {
+                    id: true,
+                    monto: true,
+                    cajaOrigen: true,
+                    movimientoReversion: { select: { id: true } },
+                },
+            },
         },
     })
-    return liquidaciones.filter(liquidacion => {
+    return liquidaciones.flatMap(liquidacion => {
         const rangoLiquidacion = liquidacion.periodoDesde && liquidacion.periodoHasta
             ? {
                 desde: fechaClaveRRHH(liquidacion.periodoDesde),
                 hasta: fechaClaveRRHH(liquidacion.periodoHasta),
             }
             : rangoHistoricoLiquidacion(liquidacion.periodo, liquidacion.desglose)
-        return rangoLiquidacion ? rangosLiquidacionSeSuperponen(rango, rangoLiquidacion) : false
+        const superpuesta = rangoLiquidacion ? rangosLiquidacionSeSuperponen(rango, rangoLiquidacion) : false
+        const movimientosVigentes = liquidacion.movimientosCaja.filter(movimiento => !movimiento.movimientoReversion)
+        const montoPagado = Math.round(movimientosVigentes.reduce((total, movimiento) => total + movimiento.monto, 0) * 100) / 100
+        if (!superpuesta || !rangoLiquidacion) return []
+        const montoDevengadoPeriodo = montoDevengadoReferenciaEnPeriodo({
+            id: liquidacion.id,
+            totalNeto: liquidacion.totalNeto,
+            rango: rangoLiquidacion,
+            desglose: liquidacion.desglose,
+        }, rango, diasTrabajoSemana)
+        return [{
+            ...liquidacion,
+            rango: rangoLiquidacion,
+            movimientosCaja: movimientosVigentes,
+            montoPagado,
+            montoDevengadoPeriodo,
+            cruzaPeriodo: rangoLiquidacion.desde < rango.desde || rangoLiquidacion.hasta > rango.hasta,
+        }]
     })
 }
 
@@ -45,7 +81,7 @@ export class CierreMensualMixtoService {
         const rango = rangoMesLiquidacion(periodo)
         const empleados = await prisma.empleado.findMany({
             where: { activo: true, modalidadPago: MODALIDAD_MENSUAL_MIXTA },
-            select: { id: true, nombre: true, apellido: true, dni: true },
+            select: { id: true, nombre: true, apellido: true, dni: true, diasTrabajoSemana: true },
             orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
         })
         const cierres = await prisma.cierreMensualMixto.findMany({
@@ -64,48 +100,64 @@ export class CierreMensualMixtoService {
             const cierre = cierrePorEmpleado.get(empleado.id) || null
             const [resumen, referencias] = await Promise.all([
                 cierre ? null : PayrollService.calcularSueldoSemanal(empleado.id, rango.desde, rango.hasta),
-                liquidacionesSemanalesSuperpuestas(empleado.id, periodo),
+                liquidacionesSemanalesSuperpuestas(empleado.id, periodo, empleado.diasTrabajoSemana),
             ])
+            const consolidado = resumen ? consolidarDevengadoMensual({
+                periodo: rango,
+                diasActuales: resumen.desglosePorDia,
+                descuentoPendiente: resumen.descuentoPrestamos,
+                referencias,
+            }) : null
             return {
                 empleado,
                 periodo,
                 rango,
-                totalCalculado: cierre?.totalDevengado ?? resumen?.totalNeto ?? 0,
+                totalCalculado: cierre?.totalDevengado ?? consolidado?.totalDevengado ?? 0,
+                consolidado,
                 resumen,
-                cierre,
+                cierre: cierre ? {
+                    ...cierre,
+                    totalConciliado: Math.max(0, Math.round((cierre.totalDevengado - cierre.netoRecibo - cierre.efectivoCalculado) * 100) / 100),
+                } : null,
                 referenciasSemanales: {
                     cantidad: referencias.length,
-                    total: referencias.reduce((total, liquidacion) => total + liquidacion.totalNeto, 0),
+                    cantidadPagadas: referencias.filter(liquidacion => liquidacion.montoPagado > 0).length,
+                    total: referencias.reduce((total, liquidacion) => total + liquidacion.montoPagado, 0),
+                    totalDevengado: Math.round(referencias.reduce((total, liquidacion) => total + liquidacion.montoDevengadoPeriodo, 0) * 100) / 100,
                     liquidaciones: referencias.map(liquidacion => ({
                         id: liquidacion.id,
                         periodo: liquidacion.periodo,
                         totalNeto: liquidacion.totalNeto,
+                        montoPagado: liquidacion.montoPagado,
+                        montoDevengadoPeriodo: liquidacion.montoDevengadoPeriodo,
+                        cruzaPeriodo: liquidacion.cruzaPeriodo,
                     })),
                 },
             }
         }))
     }
 
-    static async cerrar(input: { empleadoId: string; periodo: string; netoRecibo: unknown }) {
+    static async cerrar(input: {
+        empleadoId: string
+        periodo: string
+        netoRecibo: unknown
+        liquidacionesConciliadas: unknown
+        conciliacionConfirmada: unknown
+        usuarioId: string
+    }) {
         const rango = rangoMesLiquidacion(input.periodo)
         if (!periodoMensualCerrable(input.periodo, fechaClaveRRHH(new Date()))) {
             throw new Error('El mes todavía no terminó y no puede cerrarse.')
         }
         const empleado = await prisma.empleado.findUnique({
             where: { id: input.empleadoId },
-            select: { id: true, nombre: true, apellido: true, activo: true, modalidadPago: true },
+            select: { id: true, nombre: true, apellido: true, activo: true, modalidadPago: true, diasTrabajoSemana: true },
         })
         if (!empleado?.activo || empleado.modalidadPago !== MODALIDAD_MENSUAL_MIXTA) {
             throw new Error('La empleada no está activa o no utiliza la modalidad mensual mixta.')
         }
 
-        const referencias = await liquidacionesSemanalesSuperpuestas(empleado.id, input.periodo)
-        if (referencias.length > 0) {
-            throw new Error(`Existen ${referencias.length} liquidaciones semanales superpuestas. Anulalas o conciliá esos pagos antes de cerrar el mes.`)
-        }
-
         const resumen = await PayrollService.calcularSueldoSemanal(empleado.id, rango.desde, rango.hasta)
-        const distribucion = calcularDistribucionMixta(resumen.totalNeto, input.netoRecibo)
         const rangoInstantes = rangoDiasRRHH(rango.desde, rango.hasta)
 
         return prisma.$transaction(async tx => {
@@ -116,6 +168,20 @@ export class CierreMensualMixtoService {
                 where: { empleadoId_periodo: { empleadoId: empleado.id, periodo: input.periodo } },
             })
             if (existente) throw new Error('El mes ya tiene un cierre registrado para esta empleada.')
+
+            const referencias = await liquidacionesSemanalesSuperpuestas(empleado.id, input.periodo, empleado.diasTrabajoSemana, tx)
+            if (referencias.length > 0 && input.conciliacionConfirmada !== true) {
+                throw new Error('Confirmá que revisaste los pagos semanales antes de cerrar el mes.')
+            }
+            const conciliacion = resolverConciliacionSemanal(referencias, input.liquidacionesConciliadas)
+            const totalConciliado = conciliacion.total
+            const consolidado = consolidarDevengadoMensual({
+                periodo: rango,
+                diasActuales: resumen.desglosePorDia,
+                descuentoPendiente: resumen.descuentoPrestamos,
+                referencias,
+            })
+            const distribucion = calcularDistribucionMixta(consolidado.totalDevengado, input.netoRecibo, totalConciliado)
 
             const cuotasPendientes = await tx.cuotaPrestamo.findMany({
                 where: {
@@ -131,6 +197,38 @@ export class CierreMensualMixtoService {
             if (Math.abs(descuentoActual - resumen.descuentoPrestamos) > 0.009) {
                 throw new Error('Las cuotas de préstamos cambiaron. Recalculá el cierre antes de confirmarlo.')
             }
+            const desgloseCierre = {
+                dias: resumen.desglosePorDia,
+                consolidacion: {
+                    ...consolidado,
+                    fuentesSemanales: referencias.map(referencia => ({
+                        id: referencia.id,
+                        periodo: referencia.periodo,
+                        rango: referencia.rango,
+                        totalLiquidacion: referencia.totalNeto,
+                        montoDevengadoPeriodo: referencia.montoDevengadoPeriodo,
+                        cruzaPeriodo: referencia.cruzaPeriodo,
+                    })),
+                },
+                conciliacion: {
+                    totalConciliado,
+                    registradoPorId: input.usuarioId,
+                    registradoAt: new Date().toISOString(),
+                    liquidaciones: conciliacion.liquidaciones.map(referencia => ({
+                        id: referencia.id,
+                        periodo: referencia.periodo,
+                        totalLiquidacion: referencia.totalNeto,
+                        montoPagado: referencia.montoPagado,
+                        montoDevengadoPeriodo: referencia.montoDevengadoPeriodo,
+                        montoConciliado: referencia.montoConciliado,
+                        movimientosCaja: referencia.movimientosCaja.map(movimiento => ({
+                            id: movimiento.id,
+                            monto: movimiento.monto,
+                            cajaOrigen: movimiento.cajaOrigen,
+                        })),
+                    })),
+                },
+            }
 
             const liquidacion = await tx.liquidacionSueldo.create({
                 data: {
@@ -138,13 +236,13 @@ export class CierreMensualMixtoService {
                     periodo: `Cierre mensual mixto ${input.periodo}`,
                     periodoDesde: instanteRRHH(rango.desde),
                     periodoHasta: instanteRRHH(rango.hasta),
-                    sueldoProporcional: resumen.sueldoBase,
-                    horasNormales: resumen.horasNormales,
+                    sueldoProporcional: distribucion.totalDevengado + resumen.descuentoPrestamos,
+                    horasNormales: 0,
                     montoHorasNormales: 0,
-                    horasExtras: resumen.horasExtras,
-                    montoHorasExtras: resumen.montoHorasExtras,
-                    horasFeriado: resumen.horasFeriado,
-                    montoHorasFeriado: resumen.montoHorasFeriado,
+                    horasExtras: 0,
+                    montoHorasExtras: 0,
+                    horasFeriado: 0,
+                    montoHorasFeriado: 0,
                     descuentosPrestamos: resumen.descuentoPrestamos,
                     totalNeto: distribucion.totalDevengado,
                     estado: 'pendiente_pago',
@@ -172,7 +270,7 @@ export class CierreMensualMixtoService {
                     netoRecibo: distribucion.transferencia,
                     efectivoCalculado: distribucion.efectivo,
                     estado: 'PENDIENTE',
-                    desglose: resumen.desglosePorDia as unknown as Prisma.InputJsonValue,
+                    desglose: desgloseCierre as unknown as Prisma.InputJsonValue,
                 },
                 include: { pagos: true, liquidacionSueldo: true, empleado: true },
             })
@@ -185,6 +283,11 @@ export class CierreMensualMixtoService {
                 data: { cierreMensualId: cierre.id },
             })
             return cierre
+        }, {
+            // La base de producción es remota y este cierre necesita varias
+            // lecturas y escrituras auditables dentro de la misma transacción.
+            maxWait: 10_000,
+            timeout: 30_000,
         })
     }
 
@@ -209,7 +312,8 @@ export class CierreMensualMixtoService {
                 throw new Error(`El pago por ${input.medio.toLowerCase()} ya fue registrado.`)
             }
 
-            const distribucion = calcularDistribucionMixta(cierre.totalDevengado, cierre.netoRecibo)
+            const totalConciliado = Math.max(0, Math.round((cierre.totalDevengado - cierre.netoRecibo - cierre.efectivoCalculado) * 100) / 100)
+            const distribucion = calcularDistribucionMixta(cierre.totalDevengado, cierre.netoRecibo, totalConciliado)
             const monto = montoPorMedio(distribucion, input.medio)
             if (monto <= 0) throw new Error(`Este cierre no tiene saldo para pagar por ${input.medio.toLowerCase()}.`)
             const caja = await tx.saldoCaja.findUnique({ where: { tipo: input.cajaId } })
@@ -257,6 +361,11 @@ export class CierreMensualMixtoService {
                     empleado: true,
                 },
             })
+        }, {
+            // Registrar el egreso, actualizar Caja y cerrar el estado requiere
+            // varios viajes a la base remota dentro de una única transacción.
+            maxWait: 10_000,
+            timeout: 30_000,
         })
     }
 }

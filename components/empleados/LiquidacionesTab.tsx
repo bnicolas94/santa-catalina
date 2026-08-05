@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidationModal'
 import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
+import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
 
 export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: string, empleadoDatos: any }) {
     const { data: session } = useSession()
@@ -210,21 +211,33 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
 
     const printRecibo = async (liq: any) => {
         const items = Array.isArray(liq.items) ? liq.items : []
+        const esMixto = liq.tipo === 'MENSUAL_MIXTA'
+        const efectivoMixto = esMixto ? montoEfectivoReciboMixto(liq.cierreMensualMixto) : 0
+        if (esMixto && efectivoMixto <= 0) {
+            window.alert('Este cierre no tuvo un pago en efectivo. La transferencia se respalda con el recibo oficial del contador.')
+            return
+        }
         await imprimirRecibosLiquidacion([{
             empleado: empleadoDatos,
             periodo: liq.periodo,
             fechaGeneracion: liq.fechaGeneracion,
             tipo: liq.tipo,
-            horasExtras: Number(liq.horasExtras || 0) + Number(liq.ajusteHorasExtras || 0),
-            sueldoProporcional: liq.sueldoProporcional,
-            montoHorasNormales: liq.montoHorasNormales,
-            montoHorasExtras: liq.montoHorasExtras,
-            montoHorasFeriado: liq.montoHorasFeriado,
-            montoAdicionales: items.reduce((total: number, item: any) => total + Number(item.montoCalculado || 0), 0),
-            descuentos: liq.descuentosPrestamos,
-            totalNeto: liq.totalNeto,
-            desglose: liq.desglose,
-            conceptos: items.map((item: any) => ({
+            horasExtras: esMixto ? 0 : Number(liq.horasExtras || 0) + Number(liq.ajusteHorasExtras || 0),
+            sueldoProporcional: esMixto ? efectivoMixto : liq.sueldoProporcional,
+            montoHorasNormales: esMixto ? 0 : liq.montoHorasNormales,
+            montoHorasExtras: esMixto ? 0 : liq.montoHorasExtras,
+            montoHorasFeriado: esMixto ? 0 : liq.montoHorasFeriado,
+            montoAdicionales: esMixto ? 0 : items.reduce((total: number, item: any) => total + Number(item.montoCalculado || 0), 0),
+            descuentos: esMixto ? 0 : liq.descuentosPrestamos,
+            totalNeto: esMixto ? efectivoMixto : liq.totalNeto,
+            desglose: esMixto ? {
+                origen: 'MENSUAL_MIXTA_EFECTIVO',
+                periodo: liq.cierreMensualMixto?.periodo,
+                totalDevengado: liq.cierreMensualMixto?.totalDevengado,
+                netoReciboOficial: liq.cierreMensualMixto?.netoRecibo,
+                efectivoAbonado: efectivoMixto,
+            } : liq.desglose,
+            conceptos: esMixto ? [] : items.map((item: any) => ({
                 nombre: item.concepto?.nombre || item.detalle || 'Adicional / otro',
                 monto: Number(item.montoCalculado || 0),
                 detalle: item.detalle || undefined,

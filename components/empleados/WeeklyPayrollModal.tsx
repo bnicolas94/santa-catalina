@@ -443,6 +443,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         if (dia.motivoInasistencia === 'Enfermedad') {
             return 'ENFERMEDAD'
         }
+        if (dia.tipoInasistencia === 'JUSTIFICADA_PAGA') {
+            return 'CON_AVISO'
+        }
         if (dia.motivoInasistencia === 'Franco' || dia.tipoInasistencia === 'FRANCO') {
             return 'FRANCO'
         }

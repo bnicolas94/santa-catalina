@@ -31,6 +31,8 @@ export function WeeklyPayrollResults(props: Props) {
 
     const liquidables = props.resultados.filter(resultado => !resultado.esSeguimientoMensualMixto)
     const seguimientos = props.resultados.filter(resultado => resultado.esSeguimientoMensualMixto)
+    const licenciasCompletas = props.resultados.filter(resultado => resultado.licenciaPagaPeriodoCompleto)
+    const resultadosVisibles = props.resultados.filter(resultado => !resultado.licenciaPagaPeriodoCompleto)
     const totalGeneral = liquidables.reduce((total, resultado) => total + resultado.totalNeto, 0)
     const totalSeguimiento = seguimientos.reduce((total, resultado) => total + resultado.totalNeto, 0)
     const totalBase = liquidables.reduce((total, resultado) => total + resultado.sueldoBase, 0)
@@ -40,6 +42,9 @@ export function WeeklyPayrollResults(props: Props) {
     return <>
         {seguimientos.length > 0 && <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-info-bg)', color: 'var(--color-info)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
             Seguimiento mensual mixto: {seguimientos.length} empleado{seguimientos.length === 1 ? '' : 's'} · {totalSeguimiento.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })} devengados como referencia. No se incluyen en el total a pagar de esta semana.
+        </div>}
+        {licenciasCompletas.length > 0 && <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-success-bg)', color: 'var(--color-success)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+            Licencia remunerada durante todo el período: {licenciasCompletas.map(resultado => resultado.empleadoNombre).join(', ')}. Se procesa automáticamente y se oculta de la revisión diaria.
         </div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
             {[
@@ -60,7 +65,7 @@ export function WeeklyPayrollResults(props: Props) {
             <thead style={{ backgroundColor: 'var(--color-gray-50)' }}><tr>
                 <th style={{ width: '30px' }}></th><th>Empleado</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '90px' }}>Ajuste (hs)</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)' }}>Neto a Pagar</th>
             </tr></thead>
-            <tbody>{props.resultados.map(resultado => {
+            <tbody>{resultadosVisibles.map(resultado => {
                 const alertas = obtenerAlertasLiquidacion(resultado)
                 const errores = alertas.filter(alerta => alerta.nivel === 'error').length
                 const advertencias = alertas.length - errores

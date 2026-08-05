@@ -62,6 +62,8 @@ export interface ResultadoLiquidacionUI {
     totalNeto: number
     diasVacaciones?: number
     excluirLiquidacionSemanal?: boolean
+    diasLicenciaPaga?: number
+    licenciaPagaPeriodoCompleto?: boolean
     desglosePorDia: DiaLiquidacionUI[]
     ajusteHorasExtras?: number
     adicionales: AdicionalLiquidacionUI[]

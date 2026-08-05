@@ -16,7 +16,8 @@ interface Props {
 export function WeeklyPayrollDayCard(props: Props) {
     const { dia, empleadoId } = props
     const esVacaciones = dia.tipoInasistencia === 'VACACIONES'
-    return <div style={{ backgroundColor: 'white', padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: `1px solid ${dia.esFeriado ? 'var(--color-warning)' : 'var(--color-gray-200)'}`, fontSize: '11px', opacity: dia.horasTrabajadas > 0 ? 1 : 0.5 }}>
+    const esLicenciaPaga = dia.tipoInasistencia === 'JUSTIFICADA_PAGA'
+    return <div style={{ backgroundColor: 'white', padding: 'var(--space-2)', borderRadius: 'var(--radius-sm)', border: `1px solid ${dia.esFeriado ? 'var(--color-warning)' : 'var(--color-gray-200)'}`, fontSize: '11px', opacity: dia.horasTrabajadas > 0 || dia.multiplicadorJornal > 0 || esLicenciaPaga ? 1 : 0.5 }}>
         <div style={{ fontWeight: 700, borderBottom: '1px solid var(--color-gray-100)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
             <span>{dia.diaSemana} {dia.fecha.split('-')[2]}</span>
             {dia.esFeriado && <span style={{ color: 'var(--color-warning)' }}>🚩</span>}

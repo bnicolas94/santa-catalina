@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
 
 export async function GET(request: Request) {
     try {
@@ -25,7 +26,16 @@ export async function GET(request: Request) {
                 },
                 include: {
                     empleado: true,
-                    items: true
+                    items: true,
+                    cierreMensualMixto: {
+                        select: {
+                            periodo: true,
+                            totalDevengado: true,
+                            netoRecibo: true,
+                            efectivoCalculado: true,
+                            pagos: { select: { medio: true, monto: true, estado: true } },
+                        },
+                    },
                 },
                 orderBy: [
                     { empleado: { nombre: 'asc'} },
@@ -50,6 +60,8 @@ export async function GET(request: Request) {
 
         // Map the data for easier consumption in the frontend
         const reporteSueldos = liquidaciones.map(liq => {
+            const esMixto = liq.tipo === 'MENSUAL_MIXTA'
+            const efectivoMixto = esMixto ? montoEfectivoReciboMixto(liq.cierreMensualMixto) : 0
             const totalEgresos = liq.descuentosPrestamos
             const montoAdicionales = liq.items.reduce((acc, item) => acc + item.montoCalculado, 0)
             const soloSueldoBase = liq.sueldoProporcional + liq.montoHorasNormales + liq.montoHorasFeriado
@@ -57,7 +69,13 @@ export async function GET(request: Request) {
             return {
                 id: liq.id,
                 tipo: liq.tipo,
-                manualData: liq.desglose,
+                manualData: esMixto ? {
+                    origen: 'MENSUAL_MIXTA_EFECTIVO',
+                    periodo: liq.cierreMensualMixto?.periodo,
+                    totalDevengado: liq.cierreMensualMixto?.totalDevengado,
+                    netoReciboOficial: liq.cierreMensualMixto?.netoRecibo,
+                    efectivoAbonado: efectivoMixto,
+                } : liq.desglose,
                 empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
                 empleadoDatos: {
                     nombre: liq.empleado.nombre,
@@ -66,15 +84,16 @@ export async function GET(request: Request) {
                 },
                 periodo: liq.periodo,
                 fechaGeneracion: liq.fechaGeneracion,
-                horasExtras: liq.horasExtras + liq.ajusteHorasExtras,
-                montoHorasExtras: liq.montoHorasExtras,
-                sueldoProporcional: liq.sueldoProporcional,
-                montoHorasNormales: liq.montoHorasNormales,
-                montoHorasFeriado: liq.montoHorasFeriado,
-                montoAdicionales,
-                totalBruto: soloSueldoBase + liq.montoHorasExtras + montoAdicionales,
-                descuentos: totalEgresos,
-                totalNeto: liq.totalNeto
+                horasExtras: esMixto ? 0 : liq.horasExtras + liq.ajusteHorasExtras,
+                montoHorasExtras: esMixto ? 0 : liq.montoHorasExtras,
+                sueldoProporcional: esMixto ? efectivoMixto : liq.sueldoProporcional,
+                montoHorasNormales: esMixto ? 0 : liq.montoHorasNormales,
+                montoHorasFeriado: esMixto ? 0 : liq.montoHorasFeriado,
+                montoAdicionales: esMixto ? 0 : montoAdicionales,
+                totalBruto: esMixto ? efectivoMixto : soloSueldoBase + liq.montoHorasExtras + montoAdicionales,
+                descuentos: esMixto ? 0 : totalEgresos,
+                totalNeto: esMixto ? efectivoMixto : liq.totalNeto,
+                esMixtoEfectivo: esMixto,
             }
         })
 

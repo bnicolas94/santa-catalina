@@ -1,7 +1,7 @@
 "use client"
 
 import { getPrintLogos } from '@/lib/utils/printLogos'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
 
 interface ReportePagosModalProps {
@@ -11,7 +11,7 @@ interface ReportePagosModalProps {
 interface ReporteFila {
     id: string
     tipo: string
-    manualData: any
+    manualData: Record<string, unknown> | null
     empleado: string
     empleadoDatos: {
         nombre: string
@@ -29,6 +29,7 @@ interface ReporteFila {
     montoAdicionales: number
     descuentos: number
     totalNeto: number
+    esMixtoEfectivo?: boolean
 }
 
 export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
@@ -40,11 +41,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     const [filtroNombre, setFiltroNombre] = useState('')
     const [modeloRecibo, setModeloRecibo] = useState<ModeloRecibo>('A')
 
-    useEffect(() => {
-        fetchReporte()
-    }, [fechaDesde, fechaHasta])
-
-    const fetchReporte = async () => {
+    const fetchReporte = useCallback(async () => {
         setLoading(true)
         setSelectedIds(new Set())
         try {
@@ -58,7 +55,11 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         } finally {
             setLoading(false)
         }
-    }
+    }, [fechaDesde, fechaHasta])
+
+    useEffect(() => {
+        void fetchReporte()
+    }, [fetchReporte])
 
     const filteredDatos = useMemo(() => {
         if (!filtroNombre) return datos
@@ -66,7 +67,11 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         return datos.filter(d => d.empleado.toLowerCase().includes(low))
     }, [datos, filtroNombre])
 
+    const recibosImprimibles = filteredDatos.filter(d => !d.esMixtoEfectivo || d.totalNeto > 0)
+
     const toggleSelect = (id: string) => {
+        const fila = datos.find(d => d.id === id)
+        if (!fila || (fila.esMixtoEfectivo && fila.totalNeto <= 0)) return
         const next = new Set(selectedIds)
         if (next.has(id)) next.delete(id)
         else next.add(id)
@@ -74,10 +79,10 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     }
 
     const toggleSelectAll = () => {
-        if (selectedIds.size === filteredDatos.length) {
+        if (recibosImprimibles.length > 0 && recibosImprimibles.every(d => selectedIds.has(d.id))) {
             setSelectedIds(new Set())
         } else {
-            setSelectedIds(new Set(filteredDatos.map(d => d.id)))
+            setSelectedIds(new Set(recibosImprimibles.map(d => d.id)))
         }
     }
 
@@ -190,7 +195,11 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
     const handlePrintReceipts = async () => {
         if (selectedIds.size === 0) return
-        const selectedLiquidaciones = datos.filter(d => selectedIds.has(d.id))
+        const selectedLiquidaciones = datos.filter(d => selectedIds.has(d.id) && (!d.esMixtoEfectivo || d.totalNeto > 0))
+        if (selectedLiquidaciones.length === 0) {
+            window.alert('Los cierres seleccionados no tienen pagos en efectivo para respaldar con un recibo interno.')
+            return
+        }
         await imprimirRecibosLiquidacion(selectedLiquidaciones.map(liq => ({
             empleado: liq.empleadoDatos,
             periodo: liq.periodo,
@@ -244,7 +253,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                         <th style={{ width: '40px' }}>
                                             <input 
                                                 type="checkbox" 
-                                                checked={selectedIds.size === filteredDatos.length && filteredDatos.length > 0} 
+                                                checked={recibosImprimibles.length > 0 && recibosImprimibles.every(d => selectedIds.has(d.id))}
                                                 onChange={toggleSelectAll} 
                                             />
                                         </th>
@@ -257,12 +266,15 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 </thead>
                                 <tbody>
                                     {filteredDatos.length > 0 ? (
-                                        filteredDatos.map(d => (
-                                            <tr key={d.id} onClick={() => toggleSelect(d.id)} style={{ cursor: 'pointer' }}>
+                                        filteredDatos.map(d => {
+                                            const imprimible = !d.esMixtoEfectivo || d.totalNeto > 0
+                                            return (
+                                            <tr key={d.id} onClick={() => toggleSelect(d.id)} style={{ cursor: imprimible ? 'pointer' : 'not-allowed', opacity: imprimible ? 1 : .6 }}>
                                                 <td>
                                                     <input 
                                                         type="checkbox" 
                                                         checked={selectedIds.has(d.id)} 
+                                                        disabled={!imprimible}
                                                         onChange={(e) => { e.stopPropagation(); toggleSelect(d.id); }} 
                                                     />
                                                 </td>
@@ -270,7 +282,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                     <div style={{ fontWeight: 500 }}>{d.empleado}</div>
                                                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', display: 'flex', gap: '4px', alignItems: 'center' }}>
                                                         {d.periodo}
-                                                        {(d.tipo === 'VACACIONES' || d.manualData?.esVacaciones || d.periodo.toLowerCase().includes('vacaciones')) && (
+                                                        {(d.tipo === 'VACACIONES' || d.manualData?.esVacaciones === true || d.periodo.toLowerCase().includes('vacaciones')) && (
                                                             <span style={{ backgroundColor: 'var(--color-success-light)', color: 'var(--color-success)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>VACACIONES</span>
                                                         )}
                                                         {d.tipo === 'FINAL' && (
@@ -278,6 +290,12 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                         )}
                                                         {d.tipo === 'HORAS_EXTRAS_ADEUDADAS' && (
                                                             <span style={{ backgroundColor: 'var(--color-warning-light)', color: 'var(--color-warning)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>HS. ADEUDADAS</span>
+                                                        )}
+                                                        {d.esMixtoEfectivo && (
+                                                            <span style={{ backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>MIXTO · SÓLO EFECTIVO</span>
+                                                        )}
+                                                        {d.esMixtoEfectivo && !imprimible && (
+                                                            <span style={{ fontSize: '10px' }}>Sin comprobante interno</span>
                                                         )}
                                                     </div>
                                                 </td>
@@ -292,7 +310,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                     ${d.totalNeto.toLocaleString('es-AR')}
                                                 </td>
                                             </tr>
-                                        ))
+                                            )
+                                        })
                                     ) : (
                                         <tr>
                                             <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)' }}>

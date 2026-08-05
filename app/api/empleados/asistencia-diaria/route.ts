@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { SancionService } from '@/lib/services/sancion.service'
+import { instanteRRHH, rangoDiaRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 
 export async function POST(request: Request) {
     try {
@@ -14,17 +15,17 @@ export async function POST(request: Request) {
         const targetDates = fechas && Array.isArray(fechas) ? fechas : [fecha]
 
         for (const targetDate of targetDates) {
-            // Normalizar fecha en UTC para evitar desfases de zona horaria
-            const startOfDay = new Date(`${targetDate}T00:00:00.000Z`)
-            const endOfDay = new Date(`${targetDate}T23:59:59.999Z`)
+            const fechaCivil = validarFechaCivilRRHH(String(targetDate))
+            const rangoDia = rangoDiaRRHH(fechaCivil)
+            const fechaRegistro = instanteRRHH(fechaCivil, '12:00:00')
 
             // 1. Eliminar inasistencia previa en este rango de fecha
             await prisma.inasistencia.deleteMany({
                 where: {
                     empleadoId,
                     fecha: {
-                        gte: startOfDay,
-                        lte: endOfDay
+                        gte: rangoDia.gte,
+                        lt: rangoDia.lt,
                     }
                 }
             })
@@ -34,8 +35,8 @@ export async function POST(request: Request) {
                 await prisma.inasistencia.create({
                     data: {
                         empleadoId,
-                        fecha: startOfDay,
-                        tipo: 'JUSTIFICADA',
+                        fecha: fechaRegistro,
+                        tipo: 'JUSTIFICADA_PAGA',
                         motivo: 'Enfermedad',
                         tieneCertificado: true,
                         observaciones: 'Modificado desde Planilla de Asistencia Diaria'
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
                 await prisma.inasistencia.create({
                     data: {
                         empleadoId,
-                        fecha: startOfDay,
+                        fecha: fechaRegistro,
                         tipo: 'INJUSTIFICADA',
                         motivo: 'Ausencia sin aviso',
                         tieneCertificado: false,
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
                 await prisma.inasistencia.create({
                     data: {
                         empleadoId,
-                        fecha: startOfDay,
+                        fecha: fechaRegistro,
                         tipo: 'JUSTIFICADA',
                         motivo: 'Ausencia con aviso',
                         tieneCertificado: false,
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
                 await prisma.inasistencia.create({
                     data: {
                         empleadoId,
-                        fecha: startOfDay,
+                        fecha: fechaRegistro,
                         tipo: 'FRANCO',
                         motivo: 'Franco',
                         tieneCertificado: false,
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
                 await prisma.inasistencia.create({
                     data: {
                         empleadoId,
-                        fecha: startOfDay,
+                        fecha: fechaRegistro,
                         tipo: 'FERIADO',
                         motivo: 'Feriado',
                         tieneCertificado: false,
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
                 await prisma.inasistencia.create({
                     data: {
                         empleadoId,
-                        fecha: startOfDay,
+                        fecha: fechaRegistro,
                         tipo: 'TRABAJO',
                         motivo: 'Trabajó',
                         tieneCertificado: false,

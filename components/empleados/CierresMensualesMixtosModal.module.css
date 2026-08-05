@@ -62,16 +62,48 @@
 .anulado { color: #b42318; background: #fef3f2; }
 
 .warning { display: grid; gap: 4px; margin: 14px 18px 0; padding: 11px 13px; color: #92400e; background: #fffaeb; border: 1px solid #fedf89; border-radius: 8px; font-size: 12px; }
+.reconciliation { margin: 14px 18px 0; padding: 14px; border: 1px solid #fedf89; border-radius: 10px; background: #fffcf5; }
+.reconciliationHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.reconciliationHeader > div { display: grid; gap: 3px; }
+.reconciliationHeader strong { color: #7a2e0e; font-size: 13px; }
+.reconciliationHeader span { color: #92400e; font-size: 11px; line-height: 1.4; }
+.reconciliationHeader > span { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; background: #fef0c7; font-weight: 750; }
+.reconciliationList { display: grid; gap: 7px; }
+.reconciliationList > div { overflow: hidden; border: 1px solid #e4e7ec; border-radius: 8px; background: #fff; }
+.reconciliationList > div:hover { border-color: #f79009; }
+.reconciliationList .reconciliationSelected { border-color: #abefc6; background: #f6fef9; }
+.reconciliationRow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; min-height: 48px; padding: 8px 10px; cursor: pointer; }
+.reconciliationList input { width: 17px; height: 17px; accent-color: #dc1f3d; }
+.reconciliationList input:disabled { cursor: not-allowed; opacity: .45; }
+.reconciliationRow > span { display: grid; gap: 2px; min-width: 0; }
+.reconciliationRow strong { color: #344054; font-size: 12px; }
+.reconciliationRow small { color: #667085; font-size: 10px; }
+.reconciliationRow b { color: #101828; font-size: 13px; }
+.reconciliationAmount { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 8px 10px; border-top: 1px solid #d1fadf; color: #067647; font-size: 10px; font-weight: 700; }
+.reconciliationAmount > div { display: flex; align-items: center; width: 170px; height: 34px; border: 1px solid #abefc6; border-radius: 7px; background: #fff; }
+.reconciliationAmount > div > span { padding-left: 9px; }
+.reconciliationAmount input { width: 100%; height: 100%; padding: 0 8px 0 5px; border: 0; outline: 0; color: #101828; background: transparent; font: inherit; font-size: 12px; font-weight: 750; }
+.reconciliationTotal { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #fedf89; font-size: 12px; }
+.reconciliationTotal > label { display: flex; align-items: center; gap: 8px; font-weight: 700; cursor: pointer; }
+.reconciliationTotal > div { display: grid; gap: 2px; text-align: right; }
+.reconciliationTotal > div span { color: #667085; font-size: 10px; text-transform: uppercase; }
+.reconciliationTotal strong { color: #101828; font-size: 15px; }
+.reconciliationPending { color: #92400e; }
+.reconciliationReady { color: #067647; }
 .closeGrid { display: grid; grid-template-columns: 1.1fr 1fr 1fr auto; align-items: end; gap: 14px; padding: 18px; }
 .realTotal, .cashResult, .amountInput { display: grid; gap: 5px; min-width: 0; }
 .realTotal > span, .cashResult > span, .amountInput > span { color: #475467; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .03em; }
 .realTotal strong, .cashResult strong { color: #101828; font-size: 22px; }
+.cashResult .negativeAmount { color: #b42318; }
 .realTotal small, .cashResult small, .amountInput small { color: #98a2b3; font-size: 10px; line-height: 1.35; }
 .amountInput > div { display: flex; align-items: center; height: 42px; border: 1px solid #d0d5dd; border-radius: 8px; overflow: hidden; }
 .amountInput > div > span { padding-left: 12px; color: #667085; }
 .amountInput input { width: 100%; min-width: 0; height: 100%; padding: 0 10px 0 6px; border: 0; outline: 0; color: #101828; font: inherit; font-weight: 700; }
 
 .paymentGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 18px; }
+.reconciledSummary { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 13px; border: 1px solid #abefc6; border-radius: 9px; color: #067647; background: #ecfdf3; }
+.reconciledSummary span { font-size: 12px; font-weight: 650; }
+.reconciledSummary strong { font-size: 16px; }
 .payment { padding: 15px; border: 1px solid #e4e7ec; border-radius: 10px; background: #fcfcfd; }
 .paymentDone { border-color: #abefc6; background: #f6fef9; }
 .paymentTitle { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
@@ -102,6 +134,12 @@
     .header, .toolbar, .body, .footer { padding-left: 16px; padding-right: 16px; }
     .summary, .closeGrid { grid-template-columns: 1fr; }
     .paymentActions { grid-template-columns: 1fr; }
+    .reconciliationHeader { flex-direction: column; }
+    .reconciliationRow { grid-template-columns: auto 1fr; }
+    .reconciliationRow b { grid-column: 2; }
+    .reconciliationAmount, .reconciliationTotal { align-items: stretch; flex-direction: column; }
+    .reconciliationAmount > div { width: 100%; }
+    .reconciliationTotal > div { text-align: left; }
     .footer span { display: none; }
     .footer { justify-content: flex-end; }
 }

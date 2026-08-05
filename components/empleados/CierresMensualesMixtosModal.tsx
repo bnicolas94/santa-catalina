@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from './CierresMensualesMixtosModal.module.css'
 import { CambiarCajaPagoButton } from './CambiarCajaPagoButton'
@@ -32,6 +32,7 @@ interface Cierre {
     cerradoAt: string
     pagos: Pago[]
     liquidacionSueldo: { id: string; estado: string }
+    totalConciliado: number
 }
 
 interface FilaMensual {
@@ -39,12 +40,27 @@ interface FilaMensual {
     periodo: string
     rango: { desde: string; hasta: string }
     totalCalculado: number
+    consolidado?: {
+        historicoSemanal: number
+        seguimientoNoCubierto: number
+        descuentoPendiente: number
+        diasCubiertosPorHistorial: number
+    } | null
     resumen?: { diasSeguimientoGuardados?: number } | null
     cierre: Cierre | null
     referenciasSemanales: {
         cantidad: number
+        cantidadPagadas: number
         total: number
-        liquidaciones: Array<{ id: string; periodo: string; totalNeto: number }>
+        totalDevengado: number
+        liquidaciones: Array<{
+            id: string
+            periodo: string
+            totalNeto: number
+            montoPagado: number
+            montoDevengadoPeriodo: number
+            cruzaPeriodo: boolean
+        }>
     }
 }
 
@@ -84,10 +100,14 @@ function nombreCaja(cajas: Caja[], id: string) {
 }
 
 export function CierresMensualesMixtosModal({ onClose }: Props) {
+    const bodyRef = useRef<HTMLElement>(null)
     const [periodo, setPeriodo] = useState(periodoInicial)
     const [filas, setFilas] = useState<FilaMensual[]>([])
     const [cajas, setCajas] = useState<Caja[]>([])
     const [netosRecibo, setNetosRecibo] = useState<Record<string, string>>({})
+    const [liquidacionesConciliadas, setLiquidacionesConciliadas] = useState<Record<string, string[]>>({})
+    const [montosConciliados, setMontosConciliados] = useState<Record<string, Record<string, string>>>({})
+    const [conciliacionesRevisadas, setConciliacionesRevisadas] = useState<Record<string, boolean>>({})
     const [cajasPago, setCajasPago] = useState<Record<Medio, string>>({
         TRANSFERENCIA: 'mercado_pago',
         EFECTIVO: 'caja_madre',
@@ -109,7 +129,29 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
             if (!respuestaCierres.ok) throw new Error(cierres.error || 'No se pudieron cargar los cierres.')
             if (!respuestaCajas.ok) throw new Error(saldos.error || 'No se pudieron cargar las cajas.')
 
-            setFilas(cierres.empleados || [])
+            const filasCargadas = (cierres.empleados || []) as FilaMensual[]
+            setFilas(filasCargadas)
+            setLiquidacionesConciliadas(actual => {
+                const siguiente = { ...actual }
+                filasCargadas.forEach(fila => {
+                    if (siguiente[fila.empleado.id] !== undefined) return
+                    siguiente[fila.empleado.id] = fila.referenciasSemanales.liquidaciones
+                        .filter(liquidacion => Math.min(liquidacion.montoPagado, liquidacion.montoDevengadoPeriodo) > 0)
+                        .map(liquidacion => liquidacion.id)
+                })
+                return siguiente
+            })
+            setMontosConciliados(actual => {
+                const siguiente = { ...actual }
+                filasCargadas.forEach(fila => {
+                    if (siguiente[fila.empleado.id] !== undefined) return
+                    siguiente[fila.empleado.id] = Object.fromEntries(fila.referenciasSemanales.liquidaciones.map(liquidacion => [
+                        liquidacion.id,
+                        String(Math.min(liquidacion.montoPagado, liquidacion.montoDevengadoPeriodo)),
+                    ]))
+                })
+                return siguiente
+            })
             setCajas([
                 { id: 'caja_madre', nombre: 'Caja Madre', saldo: saldos.cajaMadre?.saldo || 0 },
                 { id: 'caja_chica', nombre: 'Caja Chica', saldo: saldos.cajaChica?.saldo || 0 },
@@ -126,6 +168,12 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
     }, [periodo])
 
     useEffect(() => { void cargar() }, [cargar])
+    useEffect(() => {
+        setNetosRecibo({})
+        setLiquidacionesConciliadas({})
+        setMontosConciliados({})
+        setConciliacionesRevisadas({})
+    }, [periodo])
 
     const resumen = useMemo(() => filas.reduce((acumulado, fila) => {
         const cierre = fila.cierre
@@ -136,19 +184,43 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
         return acumulado
     }, { total: 0, transferencia: 0, efectivo: 0, pagados: 0 }), [filas])
 
+    const mostrarError = (texto: string) => {
+        setMensaje({ tipo: 'error', texto })
+        requestAnimationFrame(() => bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }))
+    }
+
     const cerrar = async (fila: FilaMensual) => {
         const netoRecibo = Number(netosRecibo[fila.empleado.id])
         if (!Number.isFinite(netoRecibo) || netoRecibo < 0) {
-            setMensaje({ tipo: 'error', texto: 'Ingresá el neto exacto del recibo oficial.' })
+            mostrarError('Ingresá el neto exacto del recibo oficial.')
             return
         }
-        const efectivo = Math.round((fila.totalCalculado - netoRecibo) * 100) / 100
+        const idsConciliados = liquidacionesConciliadas[fila.empleado.id] || []
+        if (fila.referenciasSemanales.cantidad > 0 && !conciliacionesRevisadas[fila.empleado.id]) {
+            mostrarError('Confirmá que revisaste todos los pagos semanales detectados.')
+            return
+        }
+        const aplicaciones = fila.referenciasSemanales.liquidaciones.map(liquidacion => ({
+            id: liquidacion.id,
+            monto: idsConciliados.includes(liquidacion.id)
+                ? Number(montosConciliados[fila.empleado.id]?.[liquidacion.id] ?? Math.min(liquidacion.montoPagado, liquidacion.montoDevengadoPeriodo))
+                : 0,
+        }))
+        if (aplicaciones.some((aplicacion, indice) => {
+            const referencia = fila.referenciasSemanales.liquidaciones[indice]
+            return !Number.isFinite(aplicacion.monto) || aplicacion.monto < 0 || aplicacion.monto > Math.min(referencia.montoPagado, referencia.montoDevengadoPeriodo)
+        })) {
+            mostrarError('Revisá los importes aplicados: no pueden superar el pago que corresponde a este mes.')
+            return
+        }
+        const totalConciliado = Math.round(aplicaciones.reduce((total, aplicacion) => total + aplicacion.monto, 0) * 100) / 100
+        const efectivo = Math.round((fila.totalCalculado - netoRecibo - totalConciliado) * 100) / 100
         if (efectivo < 0) {
-            setMensaje({ tipo: 'error', texto: 'El neto del recibo no puede superar el sueldo real calculado.' })
+            mostrarError('El recibo más los pagos semanales aplicados no pueden superar el sueldo real calculado. Desmarcá o reducí un pago si no corresponde íntegramente a este mes.')
             return
         }
         const nombre = `${fila.empleado.nombre} ${fila.empleado.apellido || ''}`.trim()
-        if (!confirm(`¿Cerrar ${etiquetaPeriodo(periodo)} para ${nombre}?\n\nTransferencia: ${dinero(netoRecibo)}\nEfectivo: ${dinero(efectivo)}\n\nLuego los importes quedarán congelados.`)) return
+        if (!confirm(`¿Cerrar ${etiquetaPeriodo(periodo)} para ${nombre}?\n\nYa abonado en semanas: ${dinero(totalConciliado)}\nTransferencia del recibo: ${dinero(netoRecibo)}\nEfectivo restante: ${dinero(efectivo)}\n\nLuego los importes quedarán congelados.`)) return
 
         setProcesando(`cerrar-${fila.empleado.id}`)
         setMensaje(null)
@@ -156,14 +228,20 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
             const respuesta = await fetch('/api/empleados/cierres-mensuales', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ empleadoId: fila.empleado.id, periodo, netoRecibo }),
+                body: JSON.stringify({
+                    empleadoId: fila.empleado.id,
+                    periodo,
+                    netoRecibo,
+                    liquidacionesConciliadas: aplicaciones,
+                    conciliacionConfirmada: fila.referenciasSemanales.cantidad === 0 || conciliacionesRevisadas[fila.empleado.id] === true,
+                }),
             })
             const data = await respuesta.json()
             if (!respuesta.ok) throw new Error(data.error || 'No se pudo cerrar el período.')
             setMensaje({ tipo: 'ok', texto: `El cierre de ${nombre} quedó guardado. Ahora podés registrar cada medio de pago por separado.` })
             await cargar()
         } catch (error) {
-            setMensaje({ tipo: 'error', texto: error instanceof Error ? error.message : 'No se pudo cerrar el período.' })
+            mostrarError(error instanceof Error ? error.message : 'No se pudo cerrar el período.')
         } finally {
             setProcesando(null)
         }
@@ -219,7 +297,7 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
                 </div>
             </div>
 
-            <main className={styles.body}>
+            <main className={styles.body} ref={bodyRef}>
                 {mensaje && <div className={`${styles.message} ${mensaje.tipo === 'ok' ? styles.success : styles.error}`}>{mensaje.texto}</div>}
 
                 <section className={styles.summary}>
@@ -235,11 +313,15 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
                 </div> : <div className={styles.list}>
                     {filas.map(fila => {
                         const cierre = fila.cierre
-                        const neto = Number(netosRecibo[fila.empleado.id])
-                        const diferencia = Number.isFinite(neto) ? fila.totalCalculado - neto : null
+                        const netoTexto = netosRecibo[fila.empleado.id]
+                        const neto = netoTexto?.trim() ? Number(netoTexto) : Number.NaN
+                        const idsConciliados = liquidacionesConciliadas[fila.empleado.id] || []
+                        const totalConciliado = Math.round(fila.referenciasSemanales.liquidaciones
+                            .filter(liquidacion => idsConciliados.includes(liquidacion.id))
+                            .reduce((total, liquidacion) => total + Number(montosConciliados[fila.empleado.id]?.[liquidacion.id] ?? Math.min(liquidacion.montoPagado, liquidacion.montoDevengadoPeriodo)), 0) * 100) / 100
+                        const diferencia = Number.isFinite(neto) ? fila.totalCalculado - neto - totalConciliado : null
                         const pagoTransferencia = cierre?.pagos.find(pago => pago.medio === 'TRANSFERENCIA' && pago.estado !== 'ANULADO')
                         const pagoEfectivo = cierre?.pagos.find(pago => pago.medio === 'EFECTIVO' && pago.estado !== 'ANULADO')
-                        const bloqueado = fila.referenciasSemanales.cantidad > 0
                         return <article className={styles.employeeCard} key={fila.empleado.id}>
                             <div className={styles.employeeHeader}>
                                 <div className={styles.avatar}>{fila.empleado.nombre[0]}{fila.empleado.apellido?.[0] || ''}</div>
@@ -252,18 +334,74 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
                                 </span>
                             </div>
 
-                            {bloqueado && !cierre && <div className={styles.warning}>
-                                <strong>Revisión necesaria antes de cerrar</strong>
-                                <span>Hay {fila.referenciasSemanales.cantidad} liquidación(es) semanal(es) superpuesta(s) por {dinero(fila.referenciasSemanales.total)}. Deben anularse o conciliarse para evitar pagar dos veces.</span>
+                            {fila.referenciasSemanales.cantidad > 0 && !cierre && <div className={styles.reconciliation}>
+                                <div className={styles.reconciliationHeader}>
+                                    <div>
+                                        <strong>Conciliación del historial semanal</strong>
+                                        <span>El total mensual incorpora estas liquidaciones como antecedentes. Marcá únicamente los importes que la empleada ya recibió.</span>
+                                    </div>
+                                    <span>{dinero(fila.referenciasSemanales.total)} pagados</span>
+                                </div>
+                                <div className={styles.reconciliationList}>
+                                    {fila.referenciasSemanales.liquidaciones.map(liquidacion => {
+                                        const seleccionada = idsConciliados.includes(liquidacion.id)
+                                        const maximoAplicable = Math.min(liquidacion.montoPagado, liquidacion.montoDevengadoPeriodo)
+                                        return <div key={liquidacion.id} className={seleccionada ? styles.reconciliationSelected : ''}>
+                                            <label className={styles.reconciliationRow}>
+                                                <input type="checkbox" checked={seleccionada} disabled={maximoAplicable <= 0} onChange={evento => {
+                                                    setConciliacionesRevisadas(actual => ({ ...actual, [fila.empleado.id]: false }))
+                                                    setLiquidacionesConciliadas(actual => {
+                                                        const actuales = actual[fila.empleado.id] || []
+                                                        const siguientes = evento.target.checked
+                                                            ? [...actuales, liquidacion.id]
+                                                            : actuales.filter(id => id !== liquidacion.id)
+                                                        return { ...actual, [fila.empleado.id]: siguientes }
+                                                    })
+                                                    if (evento.target.checked) setMontosConciliados(actual => ({
+                                                        ...actual,
+                                                        [fila.empleado.id]: {
+                                                            ...actual[fila.empleado.id],
+                                                            [liquidacion.id]: actual[fila.empleado.id]?.[liquidacion.id] ?? String(maximoAplicable),
+                                                        },
+                                                    }))
+                                                }} />
+                                                <span>
+                                                    <strong>{liquidacion.periodo}</strong>
+                                                    <small>{liquidacion.cruzaPeriodo ? `Corresponden ${dinero(liquidacion.montoDevengadoPeriodo)} a este mes · ` : ''}{liquidacion.montoPagado > 0 ? 'Con egreso real en Caja' : 'Sin egreso registrado en Caja'}</small>
+                                                </span>
+                                                <b>{liquidacion.montoPagado > 0 ? dinero(liquidacion.montoPagado) : 'No abonado'}</b>
+                                            </label>
+                                            {seleccionada && <label className={styles.reconciliationAmount}>
+                                                <span>Monto a aplicar a {etiquetaPeriodo(periodo)}</span>
+                                                <div><span>$</span><input type="number" min="0" max={maximoAplicable} step="0.01" value={montosConciliados[fila.empleado.id]?.[liquidacion.id] ?? String(maximoAplicable)} onChange={evento => {
+                                                    setConciliacionesRevisadas(actual => ({ ...actual, [fila.empleado.id]: false }))
+                                                    setMontosConciliados(actual => ({
+                                                        ...actual,
+                                                        [fila.empleado.id]: { ...actual[fila.empleado.id], [liquidacion.id]: evento.target.value },
+                                                    }))
+                                                }} /></div>
+                                            </label>}
+                                        </div>
+                                    })}
+                                </div>
+                                <div className={styles.reconciliationTotal}>
+                                    <label className={conciliacionesRevisadas[fila.empleado.id] ? styles.reconciliationReady : styles.reconciliationPending}>
+                                        <input type="checkbox" checked={conciliacionesRevisadas[fila.empleado.id] || false} onChange={evento => setConciliacionesRevisadas(actual => ({ ...actual, [fila.empleado.id]: evento.target.checked }))} />
+                                        <span>Revisé todos los pagos y sus importes aplicados al mes.</span>
+                                    </label>
+                                    <div><span>Total aplicado</span><strong>{dinero(totalConciliado)}</strong></div>
+                                </div>
                             </div>}
 
                             {!cierre ? <div className={styles.closeGrid}>
                                 <div className={styles.realTotal}>
-                                    <span>Sueldo real calculado</span>
+                                    <span>Total mensual consolidado</span>
                                     <strong>{dinero(fila.totalCalculado)}</strong>
                                     <small>
-                                        Fichadas, extras, feriados, licencias y descuentos del 1 al último día.
-                                        {(fila.resumen?.diasSeguimientoGuardados || 0) > 0 && ` ${fila.resumen?.diasSeguimientoGuardados} días usan seguimientos semanales guardados.`}
+                                        {fila.consolidado && fila.referenciasSemanales.cantidad > 0
+                                            ? `${dinero(fila.consolidado.historicoSemanal)} del historial semanal y ${dinero(fila.consolidado.seguimientoNoCubierto)} de días posteriores no cubiertos.`
+                                            : 'Fichadas, extras, feriados, licencias y descuentos del 1 al último día.'}
+                                        {(fila.resumen?.diasSeguimientoGuardados || 0) > 0 && ` ${fila.resumen?.diasSeguimientoGuardados} días usan seguimientos guardados.`}
                                     </small>
                                 </div>
                                 <label className={styles.amountInput}>
@@ -272,16 +410,22 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
                                     <small>Es el importe que se transferirá.</small>
                                 </label>
                                 <div className={styles.cashResult}>
-                                    <span>Excedente en efectivo</span>
-                                    <strong>{diferencia === null ? '—' : dinero(Math.max(0, diferencia))}</strong>
-                                    <small>Se calcula automáticamente.</small>
+                                    <span>Efectivo restante</span>
+                                    <strong className={diferencia !== null && diferencia < 0 ? styles.negativeAmount : ''}>{diferencia === null ? '—' : dinero(diferencia)}</strong>
+                                    <small>{diferencia !== null && diferencia < 0
+                                        ? 'El recibo y lo conciliado superan el sueldo calculado. Reducí el importe aplicado o revisá los datos.'
+                                        : 'Devengado menos recibo y pagos semanales conciliados.'}</small>
                                 </div>
-                                <button className="btn btn-primary" disabled={!terminado || bloqueado || procesando !== null || diferencia === null || diferencia < 0} onClick={() => void cerrar(fila)}>
+                                <button className="btn btn-primary" disabled={!terminado || procesando !== null} onClick={() => void cerrar(fila)}>
                                     {procesando === `cerrar-${fila.empleado.id}` ? 'Cerrando…' : 'Cerrar período'}
                                 </button>
                             </div> : <div className={styles.paymentGrid}>
+                                {cierre.totalConciliado > 0 && <div className={styles.reconciledSummary}>
+                                    <span>Ya abonado y conciliado desde liquidaciones semanales</span>
+                                    <strong>{dinero(cierre.totalConciliado)}</strong>
+                                </div>}
                                 <PaymentBlock medio="TRANSFERENCIA" titulo="Transferencia del recibo" monto={cierre.netoRecibo} pago={pagoTransferencia} cajas={cajas} cajaId={cajasPago.TRANSFERENCIA} onCaja={valor => setCajasPago(actual => ({ ...actual, TRANSFERENCIA: valor }))} onPagar={() => void pagar(fila, 'TRANSFERENCIA')} onCajaCambiada={cargar} procesando={procesando === `TRANSFERENCIA-${cierre.id}`} disabled={procesando !== null || cierre.estado === 'ANULADO'} />
-                                <PaymentBlock medio="EFECTIVO" titulo="Diferencia en efectivo" monto={cierre.efectivoCalculado} pago={pagoEfectivo} cajas={cajas} cajaId={cajasPago.EFECTIVO} onCaja={valor => setCajasPago(actual => ({ ...actual, EFECTIVO: valor }))} onPagar={() => void pagar(fila, 'EFECTIVO')} onCajaCambiada={cargar} procesando={procesando === `EFECTIVO-${cierre.id}`} disabled={procesando !== null || cierre.estado === 'ANULADO'} />
+                                <PaymentBlock medio="EFECTIVO" titulo="Efectivo restante" monto={cierre.efectivoCalculado} pago={pagoEfectivo} cajas={cajas} cajaId={cajasPago.EFECTIVO} onCaja={valor => setCajasPago(actual => ({ ...actual, EFECTIVO: valor }))} onPagar={() => void pagar(fila, 'EFECTIVO')} onCajaCambiada={cargar} procesando={procesando === `EFECTIVO-${cierre.id}`} disabled={procesando !== null || cierre.estado === 'ANULADO'} />
                             </div>}
                         </article>
                     })}

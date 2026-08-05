@@ -65,8 +65,12 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
         try {
             const formData = new FormData()
             Object.entries(newInasistencia).forEach(([key, value]) => {
-                if (key === 'tipo' && value === 'OTRO') {
+                if (key === 'tipo' && value === 'ENFERMEDAD_PAGA') {
+                    formData.append(key, 'JUSTIFICADA_PAGA')
+                } else if (key === 'tipo' && value === 'OTRO') {
                     formData.append(key, newInasistencia.tipoPersonalizado)
+                } else if (key === 'motivo' && newInasistencia.tipo === 'ENFERMEDAD_PAGA') {
+                    formData.append(key, 'Enfermedad')
                 } else {
                     formData.append(key, value.toString())
                 }
@@ -99,6 +103,9 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                     observaciones: '',
                     minutosRetraso: ''
                 })
+            } else {
+                const data = await res.json().catch(() => null)
+                alert(data?.error || 'No se pudo registrar la inasistencia')
             }
         } catch (error) {
             console.error(error)
@@ -108,11 +115,12 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
     }
 
     const handleEditInasistencia = (i: any) => {
+        const esEnfermedadPaga = i.tipo === 'JUSTIFICADA_PAGA' && i.motivo === 'Enfermedad'
         setNewInasistencia({
             empleadoId: i.empleadoId,
             fecha: new Date(i.fecha).toISOString().split('T')[0],
             fechaHasta: '',
-            tipo: ['INJUSTIFICADA', 'CON_AVISO_INJUSTIFICADA', 'JUSTIFICADA_PAGA', 'JUSTIFICADA_NO_PAGA', 'TARDANZA'].includes(i.tipo) ? i.tipo : 'OTRO',
+            tipo: esEnfermedadPaga ? 'ENFERMEDAD_PAGA' : ['INJUSTIFICADA', 'CON_AVISO_INJUSTIFICADA', 'JUSTIFICADA_PAGA', 'JUSTIFICADA_NO_PAGA', 'TARDANZA'].includes(i.tipo) ? i.tipo : 'OTRO',
             tipoPersonalizado: ['INJUSTIFICADA', 'CON_AVISO_INJUSTIFICADA', 'JUSTIFICADA_PAGA', 'JUSTIFICADA_NO_PAGA', 'TARDANZA'].includes(i.tipo) ? '' : i.tipo,
             motivo: i.motivo || '',
             tieneCertificado: i.tieneCertificado,
@@ -309,7 +317,8 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                              >
                                                  <option value="INJUSTIFICADA">Injustificada (Sin Aviso)</option>
                                                  <option value="CON_AVISO_INJUSTIFICADA">Con Aviso - Injustificada</option>
-                                                 <option value="JUSTIFICADA_PAGA">Justificada (Paga)</option>
+                                                 <option value="ENFERMEDAD_PAGA">Enfermedad (Paga)</option>
+                                                 <option value="JUSTIFICADA_PAGA">Otra justificada (Paga)</option>
                                                  <option value="JUSTIFICADA_NO_PAGA">Justificada (No Paga)</option>
                                                  <option value="TARDANZA">Tardanza</option>
                                                  <option value="OTRO">Otro (Personalizado...)</option>
@@ -328,6 +337,18 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                                 />
                                             </div>
                                          )}
+                                        {newInasistencia.tipo !== 'ENFERMEDAD_PAGA' && newInasistencia.tipo !== 'OTRO' && (
+                                            <div className="form-group">
+                                                <label className="form-label">Motivo</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-input"
+                                                    value={newInasistencia.motivo}
+                                                    onChange={e => setNewInasistencia({...newInasistencia, motivo: e.target.value})}
+                                                    placeholder="Ej: trámite personal"
+                                                />
+                                            </div>
+                                        )}
                                         <div className="form-group" style={{ display: 'flex', alignItems: 'center', marginTop: '24px' }}>
                                             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                                                 <input 

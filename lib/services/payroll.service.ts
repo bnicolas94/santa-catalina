@@ -4,8 +4,9 @@ import { CajaService } from '@/lib/services/caja.service'
 import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
 import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/payroll/validacionLiquidacion'
 import { fechaClaveRRHH, instanteRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
+import { novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from '@/lib/rrhh/inasistencias'
 import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
-import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
+import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorFechas, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
 import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
 import {
     normalizarRangoLiquidacion,
@@ -57,6 +58,8 @@ export interface ResumenSemanal {
     totalNeto: number
     diasVacaciones: number
     excluirLiquidacionSemanal: boolean
+    diasLicenciaPaga: number
+    licenciaPagaPeriodoCompleto: boolean
     desglosePorDia: DiaTrabajado[]
     seguimientoGuardado?: boolean
     diasSeguimientoGuardados?: number
@@ -178,10 +181,20 @@ export class PayrollService {
 
         if (!empleado) throw new Error('Empleado no encontrado')
 
+        const inasistenciasPorFecha = new Map<string, typeof empleado.inasistencias[number]>()
+        empleado.inasistencias.forEach(inasistencia => {
+            const fecha = fechaClaveRRHH(inasistencia.fecha)
+            const anterior = inasistenciasPorFecha.get(fecha)
+            const seleccionada = anterior
+                ? seleccionarInasistenciaPreferida([anterior, inasistencia])
+                : inasistencia
+            if (seleccionada) inasistenciasPorFecha.set(fecha, seleccionada)
+        })
+
         // Vacaciones nuevas: estado diario. Vacaciones históricas: rango guardado
         // dentro del comprobante, para no perder compatibilidad con lo ya liquidado.
         const fechasVacaciones = new Set(
-            empleado.inasistencias
+            [...inasistenciasPorFecha.values()]
                 .filter(inasistencia => inasistencia.tipo === 'VACACIONES')
                 .map(inasistencia => fechaClaveRRHH(inasistencia.fecha))
         )
@@ -277,9 +290,7 @@ export class PayrollService {
             const esFeriado = !!feriadosMap[fechaStr]
             
             // 3.1 Verificar Inasistencias registradas
-            const inasistencia = empleado.inasistencias.find(i => 
-                fechaClaveRRHH(i.fecha) === fechaStr
-            )
+            const inasistencia = inasistenciasPorFecha.get(fechaStr)
             const esVacaciones = fechasVacaciones.has(fechaStr)
             const tipoInasistencia = esVacaciones ? 'VACACIONES' : inasistencia?.tipo
 
@@ -337,7 +348,23 @@ export class PayrollService {
             desglosePorDia.forEach((dia, indice) => {
                 const guardado = detallePorFecha.get(dia.fecha)
                 if (!guardado) return
-                desglosePorDia[indice] = { ...dia, ...guardado, fecha: dia.fecha }
+
+                // El seguimiento conserva ajustes manuales de horas, pero no puede
+                // reponer un estado de asistencia anterior después de que RR. HH.
+                // cargó una licencia, vacaciones u otra novedad para ese día.
+                const cambioDeNovedad = guardado.tipoInasistencia !== dia.tipoInasistencia
+                    || guardado.motivoInasistencia !== dia.motivoInasistencia
+                if (cambioDeNovedad && novedadRRHHBloqueaSeguimientoGuardado(dia.tipoInasistencia)) {
+                    return
+                }
+                desglosePorDia[indice] = {
+                    ...dia,
+                    ...guardado,
+                    fecha: dia.fecha,
+                    tipoInasistencia: dia.tipoInasistencia,
+                    motivoInasistencia: dia.motivoInasistencia,
+                    esJustificado: dia.esJustificado,
+                }
                 diasSeguimientoGuardados += 1
             })
         }
@@ -376,6 +403,18 @@ export class PayrollService {
         // nunca se incorporan a la liquidación de la semana en curso.
         const totalNeto = sueldoBase + montoHorasExtras + montoHorasFeriado - descuentoPrestamos
         const diasVacaciones = desglosePorDia.filter(dia => dia.tipoInasistencia === 'VACACIONES').length
+        const fechasLicenciaPaga = new Set(
+            desglosePorDia
+                .filter(dia => dia.tipoInasistencia === 'JUSTIFICADA_PAGA')
+                .map(dia => dia.fecha),
+        )
+        const diasLicenciaPaga = fechasLicenciaPaga.size
+        const licenciaPagaPeriodoCompleto = periodoLaboralCubiertoPorFechas(
+            fechaInicio,
+            fechaFin,
+            empleado.diasTrabajoSemana,
+            fechasLicenciaPaga,
+        ) && desglosePorDia.every(dia => dia.horasTrabajadas <= 0)
         const excluirLiquidacionSemanal = periodoLaboralCubiertoPorVacaciones(
             fechaInicio,
             fechaFin,
@@ -402,6 +441,8 @@ export class PayrollService {
             totalNeto,
             diasVacaciones,
             excluirLiquidacionSemanal,
+            diasLicenciaPaga,
+            licenciaPagaPeriodoCompleto,
             desglosePorDia,
             seguimientoGuardado: diasSeguimientoGuardados === desglosePorDia.length,
             diasSeguimientoGuardados,
@@ -973,6 +1014,18 @@ export class PayrollService {
                 movimientosCaja: {
                     select: { id: true, tipo: true, cajaOrigen: true, movimientoReversaDeId: true },
                     orderBy: { createdAt: 'asc' },
+                },
+                cierreMensualMixto: {
+                    select: {
+                        periodo: true,
+                        totalDevengado: true,
+                        netoRecibo: true,
+                        efectivoCalculado: true,
+                        pagos: {
+                            select: { medio: true, monto: true, estado: true, fechaPago: true },
+                            orderBy: { fechaPago: 'asc' },
+                        },
+                    },
                 },
             }
         })

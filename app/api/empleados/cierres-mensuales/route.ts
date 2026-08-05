@@ -50,6 +50,9 @@ export async function POST(request: Request) {
             empleadoId,
             periodo,
             netoRecibo: body.netoRecibo,
+            liquidacionesConciliadas: body.liquidacionesConciliadas,
+            conciliacionConfirmada: body.conciliacionConfirmada,
+            usuarioId: usuario.id,
         })
         return NextResponse.json(cierre, { status: 201 })
     } catch (error) {

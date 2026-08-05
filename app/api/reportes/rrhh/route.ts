@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { periodoAnalyticsValido, periodoMesActual } from '@/lib/analytics/fechas'
 import { fechaClaveRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
+import { seleccionarInasistenciaPreferida } from '@/lib/rrhh/inasistencias'
 import { calcularAusentismoRRHH, calcularPuntualidadRRHH } from '@/lib/analytics/metricas-rrhh'
 import { agruparLiquidacionesPorTipo, etiquetaTipoLiquidacion, normalizarTipoLiquidacion } from '@/lib/analytics/liquidaciones'
 import { fechasDeRangoVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
@@ -173,10 +174,20 @@ export async function GET(request: Request) {
                 .map(fecha => ({ empleadoId: liquidacion.empleadoId, fecha, tipo: 'VACACIONES' }))
         })
 
+        const inasistenciasPeriodoPorDia = new Map<string, typeof inasistenciasPeriodo[number]>()
+        inasistenciasPeriodo.forEach(inasistencia => {
+            const clave = `${inasistencia.empleadoId}:${fechaClaveRRHH(inasistencia.fecha)}`
+            const actual = inasistenciasPeriodoPorDia.get(clave)
+            const seleccionada = actual
+                ? seleccionarInasistenciaPreferida([actual, inasistencia])
+                : inasistencia
+            if (seleccionada) inasistenciasPeriodoPorDia.set(clave, seleccionada)
+        })
+
         const ausentismo = calcularAusentismoRRHH({
             empleados: empleadosActivos,
             ausencias: [
-                ...inasistenciasPeriodo,
+                ...inasistenciasPeriodoPorDia.values(),
                 ...vacacionesLegacy,
                 ...fichadas.filter(fichada => fichada.tipo === 'ausencia').map(fichada => ({
                     empleadoId: fichada.empleadoId,
@@ -544,7 +555,10 @@ export async function GET(request: Request) {
             inasistenciasRango.forEach(inasistencia => {
                 const clave = fechaClaveRRHH(inasistencia.fecha)
                 const actual = inasistenciasPorDia.get(clave)
-                if (!actual || inasistencia.tipo === 'VACACIONES') inasistenciasPorDia.set(clave, inasistencia)
+                const seleccionada = actual
+                    ? seleccionarInasistenciaPreferida([actual, inasistencia])
+                    : inasistencia
+                if (seleccionada) inasistenciasPorDia.set(clave, seleccionada)
             })
             const fechasVacacionesEmpleado = new Set(
                 vacacionesLegacy

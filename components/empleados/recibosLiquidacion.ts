@@ -93,6 +93,7 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
         totalNeto,
         rango: rangoPeriodo(periodo),
         esHorasAdeudadas: tipo === 'HORAS_EXTRAS_ADEUDADAS' || desglose.origen === 'HORAS_EXTRAS_ADEUDADAS',
+        esMixtoEfectivo: tipo === 'MENSUAL_MIXTA' || desglose.origen === 'MENSUAL_MIXTA_EFECTIVO',
         esVacaciones: tipo === 'VACACIONES' || desglose.esVacaciones === true || periodo.toLowerCase().includes('vacaciones'),
         esFinal: tipo === 'FINAL' || desglose.esLiquidacionFinal === true,
     }
@@ -112,6 +113,13 @@ function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRecibo[] {
             nombre: `Horas extras adeudadas (${dinero(calc.desglose.cantidadHoras || recibo.horasExtras)} h)`,
             monto: numero(calc.desglose.monto || recibo.montoHorasExtras || recibo.totalNeto),
             detalle: `Semana de origen: ${String(calc.desglose.semanaOrigen || recibo.periodo)}`,
+        }]
+    }
+    if (calc.esMixtoEfectivo) {
+        return [{
+            nombre: 'Diferencia salarial abonada en efectivo',
+            monto: calc.totalNeto,
+            detalle: 'El importe del recibo oficial se documenta por separado.',
         }]
     }
     if (calc.esVacaciones) {
@@ -141,6 +149,12 @@ function contenidoEspecialClasico(recibo: DatosReciboLiquidacion) {
             <p>Se deja constancia de la recepción de <strong>$${dinero(monto)}</strong> (pesos ${formatCurrencyToWords(monto)}) en concepto exclusivo de horas extras omitidas de una liquidación anterior.</p>
             <table class="tabla-especial"><thead><tr><th>Semana de origen</th><th>Horas</th><th>Valor hora</th><th>Total</th></tr></thead><tbody><tr><td>${escaparHtml(calc.desglose.semanaOrigen || recibo.periodo)}</td><td>${dinero(horas)} h</td><td>$${dinero(valorHora)}</td><td><strong>$${dinero(monto)}</strong></td></tr></tbody></table>
             <p class="detalle-observacion"><strong>Detalle:</strong> ${escaparHtml(calc.desglose.observaciones || 'Sin observaciones')}</p>`
+    }
+    if (calc.esMixtoEfectivo) {
+        return `
+            <div class="titulo-especial"><h2>Recibo de pago en efectivo</h2><p>Cierre mensual mixto</p></div>
+            <p>Se deja constancia de la recepción de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}) en concepto exclusivo de diferencia salarial abonada en efectivo correspondiente al período <strong>${escaparHtml(calc.desglose.periodo || recibo.periodo)}</strong>.</p>
+            <p class="detalle-observacion">El importe liquidado mediante el recibo oficial del contador se documenta por separado y <strong>no integra este comprobante</strong>.</p>`
     }
     if (calc.esVacaciones) {
         const inicio = calc.desglose.fechaInicioGoce ? String(calc.desglose.fechaInicioGoce).split('-').reverse().join('/') : '___'
