@@ -28,6 +28,7 @@ const PRODUCTION_OPTIONS = [
     { code: 'JQ', size: 24 },
 ]
 const PACKAGES_PER_ROUND = 7
+const REJECTION_REASONS = ['Rotura', 'Mal sellado', 'Calidad', 'Producto dañado', 'Otro']
 
 function localDate(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -46,7 +47,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
     const [rounds, setRounds] = useState(1)
     const [closing, setClosing] = useState<any>(null)
     const [produced, setProduced] = useState('')
-    const [rejected, setRejected] = useState(0)
+    const [rejected, setRejected] = useState('0')
     const [reason, setReason] = useState('')
     const [busy, setBusy] = useState(false)
     const [notice, setNotice] = useState<Notice>(null)
@@ -109,7 +110,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
     }
 
     function openClose(lot: any) {
-        setClosing(lot); setProduced(''); setRejected(lot.unidadesRechazadas || 0)
+        setClosing(lot); setProduced(String(lot.unidadesProducidas || '')); setRejected(String(lot.unidadesRechazadas || 0))
         setReason(lot.motivoRechazo || ''); setNotice(null)
     }
 
@@ -120,7 +121,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
             const response = await fetch(`/api/lotes/${closing.id}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ unidadesProducidas: produced, unidadesRechazadas: rejected,
-                    motivoRechazo: rejected > 0 ? reason : '', empleadosRonda: closing.empleadosRonda || 1,
+                    motivoRechazo: Number(rejected) > 0 ? reason : '', empleadosRonda: closing.empleadosRonda || 1,
                     fechaProduccion: closing.fechaProduccion?.split('T')[0] || date,
                     coordinadorId: closing.coordinador?.id || '', ubicacionId: closing.ubicacion?.id || '',
                     estado: 'en_camara', horaFin: new Date().toISOString(),
@@ -182,11 +183,41 @@ function StartModal({ item, rounds, setRounds, busy, onClose, onStart }: any) {
 }
 
 function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason, setReason, busy, onClose, onFinish }: any) {
+    const [activeField, setActiveField] = useState<'produced' | 'rejected'>('produced')
+    const [editedFields, setEditedFields] = useState({ produced: false, rejected: false })
+    const currentValue = activeField === 'produced' ? produced : rejected
+    const updateValue = (value: string) => activeField === 'produced' ? setProduced(value) : setRejected(value || '0')
+    const markAsEdited = () => setEditedFields(current => ({ ...current, [activeField]: true }))
+    const appendDigit = (digit: number) => {
+        if (!editedFields[activeField]) {
+            updateValue(String(digit))
+            markAsEdited()
+            return
+        }
+        const base = currentValue === '0' ? '' : currentValue
+        updateValue(`${base}${digit}`.replace(/^0+(?=\d)/, '').slice(0, 5))
+    }
+    const removeDigit = () => { updateValue(currentValue.slice(0, -1)); markAsEdited() }
+    const clearValue = () => { updateValue(''); markAsEdited() }
+
     return <div className={styles.overlay} onMouseDown={onClose}><section className={`${styles.modal} ${styles.finish}`} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true">
         <header><div><span className={styles.eyebrow}>Lote en curso</span><h2>Finalizar lote</h2><p>{lot.producto.nombre}</p></div><button onClick={onClose}>×</button></header>
-        <div className={styles.fields}><label><span>Paquetes producidos</span><input type="number" min="1" value={produced} placeholder={`Estimado: ${lot.unidadesProducidas}`} autoFocus onChange={event => setProduced(event.target.value.replace(/^0+(?=\d)/, ''))} /></label><label><span>Paquetes rechazados / merma</span><input type="number" min="0" value={rejected} onChange={event => setRejected(Math.max(0,Number(event.target.value)))} /></label></div>
-        {rejected > 0 && <label className={styles.reason}><span>Motivo del rechazo</span><input value={reason} onChange={event => setReason(event.target.value)} placeholder="Ej.: rotura, mal sellado…" /></label>}
-        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onFinish} disabled={busy || !produced || Number(produced) <= 0 || (rejected > 0 && !reason.trim())}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
+        <div className={styles.fields}>
+            <button type="button" className={`${styles.numberField} ${activeField === 'produced' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('produced')}>
+                <span>Paquetes producidos</span><strong>{produced || '—'}</strong><small>Estimado: {lot.unidadesProducidas}</small>
+            </button>
+            <button type="button" className={`${styles.numberField} ${activeField === 'rejected' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('rejected')}>
+                <span>Paquetes rechazados / merma</span><strong>{rejected || '0'}</strong><small>Tocá para modificar</small>
+            </button>
+        </div>
+        <div className={styles.numberPad} aria-label={`Teclado para ${activeField === 'produced' ? 'paquetes producidos' : 'paquetes rechazados'}`}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(number => <button type="button" key={number} onClick={() => appendDigit(number)}>{number}</button>)}
+            <button type="button" className={styles.clearKey} onClick={clearValue}>C</button>
+            <button type="button" onClick={() => appendDigit(0)}>0</button>
+            <button type="button" className={styles.deleteKey} onClick={removeDigit} aria-label="Borrar último número">⌫</button>
+        </div>
+        {Number(rejected) > 0 && <div className={styles.reason}><span>Motivo del rechazo</span><div className={styles.reasonOptions}>{REJECTION_REASONS.map(option => <button type="button" key={option} className={reason === option ? styles.reasonSelected : ''} onClick={() => setReason(option)}>{option}</button>)}</div></div>}
+        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onFinish} disabled={busy || !produced || Number(produced) <= 0 || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
     </section></div>
 }
 
