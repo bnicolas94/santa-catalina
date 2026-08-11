@@ -105,6 +105,7 @@ model Proveedor {
   categoria        String?
   insumos          Insumo[]
   movimientosStock MovimientoStock[]
+  compras          Compra[]
 
   @@map("proveedores")
 }
@@ -247,6 +248,7 @@ model Ubicacion {
   stocksInsumo        StockInsumo[]
   stocks              StockProducto[]
   conteosInsumo       ConteoInsumo[]
+  compras             Compra[]
 
   @@map("ubicaciones")
 }
@@ -314,6 +316,8 @@ model MovimientoStock {
   numeroFactura      String?              @map("numero_factura")
   montoPagado        Float?               @default(0) @map("monto_pagado")
   fechaFactura       DateTime?            @map("fecha_factura")
+  compraId           String?              @map("id_compra")
+  compra             Compra?              @relation(fields: [compraId], references: [id])
   gasto              GastoOperativo?      @relation(fields: [gastoId], references: [id])
   insumo             Insumo               @relation(fields: [insumoId], references: [id])
   loteOrigen         Lote?                @relation(fields: [loteOrigenId], references: [id])
@@ -322,7 +326,32 @@ model MovimientoStock {
   detalleConteo      ConteoInsumoDetalle?
 
   @@index([tipo, fecha])
+  @@index([compraId])
   @@map("movimientos_stock")
+}
+
+model Compra {
+  id               String            @id @default(uuid())
+  numeroFactura    String?           @map("numero_factura")
+  fechaMovimiento  DateTime          @default(now()) @map("fecha_movimiento")
+  fechaFactura     DateTime?         @map("fecha_factura")
+  estadoPago       String            @default("pendiente") @map("estado_pago")
+  costoTotal       Float             @default(0) @map("costo_total")
+  montoPagado      Float             @default(0) @map("monto_pagado")
+  observaciones    String?
+  proveedorId      String?           @map("id_proveedor")
+  ubicacionId      String?           @map("id_ubicacion")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  proveedor        Proveedor?        @relation(fields: [proveedorId], references: [id])
+  ubicacion        Ubicacion?        @relation(fields: [ubicacionId], references: [id])
+  movimientosStock MovimientoStock[]
+  gastos           GastoOperativo[]
+
+  @@index([fechaMovimiento])
+  @@index([estadoPago])
+  @@index([proveedorId, numeroFactura])
+  @@map("compras")
 }
 
 model StockInsumo {
@@ -519,12 +548,15 @@ model GastoOperativo {
   vehiculoId       String?           @map("id_vehiculo")
   kmVehiculo       Int?              @map("km_vehiculo")
   taller           String?
+  compraId         String?           @map("id_compra")
+  compra           Compra?           @relation(fields: [compraId], references: [id])
   categoria        CategoriaGasto    @relation(fields: [categoriaId], references: [id])
   ubicacion        Ubicacion?        @relation(fields: [ubicacionId], references: [id])
   vehiculo         Vehiculo?         @relation(fields: [vehiculoId], references: [id])
   movimientosStock MovimientoStock[]
   movimientosCaja  MovimientoCaja[]
 
+  @@index([compraId])
   @@map("gastos_operativos")
 }
 

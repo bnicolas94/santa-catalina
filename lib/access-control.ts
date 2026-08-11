@@ -49,6 +49,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/movimientos-producto', permissions: ['permisoProduccion', 'permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
 
     // Catálogo, compras y stock.
+    { path: '/api/compras', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/familias-insumo', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/fichas-tecnicas', permissions: ['permisoStock', 'permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },

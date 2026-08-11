@@ -1,115 +1,133 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { CajaService } from '@/lib/services/caja.service'
+import { ComprasService } from '@/lib/services/compras.service'
+import {
+    CompraValidationError,
+    distribuirPagoEntreItems,
+    estadoPagoDesdeMontos,
+    numeroPositivo,
+    validarCajaCompra,
+} from '@/lib/compras/validacion'
 
-// PUT /api/movimientos-stock/:id/pago — Registrar pago total o parcial (a cuenta)
+// PUT /api/movimientos-stock/:id/pago — registra un pago sobre la compra completa.
 export async function PUT(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params
-        
-        // Accept optional cajaOrigen and monto from body
-        let selectedCaja = 'caja_chica'
-        let montoParcial: number | null = null
+        let body: Record<string, unknown> = {}
         try {
-            const body = await request.json()
-            if (body.cajaOrigen) selectedCaja = body.cajaOrigen
-            if (body.monto !== undefined && body.monto !== null && body.monto !== '') {
-                montoParcial = parseFloat(String(body.monto).replace(',', '.'))
-            }
-        } catch { /* no body = defaults */ }
-
-        const movimiento = await prisma.movimientoStock.findUnique({
-            where: { id },
-            include: { insumo: true, proveedor: true }
-        })
-
-        if (!movimiento || movimiento.tipo !== 'entrada') {
-            return NextResponse.json({ error: 'Movimiento no encontrado o no es una compra' }, { status: 404 })
+            body = await request.json() as Record<string, unknown>
+        } catch {
+            // El cuerpo es opcional: sin monto se cancela todo el saldo.
         }
+        const cajaOrigen = validarCajaCompra(body.cajaOrigen || 'caja_chica')
 
-        if (movimiento.estadoPago === 'pagado') {
-            return NextResponse.json({ error: 'El movimiento ya se encuentra totalmente pagado' }, { status: 400 })
-        }
-
-        if (!movimiento.costoTotal) {
-            return NextResponse.json({ error: 'El movimiento no tiene un costo total registrado' }, { status: 400 })
-        }
-
-        const yaPagado = movimiento.montoPagado || 0
-        const saldoPendiente = movimiento.costoTotal - yaPagado
-
-        if (saldoPendiente <= 0) {
-            return NextResponse.json({ error: 'No hay saldo pendiente en este movimiento' }, { status: 400 })
-        }
-
-        // Si no se envía monto, se paga todo el saldo pendiente
-        const montoAPagar = montoParcial !== null ? montoParcial : saldoPendiente
-
-        if (montoAPagar <= 0) {
-            return NextResponse.json({ error: 'El monto a pagar debe ser mayor a 0' }, { status: 400 })
-        }
-
-        if (montoAPagar > saldoPendiente + 0.01) {
-            return NextResponse.json({ error: `El monto ($${montoAPagar.toLocaleString('es-AR')}) supera el saldo pendiente ($${saldoPendiente.toLocaleString('es-AR')})` }, { status: 400 })
-        }
-
-        const nuevoMontoPagado = yaPagado + montoAPagar
-        const quedaCompletamentePagado = Math.abs(nuevoMontoPagado - movimiento.costoTotal) < 0.01
-
-        const actualizado = await prisma.$transaction(async (tx) => {
-            // 1. Crear categoria Proveedores si no existe
-            let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
-            if (!cat) {
-                cat = await tx.categoriaGasto.create({ data: { nombre: 'Proveedores', color: '#3498DB' } })
-            }
-
-            // 2. Crear Gasto Operativo por el monto abonado
-            const gasto = await tx.gastoOperativo.create({
-                data: {
-                    fecha: new Date(),
-                    monto: montoAPagar,
-                    descripcion: quedaCompletamentePagado
-                        ? `Pago final de deuda — ${movimiento.insumo.nombre} (Prov: ${movimiento.proveedor?.nombre || 'General'})`
-                        : `Pago a cuenta — ${movimiento.insumo.nombre} (Prov: ${movimiento.proveedor?.nombre || 'General'}) — Abonado: $${nuevoMontoPagado.toLocaleString('es-AR')} / $${movimiento.costoTotal!.toLocaleString('es-AR')}`,
-                    categoriaId: cat.id
-                }
-            })
-
-            // 3. Crear Movimiento de Caja
-            await CajaService.createMovimientoEnTx(tx, {
-                tipo: 'egreso',
-                concepto: 'pago_proveedor',
-                monto: montoAPagar,
-                medioPago: selectedCaja.includes('mercado_pago') ? 'transferencia' : 'efectivo',
-                cajaOrigen: selectedCaja,
-                descripcion: gasto.descripcion,
-                gastoId: gasto.id,
-                fecha: new Date(),
-            })
-
-            // 4. Actualizar el movimiento de stock
-            const movActualizado = await tx.movimientoStock.update({
+        const actualizado = await prisma.$transaction(async tx => {
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'pago-compra:' + id}))::text AS lock_result`
+            const movimiento = await tx.movimientoStock.findUnique({
                 where: { id },
-                data: {
-                    estadoPago: quedaCompletamentePagado ? 'pagado' : 'a_cuenta',
-                    montoPagado: nuevoMontoPagado,
-                    gastoId: gasto.id
-                },
-                include: {
-                    insumo: { select: { id: true, nombre: true, unidadMedida: true } },
-                    proveedor: { select: { id: true, nombre: true } },
-                }
+                include: { compra: true, insumo: true, proveedor: true },
+            })
+            if (!movimiento || movimiento.tipo !== 'entrada') {
+                throw new CompraValidationError('Movimiento no encontrado o no es una compra')
+            }
+            if (!movimiento.costoTotal) {
+                throw new CompraValidationError('La compra no tiene un costo total registrado')
+            }
+
+            if (movimiento.compraId) {
+                await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'pago-compra:' + movimiento.compraId}))::text AS lock_result`
+            }
+
+            let compraId = movimiento.compraId
+            if (!compraId) {
+                const compra = await tx.compra.create({
+                    data: {
+                        proveedorId: movimiento.proveedorId,
+                        ubicacionId: movimiento.ubicacionId,
+                        numeroFactura: movimiento.numeroFactura,
+                        fechaMovimiento: movimiento.fecha,
+                        fechaFactura: movimiento.fechaFactura,
+                        estadoPago: movimiento.estadoPago || 'pendiente',
+                        costoTotal: movimiento.costoTotal,
+                        montoPagado: movimiento.montoPagado || 0,
+                        observaciones: movimiento.observaciones,
+                        movimientosStock: { connect: { id: movimiento.id } },
+                    },
+                })
+                compraId = compra.id
+            }
+
+            const items = await tx.movimientoStock.findMany({
+                where: { compraId, tipo: 'entrada' },
+                select: { id: true, costoTotal: true, montoPagado: true },
+            })
+            const costoTotal = items.reduce((acc, item) => acc + (item.costoTotal || 0), 0)
+            const yaPagado = items.reduce((acc, item) => acc + (item.montoPagado || 0), 0)
+            const saldoPendiente = costoTotal - yaPagado
+            if (saldoPendiente <= 0.01) throw new CompraValidationError('La compra ya está totalmente pagada')
+
+            const montoAPagar = body.monto === undefined || body.monto === null || body.monto === ''
+                ? saldoPendiente
+                : numeroPositivo(body.monto, 'Monto a pagar')
+            const distribucion = distribuirPagoEntreItems(items, montoAPagar)
+            const nuevoMontoPagado = yaPagado + montoAPagar
+            const nuevoEstado = estadoPagoDesdeMontos(costoTotal, nuevoMontoPagado)
+
+            const compra = await tx.compra.findUnique({
+                where: { id: compraId },
+                include: { proveedor: { select: { nombre: true } } },
+            })
+            if (!compra) throw new CompraValidationError('Compra no encontrada')
+
+            await ComprasService.registrarPagoEnTx(tx, {
+                compraId,
+                monto: montoAPagar,
+                pagos: [{ cajaOrigen, monto: montoAPagar }],
+                fecha: new Date(),
+                ubicacionId: compra.ubicacionId,
+                descripcion: nuevoEstado === 'pagado'
+                    ? `Pago final de compra${compra.numeroFactura ? ` Fac. ${compra.numeroFactura}` : ''} - ${compra.proveedor?.nombre || 'General'}`
+                    : `Pago a cuenta de compra${compra.numeroFactura ? ` Fac. ${compra.numeroFactura}` : ''} - ${compra.proveedor?.nombre || 'General'}`,
             })
 
-            return movActualizado
+            for (const item of items) {
+                const asignado = distribucion.get(item.id) || 0
+                await tx.movimientoStock.update({
+                    where: { id: item.id },
+                    data: {
+                        montoPagado: { increment: asignado },
+                        estadoPago: nuevoEstado,
+                    },
+                })
+            }
+            await tx.compra.update({
+                where: { id: compraId },
+                data: {
+                    costoTotal,
+                    montoPagado: nuevoMontoPagado,
+                    estadoPago: nuevoEstado,
+                },
+            })
+
+            return tx.movimientoStock.findUnique({
+                where: { id },
+                include: {
+                    insumo: { select: { id: true, nombre: true, unidadMedida: true, unidadSecundaria: true } },
+                    proveedor: { select: { id: true, nombre: true } },
+                    compra: true,
+                },
+            })
         })
 
         return NextResponse.json(actualizado)
     } catch (error) {
-        console.error('Error actualizando pago de movimiento:', error)
-        return NextResponse.json({ error: 'Error al actualizar el estado de pago' }, { status: 500 })
+        if (error instanceof CompraValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        console.error('Error registrando pago de compra:', error)
+        return NextResponse.json({ error: 'Error al registrar el pago' }, { status: 500 })
     }
 }

@@ -1,215 +1,230 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { CajaService } from '@/lib/services/caja.service'
+import { ComprasService } from '@/lib/services/compras.service'
+import {
+    CompraValidationError,
+    estadoPagoDesdeMontos,
+    numeroNoNegativo,
+    numeroPositivo,
+    validarMontoPagado,
+    validarPagosDivididos,
+} from '@/lib/compras/validacion'
+
+type ItemFactura = {
+    insumoId: string | null
+    insumoNombre: string | null
+    unidadMedida: string
+    cantidad: number
+    cantidadSecundaria: number | null
+    costoTotal: number
+    actualizarCosto: boolean
+    fechaVencimiento: Date | null
+}
+
+function fechaCivil(value: unknown, fallback = new Date()): Date {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? new Date(`${value}T12:00:00Z`)
+        : fallback
+}
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json()
-        console.log('--- POST /api/movimientos-stock/factura PAYLOAD:', JSON.stringify(body, null, 2))
-        
-        const { 
-            proveedorId, 
-            numeroFactura, 
-            fechaMovimiento, 
-            fechaFactura,
-            estadoPago, 
-            cajaOrigen, 
-            ubicacionId, 
-            observaciones,
-            items 
-        } = body
-
-        if ((!proveedorId && !body.proveedorNombre) || !ubicacionId || !items || !Array.isArray(items) || items.length === 0) {
-            return NextResponse.json({ error: 'Faltan campos obligatorios o ítems' }, { status: 400 })
+        const body = await request.json() as Record<string, unknown>
+        const proveedorIdSolicitado = String(body.proveedorId || '') || null
+        const proveedorNombre = String(body.proveedorNombre || '').trim() || null
+        const ubicacionId = String(body.ubicacionId || '')
+        if ((!proveedorIdSolicitado && !proveedorNombre) || !ubicacionId) {
+            throw new CompraValidationError('Seleccione proveedor y ubicación')
+        }
+        if (!Array.isArray(body.items) || body.items.length === 0) {
+            throw new CompraValidationError('Debe agregar al menos un ítem')
         }
 
-        const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : new Date()
-        const parsedFechaFactura = fechaFactura ? new Date(`${fechaFactura}T12:00:00Z`) : null
-        const selectedCaja = cajaOrigen || 'caja_madre'
-
-        // 1. Calcular costo total de la factura
-        const costoTotalFactura = items.reduce((acc: number, item: any) => acc + (parseFloat(String(item.costoTotal || 0).replace(',', '.'))), 0)
-        
-        const esACuenta = estadoPago === 'a_cuenta'
-        const montoACuentaFloat = body.montoPagado ? parseFloat(String(body.montoPagado).replace(',', '.')) : 0
-        const montoADescontar = estadoPago === 'pagado' ? costoTotalFactura : (esACuenta ? montoACuentaFloat : 0)
-
-        const result = await prisma.$transaction(async (tx) => {
-            let gastoId = null
-            
-            // 2. Resolver o Crear Proveedor (Upsert Seguro)
-            let finalProveedorId = proveedorId
-            let resolvedProveedorNombre = body.proveedorNombre || 'Proveedor'
-
-            if (!finalProveedorId && body.proveedorNombre) {
-                // Chequear si existe por string
-                const provExistente = await tx.proveedor.findFirst({
-                    where: { nombre: { equals: body.proveedorNombre, mode: 'insensitive' } }
-                })
-                if (provExistente) {
-                    finalProveedorId = provExistente.id
-                    resolvedProveedorNombre = provExistente.nombre
-                } else {
-                    const nuevoProv = await tx.proveedor.create({
-                        data: { nombre: body.proveedorNombre }
-                    })
-                    finalProveedorId = nuevoProv.id
-                    resolvedProveedorNombre = nuevoProv.nombre
-                }
-            } else if (finalProveedorId) {
-                const provParams = await tx.proveedor.findUnique({ where: { id: finalProveedorId } })
-                if (provParams) resolvedProveedorNombre = provParams.nombre
+        const items: ItemFactura[] = body.items.map((raw, index) => {
+            if (!raw || typeof raw !== 'object') throw new CompraValidationError(`Ítem ${index + 1} inválido`)
+            const item = raw as Record<string, unknown>
+            const insumoId = String(item.insumoId || '') || null
+            const insumoNombre = String(item.insumoNombre || '').trim() || null
+            if (!insumoId && !insumoNombre) throw new CompraValidationError(`Seleccione el insumo del ítem ${index + 1}`)
+            return {
+                insumoId,
+                insumoNombre,
+                unidadMedida: String(item.unidadMedida || 'unidades'),
+                cantidad: numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`),
+                cantidadSecundaria: item.cantidadSecundaria
+                    ? numeroPositivo(item.cantidadSecundaria, `Cantidad secundaria del ítem ${index + 1}`)
+                    : null,
+                costoTotal: numeroNoNegativo(item.costoTotal, `Costo del ítem ${index + 1}`),
+                actualizarCosto: item.actualizarCosto === true,
+                fechaVencimiento: item.fechaVencimiento ? fechaCivil(item.fechaVencimiento) : null,
             }
-
-            // 3. Si hay costo y está pagado o a cuenta, creamos UN solo gasto
-            if (montoADescontar > 0) {
-                console.log(`Factura: Processing ${estadoPago} entry financial records for amount:`, montoADescontar)
-                
-                let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
-                if (!cat) {
-                    cat = await tx.categoriaGasto.create({ data: { nombre: 'Proveedores', color: '#3498DB' } })
-                }
-
-                const gasto = await tx.gastoOperativo.create({
-                    data: {
-                        fecha: parsedFecha,
-                        monto: montoADescontar,
-                        descripcion: esACuenta
-                            ? `Pago a cuenta Fac. ${numeroFactura || 'S/N'} - ${resolvedProveedorNombre} (Abonado: $${montoADescontar.toLocaleString('es-AR')} / $${costoTotalFactura.toLocaleString('es-AR')})`
-                            : `Factura ${numeroFactura || 'S/N'} - ${resolvedProveedorNombre}`,
-                        categoriaId: cat.id
-                    }
-                })
-                gastoId = gasto.id
-
-                if (body.pagoDividido && body.pagos && Array.isArray(body.pagos)) {
-                    for (const pago of body.pagos) {
-                        const montoPago = parseFloat(String(pago.monto).replace(',', '.'));
-                        if (montoPago > 0) {
-                            await CajaService.createMovimientoEnTx(tx, {
-                                tipo: 'egreso',
-                                concepto: 'pago_proveedor',
-                                monto: montoPago,
-                                medioPago: pago.cajaOrigen?.includes('mercado_pago') ? 'transferencia' : 'efectivo',
-                                cajaOrigen: pago.cajaOrigen,
-                                descripcion: `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
-                                gastoId: gastoId,
-                                fecha: parsedFecha,
-                            })
-                        }
-                    }
-                } else {
-                    await CajaService.createMovimientoEnTx(tx, {
-                        tipo: 'egreso',
-                        concepto: 'pago_proveedor',
-                        monto: montoADescontar,
-                        medioPago: selectedCaja.includes('mercado_pago') ? 'transferencia' : 'efectivo',
-                        cajaOrigen: selectedCaja,
-                        descripcion: esACuenta
-                            ? `Pago a cuenta Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`
-                            : `Pago Fac. ${numeroFactura || 'S/N'} - ${observaciones || 'Compra Insumos'}`,
-                        gastoId: gastoId,
-                        fecha: parsedFecha,
-                    })
-                }
-            }
-
-            // 4. Crear cada MovimientoStock y actualizar Insumo
-            const creados = []
-            const newInsumosCache = new Map<string, string>()
-            
-            for (const item of items) {
-                const cantidadFloat = parseFloat(String(item.cantidad).replace(',', '.'))
-                const movCantSec = item.cantidadSecundaria ? parseFloat(String(item.cantidadSecundaria).replace(',', '.')) : null
-                const costoItemFloat = item.costoTotal ? parseFloat(String(item.costoTotal).replace(',', '.')) : null
-
-                let finalInsumoId = item.insumoId
-                if (!finalInsumoId && item.insumoNombre) {
-                    const normalizedName = item.insumoNombre.trim().toLowerCase()
-                    if (newInsumosCache.has(normalizedName)) {
-                        finalInsumoId = newInsumosCache.get(normalizedName)
-                    } else {
-                        const insExistente = await tx.insumo.findFirst({
-                            where: { nombre: { equals: item.insumoNombre.trim(), mode: 'insensitive' } }
-                        })
-                        if (insExistente) {
-                            finalInsumoId = insExistente.id
-                            newInsumosCache.set(normalizedName, finalInsumoId)
-                        } else {
-                            const nuevoIns = await tx.insumo.create({
-                                data: {
-                                    nombre: item.insumoNombre,
-                                    unidadMedida: item.unidadMedida || 'unidades',
-                                    proveedorId: finalProveedorId || null
-                                }
-                            })
-                            finalInsumoId = nuevoIns.id
-                            newInsumosCache.set(normalizedName, finalInsumoId)
-                        }
-                    }
-                }
-
-                const movimiento = await tx.movimientoStock.create({
-                    data: {
-                        insumoId: finalInsumoId,
-                        tipo: 'entrada',
-                        fecha: parsedFecha,
-                        cantidad: cantidadFloat,
-                        cantidadSecundaria: movCantSec,
-                        observaciones: observaciones || null,
-                        proveedorId: finalProveedorId || null,
-                        numeroFactura: numeroFactura || null,
-                        costoTotal: costoItemFloat,
-                        estadoPago: estadoPago || 'pendiente',
-                        montoPagado: estadoPago === 'pagado' ? costoItemFloat : (esACuenta && costoItemFloat ? (montoACuentaFloat / costoTotalFactura * (costoItemFloat || 0)) : 0),
-                        gastoId,
-                        fechaVencimiento: item.fechaVencimiento ? new Date(item.fechaVencimiento) : null,
-                        fechaFactura: parsedFechaFactura,
-                        ubicacionId
-                    }
-                })
-                creados.push(movimiento)
-
-                // Actualizar Insumo Global
-                const dataInsumo: any = { 
-                    stockActual: { increment: cantidadFloat },
-                    stockActualSecundario: { increment: movCantSec || 0 }
-                }
-
-                if (costoItemFloat && item.actualizarCosto && cantidadFloat > 0) {
-                    dataInsumo.precioUnitario = costoItemFloat / cantidadFloat
-                }
-                
-                await tx.insumo.update({
-                    where: { id: finalInsumoId },
-                    data: dataInsumo
-                })
-
-                // Actualizar StockInsumo para ubicación específica
-                await tx.stockInsumo.upsert({
-                    where: { insumoId_ubicacionId: { insumoId: finalInsumoId, ubicacionId } },
-                    update: {
-                        cantidad: { increment: cantidadFloat },
-                        cantidadSecundaria: { increment: movCantSec || 0 }
-                    },
-                    create: {
-                        insumoId: finalInsumoId,
-                        ubicacionId,
-                        cantidad: cantidadFloat,
-                        cantidadSecundaria: movCantSec || 0
-                    }
-                })
-            }
-
-            return creados
         })
 
-        return NextResponse.json({ message: 'Factura procesada correctamente', count: result.length }, { status: 201 })
-    } catch (error: any) {
-        console.error('CRITICAL ERROR in POST /api/movimientos-stock/factura:', error)
-        return NextResponse.json({ 
-            error: 'Error al registrar la factura',
-            details: error instanceof Error ? error.message : String(error)
-        }, { status: 500 })
+        const costoTotal = items.reduce((acc, item) => acc + item.costoTotal, 0)
+        const estadoSolicitado = String(body.estadoPago || 'pendiente')
+        if (!['pagado', 'pendiente', 'a_cuenta'].includes(estadoSolicitado)) {
+            throw new CompraValidationError('Estado de pago inválido')
+        }
+        const montoPagado = costoTotal === 0
+            ? 0
+            : estadoSolicitado === 'pagado'
+                ? costoTotal
+                : estadoSolicitado === 'a_cuenta'
+                    ? numeroPositivo(body.montoPagado, 'Monto pagado')
+                    : 0
+        validarMontoPagado(costoTotal, montoPagado)
+        if (estadoSolicitado === 'a_cuenta' && montoPagado >= costoTotal) {
+            throw new CompraValidationError('El pago a cuenta debe ser menor al total')
+        }
+        const estadoPago = estadoPagoDesdeMontos(costoTotal, montoPagado)
+        const cajaOrigen = String(body.cajaOrigen || 'caja_chica')
+        const pagos = montoPagado > 0
+            ? validarPagosDivididos(body.pagoDividido ? body.pagos : undefined, montoPagado, cajaOrigen)
+            : []
+        const fechaMovimiento = fechaCivil(body.fechaMovimiento)
+        const fechaFactura = body.fechaFactura ? fechaCivil(body.fechaFactura) : null
+        const numeroFactura = String(body.numeroFactura || '').trim() || null
+        const observaciones = String(body.observaciones || '').trim() || null
+
+        const result = await prisma.$transaction(async tx => {
+            let proveedorId = proveedorIdSolicitado
+            let nombreProveedor = proveedorNombre || 'Proveedor'
+            if (!proveedorId && proveedorNombre) {
+                const existente = await tx.proveedor.findFirst({
+                    where: { nombre: { equals: proveedorNombre, mode: 'insensitive' } },
+                })
+                if (existente) {
+                    proveedorId = existente.id
+                    nombreProveedor = existente.nombre
+                } else {
+                    const creado = await tx.proveedor.create({ data: { nombre: proveedorNombre } })
+                    proveedorId = creado.id
+                    nombreProveedor = creado.nombre
+                }
+            } else if (proveedorId) {
+                const proveedor = await tx.proveedor.findUnique({ where: { id: proveedorId } })
+                if (!proveedor) throw new CompraValidationError('Proveedor no encontrado')
+                nombreProveedor = proveedor.nombre
+            }
+
+            const compra = await tx.compra.create({
+                data: {
+                    proveedorId,
+                    ubicacionId,
+                    numeroFactura,
+                    fechaMovimiento,
+                    fechaFactura,
+                    estadoPago,
+                    costoTotal,
+                    montoPagado,
+                    observaciones,
+                },
+            })
+
+            let gastoId: string | null = null
+            if (montoPagado > 0) {
+                const gasto = await ComprasService.registrarPagoEnTx(tx, {
+                    compraId: compra.id,
+                    monto: montoPagado,
+                    pagos,
+                    fecha: fechaMovimiento,
+                    ubicacionId,
+                    descripcion: estadoPago === 'a_cuenta'
+                        ? `Pago a cuenta Fac. ${numeroFactura || 'S/N'} - ${nombreProveedor}`
+                        : `Factura ${numeroFactura || 'S/N'} - ${nombreProveedor}`,
+                })
+                gastoId = gasto.id
+            }
+
+            const cacheInsumos = new Map<string, string>()
+            const movimientos = []
+            for (const item of items) {
+                let insumoId = item.insumoId
+                if (!insumoId && item.insumoNombre) {
+                    const clave = item.insumoNombre.toLocaleLowerCase('es-AR')
+                    insumoId = cacheInsumos.get(clave) || null
+                    if (!insumoId) {
+                        const existente = await tx.insumo.findFirst({
+                            where: { nombre: { equals: item.insumoNombre, mode: 'insensitive' } },
+                        })
+                        if (existente) {
+                            insumoId = existente.id
+                        } else {
+                            const creado = await tx.insumo.create({
+                                data: {
+                                    nombre: item.insumoNombre,
+                                    unidadMedida: item.unidadMedida,
+                                    proveedorId,
+                                },
+                            })
+                            insumoId = creado.id
+                        }
+                        cacheInsumos.set(clave, insumoId)
+                    }
+                }
+                if (!insumoId) throw new CompraValidationError('No se pudo resolver un insumo de la factura')
+
+                const pagoItem = costoTotal > 0 ? montoPagado * (item.costoTotal / costoTotal) : 0
+                const movimiento = await tx.movimientoStock.create({
+                    data: {
+                        insumoId,
+                        compraId: compra.id,
+                        tipo: 'entrada',
+                        fecha: fechaMovimiento,
+                        cantidad: item.cantidad,
+                        cantidadSecundaria: item.cantidadSecundaria,
+                        observaciones,
+                        proveedorId,
+                        numeroFactura,
+                        costoTotal: item.costoTotal,
+                        estadoPago,
+                        montoPagado: pagoItem,
+                        gastoId,
+                        fechaVencimiento: item.fechaVencimiento,
+                        fechaFactura,
+                        ubicacionId,
+                    },
+                })
+                movimientos.push(movimiento)
+
+                await tx.insumo.update({
+                    where: { id: insumoId },
+                    data: {
+                        stockActual: { increment: item.cantidad },
+                        stockActualSecundario: { increment: item.cantidadSecundaria || 0 },
+                        ...(item.actualizarCosto && item.costoTotal > 0
+                            ? { precioUnitario: item.costoTotal / item.cantidad }
+                            : {}),
+                    },
+                })
+                await tx.stockInsumo.upsert({
+                    where: { insumoId_ubicacionId: { insumoId, ubicacionId } },
+                    update: {
+                        cantidad: { increment: item.cantidad },
+                        cantidadSecundaria: { increment: item.cantidadSecundaria || 0 },
+                    },
+                    create: {
+                        insumoId,
+                        ubicacionId,
+                        cantidad: item.cantidad,
+                        cantidadSecundaria: item.cantidadSecundaria || 0,
+                    },
+                })
+            }
+
+            return { compra, count: movimientos.length }
+        })
+
+        return NextResponse.json({
+            message: 'Factura procesada correctamente',
+            compraId: result.compra.id,
+            count: result.count,
+        }, { status: 201 })
+    } catch (error) {
+        if (error instanceof CompraValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        console.error('Error en POST /api/movimientos-stock/factura:', error)
+        return NextResponse.json({ error: 'Error al registrar la factura' }, { status: 500 })
     }
 }

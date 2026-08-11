@@ -3,8 +3,27 @@
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: any[]; proveedor?: { id: string; nombre: string } }
+interface StockInsumoResumen { ubicacionId: string; cantidad: number }
+interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string } }
 interface Proveedor { id: string; nombre: string }
+interface Ubicacion { id: string; nombre: string; tipo: string }
+interface CajaCompra { tipo: string }
+interface PagoForm { cajaOrigen: string; monto: string }
+interface ItemFacturaForm {
+    insumoId: string
+    insumoNombre: string
+    cantidad: string
+    cantidadSecundaria: string
+    costoTotal: string
+    actualizarCosto: boolean
+    useBultos: boolean
+    bultos: string
+    unidadesPorBulto: string
+    fechaVencimiento: string
+    unidadMedida: string
+    unidadSecundaria?: string
+}
+interface CompraResumen { id: string; costoTotal: number; montoPagado: number; estadoPago: string; numeroFactura: string | null }
 interface Movimiento {
     id: string; tipo: string; cantidad: number; cantidadSecundaria: number | null; fecha: string; observaciones: string | null
     costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null; numeroFactura: string | null;
@@ -12,6 +31,7 @@ interface Movimiento {
     insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
     proveedor: { id: string; nombre: string } | null
     ubicacion: { id: string; nombre: string } | null
+    compra: CompraResumen | null
 }
 
 function ComprasContent() {
@@ -19,19 +39,16 @@ function ComprasContent() {
     const [movimientos, setMovimientos] = useState<Movimiento[]>([])
     const [insumos, setInsumos] = useState<Insumo[]>([])
     const [proveedores, setProveedores] = useState<Proveedor[]>([])
-    const [ubicaciones, setUbicaciones] = useState<any[]>([])
-    const [selectedUbi, setSelectedUbi] = useState<string>('')
-    const [stockProductos, setStockProductos] = useState<any[]>([])
-    const [cajas, setCajas] = useState<any[]>([])
+    const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
+    const [cajas, setCajas] = useState<CajaCompra[]>([])
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[], ubicacionId: '', observaciones: '', items: [] as any[], montoPagado: '' })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '' })
     const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
     const [isManualInsumo, setIsManualInsumo] = useState(false)
-    const [filterTipo, setFilterTipo] = useState('')
     const [filterInsumo, setFilterInsumo] = useState('')
     const [filterFecha, setFilterFecha] = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD local
     const [filterPago, setFilterPago] = useState('')
@@ -46,9 +63,10 @@ function ComprasContent() {
     const [form, setForm] = useState({
         insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '',
         costoTotal: '', estadoPago: 'pagado', actualizarCosto: true,
+        montoPagado: '',
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
         fechaFactura: '',
-        ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as any[],
+        ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as PagoForm[],
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -65,32 +83,26 @@ function ComprasContent() {
 
     async function fetchData() {
         try {
-            const [movRes, insRes, provRes, ubiRes, stockProdRes, cajasRes] = await Promise.all([
-                fetch('/api/movimientos-stock'),
+            const [movRes, insRes, provRes, ubiRes, cajasRes] = await Promise.all([
+                fetch('/api/movimientos-stock?tipo=entrada&limit=500'),
                 fetch('/api/insumos'),
-                fetch('/api/proveedores'),
+                fetch('/api/proveedores?activos=true'),
                 fetch('/api/operaciones/ubicaciones'),
-                fetch('/api/stock-producto'),
-                fetch('/api/caja/saldos')
+                fetch('/api/compras/cajas')
             ])
             const movData = await movRes.json()
             const insData = await insRes.json()
             const provData = await provRes.json()
             const ubiData = await ubiRes.json()
-            const stockProdData = await stockProdRes.json()
-            const cajasData = await cajasRes.json()
+            const cajasData: unknown = await cajasRes.json()
 
-            setMovimientos(Array.isArray(movData) ? movData.filter((m: any) => m.tipo === 'entrada') : [])
+            setMovimientos(Array.isArray(movData) ? movData : [])
             setInsumos(Array.isArray(insData) ? insData : [])
             setProveedores(Array.isArray(provData) ? provData : [])
             setUbicaciones(Array.isArray(ubiData) ? ubiData : [])
-            setStockProductos(Array.isArray(stockProdData) ? stockProdData : [])
             
-            if (cajasData && !cajasData.error) {
-                // Convertir el objeto de cajas en un array para el select
-                const list = Object.values(cajasData).filter((c: any) => 
-                    c && c.tipo && c.tipo !== 'caja_madre' && c.tipo !== 'local'
-                )
+            if (Array.isArray(cajasData)) {
+                const list = cajasData.filter((c): c is CajaCompra => Boolean(c && typeof c === 'object' && typeof c.tipo === 'string'))
                 setCajas(list)
             }
         } catch { setError('Error al cargar datos') } finally { setLoading(false) }
@@ -109,16 +121,16 @@ function ComprasContent() {
                 unidadesPorBulto: String(form.unidadesPorBulto).replace(',', '.'),
             }
 
-            if (form.tipo === 'entrada' && (form.estadoPago === 'pagado' || form.estadoPago === 'a_cuenta') && form.pagoDividido) {
-                const totalEsperado = form.estadoPago === 'a_cuenta' ? parseFloat((form as any).montoPagado || '0') : parseFloat(form.costoTotal || '0');
+            if (!editingId && form.tipo === 'entrada' && (form.estadoPago === 'pagado' || form.estadoPago === 'a_cuenta') && form.pagoDividido) {
+                const totalEsperado = form.estadoPago === 'a_cuenta' ? parseFloat(form.montoPagado || '0') : parseFloat(form.costoTotal || '0');
                 const totalCalculado = form.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
                 if (Math.abs(totalCalculado - totalEsperado) > 0.01) {
                     return setError('La suma de los pagos divididos debe ser exactamente igual al monto a pagar ($' + totalEsperado.toLocaleString('es-AR') + ')');
                 }
             }
 
-            if (form.tipo === 'entrada' && form.estadoPago === 'a_cuenta') {
-                const montoP = parseFloat((form as any).montoPagado || '0');
+            if (!editingId && form.tipo === 'entrada' && form.estadoPago === 'a_cuenta') {
+                const montoP = parseFloat(form.montoPagado || '0');
                 const costoT = parseFloat(form.costoTotal || '0');
                 if (montoP <= 0) return setError('Ingrese el monto a pagar a cuenta');
                 if (montoP >= costoT) return setError('El monto a cuenta debe ser menor al costo total. Si paga todo, use "Pagado".');
@@ -129,7 +141,7 @@ function ComprasContent() {
                 cantidad: cleansingForm.useBultos 
                     ? String(parseFloat(cleansingForm.bultos || '0') * parseFloat(cleansingForm.unidadesPorBulto || '1')) 
                     : cleansingForm.cantidad,
-                montoPagado: (form as any).montoPagado ? String((form as any).montoPagado).replace(',', '.') : undefined,
+                montoPagado: form.montoPagado ? String(form.montoPagado).replace(',', '.') : undefined,
             }
 
             const res = await fetch(editingId ? `/api/movimientos-stock/${editingId}` : '/api/movimientos-stock', {
@@ -141,7 +153,7 @@ function ComprasContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', montoPagado: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -163,7 +175,7 @@ function ComprasContent() {
         const itemToAdd = { 
             ...tempItem, 
             cantidad: finalCantidad,
-            insumoNombre: isManualInsumo ? tempItem.insumoNombre : insData?.nombre,
+            insumoNombre: isManualInsumo ? tempItem.insumoNombre : (insData?.nombre || ''),
             unidadMedida: isManualInsumo ? (tempItem.unidadMedida || 'unidades') : (insData?.unidadMedida || 'u'),
             unidadSecundaria: insData?.unidadSecundaria
         }
@@ -227,7 +239,8 @@ function ComprasContent() {
             observaciones: mov.observaciones || '',
             proveedorId: mov.proveedor?.id || '',
             costoTotal: mov.costoTotal ? String(mov.costoTotal) : '',
-            estadoPago: mov.estadoPago || 'pagado',
+            estadoPago: mov.compra?.estadoPago || mov.estadoPago || 'pendiente',
+            montoPagado: String(mov.compra?.montoPagado || mov.montoPagado || ''),
             actualizarCosto: false, // Por defecto false al editar para no pisar sin querer
             useBultos: false,
             bultos: '',
@@ -247,7 +260,9 @@ function ComprasContent() {
         if (cajas.length === 0) return setError('No hay cajas disponibles para realizar el pago')
         
         const mov = movimientos.find(m => m.id === id)
-        const saldoPendiente = mov ? (mov.costoTotal || 0) - (mov.montoPagado || 0) : 0
+        const saldoPendiente = mov
+            ? (mov.compra?.costoTotal ?? mov.costoTotal ?? 0) - (mov.compra?.montoPagado ?? mov.montoPagado ?? 0)
+            : 0
         
         let montoPago: number | null = null
         if (esParcial) {
@@ -271,7 +286,7 @@ function ComprasContent() {
         
         if (!confirm(`¿Registrar pago de ${montoLabel} desde ${label}?`)) return
         try {
-            const payload: any = { cajaOrigen: selectedBox.tipo }
+            const payload: Record<string, string | number> = { cajaOrigen: selectedBox.tipo }
             if (montoPago !== null) payload.monto = montoPago
             
             const res = await fetch(`/api/movimientos-stock/${id}/pago`, {
@@ -292,14 +307,14 @@ function ComprasContent() {
     }
 
     async function handleDelete(id: string) {
-        if (!confirm('¿Seguro que querés eliminar este movimiento? Se revertirá la cantidad en el stock del insumo y se borrará el gasto asociado si existía.')) return
+        if (!confirm('¿Seguro que querés eliminar esta compra completa? Se revertirán todos sus ítems, pagos y saldos de caja.')) return
         try {
             const res = await fetch(`/api/movimientos-stock/${id}`, { method: 'DELETE' })
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error || 'Error al eliminar el movimiento')
             }
-            setSuccess('Movimiento eliminado y stock revertido.')
+            setSuccess('Compra eliminada; stock y caja fueron revertidos.')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
@@ -313,10 +328,11 @@ function ComprasContent() {
     }) : movimientos
 
     const filteredByInsumo = filterInsumo ? movimientosPorFecha.filter(m => m.insumo.id === filterInsumo) : movimientosPorFecha
+    const estadoCompra = (mov: Movimiento) => mov.compra?.estadoPago || mov.estadoPago
     const filteredByPago = filterPago === 'pendiente' 
-        ? filteredByInsumo.filter(m => m.estadoPago === 'pendiente' || m.estadoPago === 'a_cuenta')
-        : (filterPago ? filteredByInsumo.filter(m => m.estadoPago === filterPago) : filteredByInsumo)
-    const filtered = filterTipo ? filteredByPago.filter((m) => m.tipo === filterTipo) : filteredByPago
+        ? filteredByInsumo.filter(m => estadoCompra(m) === 'pendiente' || estadoCompra(m) === 'a_cuenta')
+        : (filterPago ? filteredByInsumo.filter(m => estadoCompra(m) === filterPago) : filteredByInsumo)
+    const filtered = filteredByPago
 
     // Calcular stock por vencimiento para el insumo filtrado o todos
     const stockPorVto = (() => {
@@ -338,10 +354,11 @@ function ComprasContent() {
             .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
     })()
 
-    const statsEntradas = movimientosPorFecha.filter((m) => m.tipo === 'entrada').length
-    const statsSalidas = movimientosPorFecha.filter((m) => m.tipo === 'salida').length
-
-    const renderRow = (mov: Movimiento) => (
+    const renderRow = (mov: Movimiento) => {
+        const estadoPago = estadoCompra(mov)
+        const montoPagado = mov.compra?.montoPagado ?? mov.montoPagado ?? 0
+        const costoCompra = mov.compra?.costoTotal ?? mov.costoTotal ?? 0
+        return (
         <tr key={mov.id}>
             <td>
                 <span className="badge" style={{
@@ -374,7 +391,7 @@ function ComprasContent() {
                 {mov.tipo === 'entrada' && mov.costoTotal ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={{ fontWeight: 600 }}>${mov.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-                        {mov.estadoPago === 'pendiente' ? (
+                        {estadoPago === 'pendiente' ? (
                             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                 <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#F39C1220', color: '#E67E22', border: '1px solid #F39C12', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
                                     ⏳ Pagar todo
@@ -383,10 +400,10 @@ function ComprasContent() {
                                     💰 A cuenta
                                 </button>
                             </div>
-                        ) : mov.estadoPago === 'a_cuenta' ? (
+                        ) : estadoPago === 'a_cuenta' ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                                 <span className="badge" style={{ backgroundColor: '#3498DB20', color: '#2980B9', border: '1px solid #3498DB', padding: '0.2rem 0.6rem', fontSize: '0.7rem' }}>
-                                    💰 Pagado ${(mov.montoPagado || 0).toLocaleString('es-AR')} / ${mov.costoTotal.toLocaleString('es-AR')}
+                                    💰 Pagado ${montoPagado.toLocaleString('es-AR')} / ${costoCompra.toLocaleString('es-AR')}
                                 </span>
                                 <div style={{ display: 'flex', gap: '4px' }}>
                                     <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#27AE6020', color: '#27AE60', border: '1px solid #27AE60', padding: '0.15rem 0.5rem', fontSize: '0.65rem' }}>
@@ -452,7 +469,8 @@ function ComprasContent() {
                 </div>
             </td>
         </tr>
-    );
+        )
+    }
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando stock...</p></div>
 
@@ -485,7 +503,7 @@ function ComprasContent() {
                         </button>
                     )}
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
-                        const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
+                        const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
                         setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
                         setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
                         setMostrarTodosInsumos(false)
@@ -495,8 +513,8 @@ function ComprasContent() {
                     }}>📑 Factura Múltiple</button>
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
-                        const defaultUbi = ubicaciones.find(u => u.nombre === selectedUbi)?.id || (ubicaciones.length > 0 ? ubicaciones[0].id : '')
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: defaultUbi, cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
+                        const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', montoPagado: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: defaultUbi, cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
                         setShowModal(true)
                     }}>➕ Ajuste Manual</button>
                 </div>
@@ -514,7 +532,7 @@ function ComprasContent() {
 
                 <button className="btn btn-sm" onClick={() => setFilterPago(filterPago === 'pendiente' ? '' : 'pendiente')}
                     style={{ whiteSpace: 'nowrap', backgroundColor: filterPago === 'pendiente' ? '#E67E22' : '#E67E2218', color: filterPago === 'pendiente' ? '#fff' : '#E67E22', border: '2px solid #E67E22', fontWeight: 600 }}>
-                    ⏳ Pagos Pendientes ({movimientosPorFecha.filter(m => m.estadoPago === 'pendiente' || m.estadoPago === 'a_cuenta').length})
+                    ⏳ Pagos Pendientes ({new Set(movimientosPorFecha.filter(m => estadoCompra(m) === 'pendiente' || estadoCompra(m) === 'a_cuenta').map(m => m.compra?.id || m.id)).size})
                 </button>
                 <button className="btn btn-sm" onClick={() => setAgruparPorProveedor(!agruparPorProveedor)}
                     style={{ whiteSpace: 'nowrap', backgroundColor: agruparPorProveedor ? '#9B59B6' : '#9B59B618', color: agruparPorProveedor ? '#fff' : '#9B59B6', border: '2px solid #9B59B6', fontWeight: 600 }}>
@@ -633,8 +651,8 @@ function ComprasContent() {
                                     <label className="form-label">Insumo</label>
                                     <select className="form-select" value={form.insumoId} onChange={(e) => setForm({ ...form, insumoId: e.target.value })} required>
                                         <option value="">Seleccionar insumo...</option>
-                                        {insumos.map((ins: any) => {
-                                            const stockUbi = form.ubicacionId ? ins.stocks?.find((s: any) => s.ubicacionId === form.ubicacionId)?.cantidad || 0 : ins.stockActual;
+                                        {insumos.map((ins) => {
+                                            const stockUbi = form.ubicacionId ? ins.stocks?.find((s) => s.ubicacionId === form.ubicacionId)?.cantidad || 0 : ins.stockActual;
                                             return (
                                                 <option key={ins.id} value={ins.id}>
                                                     {ins.nombre} (stock: {stockUbi} {ins.unidadMedida})
@@ -748,7 +766,7 @@ function ComprasContent() {
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Estado de Pago</label>
-                                            <select className="form-select" value={form.estadoPago} onChange={(e) => setForm({ ...form, estadoPago: e.target.value })}>
+                                            <select className="form-select" value={form.estadoPago} disabled={!!editingId} onChange={(e) => setForm({ ...form, estadoPago: e.target.value })}>
                                                 <option value="pagado">✅ Pagado (Contado)</option>
                                                 <option value="a_cuenta">💰 A Cuenta (Parcial)</option>
                                                 <option value="pendiente">⏳ Pendiente (Cta. Cte.)</option>
@@ -758,14 +776,14 @@ function ComprasContent() {
                                             <div className="form-group">
                                                 <label className="form-label">Monto que abona ahora ($)</label>
                                                 <input type="number" step="0.01" className="form-input" 
-                                                    value={(form as any).montoPagado || ''} 
-                                                    onChange={(e) => setForm({ ...form, montoPagado: e.target.value } as any)} 
+                                                    value={form.montoPagado || ''}
+                                                    onChange={(e) => setForm({ ...form, montoPagado: e.target.value })}
                                                     placeholder="Ej: 50000" 
                                                     required 
                                                 />
-                                                {(form as any).montoPagado && form.costoTotal && (
+                                                {form.montoPagado && form.costoTotal && (
                                                     <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#2980B9' }}>
-                                                        Quedará pendiente: <strong>${(parseFloat(form.costoTotal) - parseFloat((form as any).montoPagado || '0')).toLocaleString('es-AR')}</strong>
+                                                        Quedará pendiente: <strong>${(parseFloat(form.costoTotal) - parseFloat(form.montoPagado || '0')).toLocaleString('es-AR')}</strong>
                                                     </div>
                                                 )}
                                             </div>
@@ -776,7 +794,7 @@ function ComprasContent() {
                                                 Actualizar costo unitario del insumo
                                             </label>
                                         </div>
-                                        {(form.estadoPago === 'pagado' || form.estadoPago === 'a_cuenta') && (
+                                        {!editingId && (form.estadoPago === 'pagado' || form.estadoPago === 'a_cuenta') && (
                                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                                     <label className="form-label" style={{ margin: 0, fontSize: 'var(--text-xs)' }}>¿De qué caja sale el pago?</label>

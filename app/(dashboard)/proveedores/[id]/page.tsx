@@ -38,6 +38,7 @@ interface Proveedor {
     _count: {
         insumos: number
         movimientosStock: number
+        compras: number
     }
 }
 
@@ -224,7 +225,7 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
                                 </div>
                                 <div>
                                     <label className="text-muted small uppercase">Compras</label>
-                                    <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>{proveedor._count.movimientosStock}</p>
+                                    <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>{proveedor._count.compras}</p>
                                 </div>
                             </div>
                         </div>

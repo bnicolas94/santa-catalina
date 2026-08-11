@@ -2,9 +2,12 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 
 // GET /api/proveedores
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const { searchParams } = new URL(request.url)
+        const soloActivos = searchParams.get('activos') === 'true'
         const proveedores = await prisma.proveedor.findMany({
+            where: soloActivos ? { activo: true } : undefined,
             orderBy: { nombre: 'asc' },
             include: {
                 _count: { select: { insumos: true } },

@@ -44,6 +44,12 @@ test('Caja queda aislada de usuarios con otros permisos', () => {
     )
 })
 
+test('Compras puede listar cajas de pago sin habilitar la administración de Caja', () => {
+    const token = { rol: 'ADMIN_OPS', permisos: { permisoStock: true } }
+    assert.equal(canAccessPath('/api/compras/cajas', token), true)
+    assert.equal(canAccessPath('/api/caja/saldos', token), false)
+})
+
 test('las mermas de Costos requieren permisoCostos', () => {
     assert.equal(
         canAccessPath('/api/costos/mermas', { rol: 'OPERARIO', permisos: { permisoCostos: true } }),

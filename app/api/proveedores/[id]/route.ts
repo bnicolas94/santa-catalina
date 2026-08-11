@@ -27,7 +27,8 @@ export async function GET(
                 _count: {
                     select: {
                         insumos: true,
-                        movimientosStock: true
+                        movimientosStock: true,
+                        compras: true
                     }
                 }
             }
@@ -37,7 +38,17 @@ export async function GET(
             return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 })
         }
 
-        return NextResponse.json(proveedor)
+        const comprasHistoricas = await prisma.movimientoStock.count({
+            where: { proveedorId: id, tipo: 'entrada', compraId: null }
+        })
+
+        return NextResponse.json({
+            ...proveedor,
+            _count: {
+                ...proveedor._count,
+                compras: proveedor._count.compras + comprasHistoricas
+            }
+        })
     } catch (error) {
         console.error('Error fetching proveedor:', error)
         return NextResponse.json({ error: 'Error al obtener el proveedor' }, { status: 500 })

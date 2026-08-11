@@ -1,228 +1,288 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { CajaService } from '@/lib/services/caja.service'
+import { ComprasService } from '@/lib/services/compras.service'
+import {
+    CompraValidationError,
+    estadoPagoDesdeMontos,
+    numeroNoNegativo,
+    numeroPositivo,
+    validarMontoPagado,
+} from '@/lib/compras/validacion'
+
+type TxClient = Prisma.TransactionClient
+
+type StockDelta = {
+    insumoId: string
+    ubicacionId: string | null
+    cantidad: number
+    cantidadSecundaria: number
+    tipo: string
+}
+
+function fechaCivil(value: unknown, fallback: Date): Date {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? new Date(`${value}T12:00:00Z`)
+        : fallback
+}
+
+async function aplicarStock(tx: TxClient, movimiento: StockDelta, factor: 1 | -1) {
+    const signoTipo = movimiento.tipo === 'entrada' ? 1 : -1
+    const delta = factor * signoTipo * movimiento.cantidad
+    const deltaSecundario = factor * signoTipo * movimiento.cantidadSecundaria
+    await tx.insumo.update({
+        where: { id: movimiento.insumoId },
+        data: {
+            stockActual: { increment: delta },
+            stockActualSecundario: { increment: deltaSecundario },
+        },
+    })
+    if (movimiento.ubicacionId) {
+        await tx.stockInsumo.upsert({
+            where: {
+                insumoId_ubicacionId: {
+                    insumoId: movimiento.insumoId,
+                    ubicacionId: movimiento.ubicacionId,
+                },
+            },
+            update: {
+                cantidad: { increment: delta },
+                cantidadSecundaria: { increment: deltaSecundario },
+            },
+            create: {
+                insumoId: movimiento.insumoId,
+                ubicacionId: movimiento.ubicacionId,
+                cantidad: delta,
+                cantidadSecundaria: deltaSecundario,
+            },
+        })
+    }
+}
 
 // DELETE /api/movimientos-stock/[id]
+// Si el movimiento pertenece a una compra, elimina la factura completa.
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params
+        await prisma.$transaction(async tx => {
+            const movimiento = await tx.movimientoStock.findUnique({ where: { id } })
+            if (!movimiento) throw new CompraValidationError('Movimiento no encontrado')
 
-        // 1. Buscar el movimiento para saber qué revertir
-        const movimiento = await prisma.movimientoStock.findUnique({
-            where: { id },
-        })
-
-        if (!movimiento) {
-            return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
-        }
-
-        await prisma.$transaction(async (tx) => {
-            // 2. Revertir el stock en el Insumo
-            const delta = movimiento.tipo === 'entrada' ? -movimiento.cantidad : movimiento.cantidad
-            const deltaSec = movimiento.cantidadSecundaria ? (movimiento.tipo === 'entrada' ? -movimiento.cantidadSecundaria : movimiento.cantidadSecundaria) : 0
-
-            await tx.insumo.update({
-                where: { id: movimiento.insumoId },
-                data: {
-                    stockActual: { increment: delta },
-                    stockActualSecundario: { increment: deltaSec }
+            if (movimiento.compraId) {
+                await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'eliminar-compra:' + movimiento.compraId}))::text AS lock_result`
+                const items = await tx.movimientoStock.findMany({ where: { compraId: movimiento.compraId } })
+                for (const item of items) {
+                    await aplicarStock(tx, {
+                        insumoId: item.insumoId,
+                        ubicacionId: item.ubicacionId,
+                        cantidad: item.cantidad,
+                        cantidadSecundaria: item.cantidadSecundaria || 0,
+                        tipo: item.tipo,
+                    }, -1)
                 }
-            })
 
-            // 3. Revertir el stock en la Ubicación específica
-            await tx.stockInsumo.updateMany({
-                where: { insumoId: movimiento.insumoId, ubicacionId: movimiento.ubicacionId as string },
-                data: {
-                    cantidad: { increment: delta },
-                    cantidadSecundaria: { increment: deltaSec }
-                }
-            })
-
-            // 4. Si tiene un gasto asociado, verificar si hay otros ítems en esa factura
-            if (movimiento.gastoId) {
-                const countAsociados = await tx.movimientoStock.count({ where: { gastoId: movimiento.gastoId } })
-                if (countAsociados <= 1) {
-                    // Es el único o último ítem, borramos todo
-                    await tx.movimientoCaja.deleteMany({ where: { gastoId: movimiento.gastoId } })
-                    await tx.gastoOperativo.delete({ where: { id: movimiento.gastoId } })
-                } else if (movimiento.costoTotal) {
-                    // Hay otros ítems, solo restamos este monto de la caja y el gasto
-                    await tx.gastoOperativo.update({ where: { id: movimiento.gastoId }, data: { monto: { decrement: movimiento.costoTotal } } })
-                    await tx.movimientoCaja.updateMany({ where: { gastoId: movimiento.gastoId }, data: { monto: { decrement: movimiento.costoTotal } } })
-                }
+                await ComprasService.revertirFinanzasCompraEnTx(tx, movimiento.compraId)
+                await tx.movimientoStock.deleteMany({ where: { compraId: movimiento.compraId } })
+                await tx.compra.delete({ where: { id: movimiento.compraId } })
+                return
             }
 
-            // 5. Eliminar el movimiento
-            await tx.movimientoStock.delete({
-                where: { id }
-            })
+            // Compatibilidad defensiva para movimientos antiguos aún sin cabecera.
+            if (movimiento.gastoId) {
+                const asociados = await tx.movimientoStock.count({ where: { gastoId: movimiento.gastoId } })
+                if (asociados > 1) {
+                    throw new CompraValidationError('Este movimiento histórico comparte un pago con otros ítems y no puede eliminarse individualmente')
+                }
+                const cajas = await tx.movimientoCaja.findMany({
+                    where: { gastoId: movimiento.gastoId },
+                    select: { id: true },
+                })
+                for (const caja of cajas) await CajaService.revertirMovimientoEnTx(tx, caja.id)
+            }
+            await aplicarStock(tx, {
+                insumoId: movimiento.insumoId,
+                ubicacionId: movimiento.ubicacionId,
+                cantidad: movimiento.cantidad,
+                cantidadSecundaria: movimiento.cantidadSecundaria || 0,
+                tipo: movimiento.tipo,
+            }, -1)
+            const gastoId = movimiento.gastoId
+            await tx.movimientoStock.delete({ where: { id } })
+            if (gastoId) await tx.gastoOperativo.delete({ where: { id: gastoId } })
         })
 
-        return NextResponse.json({ message: 'Movimiento eliminado y stock revertido correctamente' })
+        return NextResponse.json({ message: 'Compra eliminada; stock y caja fueron revertidos' })
     } catch (error) {
-        console.error('Error eliminando movimiento de stock:', error)
-        return NextResponse.json({ error: 'Error al eliminar el movimiento' }, { status: 500 })
+        if (error instanceof CompraValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        console.error('Error eliminando compra:', error)
+        return NextResponse.json({ error: 'Error al eliminar la compra' }, { status: 500 })
     }
 }
 
 // PATCH /api/movimientos-stock/[id]
+// Edita el ítem sin inventar ni revertir pagos. El estado se deriva de los montos reales.
 export async function PATCH(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params
-        const body = await request.json()
-        const { insumoId, tipo, cantidad, observaciones, proveedorId, costoTotal, estadoPago, actualizarCosto, fechaVencimiento, fechaMovimiento, fechaFactura } = body
+        const body = await request.json() as Record<string, unknown>
+        const result = await prisma.$transaction(async tx => {
+            const original = await tx.movimientoStock.findUnique({ where: { id } })
+            if (!original) throw new CompraValidationError('Movimiento no encontrado')
 
-        // 1. Buscar el movimiento original
-        const movOriginal = await prisma.movimientoStock.findUnique({
-            where: { id },
-        })
+            const tipo = String(body.tipo || original.tipo)
+            if (tipo !== original.tipo) throw new CompraValidationError('No se puede cambiar el tipo de un movimiento existente')
+            const insumoId = String(body.insumoId || original.insumoId)
+            const ubicacionId = String(body.ubicacionId || original.ubicacionId || '') || null
+            if (!insumoId || !ubicacionId) throw new CompraValidationError('Seleccione insumo y ubicación')
+            const cantidad = numeroPositivo(body.cantidad, 'Cantidad')
+            const cantidadSecundaria = body.cantidadSecundaria
+                ? numeroPositivo(body.cantidadSecundaria, 'Cantidad secundaria')
+                : 0
+            const costoTotal = body.costoTotal === '' || body.costoTotal === undefined
+                ? null
+                : numeroNoNegativo(body.costoTotal, 'Costo total')
+            const proveedorId = String(body.proveedorId || '') || null
+            const fechaMovimiento = fechaCivil(body.fechaMovimiento, original.fecha)
+            const fechaFactura = body.fechaFactura ? fechaCivil(body.fechaFactura, original.fecha) : null
+            const fechaVencimiento = body.fechaVencimiento ? fechaCivil(body.fechaVencimiento, original.fecha) : null
+            const observaciones = String(body.observaciones || '').trim() || null
 
-        if (!movOriginal) {
-            return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
-        }
-
-        const nuevaCant = parseFloat(cantidad)
-        const nuevoCostoTotal = costoTotal ? parseFloat(costoTotal) : null
-        const nuevoEstado = tipo === 'entrada' ? (estadoPago || 'pagado') : null
-        
-        const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : movOriginal.fecha
-
-        const result = await prisma.$transaction(async (tx) => {
-            // 2. Compensar Stock
-            // Cantidad vieja (con signo): entrada es +, salida es -
-            const cantViejaSigno = movOriginal.tipo === 'entrada' ? movOriginal.cantidad : -movOriginal.cantidad
-            // Cantidad nueva (con signo):
-            const cantNuevaSigno = tipo === 'entrada' ? nuevaCant : -nuevaCant
-            // Diferencia a aplicar: nuevo - viejo
-            const deltaStock = cantNuevaSigno - cantViejaSigno
-
-            if (deltaStock !== 0 || movOriginal.insumoId !== insumoId) {
-                // Si cambió el insumo, revertimos el viejo y aplicamos al nuevo
-                if (movOriginal.insumoId !== insumoId) {
-                    await tx.insumo.update({
-                        where: { id: movOriginal.insumoId },
-                        data: { stockActual: { increment: -cantViejaSigno } }
-                    })
-                    await tx.insumo.update({
-                        where: { id: insumoId },
-                        data: { stockActual: { increment: cantNuevaSigno } }
-                    })
-                } else {
-                    await tx.insumo.update({
-                        where: { id: insumoId },
-                        data: { stockActual: { increment: deltaStock } }
-                    })
-                }
+            const compraItems = original.compraId
+                ? await tx.movimientoStock.findMany({ where: { compraId: original.compraId } })
+                : [original]
+            for (const item of compraItems) {
+                await aplicarStock(tx, {
+                    insumoId: item.insumoId,
+                    ubicacionId: item.ubicacionId,
+                    cantidad: item.cantidad,
+                    cantidadSecundaria: item.cantidadSecundaria || 0,
+                    tipo: item.tipo,
+                }, -1)
             }
 
-            // 3. Sincronizar Gasto Operativo
-            let gastoId = movOriginal.gastoId
-
-            if (tipo === 'entrada' && nuevoCostoTotal) {
-                if (nuevoEstado === 'pagado') {
-                    // Buscar o crear categoria "Proveedores"
-                    let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
-                    if (!cat) {
-                        cat = await tx.categoriaGasto.create({ data: { nombre: 'Proveedores', color: '#3498DB' } })
-                    }
-
-                    if (gastoId) {
-                        // Actualizar gasto existente mediante incremento de la diferencia
-                        const deltaCosto = nuevoCostoTotal - (movOriginal.costoTotal || 0)
-                        await tx.gastoOperativo.update({
-                            where: { id: gastoId },
-                            data: {
-                                fecha: parsedFecha,
-                                monto: { increment: deltaCosto },
-                                categoriaId: cat.id
-                            }
-                        })
-                        // Actualizar fecha en caja asociada
-                        await tx.movimientoCaja.updateMany({
-                            where: { gastoId: gastoId },
-                            data: { 
-                                fecha: parsedFecha,
-                                monto: { increment: deltaCosto }
-                            }
-                        })
-                    } else {
-                        // Crear nuevo gasto
-                        const nuevoGasto = await tx.gastoOperativo.create({
-                            data: {
-                                fecha: parsedFecha,
-                                monto: nuevoCostoTotal,
-                                descripcion: `Compra de Insumos - ${observaciones || 'Directa'}`,
-                                categoriaId: cat.id
-                            }
-                        })
-                        gastoId = nuevoGasto.id
-                    }
-                } else if (nuevoEstado === 'pendiente' && gastoId) {
-                    // Si pasó de pagado a pendiente, debemos remover su costo del Gasto Operativo o borrarlo si era el último
-                    const countAsociados = await tx.movimientoStock.count({ where: { gastoId } })
-                    if (countAsociados <= 1) {
-                        await tx.movimientoCaja.deleteMany({ where: { gastoId } })
-                        await tx.gastoOperativo.delete({ where: { id: gastoId } })
-                    } else if (movOriginal.costoTotal) {
-                        await tx.gastoOperativo.update({ where: { id: gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
-                        await tx.movimientoCaja.updateMany({ where: { gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
-                    }
-                    gastoId = null
+            const actualizados = compraItems.map(item => item.id === id
+                ? {
+                    ...item,
+                    insumoId,
+                    ubicacionId,
+                    cantidad,
+                    cantidadSecundaria,
+                    costoTotal,
+                    proveedorId,
+                    fecha: fechaMovimiento,
+                    fechaFactura,
+                    fechaVencimiento,
+                    observaciones,
                 }
-            } else if (gastoId) {
-                // Si ya no es entrada o no tiene costo, borramos el item del gasto
-                const countAsociados = await tx.movimientoStock.count({ where: { gastoId } })
-                if (countAsociados <= 1) {
-                    await tx.movimientoCaja.deleteMany({ where: { gastoId } })
-                    await tx.gastoOperativo.delete({ where: { id: gastoId } })
-                } else if (movOriginal.costoTotal) {
-                    await tx.gastoOperativo.update({ where: { id: gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
-                    await tx.movimientoCaja.updateMany({ where: { gastoId }, data: { monto: { decrement: movOriginal.costoTotal } } })
-                }
-                gastoId = null
+                : {
+                    ...item,
+                    ubicacionId,
+                    proveedorId,
+                    fecha: fechaMovimiento,
+                    fechaFactura,
+                    observaciones,
+                })
+
+            for (const item of actualizados) {
+                await aplicarStock(tx, {
+                    insumoId: item.insumoId,
+                    ubicacionId: item.ubicacionId,
+                    cantidad: item.cantidad,
+                    cantidadSecundaria: item.cantidadSecundaria || 0,
+                    tipo: item.tipo,
+                }, 1)
             }
 
-            // 4. Actualizar Movimiento
-            const movActualizado = await tx.movimientoStock.update({
+            await tx.movimientoStock.update({
                 where: { id },
                 data: {
                     insumoId,
-                    tipo,
-                    fecha: parsedFecha,
-                    cantidad: nuevaCant,
-                    observaciones: observaciones || null,
-                    proveedorId: proveedorId || null,
-                    costoTotal: nuevoCostoTotal,
-                    estadoPago: nuevoEstado,
-                    fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
-                    fechaFactura: fechaFactura ? new Date(`${fechaFactura}T12:00:00Z`) : null,
-                    gastoId
+                    cantidad,
+                    cantidadSecundaria,
+                    costoTotal,
+                    proveedorId,
+                    fecha: fechaMovimiento,
+                    fechaFactura,
+                    fechaVencimiento,
+                    ubicacionId,
+                    observaciones,
                 },
-                include: {
-                    insumo: { select: { id: true, nombre: true, unidadMedida: true } },
-                    proveedor: { select: { id: true, nombre: true } },
-                }
             })
 
-            // 5. Actualizar precio unitario si se solicitó
-            if (tipo === 'entrada' && nuevoCostoTotal && actualizarCosto && nuevaCant > 0) {
-                await tx.insumo.update({
-                    where: { id: insumoId },
-                    data: { precioUnitario: nuevoCostoTotal / nuevaCant }
+            if (original.compraId) {
+                await tx.movimientoStock.updateMany({
+                    where: { compraId: original.compraId },
+                    data: {
+                        proveedorId,
+                        ubicacionId,
+                        fecha: fechaMovimiento,
+                        fechaFactura,
+                        observaciones,
+                    },
+                })
+                const itemsNuevos = await tx.movimientoStock.findMany({
+                    where: { compraId: original.compraId },
+                    select: { id: true, costoTotal: true, montoPagado: true },
+                })
+                const nuevoTotal = itemsNuevos.reduce((acc, item) => acc + (item.costoTotal || 0), 0)
+                const pagadoActual = itemsNuevos.reduce((acc, item) => acc + (item.montoPagado || 0), 0)
+                validarMontoPagado(nuevoTotal, pagadoActual)
+                const estadoPago = estadoPagoDesdeMontos(nuevoTotal, pagadoActual)
+                for (const item of itemsNuevos) {
+                    const montoItem = nuevoTotal > 0 ? pagadoActual * ((item.costoTotal || 0) / nuevoTotal) : 0
+                    await tx.movimientoStock.update({
+                        where: { id: item.id },
+                        data: { montoPagado: montoItem, estadoPago },
+                    })
+                }
+                await tx.compra.update({
+                    where: { id: original.compraId },
+                    data: {
+                        proveedorId,
+                        ubicacionId,
+                        fechaMovimiento,
+                        fechaFactura,
+                        observaciones,
+                        costoTotal: nuevoTotal,
+                        montoPagado: pagadoActual,
+                        estadoPago,
+                    },
                 })
             }
 
-            return movActualizado
+            if (tipo === 'entrada' && costoTotal && body.actualizarCosto === true) {
+                await tx.insumo.update({
+                    where: { id: insumoId },
+                    data: { precioUnitario: costoTotal / cantidad },
+                })
+            }
+
+            return tx.movimientoStock.findUnique({
+                where: { id },
+                include: {
+                    insumo: { select: { id: true, nombre: true, unidadMedida: true, unidadSecundaria: true } },
+                    proveedor: { select: { id: true, nombre: true } },
+                    ubicacion: { select: { id: true, nombre: true } },
+                    compra: true,
+                },
+            })
         })
 
         return NextResponse.json(result)
     } catch (error) {
-        console.error('Error actualizando movimiento de stock:', error)
-        return NextResponse.json({ error: 'Error al actualizar el movimiento' }, { status: 500 })
+        if (error instanceof CompraValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        console.error('Error actualizando compra:', error)
+        return NextResponse.json({ error: 'Error al actualizar la compra' }, { status: 500 })
     }
 }

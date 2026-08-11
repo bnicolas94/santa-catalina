@@ -53,9 +53,35 @@ export async function GET() {
                 where: { fecha: { gte: startOfMonth, lte: endOfMonth } },
                 _sum: { monto: true },
             }),
-            // Compras por pagar (SÓLO las pendientes REALES)
-            prisma.movimientoStock.count({
-                where: { tipo: 'entrada', estadoPago: 'pendiente' }
+            // Compras nuevas más facturas históricas sin cabecera, sin modificar su información.
+            Promise.all([
+                prisma.compra.count({
+                    where: { estadoPago: { in: ['pendiente', 'a_cuenta'] } }
+                }),
+                prisma.movimientoStock.findMany({
+                    where: {
+                        tipo: 'entrada',
+                        compraId: null,
+                        estadoPago: { in: ['pendiente', 'a_cuenta'] }
+                    },
+                    select: {
+                        id: true,
+                        gastoId: true,
+                        numeroFactura: true,
+                        proveedorId: true,
+                        ubicacionId: true,
+                        fecha: true
+                    }
+                })
+            ]).then(([nuevas, historicas]) => {
+                const gruposHistoricos = new Set(historicas.map(compra => {
+                    if (compra.numeroFactura) {
+                        return `factura:${compra.proveedorId || ''}:${compra.ubicacionId || ''}:${compra.numeroFactura}:${compra.fecha.toISOString()}`
+                    }
+                    if (compra.gastoId) return `gasto:${compra.gastoId}`
+                    return `movimiento:${compra.id}`
+                }))
+                return nuevas + gruposHistoricos.size
             }),
             // Últimos 5 movimientos de stock
             prisma.movimientoStock.findMany({

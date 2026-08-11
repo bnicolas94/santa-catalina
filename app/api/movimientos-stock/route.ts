@@ -1,22 +1,53 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
-import { CajaService } from '@/lib/services/caja.service'
+import { ComprasService } from '@/lib/services/compras.service'
+import {
+    CompraValidationError,
+    estadoPagoDesdeMontos,
+    numeroNoNegativo,
+    numeroPositivo,
+    validarMontoPagado,
+    validarPagosDivididos,
+} from '@/lib/compras/validacion'
+
+const ESTADOS_PAGO = new Set(['pagado', 'pendiente', 'a_cuenta'])
+
+function fechaCivil(value: unknown, fallback = new Date()): Date {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? new Date(`${value}T12:00:00Z`)
+        : fallback
+}
 
 // GET /api/movimientos-stock
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const insumoId = searchParams.get('insumoId')
+        const tipo = searchParams.get('tipo')
+        const requestedLimit = Number(searchParams.get('limit') || 100)
+        const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 500) : 100
 
         const movimientos = await prisma.movimientoStock.findMany({
-            where: insumoId ? { insumoId } : {},
+            where: {
+                ...(insumoId ? { insumoId } : {}),
+                ...(tipo === 'entrada' || tipo === 'salida' ? { tipo } : {}),
+            },
             orderBy: { fecha: 'desc' },
-            take: 100,
+            take: limit,
             include: {
-                insumo: { select: { id: true, nombre: true, unidadMedida: true } },
+                insumo: { select: { id: true, nombre: true, unidadMedida: true, unidadSecundaria: true } },
                 proveedor: { select: { id: true, nombre: true } },
                 loteOrigen: { select: { id: true } },
                 ubicacion: { select: { id: true, nombre: true } },
+                compra: {
+                    select: {
+                        id: true,
+                        costoTotal: true,
+                        montoPagado: true,
+                        estadoPago: true,
+                        numeroFactura: true,
+                    },
+                },
             },
         })
         return NextResponse.json(movimientos)
@@ -29,168 +60,140 @@ export async function GET(request: Request) {
 // POST /api/movimientos-stock
 export async function POST(request: Request) {
     try {
-        const body = await request.json()
-        console.log('--- POST /api/movimientos-stock PAYLOAD:', JSON.stringify(body, null, 2))
-        
-        const { 
-            insumoId, tipo, cantidad, cantidadSecundaria, observaciones, 
-            proveedorId, costoTotal, estadoPago, actualizarCosto, 
-            fechaVencimiento, ubicacionId, fechaMovimiento, cajaOrigen,
-            pagoDividido, pagos, montoPagado, fechaFactura
-        } = body
+        const body = await request.json() as Record<string, unknown>
+        const insumoId = String(body.insumoId || '')
+        const tipo = String(body.tipo || '')
+        const ubicacionId = String(body.ubicacionId || '')
+        if (!insumoId || !ubicacionId) throw new CompraValidationError('Faltan insumo o ubicación')
+        if (tipo !== 'entrada' && tipo !== 'salida') throw new CompraValidationError('Tipo debe ser entrada o salida')
 
-        if (!insumoId || !tipo || !cantidad || !ubicacionId) {
-            return NextResponse.json({ error: 'Faltan campos obligatorios (insumo, tipo, cantidad, ubicacion)' }, { status: 400 })
+        const cantidad = numeroPositivo(body.cantidad, 'Cantidad')
+        const cantidadSecundaria = body.cantidadSecundaria
+            ? numeroPositivo(body.cantidadSecundaria, 'Cantidad secundaria')
+            : null
+        const costoTotal = body.costoTotal === '' || body.costoTotal === undefined
+            ? null
+            : numeroNoNegativo(body.costoTotal, 'Costo total')
+        const observaciones = String(body.observaciones || '').trim() || null
+        const proveedorId = String(body.proveedorId || '') || null
+        const fechaMovimiento = fechaCivil(body.fechaMovimiento)
+        const fechaFactura = body.fechaFactura ? fechaCivil(body.fechaFactura) : null
+        const fechaVencimiento = body.fechaVencimiento ? fechaCivil(body.fechaVencimiento) : null
+
+        const estadoSolicitado = String(body.estadoPago || 'pendiente')
+        if (tipo === 'entrada' && !ESTADOS_PAGO.has(estadoSolicitado)) {
+            throw new CompraValidationError('Estado de pago inválido')
         }
 
-        if (!['entrada', 'salida'].includes(tipo)) {
-            return NextResponse.json({ error: 'Tipo debe ser "entrada" o "salida"' }, { status: 400 })
+        const total = costoTotal || 0
+        const montoPagado = tipo !== 'entrada' || total === 0
+            ? 0
+            : estadoSolicitado === 'pagado'
+                ? total
+                : estadoSolicitado === 'a_cuenta'
+                    ? numeroPositivo(body.montoPagado, 'Monto pagado')
+                    : 0
+        validarMontoPagado(total, montoPagado)
+        if (estadoSolicitado === 'a_cuenta' && montoPagado >= total) {
+            throw new CompraValidationError('El pago a cuenta debe ser menor al total')
         }
+        const estadoPago = tipo === 'entrada' ? estadoPagoDesdeMontos(total, montoPagado) : null
+        const cajaOrigen = String(body.cajaOrigen || 'caja_chica')
+        const pagos = montoPagado > 0
+            ? validarPagosDivididos(body.pagoDividido ? body.pagos : undefined, montoPagado, cajaOrigen)
+            : []
 
-        const result = await prisma.$transaction(async (tx) => {
-            const costoTotalFloat = costoTotal ? parseFloat(String(costoTotal).replace(',', '.')) : null
-            const cantidadFloat = parseFloat(String(cantidad).replace(',', '.'))
-            const movCantSec = cantidadSecundaria ? parseFloat(String(cantidadSecundaria).replace(',', '.')) : null
-            const parsedFecha = fechaMovimiento ? new Date(`${fechaMovimiento}T12:00:00Z`) : new Date()
-            const selectedCaja = cajaOrigen || 'caja_madre'
-            
-            let gastoId = null
-            let movimientoCajaId = null
+        const result = await prisma.$transaction(async tx => {
+            const compra = tipo === 'entrada'
+                ? await tx.compra.create({
+                    data: {
+                        proveedorId,
+                        ubicacionId,
+                        numeroFactura: String(body.numeroFactura || '') || null,
+                        fechaMovimiento,
+                        fechaFactura,
+                        estadoPago: estadoPago || 'pendiente',
+                        costoTotal: total,
+                        montoPagado,
+                        observaciones,
+                    },
+                })
+                : null
 
-            // 1. Manejo de Gasto y Caja si es entrada pagada o a cuenta
-            const esPagado = estadoPago === 'pagado'
-            const esACuenta = estadoPago === 'a_cuenta'
-            const montoACuentaFloat = montoPagado ? parseFloat(String(montoPagado).replace(',', '.')) : 0
-            const montoADescontar = esPagado ? costoTotalFloat : (esACuenta ? montoACuentaFloat : 0)
-
-            if (tipo === 'entrada' && montoADescontar && montoADescontar > 0) {
-                console.log(`Processing ${esPagado ? 'paid' : 'partial'} entry financial records... Amount: ${montoADescontar}`)
-                try {
-                    let cat = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
-                    if (!cat) {
-                        cat = await tx.categoriaGasto.create({ data: { nombre: 'Proveedores', color: '#3498DB' } })
-                    }
-
-                    const gasto = await tx.gastoOperativo.create({
-                        data: {
-                            fecha: parsedFecha,
-                            monto: montoADescontar,
-                            descripcion: esACuenta 
-                                ? `Pago a cuenta Insumos - ${observaciones || 'Directa'} (Abonado: $${montoADescontar.toLocaleString('es-AR')} / $${costoTotalFloat?.toLocaleString('es-AR')})`
-                                : `Compra de Insumos - ${observaciones || 'Directa'}`,
-                            categoriaId: cat.id
-                        }
-                    })
-                    gastoId = gasto.id
-                    console.log('Gasto created:', gastoId)
-
-                    if (pagoDividido && pagos && Array.isArray(pagos)) {
-                        for (const pago of pagos) {
-                            const montoPagoItem = parseFloat(String(pago.monto).replace(',', '.'));
-                            if (montoPagoItem > 0) {
-                                await CajaService.createMovimientoEnTx(tx, {
-                                    tipo: 'egreso',
-                                    concepto: 'pago_proveedor',
-                                    monto: montoPagoItem,
-                                    medioPago: pago.cajaOrigen?.includes('mercado_pago') ? 'transferencia' : 'efectivo',
-                                    cajaOrigen: pago.cajaOrigen,
-                                    descripcion: `Compra de Insumos: ${observaciones || 'Directa'}`,
-                                    gastoId: gastoId,
-                                    fecha: parsedFecha,
-                                })
-                            }
-                        }
-                        movimientoCajaId = 'multiple_pagos';
-                        console.log('Multiple MovimientoCaja created via CajaService');
-                    } else {
-                        const movCaja = await CajaService.createMovimientoEnTx(tx, {
-                            tipo: 'egreso',
-                            concepto: 'pago_proveedor',
-                            monto: montoADescontar,
-                            medioPago: selectedCaja.includes('mercado_pago') ? 'transferencia' : 'efectivo',
-                            cajaOrigen: selectedCaja,
-                            descripcion: esACuenta 
-                                ? `Pago a cuenta: ${observaciones || 'Directa'}`
-                                : `Compra de Insumos: ${observaciones || 'Directa'}`,
-                            gastoId: gastoId,
-                            fecha: parsedFecha,
-                        })
-                        movimientoCajaId = movCaja.id
-                        console.log('MovimientoCaja created via CajaService:', movimientoCajaId)
-                    }
-                } catch (financialError) {
-                    console.error('ERROR in financial steps:', financialError)
-                    throw new Error('Error en el proceso financiero (gasto/caja): ' + (financialError instanceof Error ? financialError.message : String(financialError)))
-                }
+            let gastoId: string | null = null
+            if (compra && montoPagado > 0) {
+                const gasto = await ComprasService.registrarPagoEnTx(tx, {
+                    compraId: compra.id,
+                    monto: montoPagado,
+                    pagos,
+                    fecha: fechaMovimiento,
+                    ubicacionId,
+                    descripcion: estadoPago === 'a_cuenta'
+                        ? `Pago a cuenta de compra - ${observaciones || 'Directa'}`
+                        : `Compra de insumos - ${observaciones || 'Directa'}`,
+                })
+                gastoId = gasto.id
             }
 
-            // 2. Crear Movimiento de Stock
-            console.log('Creating MovimientoStock...')
             const movimiento = await tx.movimientoStock.create({
                 data: {
                     insumoId,
                     tipo,
-                    fecha: parsedFecha,
-                    cantidad: cantidadFloat,
-                    cantidadSecundaria: movCantSec,
-                    observaciones: observaciones || null,
-                    proveedorId: proveedorId || null,
-                    costoTotal: costoTotalFloat,
-                    estadoPago: tipo === 'entrada' ? (estadoPago || 'pendiente') : null,
-                    montoPagado: esPagado ? costoTotalFloat : (esACuenta ? montoACuentaFloat : 0),
+                    fecha: fechaMovimiento,
+                    cantidad,
+                    cantidadSecundaria,
+                    observaciones,
+                    proveedorId,
+                    costoTotal,
+                    estadoPago,
+                    montoPagado,
                     gastoId,
-                    fechaVencimiento: fechaVencimiento ? new Date(fechaVencimiento) : null,
-                    fechaFactura: fechaFactura ? new Date(`${fechaFactura}T12:00:00Z`) : null,
-                    ubicacionId
-                }
+                    compraId: compra?.id || null,
+                    fechaVencimiento,
+                    fechaFactura,
+                    ubicacionId,
+                },
             })
-            console.log('MovimientoStock created:', movimiento.id)
 
-            // 3. Actualizar Insumo Global
-            const delta = tipo === 'entrada' ? cantidadFloat : -cantidadFloat
-            const deltaSec = movCantSec ? (tipo === 'entrada' ? movCantSec : -movCantSec) : 0
-            
-            const dataInsumo: any = { 
-                stockActual: { increment: delta },
-                stockActualSecundario: { increment: deltaSec }
-            }
-
-            if (tipo === 'entrada' && costoTotalFloat && actualizarCosto && cantidadFloat > 0) {
-                dataInsumo.precioUnitario = costoTotalFloat / cantidadFloat
-                console.log('Updating insumo price unitario:', dataInsumo.precioUnitario)
-            }
+            const signo = tipo === 'entrada' ? 1 : -1
+            const delta = signo * cantidad
+            const deltaSecundario = signo * (cantidadSecundaria || 0)
             await tx.insumo.update({
                 where: { id: insumoId },
-                data: dataInsumo
+                data: {
+                    stockActual: { increment: delta },
+                    stockActualSecundario: { increment: deltaSecundario },
+                    ...(tipo === 'entrada' && costoTotal && body.actualizarCosto
+                        ? { precioUnitario: costoTotal / cantidad }
+                        : {}),
+                },
             })
-            console.log('Global Insumo stock updated')
-
-            // 4. Actualizar/Crear el StockInsumo para esa ubicación específica
-            console.log('Upserting StockInsumo for location:', ubicacionId)
             await tx.stockInsumo.upsert({
                 where: { insumoId_ubicacionId: { insumoId, ubicacionId } },
                 update: {
                     cantidad: { increment: delta },
-                    cantidadSecundaria: { increment: deltaSec }
+                    cantidadSecundaria: { increment: deltaSecundario },
                 },
                 create: {
                     insumoId,
                     ubicacionId,
                     cantidad: delta,
-                    cantidadSecundaria: deltaSec
-                }
+                    cantidadSecundaria: deltaSecundario,
+                },
             })
-            console.log('StockInsumo upserted')
 
-            return movimiento
+            return tx.movimientoStock.findUnique({
+                where: { id: movimiento.id },
+                include: { compra: true },
+            })
         })
 
         return NextResponse.json(result, { status: 201 })
-    } catch (error: any) {
-        console.error('CRITICAL ERROR in POST /api/movimientos-stock:', error)
-        return NextResponse.json({ 
-            error: 'Error al registrar movimiento',
-            details: error instanceof Error ? error.message : String(error)
-        }, { status: 500 })
+    } catch (error) {
+        if (error instanceof CompraValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        console.error('Error en POST /api/movimientos-stock:', error)
+        return NextResponse.json({ error: 'Error al registrar movimiento' }, { status: 500 })
     }
 }
