@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { normalizarUnidadParaFormulario } from '@/lib/insumos/unidades'
 
 interface Proveedor {
     id: string
@@ -124,7 +125,7 @@ export default function InsumosPage() {
         setEditingId(ins.id)
         setForm({
             nombre: ins.nombre,
-            unidadMedida: ins.unidadMedida,
+            unidadMedida: normalizarUnidadParaFormulario(ins.unidadMedida),
             stockActual: String(ins.stockActual),
             stockMinimo: String(ins.stockMinimo),
             precioUnitario: String(ins.precioUnitario),
