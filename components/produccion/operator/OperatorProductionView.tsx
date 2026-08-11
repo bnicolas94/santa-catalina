@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import styles from './operator-production.module.css'
 
 type Notice = { type: 'success' | 'error'; text: string } | null
@@ -27,6 +27,7 @@ const PRODUCTION_OPTIONS = [
     { code: 'CLA', size: 48 },
     { code: 'JQ', size: 24 },
 ]
+const PACKAGES_PER_ROUND = 7
 
 function localDate(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -44,7 +45,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
     const [selected, setSelected] = useState<ProductionOption | null>(null)
     const [rounds, setRounds] = useState(1)
     const [closing, setClosing] = useState<any>(null)
-    const [produced, setProduced] = useState(0)
+    const [produced, setProduced] = useState('')
     const [rejected, setRejected] = useState(0)
     const [reason, setReason] = useState('')
     const [busy, setBusy] = useState(false)
@@ -63,13 +64,19 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                 name: product.nombre,
                 code: product.codigoInterno,
                 presentationSize: presentation.cantidad,
-                packagesPerRound: product.paquetesPorRonda || 14,
+                packagesPerRound: PACKAGES_PER_ROUND,
             }
         }).filter(Boolean) as ProductionOption[]
     }, [data?.productos])
 
     const dateLots = lots.filter((lot: any) => lot.fechaProduccion?.split('T')[0] === date)
     const activeLots = dateLots.filter((lot: any) => lot.estado === 'en_produccion')
+    const historyLots = dateLots.filter((lot: any) => lot.estado !== 'en_produccion')
+
+    useEffect(() => {
+        document.body.classList.add('operator-production-mode')
+        return () => document.body.classList.remove('operator-production-mode')
+    }, [])
 
     function changeDay(offset: number) {
         const next = new Date(`${date}T12:00:00`)
@@ -102,7 +109,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
     }
 
     function openClose(lot: any) {
-        setClosing(lot); setProduced(lot.unidadesProducidas || 0); setRejected(lot.unidadesRechazadas || 0)
+        setClosing(lot); setProduced(''); setRejected(lot.unidadesRechazadas || 0)
         setReason(lot.motivoRechazo || ''); setNotice(null)
     }
 
@@ -116,7 +123,8 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                     motivoRechazo: rejected > 0 ? reason : '', empleadosRonda: closing.empleadosRonda || 1,
                     fechaProduccion: closing.fechaProduccion?.split('T')[0] || date,
                     coordinadorId: closing.coordinador?.id || '', ubicacionId: closing.ubicacion?.id || '',
-                    estado: 'en_camara', horaFin: new Date().toISOString() }),
+                    estado: 'en_camara', horaFin: new Date().toISOString(),
+                    distribucionPresentaciones: Array.isArray(closing.distribucion) ? closing.distribucion : undefined }),
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error || 'No se pudo finalizar el lote')
@@ -149,6 +157,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                 <button onClick={() => openClose(lot)}>Finalizar lote</button>
             </article>)}</div>
         </section>}
+        <ProductionHistory lots={historyLots} />
         {selected && <StartModal item={selected} rounds={rounds} setRounds={setRounds} busy={busy} onClose={() => setSelected(null)} onStart={startProduction} />}
         {closing && <FinishModal lot={closing} produced={produced} setProduced={setProduced} rejected={rejected} setRejected={setRejected} reason={reason} setReason={setReason} busy={busy} onClose={() => setClosing(null)} onFinish={finishProduction} />}
     </main>
@@ -165,8 +174,8 @@ function ProductCard({ item, onStart }: { item: ProductionOption; onStart: (item
 function StartModal({ item, rounds, setRounds, busy, onClose, onStart }: any) {
     return <div className={styles.overlay} onMouseDown={onClose}><section className={styles.modal} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true">
         <header><div><span className={styles.eyebrow}>Nuevo lote</span><h2>Iniciar producción</h2><p>{item.name} · x{item.presentationSize}</p></div><button onClick={onClose}>×</button></header>
-        <div className={styles.rounds}><span>Rondas de producción</span><div><button onClick={() => setRounds(Math.max(1, rounds - 1))}>−</button><strong>{rounds}<small>rondas</small></strong><button onClick={() => setRounds(rounds + 1)}>+</button></div></div>
-        <div className={styles.quick}><button onClick={() => setRounds(rounds + 1)}>+1 ronda</button><button onClick={() => setRounds(rounds + 5)}>+5 rondas</button></div>
+        <div className={styles.rounds}><span>Rondas de 7 paquetes</span><div><button onClick={() => setRounds(Math.max(1, rounds - 1))}>−</button><strong>{rounds}<small>rondas</small></strong><button onClick={() => setRounds(rounds + 1)}>+</button></div></div>
+        <div className={styles.quick}><button onClick={() => setRounds(rounds + 1)}>+1 ronda (7)</button><button onClick={() => setRounds(rounds + 2)}>+2 rondas (14)</button></div>
         <div className={styles.estimate}><span>Total estimado</span><strong>{rounds * item.packagesPerRound} paquetes</strong></div>
         <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onStart} disabled={busy}>{busy ? 'Iniciando…' : '▷ Iniciar producción'}</button></footer>
     </section></div>
@@ -175,8 +184,27 @@ function StartModal({ item, rounds, setRounds, busy, onClose, onStart }: any) {
 function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason, setReason, busy, onClose, onFinish }: any) {
     return <div className={styles.overlay} onMouseDown={onClose}><section className={`${styles.modal} ${styles.finish}`} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true">
         <header><div><span className={styles.eyebrow}>Lote en curso</span><h2>Finalizar lote</h2><p>{lot.producto.nombre}</p></div><button onClick={onClose}>×</button></header>
-        <div className={styles.fields}><label><span>Paquetes producidos</span><input type="number" min="0" value={produced} onChange={event => setProduced(Math.max(0,Number(event.target.value)))} /></label><label><span>Paquetes rechazados / merma</span><input type="number" min="0" value={rejected} onChange={event => setRejected(Math.max(0,Number(event.target.value)))} /></label></div>
+        <div className={styles.fields}><label><span>Paquetes producidos</span><input type="number" min="1" value={produced} placeholder={`Estimado: ${lot.unidadesProducidas}`} autoFocus onChange={event => setProduced(event.target.value.replace(/^0+(?=\d)/, ''))} /></label><label><span>Paquetes rechazados / merma</span><input type="number" min="0" value={rejected} onChange={event => setRejected(Math.max(0,Number(event.target.value)))} /></label></div>
         {rejected > 0 && <label className={styles.reason}><span>Motivo del rechazo</span><input value={reason} onChange={event => setReason(event.target.value)} placeholder="Ej.: rotura, mal sellado…" /></label>}
-        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onFinish} disabled={busy || (rejected > 0 && !reason.trim())}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
+        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onFinish} disabled={busy || !produced || Number(produced) <= 0 || (rejected > 0 && !reason.trim())}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
     </section></div>
+}
+
+function ProductionHistory({ lots }: { lots: any[] }) {
+    const stateLabels: Record<string, string> = { en_camara: 'En cámara', distribuido: 'Distribuido', merma: 'Merma', vencido: 'Vencido' }
+    const presentationSize = (lot: any) => {
+        const distribution = Array.isArray(lot.distribucion) ? lot.distribucion[0] : null
+        const presentationId = distribution?.presentacionId || lot.movimientosProducto?.[0]?.presentacionId
+        return lot.producto?.presentaciones?.find((item: any) => item.id === presentationId)?.cantidad
+    }
+
+    return <section className={`${styles.section} ${styles.history}`}>
+        <div className={styles.sectionTitle}><div><span className={styles.eyebrow}>Solo lectura</span><h2>Historial producido del día</h2></div><span>{lots.length} lote{lots.length === 1 ? '' : 's'}</span></div>
+        {lots.length === 0 ? <div className={styles.empty}>Todavía no hay lotes finalizados para esta fecha.</div> : <div className={styles.historyList}>
+            {lots.map(lot => <article key={lot.id} className={styles.historyItem}>
+                <div><span className={styles.historyCode}>{lot.producto?.codigoInterno}{presentationSize(lot) ? ` x${presentationSize(lot)}` : ''}</span><h3>{lot.producto?.nombre}</h3><small>{lot.id}</small></div>
+                <div className={styles.historyMetrics}><span><strong>{lot.unidadesProducidas}</strong> producidos</span><span><strong>{lot.unidadesRechazadas || 0}</strong> rechazados</span><span className={styles.readonlyState}>{stateLabels[lot.estado] || lot.estado}</span></div>
+            </article>)}
+        </div>}
+    </section>
 }

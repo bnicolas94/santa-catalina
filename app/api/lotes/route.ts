@@ -1,4 +1,5 @@
 // VERSION_IDENTIFIER: 2026-03-13_V3_CLEAN
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { productoId, fechaProduccion, unidadesProducidas, empleadosRonda, coordinadorId, estado, ubicacionId } = body
+        const { productoId, presentacionId, fechaProduccion, unidadesProducidas, empleadosRonda, coordinadorId, estado, ubicacionId } = body
 
         if (!productoId || !fechaProduccion || !unidadesProducidas || !ubicacionId) {
             return NextResponse.json({ error: 'Producto, fecha, unidades y ubicación son requeridos' }, { status: 400 })
@@ -77,6 +78,13 @@ export async function POST(request: Request) {
         const producto = await prisma.producto.findUnique({ where: { id: productoId } })
         if (!producto) {
             return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
+        }
+
+        const presentacionSeleccionada = presentacionId
+            ? await prisma.presentacion.findFirst({ where: { id: presentacionId, productoId } })
+            : null
+        if (presentacionId && !presentacionSeleccionada) {
+            return NextResponse.json({ error: 'La presentación seleccionada no corresponde al producto' }, { status: 400 })
         }
 
         // Buscar el número más alto existente para este producto+día para evitar colisiones
@@ -125,7 +133,9 @@ export async function POST(request: Request) {
                     productoId,
                     coordinadorId: coordinadorId || null,
                     ubicacionId,
-                    distribucion: body.distribucionPresentaciones || null,
+                    distribucion: presentacionId
+                        ? [{ presentacionId, cantidad: qtyPaquetes }]
+                        : body.distribucionPresentaciones || null,
                 },
                 include: {
                     producto: true,
@@ -158,9 +168,8 @@ export async function POST(request: Request) {
             }
 
             if ((estado || 'en_camara') !== 'en_produccion') {
-                const presentacion = await tx.presentacion.findFirst({
-                    where: { productoId },
-                    orderBy: { cantidad: 'desc' }
+                const presentacion = presentacionSeleccionada || await tx.presentacion.findFirst({
+                    where: { productoId }, orderBy: { cantidad: 'desc' }
                 })
                 if (presentacion) {
                     await tx.stockProducto.upsert({
