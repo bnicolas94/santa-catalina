@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Proveedor {
     id: string
@@ -509,6 +510,7 @@ export default function InsumosPage() {
                                             step="0.01"
                                             className="form-input"
                                             value={form.stockActual}
+                                            disabled={Boolean(editingId)}
                                             onChange={(e) => {
                                                 const val = e.target.value
                                                 const factor = parseFloat(form.factorConversion.replace(',', '.'))
@@ -530,6 +532,9 @@ export default function InsumosPage() {
                                         />
                                     </div>
                                 </div>
+                                {editingId && <div style={{ marginTop: '-8px', marginBottom: 'var(--space-4)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-info-bg)', color: 'var(--color-info)' }}>
+                                    El stock no se modifica desde la ficha del insumo. Usá <Link href="/conteos-insumos" style={{ fontWeight: 700, textDecoration: 'underline' }}>Conteos</Link> o registrá un movimiento de entrada/salida.
+                                </div>}
                                 <div style={{ padding: 'var(--space-4)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
                                     <h4 style={{ marginBottom: 'var(--space-3)', fontSize: 'var(--text-xs)', textTransform: 'uppercase', color: 'var(--color-gray-500)' }}>Unidad Secundaria (Opcional)</h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
@@ -570,6 +575,7 @@ export default function InsumosPage() {
                                                 step="0.01"
                                                 className="form-input"
                                                 value={form.stockActualSecundario}
+                                                disabled={Boolean(editingId)}
                                                 onChange={(e) => {
                                                     const val = e.target.value
                                                     const factor = parseFloat(form.factorConversion.replace(',', '.'))

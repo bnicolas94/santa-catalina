@@ -70,6 +70,7 @@ model Empleado {
   sanciones                 Sancion[]
   talleUniforme             TalleUniforme?
   entregasUniforme          EntregaUniforme[]        @relation("EmpleadoEntregasUniforme")
+  conteosInsumo             ConteoInsumo[]           @relation("ResponsableConteoInsumo")
 
   @@map("empleados")
 }
@@ -162,26 +163,27 @@ model FamiliaInsumo {
 }
 
 model Insumo {
-  id                    String            @id @default(uuid())
+  id                    String                @id @default(uuid())
   nombre                String
-  unidadMedida          String            @map("unidad_medida")
-  stockActual           Float             @default(0) @map("stock_actual")
-  stockMinimo           Float             @default(0) @map("stock_minimo")
-  precioUnitario        Float             @default(0) @map("precio_unitario")
-  diasReposicion        Int               @default(1) @map("dias_reposicion")
-  activo                Boolean           @default(true)
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
-  proveedorId           String?           @map("id_proveedor")
-  familiaId             String?           @map("id_familia")
-  unidadSecundaria      String?           @map("unidad_secundaria")
-  factorConversion      Float?            @map("factor_conversion")
-  stockActualSecundario Float             @default(0) @map("stock_actual_secundario")
+  unidadMedida          String                @map("unidad_medida")
+  stockActual           Float                 @default(0) @map("stock_actual")
+  stockMinimo           Float                 @default(0) @map("stock_minimo")
+  precioUnitario        Float                 @default(0) @map("precio_unitario")
+  diasReposicion        Int                   @default(1) @map("dias_reposicion")
+  activo                Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  proveedorId           String?               @map("id_proveedor")
+  familiaId             String?               @map("id_familia")
+  unidadSecundaria      String?               @map("unidad_secundaria")
+  factorConversion      Float?                @map("factor_conversion")
+  stockActualSecundario Float                 @default(0) @map("stock_actual_secundario")
   fichasTecnicas        FichaTecnica[]
-  familia               FamiliaInsumo?    @relation(fields: [familiaId], references: [id])
-  proveedor             Proveedor?        @relation(fields: [proveedorId], references: [id])
+  familia               FamiliaInsumo?        @relation(fields: [familiaId], references: [id])
+  proveedor             Proveedor?            @relation(fields: [proveedorId], references: [id])
   movimientos           MovimientoStock[]
   stocks                StockInsumo[]
+  detallesConteo        ConteoInsumoDetalle[]
 
   @@map("insumos")
 }
@@ -201,27 +203,28 @@ model FichaTecnica {
 }
 
 model Lote {
-  id                  String               @id
-  fechaProduccion     DateTime             @map("fecha_produccion")
-  horaInicio          DateTime?            @map("hora_inicio")
-  horaFin             DateTime?            @map("hora_fin")
-  unidadesProducidas  Int                  @default(0) @map("unidades_producidas")
-  unidadesRechazadas  Int                  @default(0) @map("unidades_rechazadas")
-  motivoRechazo       String?              @map("motivo_rechazo")
-  empleadosRonda      Int                  @default(1) @map("empleados_ronda")
-  estado              String               @default("en_camara")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  ubicacionId         String               @map("id_ubicacion")
-  productoId          String               @map("id_producto")
-  coordinadorId       String?              @map("id_empleado_coord")
-  distribucion        Json?                @map("distribucion")
-  detallePedidos      DetallePedido[]
-  coordinador         Empleado?            @relation("CoordinadorLote", fields: [coordinadorId], references: [id])
-  producto            Producto             @relation(fields: [productoId], references: [id])
-  ubicacion           Ubicacion            @relation(fields: [ubicacionId], references: [id])
-  movimientosProducto MovimientoProducto[]
-  movimientosStock    MovimientoStock[]
+  id                   String               @id
+  fechaProduccion      DateTime             @map("fecha_produccion")
+  horaInicio           DateTime?            @map("hora_inicio")
+  horaFin              DateTime?            @map("hora_fin")
+  unidadesPlanificadas Int                  @default(0) @map("unidades_planificadas")
+  unidadesProducidas   Int                  @default(0) @map("unidades_producidas")
+  unidadesRechazadas   Int                  @default(0) @map("unidades_rechazadas")
+  motivoRechazo        String?              @map("motivo_rechazo")
+  empleadosRonda       Int                  @default(1) @map("empleados_ronda")
+  estado               String               @default("en_camara")
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  ubicacionId          String               @map("id_ubicacion")
+  productoId           String               @map("id_producto")
+  coordinadorId        String?              @map("id_empleado_coord")
+  distribucion         Json?                @map("distribucion")
+  detallePedidos       DetallePedido[]
+  coordinador          Empleado?            @relation("CoordinadorLote", fields: [coordinadorId], references: [id])
+  producto             Producto             @relation(fields: [productoId], references: [id])
+  ubicacion            Ubicacion            @relation(fields: [ubicacionId], references: [id])
+  movimientosProducto  MovimientoProducto[]
+  movimientosStock     MovimientoStock[]
 
   @@map("lotes")
 }
@@ -243,6 +246,7 @@ model Ubicacion {
   rutasOrigen         Ruta[]               @relation("OrigenRuta")
   stocksInsumo        StockInsumo[]
   stocks              StockProducto[]
+  conteosInsumo       ConteoInsumo[]
 
   @@map("ubicaciones")
 }
@@ -291,30 +295,31 @@ model MovimientoProducto {
 }
 
 model MovimientoStock {
-  id                 String          @id @default(uuid())
+  id                 String               @id @default(uuid())
   tipo               String
   cantidad           Float
-  fecha              DateTime        @default(now())
+  fecha              DateTime             @default(now())
   observaciones      String?
-  motivoMerma        String?         @map("motivo_merma")
-  costoTotal         Float?          @map("costo_total")
-  estadoPago         String?         @default("pagado")
-  createdAt          DateTime        @default(now())
-  insumoId           String          @map("id_insumo")
-  loteOrigenId       String?         @map("id_lote_origen")
-  proveedorId        String?         @map("id_proveedor")
-  gastoId            String?         @map("id_gasto")
-  fechaVencimiento   DateTime?       @map("fecha_vencimiento")
-  ubicacionId        String?         @map("id_ubicacion")
-  cantidadSecundaria Float?          @map("cantidad_secundaria")
-  numeroFactura      String?         @map("numero_factura")
-  montoPagado        Float?          @default(0) @map("monto_pagado")
-  fechaFactura       DateTime?       @map("fecha_factura")
-  gasto              GastoOperativo? @relation(fields: [gastoId], references: [id])
-  insumo             Insumo          @relation(fields: [insumoId], references: [id])
-  loteOrigen         Lote?           @relation(fields: [loteOrigenId], references: [id])
-  proveedor          Proveedor?      @relation(fields: [proveedorId], references: [id])
-  ubicacion          Ubicacion?      @relation(fields: [ubicacionId], references: [id])
+  motivoMerma        String?              @map("motivo_merma")
+  costoTotal         Float?               @map("costo_total")
+  estadoPago         String?              @default("pagado")
+  createdAt          DateTime             @default(now())
+  insumoId           String               @map("id_insumo")
+  loteOrigenId       String?              @map("id_lote_origen")
+  proveedorId        String?              @map("id_proveedor")
+  gastoId            String?              @map("id_gasto")
+  fechaVencimiento   DateTime?            @map("fecha_vencimiento")
+  ubicacionId        String?              @map("id_ubicacion")
+  cantidadSecundaria Float?               @map("cantidad_secundaria")
+  numeroFactura      String?              @map("numero_factura")
+  montoPagado        Float?               @default(0) @map("monto_pagado")
+  fechaFactura       DateTime?            @map("fecha_factura")
+  gasto              GastoOperativo?      @relation(fields: [gastoId], references: [id])
+  insumo             Insumo               @relation(fields: [insumoId], references: [id])
+  loteOrigen         Lote?                @relation(fields: [loteOrigenId], references: [id])
+  proveedor          Proveedor?           @relation(fields: [proveedorId], references: [id])
+  ubicacion          Ubicacion?           @relation(fields: [ubicacionId], references: [id])
+  detalleConteo      ConteoInsumoDetalle?
 
   @@index([tipo, fecha])
   @@map("movimientos_stock")
@@ -332,6 +337,38 @@ model StockInsumo {
 
   @@unique([insumoId, ubicacionId])
   @@map("stock_insumos")
+}
+
+model ConteoInsumo {
+  id            String                @id @default(uuid())
+  fecha         DateTime              @default(now())
+  estado        String                @default("confirmado")
+  observaciones String?
+  ubicacionId   String                @map("id_ubicacion")
+  responsableId String?               @map("id_responsable")
+  createdAt     DateTime              @default(now())
+  ubicacion     Ubicacion             @relation(fields: [ubicacionId], references: [id])
+  responsable   Empleado?             @relation("ResponsableConteoInsumo", fields: [responsableId], references: [id])
+  detalles      ConteoInsumoDetalle[]
+
+  @@index([ubicacionId, fecha])
+  @@map("conteos_insumo")
+}
+
+model ConteoInsumoDetalle {
+  id                String           @id @default(uuid())
+  conteoId          String           @map("id_conteo")
+  insumoId          String           @map("id_insumo")
+  stockSistema      Float            @map("stock_sistema")
+  cantidadContada   Float            @map("cantidad_contada")
+  diferencia        Float
+  movimientoStockId String?          @unique @map("id_movimiento_stock")
+  conteo            ConteoInsumo     @relation(fields: [conteoId], references: [id], onDelete: Cascade)
+  insumo            Insumo           @relation(fields: [insumoId], references: [id])
+  movimientoStock   MovimientoStock? @relation(fields: [movimientoStockId], references: [id])
+
+  @@unique([conteoId, insumoId])
+  @@map("conteos_insumo_detalle")
 }
 
 model Cliente {

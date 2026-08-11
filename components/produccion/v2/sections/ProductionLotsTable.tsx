@@ -58,7 +58,7 @@ export const ProductionLotsTable: React.FC<ProductionLotsTableProps> = ({ lotes,
                                 <td>
                                     <div style={{ display: 'flex', gap: '4px' }}>
                                         <button className="btn btn-ghost btn-sm" title="Editar / Cerrar" onClick={() => onEdit(l)}>✏️</button>
-                                        <button className="btn btn-ghost btn-danger btn-sm" title="Eliminar" onClick={() => onDelete(l)}>🗑️</button>
+                                        <button className="btn btn-ghost btn-danger btn-sm" title="Anular lote" onClick={() => onDelete(l)}>🚫</button>
                                     </div>
                                 </td>
                             </tr>

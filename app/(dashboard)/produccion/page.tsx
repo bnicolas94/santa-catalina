@@ -33,6 +33,20 @@ interface Ubicacion {
     tipo: string
 }
 
+function ajustarDistribucionSimple(
+    distribucion: { presentacionId: string, cantidad: number }[],
+    paquetesBuenos: number,
+) {
+    const conCantidad = distribucion.filter(item => Number(item.cantidad) > 0)
+    if (conCantidad.length > 1 || distribucion.length === 0) return distribucion
+
+    const presentacionObjetivo = conCantidad[0]?.presentacionId || distribucion[0].presentacionId
+    return distribucion.map(item => ({
+        ...item,
+        cantidad: item.presentacionId === presentacionObjetivo ? Math.max(paquetesBuenos, 0) : 0,
+    }))
+}
+
 interface Coordinador {
     id: string
     nombre: string
@@ -60,6 +74,7 @@ const ESTADOS_LOTE = [
     { value: 'distribuido', label: 'Distribuido', color: '#2ECC71', emoji: '✅' },
     { value: 'merma', label: 'Merma', color: '#E74C3C', emoji: '⚠️' },
     { value: 'vencido', label: 'Vencido', color: '#95A5A6', emoji: '🕐' },
+    { value: 'cancelado', label: 'Anulado', color: '#7F8C8D', emoji: '🚫' },
 ]
 
 function getEstadoInfo(estado: string) {
@@ -329,12 +344,22 @@ export default function ProduccionPage() {
         if (!loteSeleccionado) return
         setError('')
         try {
+            const totalProducido = Number(cerrarForm.unidadesProducidas)
+            const totalRechazado = Number(cerrarForm.unidadesRechazadas)
+            if (totalRechazado > totalProducido) {
+                throw new Error('Los paquetes rechazados no pueden superar el total producido.')
+            }
+            const paquetesBuenos = totalProducido - totalRechazado
+
             // Verify total distributed units match the reported production units
             if (cerrarForm.estado !== 'en_produccion' && loteSeleccionado.estado === 'en_produccion') {
                 const presentaciones = loteSeleccionado.producto.presentaciones || []
                 if (presentaciones.length > 0) {
-                    const primarySize = presentaciones[0].cantidad
-                    const totalUnidadesEsperadas = Number(cerrarForm.unidadesProducidas) * primarySize
+                    const presentacionBaseId = Array.isArray(loteSeleccionado.distribucion)
+                        ? loteSeleccionado.distribucion[0]?.presentacionId
+                        : undefined
+                    const primarySize = presentaciones.find(p => p.id === presentacionBaseId)?.cantidad || presentaciones[0].cantidad
+                    const totalUnidadesEsperadas = paquetesBuenos * primarySize
                     
                     const totalUnidadesDistribuidas = cerrarForm.distribucionPresentaciones.reduce((acc, current) => {
                         const pres = presentaciones.find(p => p.id === current.presentacionId)
@@ -342,13 +367,13 @@ export default function ProduccionPage() {
                     }, 0)
 
                     if (totalUnidadesDistribuidas !== totalUnidadesEsperadas) {
-                        throw new Error(`La suma de unidades distribuidas (${totalUnidadesDistribuidas}) no coincide con el total producido reportado (${totalUnidadesEsperadas} unidades).`)
+                        throw new Error(`La distribución (${totalUnidadesDistribuidas} unidades) debe coincidir con los ${paquetesBuenos} paquetes buenos (${totalUnidadesEsperadas} unidades).`)
                     }
                 } else {
                     // Fallback comparison if no presentations (legacy or edge case)
                     const totalPaquetesDistribucion = cerrarForm.distribucionPresentaciones.reduce((a, b) => a + Number(b.cantidad), 0)
-                    if (totalPaquetesDistribucion !== Number(cerrarForm.unidadesProducidas)) {
-                        throw new Error(`La suma de paquetes distribuidos (${totalPaquetesDistribucion}) no coincide con el total producido reportado (${cerrarForm.unidadesProducidas}).`)
+                    if (totalPaquetesDistribucion !== paquetesBuenos) {
+                        throw new Error(`La suma de paquetes distribuidos (${totalPaquetesDistribucion}) debe coincidir con los ${paquetesBuenos} paquetes buenos.`)
                     }
                 }
             }
@@ -383,15 +408,15 @@ export default function ProduccionPage() {
     }
 
     async function handleDeleteLote(lote: Lote) {
-        if (!confirm(`¿Seguro que querés eliminar el lote ${lote.id}?\n\nSe revertirá el stock de insumos consumidos y el stock de producto terminado generado.`)) return
+        if (!confirm(`¿Seguro que querés anular el lote ${lote.id}?\n\nSe revertirá el stock, pero el lote y sus movimientos quedarán en el historial.`)) return
         setError('')
         try {
             const res = await fetch(`/api/lotes/${lote.id}`, { method: 'DELETE' })
             if (!res.ok) {
                 const data = await res.json()
-                throw new Error(data.error || 'Error al eliminar')
+                throw new Error(data.error || 'Error al anular')
             }
-            setSuccess(`Lote ${lote.id} eliminado y stock revertido`)
+            setSuccess(`Lote ${lote.id} anulado y stock revertido`)
             fetchData()
             setTimeout(() => setSuccess(''), 4000)
         } catch (err: unknown) {
@@ -1594,8 +1619,16 @@ export default function ProduccionPage() {
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
-                                        <label className="form-label">Paquetes producidos</label>
-                                        <input type="number" className="form-input" value={cerrarForm.unidadesProducidas} onChange={(e) => setCerrarForm({ ...cerrarForm, unidadesProducidas: e.target.value })} />
+                                        <label className="form-label">Total producido (incluye rechazados)</label>
+                                        <input type="number" className="form-input" value={cerrarForm.unidadesProducidas} onChange={(e) => {
+                                            const unidadesProducidas = e.target.value
+                                            const buenos = Number(unidadesProducidas || 0) - Number(cerrarForm.unidadesRechazadas || 0)
+                                            setCerrarForm({
+                                                ...cerrarForm,
+                                                unidadesProducidas,
+                                                distribucionPresentaciones: ajustarDistribucionSimple(cerrarForm.distribucionPresentaciones, buenos),
+                                            })
+                                        }} />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Operarios en ronda</label>
@@ -1622,8 +1655,16 @@ export default function ProduccionPage() {
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
                                     <div className="form-group">
-                                        <label className="form-label">Paquetes rechazados</label>
-                                        <input type="number" className="form-input" value={cerrarForm.unidadesRechazadas} onChange={(e) => setCerrarForm({ ...cerrarForm, unidadesRechazadas: e.target.value })} />
+                                        <label className="form-label">Paquetes rechazados (incluidos en el total)</label>
+                                        <input type="number" className="form-input" value={cerrarForm.unidadesRechazadas} onChange={(e) => {
+                                            const unidadesRechazadas = e.target.value
+                                            const buenos = Number(cerrarForm.unidadesProducidas || 0) - Number(unidadesRechazadas || 0)
+                                            setCerrarForm({
+                                                ...cerrarForm,
+                                                unidadesRechazadas,
+                                                distribucionPresentaciones: ajustarDistribucionSimple(cerrarForm.distribucionPresentaciones, buenos),
+                                            })
+                                        }} />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Motivo rechazo</label>
@@ -1631,12 +1672,17 @@ export default function ProduccionPage() {
                                     </div>
                                 </div>
 
+                                <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)' }}>
+                                    Ingresan a cámara: <strong>{Math.max(Number(cerrarForm.unidadesProducidas || 0) - Number(cerrarForm.unidadesRechazadas || 0), 0)} paquetes buenos</strong>
+                                    {' · '}Merma: <strong>{Number(cerrarForm.unidadesRechazadas || 0)}</strong>
+                                </div>
+
                                 {loteSeleccionado?.producto?.presentaciones && loteSeleccionado.producto.presentaciones.length > 0 && (
                                     <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-3)', backgroundColor: 'var(--color-gray-50)', borderRadius: 'var(--radius-md)' }}>
                                         <h4 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-md)', fontFamily: 'var(--font-heading)' }}>Distribución por Presentación</h4>
                                         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginBottom: 'var(--space-3)' }}>
                                             Si cambias el estado a terminado o distribuyes stock, indica cuántos paquetes de cada tamaño armaste.
-                                            El total debe sumar <strong>{cerrarForm.unidadesProducidas || 0}</strong> paquetes.
+                                            La distribución debe equivaler a <strong>{Math.max(Number(cerrarForm.unidadesProducidas || 0) - Number(cerrarForm.unidadesRechazadas || 0), 0)}</strong> paquetes buenos de la presentación base.
                                         </p>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                                             {loteSeleccionado.producto.presentaciones.map((p, index) => {
