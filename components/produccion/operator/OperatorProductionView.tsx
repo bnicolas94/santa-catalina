@@ -67,11 +67,16 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                 code: product.codigoInterno,
                 presentationSize: presentation.cantidad,
                 packagesPerRound: PACKAGES_PER_ROUND,
-                inputsPerPackage: (product.fichasTecnicas || []).map((recipe: any) => ({
+                inputsPerPackage: (product.fichasTecnicas || [])
+                    .filter((recipe: any) => !recipe.presentacionId || recipe.presentacionId === presentation.id)
+                    .map((recipe: any) => ({
                     id: recipe.insumoId,
                     name: recipe.insumo?.nombre || 'Insumo',
                     unit: recipe.insumo?.unidadMedida || recipe.unidadMedida,
-                    quantity: recipe.cantidadPorUnidad * presentation.cantidad / (1 - Math.min(Math.max(Number(recipe.merma) || 0, 0), 99.99) / 100),
+                    quantity: (recipe.tipoConsumo === 'por_paquete'
+                        ? recipe.cantidadPorUnidad
+                        : recipe.cantidadPorUnidad * presentation.cantidad
+                    ) / (1 - Math.min(Math.max(Number(recipe.merma) || 0, 0), 99.99) / 100),
                 })),
             }
         }).filter(Boolean) as ProductionOption[]

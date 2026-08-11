@@ -98,7 +98,13 @@ export async function POST(request: Request) {
 
         const fichasT = await prisma.fichaTecnica.findMany({
             where: { productoId },
-            select: { insumoId: true, cantidadPorUnidad: true, merma: true },
+            select: {
+                insumoId: true,
+                cantidadPorUnidad: true,
+                merma: true,
+                tipoConsumo: true,
+                presentacionId: true,
+            },
         })
         if (fichasT.length === 0) {
             return NextResponse.json({ error: 'El producto no tiene una ficha técnica configurada' }, { status: 400 })
@@ -107,6 +113,7 @@ export async function POST(request: Request) {
             fichasT,
             qtyPaquetes,
             presentacionSeleccionada.cantidad,
+            presentacionSeleccionada.id,
         )
 
         // Buscar el número más alto existente para este producto+día para evitar colisiones

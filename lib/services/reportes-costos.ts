@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getGlobalConfig } from './reportes'
-import { getMermasPeriodo } from './mermas-costos'
+import { calcularCostoPaqueteReceta, getMermasPeriodo } from './mermas-costos'
 
 /**
  * Extrae la fecha de INICIO del período trabajado desde el campo `periodo` de una liquidación.
@@ -446,19 +446,6 @@ export async function getCostosReport(
 
     const costoPorProducto = productos.map(prod => {
         // Calcular costo unitario (por sanguchito)
-        let costoUnitario = 0
-        const detalleInsumos: { nombre: string; cantidad: number; costo: number }[] = []
-
-        for (const ft of prod.fichasTecnicas) {
-            const costo = ft.cantidadPorUnidad * (ft.insumo.precioUnitario || 0)
-            costoUnitario += costo
-            detalleInsumos.push({
-                nombre: ft.insumo.nombre,
-                cantidad: ft.cantidadPorUnidad,
-                costo
-            })
-        }
-
         // Encontrar la presentación principal para calcular margen
         const presentacionPrincipal = prod.presentaciones.length > 0
             ? prod.presentaciones.sort((a, b) => b.cantidad - a.cantidad)[0]
@@ -466,7 +453,21 @@ export async function getCostosReport(
 
         const precioVenta = presentacionPrincipal?.precioVenta || 0
         const cantidadPresentacion = presentacionPrincipal?.cantidad || 1
-        const costoTotal = costoUnitario * cantidadPresentacion
+        const costoTotal = calcularCostoPaqueteReceta(
+            prod.fichasTecnicas,
+            cantidadPresentacion,
+            presentacionPrincipal?.id,
+        )
+        const costoUnitario = costoTotal / cantidadPresentacion
+        const detalleInsumos = prod.fichasTecnicas
+            .filter(ft => !ft.presentacionId || ft.presentacionId === presentacionPrincipal?.id)
+            .map(ft => {
+                const cantidad = ft.tipoConsumo === 'por_paquete'
+                    ? ft.cantidadPorUnidad
+                    : ft.cantidadPorUnidad * cantidadPresentacion
+                const cantidadReal = cantidad / (1 - Math.min(Math.max(ft.merma || 0, 0), 99.99) / 100)
+                return { nombre: ft.insumo.nombre, cantidad, costo: cantidadReal * (ft.insumo.precioUnitario || 0) }
+            })
         const margenBruto = precioVenta - costoTotal
         const margenPct = precioVenta > 0 ? (margenBruto / precioVenta) * 100 : 0
 

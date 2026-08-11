@@ -28,3 +28,23 @@ test('rechaza cantidades de paquetes decimales o negativas', () => {
     assert.throws(() => calcularConsumosProduccion([], 1.5, 48), /entero/)
     assert.throws(() => calcularConsumosProduccion([], -1, 48), /entero/)
 })
+
+test('los envases por paquete no se multiplican por la cantidad de sandwiches', () => {
+    const receta = [{ insumoId: 'bandeja', cantidadPorUnidad: 1, tipoConsumo: 'por_paquete' }]
+    const [consumo] = calcularConsumosProduccion(receta, 7, 48, 'x48')
+
+    assert.equal(consumo.cantidad, 7)
+})
+
+test('aplica los insumos configurados para la presentacion elegida', () => {
+    const receta = [
+        { insumoId: 'pan', cantidadPorUnidad: 0.375, tipoConsumo: 'por_unidad' },
+        { insumoId: 'bandeja48', cantidadPorUnidad: 1, tipoConsumo: 'por_paquete', presentacionId: 'x48' },
+        { insumoId: 'bandeja24', cantidadPorUnidad: 1, tipoConsumo: 'por_paquete', presentacionId: 'x24' },
+    ]
+
+    assert.deepEqual(calcularConsumosProduccion(receta, 1, 24, 'x24'), [
+        { insumoId: 'pan', cantidad: 9 },
+        { insumoId: 'bandeja24', cantidad: 1 },
+    ])
+})

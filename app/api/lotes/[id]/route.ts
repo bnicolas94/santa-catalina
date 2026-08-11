@@ -240,9 +240,21 @@ export async function PUT(
             // ─── Conciliación de insumos sin borrar el historial ───
             const fichas = await tx.fichaTecnica.findMany({
                 where: { productoId: updated.productoId },
-                select: { insumoId: true, cantidadPorUnidad: true, merma: true },
+                select: {
+                    insumoId: true,
+                    cantidadPorUnidad: true,
+                    merma: true,
+                    tipoConsumo: true,
+                    presentacionId: true,
+                },
             })
-            if (presentacionBase && fichas.length > 0) {
+            const usaConsumoAlInicio = await tx.movimientoStock.count({
+                where: {
+                    loteOrigenId: id,
+                    observaciones: { startsWith: 'Consumo al iniciar producci' },
+                },
+            })
+            if (presentacionBase && fichas.length > 0 && usaConsumoAlInicio > 0) {
                 const paquetesConsumidos = nuevoEstado === 'en_produccion'
                     ? updated.unidadesPlanificadas || updated.unidadesProducidas
                     : updated.unidadesProducidas
@@ -250,6 +262,7 @@ export async function PUT(
                     fichas,
                     paquetesConsumidos,
                     presentacionBase.cantidad,
+                    presentacionBase.id,
                 )
                 await conciliarConsumoLote(tx, {
                     loteId: id,

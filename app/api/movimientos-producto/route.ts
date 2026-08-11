@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import { calcularCostoReceta, extraerMotivoMerma } from '@/lib/services/mermas-costos'
+import { calcularCostoPaqueteReceta, extraerMotivoMerma } from '@/lib/services/mermas-costos'
 import type { Prisma } from '@prisma/client'
 import { revalidateTag } from 'next/cache'
 
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
                     data: { cantidad: { decrement: cant } },
                 })
                 const costoUnitario = tipo === 'merma'
-                    ? calcularCostoReceta(stock.producto.fichasTecnicas) * stock.presentacion.cantidad
+                    ? calcularCostoPaqueteReceta(stock.producto.fichasTecnicas, stock.presentacion.cantidad, presentacionId)
                     : null
                 await tx.movimientoProducto.create({
                     data: {

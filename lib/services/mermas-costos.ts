@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 type FichaCosto = {
     cantidadPorUnidad: number
     merma?: number | null
+    tipoConsumo?: string | null
+    presentacionId?: string | null
     insumo: { precioUnitario: number }
 }
 
@@ -26,6 +28,22 @@ export function calcularCostoReceta(fichas: FichaCosto[]) {
         const cantidadReal = ficha.cantidadPorUnidad / (1 - mermaPct / 100)
         return total + cantidadReal * (ficha.insumo.precioUnitario || 0)
     }, 0)
+}
+
+export function calcularCostoPaqueteReceta(
+    fichas: FichaCosto[],
+    unidadesPorPaquete: number,
+    presentacionId?: string,
+) {
+    return fichas
+        .filter(ficha => !ficha.presentacionId || ficha.presentacionId === presentacionId)
+        .reduce((total, ficha) => {
+            const mermaPct = Math.min(Math.max(ficha.merma || 0, 0), 99.99)
+            const cantidadNeta = ficha.tipoConsumo === 'por_paquete'
+                ? ficha.cantidadPorUnidad
+                : ficha.cantidadPorUnidad * unidadesPorPaquete
+            return total + cantidadNeta / (1 - mermaPct / 100) * (ficha.insumo.precioUnitario || 0)
+        }, 0)
 }
 
 export function extraerMotivoMerma(observaciones?: string | null) {
@@ -168,7 +186,11 @@ export async function registrarMerma(input: RegistrarMermaInput) {
             throw new Error(`Stock insuficiente en la ubicación. Disponible: ${stock?.cantidad || 0} paquetes`)
         }
 
-        const costoUnidadPresentacion = calcularCostoReceta(presentacion.producto.fichasTecnicas) * presentacion.cantidad
+        const costoUnidadPresentacion = calcularCostoPaqueteReceta(
+            presentacion.producto.fichasTecnicas,
+            presentacion.cantidad,
+            presentacion.id,
+        )
         const costoTotal = costoUnidadPresentacion * input.cantidad
         const actualizado = await tx.stockProducto.updateMany({
             where: {
@@ -239,6 +261,7 @@ async function obtenerRegistros(desde: Date, hasta: Date, ubicacionId?: string) 
                     select: {
                         nombre: true,
                         planchasPorPaquete: true,
+                        presentaciones: { select: { id: true, cantidad: true } },
                         fichasTecnicas: { include: { insumo: { select: { precioUnitario: true } } } }
                     }
                 }
@@ -250,7 +273,11 @@ async function obtenerRegistros(desde: Date, hasta: Date, ubicacionId?: string) 
     const productos = movimientosProducto
         .filter(movimiento => !movimiento.loteId)
         .map(movimiento => {
-            const costoCalculado = calcularCostoReceta(movimiento.producto.fichasTecnicas) * movimiento.presentacion.cantidad
+            const costoCalculado = calcularCostoPaqueteReceta(
+                movimiento.producto.fichasTecnicas,
+                movimiento.presentacion.cantidad,
+                movimiento.presentacionId,
+            )
             const costoUnitario = movimiento.costoUnitario ?? costoCalculado
             return {
                 id: `producto-${movimiento.id}`,
@@ -291,8 +318,17 @@ async function obtenerRegistros(desde: Date, hasta: Date, ubicacionId?: string) 
     })
 
     const rechazosProduccion = lotes.map(lote => {
-        const unidadesPorPaquete = (lote.producto.planchasPorPaquete || 6) * 8
-        const costoUnitario = calcularCostoReceta(lote.producto.fichasTecnicas) * unidadesPorPaquete
+        const distribucion = Array.isArray(lote.distribucion)
+            ? lote.distribucion as { presentacionId?: string }[]
+            : []
+        const presentacionId = distribucion[0]?.presentacionId
+        const presentacion = lote.producto.presentaciones.find(item => item.id === presentacionId)
+        const unidadesPorPaquete = presentacion?.cantidad || (lote.producto.planchasPorPaquete || 6) * 8
+        const costoUnitario = calcularCostoPaqueteReceta(
+            lote.producto.fichasTecnicas,
+            unidadesPorPaquete,
+            presentacionId,
+        )
         return {
             id: `lote-${lote.id}`,
             referenciaId: lote.id,

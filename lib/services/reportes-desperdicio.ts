@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getGlobalConfig } from './reportes'
-import { getMermasPeriodo } from './mermas-costos'
+import { calcularCostoPaqueteReceta, getMermasPeriodo } from './mermas-costos'
 
 /**
  * Servicio de reportes de desperdicio.
@@ -44,6 +44,7 @@ export async function getDesperdicioReport(
                 select: {
                     id: true, nombre: true, codigoInterno: true,
                     planchasPorPaquete: true,
+                    presentaciones: { select: { id: true, cantidad: true } },
                     fichasTecnicas: { include: { insumo: { select: { precioUnitario: true } } } }
                 }
             }
@@ -90,15 +91,20 @@ export async function getDesperdicioReport(
 
         if (lote.unidadesRechazadas > 0) {
             // Calcular costo del desperdicio (paquetes rechazados × planchas × sanguchitos × costo unitario)
-            const planchasPorPaq = lote.producto.planchasPorPaquete || planchasPorPaqDefault
-            const sanguchitosRechazados = lote.unidadesRechazadas * planchasPorPaq * sanguchitosPorPlancha
+            const distribucion = Array.isArray(lote.distribucion)
+                ? lote.distribucion as { presentacionId?: string }[]
+                : []
+            const presentacionId = distribucion[0]?.presentacionId
+            const presentacion = lote.producto.presentaciones.find(item => item.id === presentacionId)
+            const unidadesPorPaquete = presentacion?.cantidad
+                || (lote.producto.planchasPorPaquete || planchasPorPaqDefault) * sanguchitosPorPlancha
+            const costoPaquete = calcularCostoPaqueteReceta(
+                lote.producto.fichasTecnicas,
+                unidadesPorPaquete,
+                presentacionId,
+            )
 
-            let costoUnitario = 0
-            for (const ft of lote.producto.fichasTecnicas) {
-                costoUnitario += ft.cantidadPorUnidad * (ft.insumo.precioUnitario || 0)
-            }
-
-            entry.costoDesperdicio += sanguchitosRechazados * costoUnitario
+            entry.costoDesperdicio += lote.unidadesRechazadas * costoPaquete
 
             if (lote.motivoRechazo && !entry.motivos.includes(lote.motivoRechazo)) {
                 entry.motivos.push(lote.motivoRechazo)

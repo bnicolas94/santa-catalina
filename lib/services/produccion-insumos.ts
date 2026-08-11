@@ -7,6 +7,8 @@ export interface RecetaInsumo {
     insumoId: string
     cantidadPorUnidad: number
     merma?: number | null
+    tipoConsumo?: string | null
+    presentacionId?: string | null
 }
 
 export interface ConsumoInsumoCalculado {
@@ -22,10 +24,23 @@ function roundStock(value: number) {
  * La ficha técnica guarda consumo por unidad vendible (por ejemplo, un sándwich).
  * Producción informa paquetes, por lo que primero se convierten a unidades vendibles.
  */
+export function aplicaRecetaAPresentacion(item: RecetaInsumo, presentacionId?: string) {
+    return !item.presentacionId || item.presentacionId === presentacionId
+}
+
+export function calcularCantidadInsumoPorPaquete(item: RecetaInsumo, unidadesPorPaquete: number) {
+    const merma = Math.min(Math.max(Number(item.merma) || 0, 0), 99.99)
+    const cantidadNeta = item.tipoConsumo === 'por_paquete'
+        ? item.cantidadPorUnidad
+        : item.cantidadPorUnidad * unidadesPorPaquete
+    return cantidadNeta / (1 - merma / 100)
+}
+
 export function calcularConsumosProduccion(
     receta: RecetaInsumo[],
     paquetes: number,
     unidadesPorPaquete: number,
+    presentacionId?: string,
 ): ConsumoInsumoCalculado[] {
     if (!Number.isFinite(paquetes) || paquetes < 0 || !Number.isInteger(paquetes)) {
         throw new Error('La cantidad de paquetes debe ser un entero mayor o igual a cero')
@@ -34,12 +49,13 @@ export function calcularConsumosProduccion(
         throw new Error('La presentación debe tener una cantidad válida de unidades')
     }
 
-    const unidadesTotales = paquetes * unidadesPorPaquete
-    return receta.map((item) => {
-        const merma = Math.min(Math.max(Number(item.merma) || 0, 0), 99.99)
-        const cantidadConMerma = (item.cantidadPorUnidad * unidadesTotales) / (1 - merma / 100)
-        return { insumoId: item.insumoId, cantidad: roundStock(cantidadConMerma) }
-    }).filter((item) => item.cantidad > STOCK_TOLERANCE)
+    return receta
+        .filter((item) => aplicaRecetaAPresentacion(item, presentacionId))
+        .map((item) => ({
+            insumoId: item.insumoId,
+            cantidad: roundStock(calcularCantidadInsumoPorPaquete(item, unidadesPorPaquete) * paquetes),
+        }))
+        .filter((item) => item.cantidad > STOCK_TOLERANCE)
 }
 
 type Tx = Prisma.TransactionClient

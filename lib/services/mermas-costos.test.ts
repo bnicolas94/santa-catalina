@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calcularCostoReceta, calcularResultadoConMerma, extraerMotivoMerma } from './mermas-costos'
+import { calcularCostoPaqueteReceta, calcularCostoReceta, calcularResultadoConMerma, extraerMotivoMerma } from './mermas-costos'
 
 test('calcularCostoReceta valoriza cantidades y costo unitario', () => {
     const costo = calcularCostoReceta([
@@ -36,4 +36,14 @@ test('la merma no se descuenta dos veces cuando el CMV usa compras', () => {
         mermaImpactaResultado: false,
         rentabilidadNeta: 700
     })
+})
+
+test('el costo por paquete suma contenido y envase de la presentacion', () => {
+    const costo = calcularCostoPaqueteReceta([
+        { cantidadPorUnidad: 0.1, tipoConsumo: 'por_unidad', insumo: { precioUnitario: 100 } },
+        { cantidadPorUnidad: 1, tipoConsumo: 'por_paquete', presentacionId: 'x48', insumo: { precioUnitario: 50 } },
+        { cantidadPorUnidad: 1, tipoConsumo: 'por_paquete', presentacionId: 'x24', insumo: { precioUnitario: 20 } },
+    ], 48, 'x48')
+
+    assert.equal(costo, 530)
 })

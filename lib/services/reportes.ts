@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { unstable_cache } from 'next/cache'
 import { getLiquidacionFetchRange, liquidacionBelongsToPeriod } from './reportes-costos'
-import { calcularResultadoConMerma, getMermasPeriodo } from './mermas-costos'
+import { calcularCostoPaqueteReceta, calcularResultadoConMerma, getMermasPeriodo } from './mermas-costos'
 
 /**
  * SERVICIOS DE CONFIGURACIÓN Y METADATA
@@ -119,11 +119,12 @@ export const getRentabilidadReport = unstable_cache(
                 if ((det as any).costoUnitarioHistorico !== null && (det as any).costoUnitarioHistorico !== undefined) {
                     costoMercaderiaVendida += (det as any).costoUnitarioHistorico * det.cantidad
                 } else {
-                    let costoPorSandwich = 0
-                    for (const ft of det.presentacion.producto.fichasTecnicas) {
-                        costoPorSandwich += ft.cantidadPorUnidad * (ft.insumo.precioUnitario || 0)
-                    }
-                    costoMercaderiaVendida += costoPorSandwich * det.presentacion.cantidad * det.cantidad
+                    const costoPorPaquete = calcularCostoPaqueteReceta(
+                        det.presentacion.producto.fichasTecnicas,
+                        det.presentacion.cantidad,
+                        det.presentacionId,
+                    )
+                    costoMercaderiaVendida += costoPorPaquete * det.cantidad
                 }
             }
         }

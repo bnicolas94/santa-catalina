@@ -147,6 +147,7 @@ model Presentacion {
   producto       Producto                  @relation(fields: [productoId], references: [id], onDelete: Cascade)
   requerimientos RequerimientoProduccion[]
   stocks         StockProducto[]
+  fichasTecnicas FichaTecnica[]
 
   @@unique([productoId, cantidad])
   @@map("presentaciones")
@@ -190,16 +191,21 @@ model Insumo {
 }
 
 model FichaTecnica {
-  id                String   @id @default(uuid())
-  cantidadPorUnidad Float    @map("cantidad_por_unidad")
-  unidadMedida      String   @map("unidad_medida")
-  productoId        String   @map("id_producto")
-  insumoId          String   @map("id_insumo")
-  merma             Float    @default(0)
-  insumo            Insumo   @relation(fields: [insumoId], references: [id])
-  producto          Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  id                String        @id @default(uuid())
+  cantidadPorUnidad Float         @map("cantidad_por_unidad")
+  unidadMedida      String        @map("unidad_medida")
+  productoId        String        @map("id_producto")
+  insumoId          String        @map("id_insumo")
+  merma             Float         @default(0)
+  tipoConsumo       String        @default("por_unidad") @map("tipo_consumo")
+  presentacionId    String?       @map("id_presentacion")
+  claveAlcance      String        @default("global:por_unidad") @map("clave_alcance")
+  insumo            Insumo        @relation(fields: [insumoId], references: [id])
+  producto          Producto      @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  presentacion      Presentacion? @relation(fields: [presentacionId], references: [id], onDelete: Cascade)
 
-  @@unique([productoId, insumoId])
+  @@unique([productoId, insumoId, claveAlcance])
+  @@index([productoId, tipoConsumo, presentacionId])
   @@map("fichas_tecnicas")
 }
 

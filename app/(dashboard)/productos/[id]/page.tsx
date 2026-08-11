@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 
 interface Insumo {
@@ -10,30 +10,65 @@ interface Insumo {
     unidadMedida: string
 }
 
-interface FichaTecnica {
-    id: string
-    cantidadPorUnidad: number
-    unidadMedida: string
-    merma: number
-    insumo: Insumo
-}
-
 interface Presentacion {
     id: string
     cantidad: number
     precioVenta: number
 }
 
+interface FichaTecnica {
+    id: string
+    cantidadPorUnidad: number
+    unidadMedida: string
+    merma: number
+    tipoConsumo?: string
+    presentacionId?: string | null
+    insumo: Insumo
+}
+
 interface Producto {
     id: string
     nombre: string
     codigoInterno: string
-    costoUnitario: number
     vidaUtilHoras: number
-    tempConservacionMax: number
     activo: boolean
     presentaciones: Presentacion[]
     fichasTecnicas: FichaTecnica[]
+}
+
+type FichaForm = {
+    insumoId: string
+    cantidadNetaPaquete: string
+    merma: string
+    tipoConsumo: 'por_unidad' | 'por_paquete'
+    alcance: 'global' | 'presentacion'
+}
+
+const FORM_INICIAL: FichaForm = {
+    insumoId: '',
+    cantidadNetaPaquete: '',
+    merma: '0',
+    tipoConsumo: 'por_unidad',
+    alcance: 'global',
+}
+
+function cantidadNetaPaquete(ficha: FichaTecnica, presentacion: Presentacion) {
+    return ficha.tipoConsumo === 'por_paquete'
+        ? ficha.cantidadPorUnidad
+        : ficha.cantidadPorUnidad * presentacion.cantidad
+}
+
+function cantidadRealPaquete(ficha: FichaTecnica, presentacion: Presentacion) {
+    const factor = 1 - Math.min(Math.max(ficha.merma || 0, 0), 99.99) / 100
+    return cantidadNetaPaquete(ficha, presentacion) / factor
+}
+
+function formatoCantidad(value: number) {
+    return value.toLocaleString('es-AR', { maximumFractionDigits: 4 })
+}
+
+function formatoDinero(value: number) {
+    return value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function ProductoDetallePage() {
@@ -41,348 +76,214 @@ export default function ProductoDetallePage() {
     const router = useRouter()
     const [producto, setProducto] = useState<Producto | null>(null)
     const [insumos, setInsumos] = useState<Insumo[]>([])
+    const [presentacionId, setPresentacionId] = useState('')
     const [loading, setLoading] = useState(true)
-    const [showAddInsumo, setShowAddInsumo] = useState(false)
-    const [fichaForm, setFichaForm] = useState({
-        insumoId: '',
-        cantidadPorUnidad: '',
-        unidadMedida: 'kg',
-        merma: '0',
-    })
+    const [showForm, setShowForm] = useState(false)
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [saving, setSaving] = useState(false)
+    const [form, setForm] = useState<FichaForm>(FORM_INICIAL)
     const [success, setSuccess] = useState('')
     const [error, setError] = useState('')
 
-    useEffect(() => {
-        fetchData()
-    }, [])
-
     async function fetchData() {
         try {
-            const [prodRes, insRes] = await Promise.all([
-                fetch('/api/productos'),
-                fetch('/api/insumos'),
-            ])
-            const productos = await prodRes.json()
-            const prod = productos.find((p: Producto) => p.id === params.id)
-            setProducto(prod || null)
+            const [prodRes, insRes] = await Promise.all([fetch('/api/productos'), fetch('/api/insumos')])
+            if (!prodRes.ok || !insRes.ok) throw new Error('No se pudieron cargar los datos')
+            const productos: Producto[] = await prodRes.json()
+            const actual = productos.find(item => item.id === params.id) || null
+            setProducto(actual)
             setInsumos(await insRes.json())
-        } catch {
-            setError('Error al cargar datos')
+            if (actual?.presentaciones.length) {
+                setPresentacionId(current => current && actual.presentaciones.some(p => p.id === current)
+                    ? current
+                    : actual.presentaciones[0].id)
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error al cargar datos')
         } finally {
             setLoading(false)
         }
     }
 
-    async function addInsumoToFicha(e: React.FormEvent) {
-        e.preventDefault()
+    useEffect(() => { void fetchData() }, [])
+
+    const presentacion = useMemo(
+        () => producto?.presentaciones.find(item => item.id === presentacionId) || producto?.presentaciones[0],
+        [producto, presentacionId],
+    )
+    const fichasVisibles = useMemo(
+        () => producto?.fichasTecnicas.filter(ficha => !ficha.presentacionId || ficha.presentacionId === presentacion?.id) || [],
+        [producto, presentacion],
+    )
+    const costoPaquete = presentacion
+        ? fichasVisibles.reduce((total, ficha) => total + cantidadRealPaquete(ficha, presentacion) * ficha.insumo.precioUnitario, 0)
+        : 0
+    const precioVenta = presentacion?.precioVenta || 0
+    const margen = precioVenta > 0 ? (precioVenta - costoPaquete) / precioVenta * 100 : null
+
+    function abrirNuevaFicha() {
+        setEditingId(null)
+        setForm(FORM_INICIAL)
         setError('')
+        setShowForm(true)
+    }
 
-        const mainPres = producto?.presentaciones?.[0];
-        const unidadesBa = mainPres?.cantidad || 48;
-        const cantidadUnitaria = parseFloat(fichaForm.cantidadPorUnidad) / unidadesBa;
+    function abrirEdicion(ficha: FichaTecnica) {
+        if (!presentacion) return
+        setEditingId(ficha.id)
+        setForm({
+            insumoId: ficha.insumo.id,
+            cantidadNetaPaquete: String(cantidadNetaPaquete(ficha, presentacion)),
+            merma: String(ficha.merma || 0),
+            tipoConsumo: ficha.tipoConsumo === 'por_paquete' ? 'por_paquete' : 'por_unidad',
+            alcance: ficha.presentacionId ? 'presentacion' : 'global',
+        })
+        setError('')
+        setShowForm(true)
+    }
 
+    async function guardarFicha(event: React.FormEvent) {
+        event.preventDefault()
+        if (!producto || !presentacion || saving) return
+        setSaving(true)
+        setError('')
         try {
-            const res = await fetch('/api/fichas-tecnicas', {
-                method: 'POST',
+            const response = await fetch('/api/fichas-tecnicas', {
+                method: editingId ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    productoId: params.id,
-                    ...fichaForm,
-                    cantidadPorUnidad: cantidadUnitaria,
+                    id: editingId,
+                    productoId: producto.id,
+                    insumoId: form.insumoId,
+                    cantidadNetaPaquete: Number(form.cantidadNetaPaquete),
+                    unidadesReferencia: presentacion.cantidad,
+                    merma: Number(form.merma || 0),
+                    tipoConsumo: form.tipoConsumo,
+                    presentacionId: form.alcance === 'presentacion' ? presentacion.id : null,
                 }),
             })
-
-            if (!res.ok) {
-                const data = await res.json()
-                throw new Error(data.error)
-            }
-
-            setSuccess('Insumo agregado a la receta')
-            setShowAddInsumo(false)
-            setFichaForm({ insumoId: '', cantidadPorUnidad: '', unidadMedida: 'kg', merma: '0' })
-            fetchData()
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error || 'No se pudo guardar la receta')
+            setShowForm(false)
+            setSuccess(editingId ? 'Línea de receta actualizada' : 'Insumo agregado a la receta')
+            await fetchData()
             setTimeout(() => setSuccess(''), 3000)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Error')
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'No se pudo guardar la receta')
+        } finally {
+            setSaving(false)
         }
     }
 
-    async function removeInsumoFromFicha(fichaId: string) {
-        try {
-            await fetch(`/api/fichas-tecnicas?id=${fichaId}`, { method: 'DELETE' })
-            setSuccess('Insumo removido de la receta')
-            fetchData()
-            setTimeout(() => setSuccess(''), 3000)
-        } catch {
-            setError('Error al eliminar')
+    async function quitarFicha(ficha: FichaTecnica) {
+        if (!window.confirm(`¿Quitar ${ficha.insumo.nombre} de esta receta?`)) return
+        setError('')
+        const response = await fetch(`/api/fichas-tecnicas?id=${ficha.id}`, { method: 'DELETE' })
+        if (!response.ok) {
+            const payload = await response.json()
+            setError(payload.error || 'No se pudo quitar el insumo')
+            return
         }
+        setSuccess('Insumo removido de la receta')
+        await fetchData()
+        setTimeout(() => setSuccess(''), 3000)
     }
 
-    if (loading) {
-        return (
-            <div className="empty-state">
-                <div className="spinner" />
-                <p>Cargando producto...</p>
+    if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando producto...</p></div>
+    if (!producto) return <div className="empty-state"><p>Producto no encontrado</p><button className="btn btn-primary" onClick={() => router.push('/productos')}>Volver a Productos</button></div>
+    if (!presentacion) return <div className="empty-state"><p>Este producto no tiene presentaciones configuradas.</p></div>
+
+    const insumoSeleccionado = insumos.find(item => item.id === form.insumoId)
+    const previewNeto = Number(form.cantidadNetaPaquete) || 0
+    const previewReal = previewNeto / (1 - Math.min(Math.max(Number(form.merma) || 0, 0), 99.99) / 100)
+
+    return <div>
+        <div className="page-header">
+            <div>
+                <button className="btn btn-ghost btn-sm" onClick={() => router.push('/productos')} style={{ marginBottom: 'var(--space-2)' }}>← Volver a Productos</button>
+                <h1><span className="badge badge-neutral" style={{ marginRight: 8, fontSize: 'var(--text-lg)' }}>{producto.codigoInterno}</span>{producto.nombre}</h1>
             </div>
-        )
-    }
-
-    if (!producto) {
-        return (
-            <div className="empty-state">
-                <p>Producto no encontrado</p>
-                <button className="btn btn-primary" onClick={() => router.push('/productos')}>
-                    Volver a Productos
-                </button>
-            </div>
-        )
-    }
-
-    const cdi = producto.fichasTecnicas.reduce(
-        (acc, f) => {
-            const mermaFactor = f.merma ? (f.merma / 100) : 0;
-            const cantidadReal = f.cantidadPorUnidad / (1 - mermaFactor);
-            return acc + (cantidadReal * f.insumo.precioUnitario);
-        },
-        0
-    )
-
-    // Usamos la primera presentación como base para calcular el lote (usualmente 48 uds)
-    const mainPres = producto.presentaciones?.[0];
-    const unidadesBase = mainPres?.cantidad || 48;
-
-    const cdiLote = cdi * unidadesBase;
-    const precioReferencia = mainPres ? mainPres.precioVenta : 0;
-    const precioPorUnidad = (precioReferencia > 0 && mainPres && mainPres.cantidad > 0) ? (precioReferencia / mainPres.cantidad) : 0;
-
-    const margen = precioPorUnidad > 0
-        ? ((precioPorUnidad - cdi) / precioPorUnidad * 100).toFixed(1)
-        : '—'
-
-    // Insumos que ya están en la ficha
-    const insumosEnFicha = new Set(producto.fichasTecnicas.map((f) => f.insumo.id))
-    const insumosDisponibles = insumos.filter((i) => !insumosEnFicha.has(i.id))
-
-    return (
-        <div>
-            <div className="page-header">
-                <div>
-                    <button className="btn btn-ghost btn-sm" onClick={() => router.push('/productos')} style={{ marginBottom: 'var(--space-2)' }}>
-                        ← Volver a Productos
-                    </button>
-                    <h1>
-                        <span className="badge badge-neutral" style={{ marginRight: 8, fontSize: 'var(--text-lg)' }}>
-                            {producto.codigoInterno}
-                        </span>
-                        {producto.nombre}
-                    </h1>
-                </div>
-                <span className={`badge ${producto.activo ? 'badge-success' : 'badge-neutral'}`}>
-                    {producto.activo ? 'Activo' : 'Inactivo'}
-                </span>
-            </div>
-
-            {success && <div className="toast toast-success">{success}</div>}
-            {error && <div className="toast toast-error">{error}</div>}
-
-            {/* Info del producto */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-                <div className="card">
-                    <div className="card-body" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>Precio Venta (Ref)</div>
-                        <div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
-                            {precioReferencia > 0 ? `$${precioReferencia.toLocaleString('es-AR')}` : '—'}
-                        </div>
-                        {producto.presentaciones.length > 1 && (
-                            <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>
-                                Basado en x{mainPres?.cantidad} unidades
-                            </div>
-                        )}
-                    </div>
-                </div>
-                <div className="card">
-                    <div className="card-body" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>CDI (Costo Insumos)</div>
-                        <div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: cdi > 0 ? 'var(--color-primary)' : 'var(--color-gray-400)' }}>
-                            {cdiLote > 0 ? `$${cdiLote.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
-                        </div>
-                        <div style={{ fontSize: '10px', color: 'var(--color-gray-400)', marginTop: '4px' }}>
-                            ${cdi.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por sándwich
-                        </div>
-                    </div>
-                </div>
-                <div className="card">
-                    <div className="card-body" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>Margen Bruto</div>
-                        <div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: parseFloat(margen as string) > 30 ? 'var(--color-success)' : parseFloat(margen as string) > 15 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
-                            {cdi > 0 ? `${margen}%` : '—'}
-                        </div>
-                    </div>
-                </div>
-                <div className="card">
-                    <div className="card-body" style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-ui)' }}>Vida Útil</div>
-                        <div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-secondary)' }}>
-                            {producto.vidaUtilHoras}h
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Ficha Técnica / Escandallo */}
-            <div className="card">
-                <div className="card-header">
-                    <h3>📝 Ficha Técnica (Escandallo)</h3>
-                    <button className="btn btn-primary btn-sm" onClick={() => setShowAddInsumo(true)}>
-                        + Agregar Insumo
-                    </button>
-                </div>
-                <div className="card-body" style={{ padding: 0 }}>
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>Insumo</th>
-                                <th>Cant. (x {unidadesBase} uds)</th>
-                                <th>Merma</th>
-                                <th>Costo (x {unidadesBase})</th>
-                                <th>Costo Unitario</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {producto.fichasTecnicas.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>
-                                        Sin insumos en la receta. Agregá insumos para calcular el CDI.
-                                    </td>
-                                </tr>
-                            ) : (
-                                <>
-                                    {producto.fichasTecnicas.map((f) => (
-                                        <tr key={f.id}>
-                                            <td style={{ fontWeight: 600 }}>{f.insumo.nombre}</td>
-                                            <td>
-                                                {(f.cantidadPorUnidad * unidadesBase).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {f.unidadMedida}
-                                            </td>
-                                            <td>
-                                                {f.merma ? `${f.merma}%` : '0%'}
-                                            </td>
-                                            <td>
-                                                ${(
-                                                    ((f.cantidadPorUnidad * unidadesBase) / (1 - (f.merma ? (f.merma / 100) : 0))) * f.insumo.precioUnitario
-                                                ).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td>
-                                                ${(
-                                                    (f.cantidadPorUnidad / (1 - (f.merma ? (f.merma / 100) : 0))) * f.insumo.precioUnitario
-                                                ).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td>
-                                                <button
-                                                    className="btn btn-ghost btn-sm"
-                                                    onClick={() => removeInsumoFromFicha(f.id)}
-                                                    style={{ color: 'var(--color-danger)' }}
-                                                >
-                                                    Quitar
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    <tr style={{ fontWeight: 700, backgroundColor: 'var(--color-gray-50)' }}>
-                                        <td>TOTAL CDI</td>
-                                        <td></td>
-                                        <td></td>
-                                        <td>${cdiLote.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-                                        <td>${cdi.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-                                        <td></td>
-                                    </tr>
-                                </>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Modal agregar insumo a ficha */}
-            {showAddInsumo && (
-                <div className="modal-overlay" onClick={() => setShowAddInsumo(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>Agregar Insumo a la Receta</h2>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowAddInsumo(false)}>✕</button>
-                        </div>
-                        <form onSubmit={addInsumoToFicha}>
-                            <div className="modal-body">
-                                <div className="form-group">
-                                    <label className="form-label">Insumo</label>
-                                    <select
-                                        className="form-select"
-                                        value={fichaForm.insumoId}
-                                        onChange={(e) => {
-                                            const ins = insumos.find((i) => i.id === e.target.value)
-                                            setFichaForm({
-                                                ...fichaForm,
-                                                insumoId: e.target.value,
-                                                unidadMedida: ins?.unidadMedida || 'kg',
-                                            })
-                                        }}
-                                        required
-                                    >
-                                        <option value="">Seleccionar insumo...</option>
-                                        {insumosDisponibles.map((ins) => (
-                                            <option key={ins.id} value={ins.id}>
-                                                {ins.nombre} (${ins.precioUnitario}/{ins.unidadMedida})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 'var(--space-4)' }}>
-                                    <div className="form-group">
-                                        <label className="form-label">Cant. Neta (para {producto?.presentaciones?.[0]?.cantidad || 48} uds)*</label>
-                                        <input
-                                            type="number"
-                                            step="0.001"
-                                            className="form-input"
-                                            value={fichaForm.cantidadPorUnidad}
-                                            onChange={(e) => setFichaForm({ ...fichaForm, cantidadPorUnidad: e.target.value })}
-                                            required
-                                            placeholder="Ej: 1.68"
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label">% Merma</label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            className="form-input"
-                                            value={fichaForm.merma}
-                                            onChange={(e) => setFichaForm({ ...fichaForm, merma: e.target.value })}
-                                            placeholder="0"
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label">Unidad</label>
-                                        <input
-                                            className="form-input"
-                                            value={fichaForm.unidadMedida}
-                                            onChange={(e) => setFichaForm({ ...fichaForm, unidadMedida: e.target.value })}
-                                            readOnly
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowAddInsumo(false)}>
-                                    Cancelar
-                                </button>
-                                <button type="submit" className="btn btn-primary">
-                                    Agregar a la receta
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            <span className={`badge ${producto.activo ? 'badge-success' : 'badge-neutral'}`}>{producto.activo ? 'Activo' : 'Inactivo'}</span>
         </div>
-    )
+
+        {success && <div className="toast toast-success">{success}</div>}
+        {error && !showForm && <div className="toast toast-error">{error}</div>}
+
+        <div className="card" style={{ marginBottom: 'var(--space-5)' }}>
+            <div className="card-body">
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', color: 'var(--color-gray-500)' }}>Presentación que querés revisar</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {producto.presentaciones.map(item => <button key={item.id} className={`btn btn-sm ${item.id === presentacion.id ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setPresentacionId(item.id)}>Paquete x{item.cantidad}</button>)}
+                </div>
+            </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+            <Summary label="Precio de venta" value={precioVenta ? `$${formatoDinero(precioVenta)}` : '—'} detail={`Paquete x${presentacion.cantidad}`} />
+            <Summary label="Costo de insumos" value={costoPaquete ? `$${formatoDinero(costoPaquete)}` : '—'} detail="Contenido + empaque + merma" />
+            <Summary label="Margen bruto" value={margen === null ? '—' : `${margen.toFixed(1)}%`} detail={margen === null ? 'Falta precio de venta' : `$${formatoDinero(precioVenta - costoPaquete)} por paquete`} />
+            <Summary label="Costo por ronda" value={costoPaquete ? `$${formatoDinero(costoPaquete * 7)}` : '—'} detail="7 paquetes" />
+        </div>
+
+        <div className="card">
+            <div className="card-header" style={{ alignItems: 'flex-start' }}>
+                <div><h3>📝 Ficha técnica · paquete x{presentacion.cantidad}</h3><p style={{ margin: '5px 0 0', color: 'var(--color-gray-500)', fontSize: 13 }}>Los insumos generales escalan con la presentación; los envases pueden asignarse sólo a x{presentacion.cantidad}.</p></div>
+                <button className="btn btn-primary btn-sm" onClick={abrirNuevaFicha}>+ Agregar insumo</button>
+            </div>
+            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+                <table className="table">
+                    <thead><tr><th>Insumo</th><th>Cálculo</th><th>Alcance</th><th>Neto / paquete</th><th>Merma</th><th>Consumo real</th><th>Ronda x7</th><th>Costo / paquete</th><th>Acciones</th></tr></thead>
+                    <tbody>
+                        {fichasVisibles.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>Esta presentación todavía no tiene receta. Agregá los insumos para calcular y descontar stock.</td></tr> : fichasVisibles.map(ficha => {
+                            const neto = cantidadNetaPaquete(ficha, presentacion)
+                            const real = cantidadRealPaquete(ficha, presentacion)
+                            return <tr key={ficha.id}>
+                                <td style={{ fontWeight: 700 }}>{ficha.insumo.nombre}<div style={{ fontSize: 11, color: 'var(--color-gray-400)', fontWeight: 400 }}>${formatoDinero(ficha.insumo.precioUnitario)} / {ficha.unidadMedida}</div></td>
+                                <td><span className="badge badge-neutral">{ficha.tipoConsumo === 'por_paquete' ? 'Por paquete' : 'Por sándwich'}</span></td>
+                                <td>{ficha.presentacionId ? <span className="badge badge-warning">Sólo x{presentacion.cantidad}</span> : <span className="badge badge-success">Todas</span>}</td>
+                                <td>{formatoCantidad(neto)} {ficha.unidadMedida}</td>
+                                <td>{formatoCantidad(ficha.merma || 0)}%</td>
+                                <td style={{ fontWeight: 700 }}>{formatoCantidad(real)} {ficha.unidadMedida}</td>
+                                <td>{formatoCantidad(real * 7)} {ficha.unidadMedida}</td>
+                                <td>${formatoDinero(real * ficha.insumo.precioUnitario)}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}><button className="btn btn-ghost btn-sm" onClick={() => abrirEdicion(ficha)}>Editar</button><button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => void quitarFicha(ficha)}>Quitar</button></td>
+                            </tr>
+                        })}
+                        {fichasVisibles.length > 0 && <tr style={{ fontWeight: 700, background: 'var(--color-gray-50)' }}><td colSpan={7}>TOTAL PAQUETE x{presentacion.cantidad}</td><td>${formatoDinero(costoPaquete)}</td><td /></tr>}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {showForm && <div className="modal-overlay" onMouseDown={() => setShowForm(false)}>
+            <div className="modal" onMouseDown={event => event.stopPropagation()}>
+                <div className="modal-header"><div><h2>{editingId ? 'Editar línea de receta' : 'Agregar insumo'}</h2><p style={{ margin: 0, color: 'var(--color-gray-500)', fontSize: 13 }}>Referencia: paquete x{presentacion.cantidad}</p></div><button className="btn btn-ghost btn-icon" onClick={() => setShowForm(false)}>×</button></div>
+                <form onSubmit={guardarFicha}>
+                    <div className="modal-body">
+                        {error && <div className="toast toast-error" style={{ position: 'static', marginBottom: 16 }}>{error}</div>}
+                        <div className="form-group"><label className="form-label">Insumo</label><select className="form-select" value={form.insumoId} disabled={Boolean(editingId)} onChange={event => setForm({ ...form, insumoId: event.target.value })} required><option value="">Seleccionar insumo...</option>{insumos.map(insumo => <option key={insumo.id} value={insumo.id}>{insumo.nombre} · {insumo.unidadMedida}</option>)}</select></div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-4)' }}>
+                            <div className="form-group"><label className="form-label">Forma de cálculo</label><select className="form-select" value={form.tipoConsumo} onChange={event => setForm({ ...form, tipoConsumo: event.target.value as FichaForm['tipoConsumo'] })}><option value="por_unidad">Por sándwich / unidad</option><option value="por_paquete">Cantidad fija por paquete</option></select><small style={{ color: 'var(--color-gray-500)' }}>{form.tipoConsumo === 'por_unidad' ? 'Ideal para fiambres, queso, pan y aderezos.' : 'Ideal para bandejas, etiquetas y envoltorios.'}</small></div>
+                            <div className="form-group"><label className="form-label">Aplicar a</label><select className="form-select" value={form.alcance} onChange={event => setForm({ ...form, alcance: event.target.value as FichaForm['alcance'] })}><option value="global">Todas las presentaciones</option><option value="presentacion">Sólo paquete x{presentacion.cantidad}</option></select></div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 'var(--space-4)' }}>
+                            <div className="form-group"><label className="form-label">Cantidad neta para 1 paquete x{presentacion.cantidad}</label><input type="number" min="0.000001" step="any" className="form-input" value={form.cantidadNetaPaquete} onChange={event => setForm({ ...form, cantidadNetaPaquete: event.target.value })} placeholder={form.tipoConsumo === 'por_paquete' ? 'Ej: 1' : 'Ej: 0,67'} required /></div>
+                            <div className="form-group"><label className="form-label">Merma técnica %</label><input type="number" min="0" max="99.99" step="0.01" className="form-input" value={form.merma} onChange={event => setForm({ ...form, merma: event.target.value })} /></div>
+                            <div className="form-group"><label className="form-label">Unidad</label><input className="form-input" value={insumoSeleccionado?.unidadMedida || '—'} readOnly /></div>
+                        </div>
+                        {previewNeto > 0 && <div style={{ background: 'var(--color-gray-50)', borderRadius: 10, padding: 14, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}><Preview label="Neto por paquete" value={`${formatoCantidad(previewNeto)} ${insumoSeleccionado?.unidadMedida || ''}`} /><Preview label="Se descuenta" value={`${formatoCantidad(previewReal)} ${insumoSeleccionado?.unidadMedida || ''}`} /><Preview label="Por ronda x7" value={`${formatoCantidad(previewReal * 7)} ${insumoSeleccionado?.unidadMedida || ''}`} /></div>}
+                    </div>
+                    <div className="modal-footer"><button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Agregar a la receta'}</button></div>
+                </form>
+            </div>
+        </div>}
+    </div>
+}
+
+function Summary({ label, value, detail }: { label: string; value: string; detail: string }) {
+    return <div className="card"><div className="card-body" style={{ textAlign: 'center' }}><div style={{ fontSize: 11, color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700 }}>{label}</div><div style={{ fontSize: 'var(--text-3xl)', fontFamily: 'var(--font-heading)', color: 'var(--color-primary)', margin: '4px 0' }}>{value}</div><div style={{ fontSize: 11, color: 'var(--color-gray-400)' }}>{detail}</div></div></div>
+}
+
+function Preview({ label, value }: { label: string; value: string }) {
+    return <div><div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--color-gray-500)', fontWeight: 700 }}>{label}</div><strong style={{ fontSize: 13 }}>{value}</strong></div>
 }
