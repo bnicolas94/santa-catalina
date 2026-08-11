@@ -16,9 +16,17 @@
     width: var(--sidebar-collapsed-width);
 }
 
+:global(body.operator-production-mode) {
+    --main-offset: 0px;
+}
+
+:global(body.operator-production-mode) .sidebar {
+    display: none;
+}
+
 /* El contenido y el encabezado deben acompañar el ancho real del menú. */
 @media (min-width: 769px) {
-    :global(body):has(.sidebar.collapsed) {
+    :global(body):not(.operator-production-mode):has(.sidebar.collapsed) {
         --main-offset: var(--sidebar-collapsed-width);
     }
 }
