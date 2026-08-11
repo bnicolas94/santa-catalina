@@ -259,10 +259,10 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
         <header><div><span className={styles.eyebrow}>Lote en curso</span><h2>Finalizar lote</h2><p>{lot.producto.nombre}</p></div><button onClick={onClose}>×</button></header>
         <div className={styles.fields}>
             <button type="button" className={`${styles.numberField} ${activeField === 'produced' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('produced')}>
-                <span>Total producido</span><strong>{produced || '—'}</strong><small>Incluye los rechazados · Estimado: {lot.unidadesProducidas}</small>
+                <span>1 · Total elaborado</span><strong>{produced || '—'}</strong><small>Buenos + rechazados · Estimado: {lot.unidadesProducidas}</small>
             </button>
             <button type="button" className={`${styles.numberField} ${activeField === 'rejected' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('rejected')}>
-                <span>Rechazados / merma</span><strong>{rejected || '0'}</strong><small>Incluidos en el total producido</small>
+                <span>2 · Rechazados / merma</span><strong>{rejected || '0'}</strong><small>Paquetes que NO ingresan a cámara</small>
             </button>
         </div>
         <div className={styles.estimate}>
@@ -271,13 +271,13 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
         </div>
         {rejectedPackages > totalProduced && <div className={styles.splitBalanceError}>Los rechazados no pueden superar el total producido.</div>}
         {isJq48Lot && <section className={styles.splitPanel}>
-            <div className={styles.splitHeader}><div><span>Presentación final</span><strong>Distribuí los {goodPackages} paquetes buenos base x48</strong></div><small>Cada paquete destinado a x24 genera 2 paquetes x24.</small></div>
+            <div className={styles.splitHeader}><div><span>3 · Presentación de los paquetes buenos</span><strong>Distribuí solamente los {goodPackages} paquetes que ingresan a cámara</strong></div><small>Convertir a x24 no registra una merma. Los rechazados se cargan en el paso 2.</small></div>
             <div className={styles.splitGrid}>
                 <button type="button" className={`${styles.numberField} ${activeField === 'jq48' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('jq48')}>
-                    <span>Dejar como x48</span><strong>{split48 || '0'}</strong><small>Resultado: {split.outputX48} paquetes x48</small>
+                    <span>Buenos que quedan x48</span><strong>{split48 || '0'}</strong><small>Ingresan {split.outputX48} paquetes x48 a cámara</small>
                 </button>
                 <button type="button" className={`${styles.numberField} ${activeField === 'jq24' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('jq24')}>
-                    <span>Convertir a x24</span><strong>{split24 || '0'}</strong><small>Resultado: {split.outputX24} paquetes x24</small>
+                    <span>Buenos a convertir en x24</span><strong>{split24 || '0'}</strong><small>No son rechazados · Ingresan {split.outputX24} paquetes x24</small>
                 </button>
             </div>
             <div className={`${styles.splitBalance} ${validSplit ? '' : styles.splitBalanceError}`}>
@@ -295,7 +295,7 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
             <button type="button" className={styles.deleteKey} onClick={removeDigit} aria-label="Borrar último número">⌫</button>
         </div>
         {Number(rejected) > 0 && <div className={styles.reason}><span>Motivo del rechazo</span><div className={styles.reasonOptions}>{REJECTION_REASONS.map(option => <button type="button" key={option} className={reason === option ? styles.reasonSelected : ''} onClick={() => setReason(option)}>{option}</button>)}</div></div>}
-        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={() => onFinish(distribution)} disabled={busy || !validTotals || !validSplit || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
+        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={() => onFinish(distribution)} disabled={busy || !validTotals || !validSplit || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : `✓ Finalizar: ${goodPackages} a cámara · ${rejectedPackages} merma`}</button></footer>
     </section></div>
 }
 
