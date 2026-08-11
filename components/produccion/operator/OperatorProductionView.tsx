@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from 'react'
+import { calculateJqPresentationSplit } from '@/lib/produccion/presentationConversion'
 import styles from './operator-production.module.css'
 
 type Notice = { type: 'success' | 'error'; text: string } | null
@@ -25,7 +26,6 @@ const PRODUCTION_OPTIONS = [
     { code: 'JQ', size: 48 },
     { code: 'ESP', size: 48 },
     { code: 'CLA', size: 48 },
-    { code: 'JQ', size: 24 },
 ]
 const PACKAGES_PER_ROUND = 7
 const REJECTION_REASONS = ['Rotura', 'Mal sellado', 'Calidad', 'Producto dañado', 'Otro']
@@ -114,7 +114,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
         setReason(lot.motivoRechazo || ''); setNotice(null)
     }
 
-    async function finishProduction() {
+    async function finishProduction(distributionOverride?: { presentacionId: string; cantidad: number }[]) {
         if (!closing || busy) return
         setBusy(true)
         try {
@@ -125,7 +125,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                     fechaProduccion: closing.fechaProduccion?.split('T')[0] || date,
                     coordinadorId: closing.coordinador?.id || '', ubicacionId: closing.ubicacion?.id || '',
                     estado: 'en_camara', horaFin: new Date().toISOString(),
-                    distribucionPresentaciones: Array.isArray(closing.distribucion) ? closing.distribucion : undefined }),
+                    distribucionPresentaciones: distributionOverride || (Array.isArray(closing.distribucion) ? closing.distribucion : undefined) }),
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error || 'No se pudo finalizar el lote')
@@ -183,10 +183,25 @@ function StartModal({ item, rounds, setRounds, busy, onClose, onStart }: any) {
 }
 
 function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason, setReason, busy, onClose, onFinish }: any) {
-    const [activeField, setActiveField] = useState<'produced' | 'rejected'>('produced')
-    const [editedFields, setEditedFields] = useState({ produced: false, rejected: false })
-    const currentValue = activeField === 'produced' ? produced : rejected
-    const updateValue = (value: string) => activeField === 'produced' ? setProduced(value) : setRejected(value || '0')
+    type NumericField = 'produced' | 'rejected' | 'jq48' | 'jq24'
+    const initialPresentationId = Array.isArray(lot.distribucion) ? lot.distribucion[0]?.presentacionId : undefined
+    const presentation48 = lot.producto.presentaciones?.find((item: any) => item.cantidad === 48)
+    const presentation24 = lot.producto.presentaciones?.find((item: any) => item.cantidad === 24)
+    const isJq48Lot = lot.producto.codigoInterno === 'JQ' && initialPresentationId === presentation48?.id && Boolean(presentation24)
+    const [activeField, setActiveField] = useState<NumericField>('produced')
+    const [split48, setSplit48] = useState(String(lot.unidadesProducidas || 0))
+    const [split24, setSplit24] = useState('0')
+    const [editedFields, setEditedFields] = useState<Record<NumericField, boolean>>({ produced: false, rejected: false, jq48: false, jq24: false })
+    const currentValue = activeField === 'produced' ? produced : activeField === 'rejected' ? rejected : activeField === 'jq48' ? split48 : split24
+    const updateValue = (value: string) => {
+        if (activeField === 'produced') {
+            setProduced(value)
+            if (isJq48Lot && !editedFields.jq48 && !editedFields.jq24) setSplit48(value || '0')
+        }
+        else if (activeField === 'rejected') setRejected(value || '0')
+        else if (activeField === 'jq48') setSplit48(value || '0')
+        else setSplit24(value || '0')
+    }
     const markAsEdited = () => setEditedFields(current => ({ ...current, [activeField]: true }))
     const appendDigit = (digit: number) => {
         if (!editedFields[activeField]) {
@@ -199,6 +214,15 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
     }
     const removeDigit = () => { updateValue(currentValue.slice(0, -1)); markAsEdited() }
     const clearValue = () => { updateValue(''); markAsEdited() }
+    const split = calculateJqPresentationSplit(Number(split48), Number(split24))
+    const expectedBasePackages = Number(produced)
+    const splitDifference = expectedBasePackages - split.basePackages
+    const validSplit = !isJq48Lot || splitDifference === 0
+    const activeFieldLabel = activeField === 'produced' ? 'paquetes producidos' : activeField === 'rejected' ? 'paquetes rechazados' : activeField === 'jq48' ? 'paquetes destinados a x48' : 'paquetes destinados a x24'
+    const distribution = isJq48Lot ? [
+        { presentacionId: presentation48.id, cantidad: split.outputX48 },
+        { presentacionId: presentation24.id, cantidad: split.outputX24 },
+    ] : undefined
 
     return <div className={styles.overlay} onMouseDown={onClose}><section className={`${styles.modal} ${styles.finish}`} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true">
         <header><div><span className={styles.eyebrow}>Lote en curso</span><h2>Finalizar lote</h2><p>{lot.producto.nombre}</p></div><button onClick={onClose}>×</button></header>
@@ -210,14 +234,32 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
                 <span>Paquetes rechazados / merma</span><strong>{rejected || '0'}</strong><small>Tocá para modificar</small>
             </button>
         </div>
-        <div className={styles.numberPad} aria-label={`Teclado para ${activeField === 'produced' ? 'paquetes producidos' : 'paquetes rechazados'}`}>
+        {isJq48Lot && <section className={styles.splitPanel}>
+            <div className={styles.splitHeader}><div><span>Presentación final</span><strong>Distribuí los {produced || 0} paquetes base x48</strong></div><small>Cada paquete destinado a x24 genera 2 paquetes x24.</small></div>
+            <div className={styles.splitGrid}>
+                <button type="button" className={`${styles.numberField} ${activeField === 'jq48' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('jq48')}>
+                    <span>Dejar como x48</span><strong>{split48 || '0'}</strong><small>Resultado: {split.outputX48} paquetes x48</small>
+                </button>
+                <button type="button" className={`${styles.numberField} ${activeField === 'jq24' ? styles.numberFieldActive : ''}`} onClick={() => setActiveField('jq24')}>
+                    <span>Convertir a x24</span><strong>{split24 || '0'}</strong><small>Resultado: {split.outputX24} paquetes x24</small>
+                </button>
+            </div>
+            <div className={`${styles.splitBalance} ${validSplit ? '' : styles.splitBalanceError}`}>
+                {validSplit
+                    ? `Distribución completa · Stock final: ${split.outputX48} x48 + ${split.outputX24} x24`
+                    : splitDifference > 0
+                        ? `Falta asignar ${splitDifference} paquete${splitDifference === 1 ? '' : 's'} base`
+                        : `Hay ${Math.abs(splitDifference)} paquete${Math.abs(splitDifference) === 1 ? '' : 's'} base de más`}
+            </div>
+        </section>}
+        <div className={styles.numberPad} aria-label={`Teclado para ${activeFieldLabel}`}>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(number => <button type="button" key={number} onClick={() => appendDigit(number)}>{number}</button>)}
             <button type="button" className={styles.clearKey} onClick={clearValue}>C</button>
             <button type="button" onClick={() => appendDigit(0)}>0</button>
             <button type="button" className={styles.deleteKey} onClick={removeDigit} aria-label="Borrar último número">⌫</button>
         </div>
         {Number(rejected) > 0 && <div className={styles.reason}><span>Motivo del rechazo</span><div className={styles.reasonOptions}>{REJECTION_REASONS.map(option => <button type="button" key={option} className={reason === option ? styles.reasonSelected : ''} onClick={() => setReason(option)}>{option}</button>)}</div></div>}
-        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={onFinish} disabled={busy || !produced || Number(produced) <= 0 || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
+        <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={() => onFinish(distribution)} disabled={busy || !produced || Number(produced) <= 0 || !validSplit || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : '✓ Confirmar y finalizar'}</button></footer>
     </section></div>
 }
 
