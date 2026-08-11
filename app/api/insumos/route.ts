@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
+
+function proveedorIdsDelBody(body: Record<string, unknown>): string[] {
+    const ids = Array.isArray(body.proveedorIds)
+        ? body.proveedorIds.map(String).filter(Boolean)
+        : (body.proveedorId ? [String(body.proveedorId)] : [])
+    return [...new Set(ids)]
+}
 
 // GET /api/insumos
 export async function GET() {
@@ -8,6 +16,7 @@ export async function GET() {
             orderBy: { nombre: 'asc' },
             include: {
                 proveedor: true,
+                proveedores: { include: { proveedor: true }, orderBy: { esPrincipal: 'desc' } },
                 familia: true,
                 stocks: { include: { ubicacion: true } }
             },
@@ -22,8 +31,10 @@ export async function GET() {
 // POST /api/insumos
 export async function POST(request: Request) {
     try {
-        const body = await request.json()
+        const body = await request.json() as Record<string, unknown>
         const { nombre, unidadMedida, stockActual, stockMinimo, precioUnitario, diasReposicion, proveedorId, familiaId } = body
+        const proveedorIds = proveedorIdsDelBody(body)
+        const proveedorPrincipalId = proveedorIds[0] || (proveedorId ? String(proveedorId) : null)
 
         if (!nombre || !unidadMedida) {
             return NextResponse.json(
@@ -31,22 +42,29 @@ export async function POST(request: Request) {
                 { status: 400 }
             )
         }
+        const nombresExistentes = await prisma.insumo.findMany({ where: { activo: true }, select: { nombre: true } })
+        if (nombresExistentes.some(item => normalizarNombreInsumo(item.nombre) === normalizarNombreInsumo(String(nombre)))) {
+            return NextResponse.json({ error: 'Ya existe un insumo activo con ese nombre. Asociá el nuevo proveedor al insumo existente.' }, { status: 400 })
+        }
 
         const insumo = await prisma.insumo.create({
             data: {
-                nombre,
-                unidadMedida,
-                stockActual: parseFloat(stockActual) || 0,
-                stockMinimo: parseFloat(stockMinimo) || 0,
-                precioUnitario: parseFloat(precioUnitario) || 0,
-                diasReposicion: parseInt(diasReposicion) || 1,
-                proveedor: proveedorId ? { connect: { id: proveedorId } } : undefined,
-                familia: familiaId ? { connect: { id: familiaId } } : undefined,
-                unidadSecundaria: body.unidadSecundaria || null,
-                factorConversion: parseFloat(body.factorConversion) || null,
-                stockActualSecundario: parseFloat(body.stockActualSecundario) || 0,
+                nombre: String(nombre),
+                unidadMedida: String(unidadMedida),
+                stockActual: parseFloat(String(stockActual || '')) || 0,
+                stockMinimo: parseFloat(String(stockMinimo || '')) || 0,
+                precioUnitario: parseFloat(String(precioUnitario || '')) || 0,
+                diasReposicion: parseInt(String(diasReposicion || '')) || 1,
+                proveedor: proveedorPrincipalId ? { connect: { id: proveedorPrincipalId } } : undefined,
+                proveedores: proveedorIds.length > 0 ? {
+                    create: proveedorIds.map((id, index) => ({ proveedorId: id, esPrincipal: index === 0 })),
+                } : undefined,
+                familia: familiaId ? { connect: { id: String(familiaId) } } : undefined,
+                unidadSecundaria: body.unidadSecundaria ? String(body.unidadSecundaria) : null,
+                factorConversion: parseFloat(String(body.factorConversion || '')) || null,
+                stockActualSecundario: parseFloat(String(body.stockActualSecundario || '')) || 0,
             },
-            include: { proveedor: true, familia: true },
+            include: { proveedor: true, proveedores: { include: { proveedor: true } }, familia: true },
         })
 
         return NextResponse.json(insumo, { status: 201 })

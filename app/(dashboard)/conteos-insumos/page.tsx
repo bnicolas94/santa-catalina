@@ -13,7 +13,9 @@ interface Insumo {
     nombre: string
     unidadMedida: string
     activo: boolean
-    stocks: { ubicacionId: string; cantidad: number }[]
+    unidadSecundaria: string | null
+    factorConversion: number | null
+    stocks: { ubicacionId: string; cantidad: number; cantidadSecundaria: number }[]
 }
 
 interface Conteo {
@@ -76,6 +78,7 @@ export default function ConteosInsumosPage() {
     }, [insumos, busqueda])
 
     const stockUbicacion = (insumo: Insumo) => insumo.stocks.find((stock) => stock.ubicacionId === ubicacionId)?.cantidad || 0
+    const stockSecundarioUbicacion = (insumo: Insumo) => insumo.stocks.find((stock) => stock.ubicacionId === ubicacionId)?.cantidadSecundaria || 0
     const lineasCargadas = Object.entries(cantidades).filter(([, value]) => value.trim() !== '')
 
     async function confirmarConteo() {
@@ -136,16 +139,30 @@ export default function ConteosInsumosPage() {
 
             <div className="table-container">
                 <table className="table">
-                    <thead><tr><th>Insumo</th><th>Stock sistema</th><th>Cantidad contada</th><th>Diferencia</th></tr></thead>
+                    <thead><tr><th>Insumo</th><th>Stock sistema</th><th>Cantidad contada (unidad principal)</th><th>Diferencia</th></tr></thead>
                     <tbody>{insumosFiltrados.map((insumo) => {
                         const sistema = stockUbicacion(insumo)
                         const value = cantidades[insumo.id] ?? ''
                         const contado = value === '' ? null : parseCantidad(value)
                         const diferencia = contado !== null && Number.isFinite(contado) ? contado - sistema : null
                         return <tr key={insumo.id}>
-                            <td><strong>{insumo.nombre}</strong><small style={{ display: 'block', color: 'var(--color-gray-400)' }}>{insumo.unidadMedida}</small></td>
-                            <td>{sistema.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {insumo.unidadMedida}</td>
-                            <td><input className="form-input" style={{ maxWidth: 170 }} inputMode="decimal" value={value} onChange={(event) => setCantidades((actual) => ({ ...actual, [insumo.id]: event.target.value }))} placeholder="Sin contar" /></td>
+                            <td>
+                                <strong>{insumo.nombre}</strong>
+                                <small style={{ display: 'block', color: 'var(--color-primary)', fontWeight: 700 }}>Ingresar conteo en {insumo.unidadMedida}</small>
+                                {insumo.unidadSecundaria && insumo.factorConversion && (
+                                    <small style={{ display: 'block', color: 'var(--color-gray-500)' }}>Referencia: 1 {insumo.unidadSecundaria} = {insumo.factorConversion.toLocaleString('es-AR')} {insumo.unidadMedida}</small>
+                                )}
+                            </td>
+                            <td>
+                                <div>{sistema.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {insumo.unidadMedida}</div>
+                                {insumo.unidadSecundaria && <small style={{ color: 'var(--color-gray-500)' }}>{stockSecundarioUbicacion(insumo).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {insumo.unidadSecundaria}</small>}
+                            </td>
+                            <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 220 }}>
+                                    <input className="form-input" inputMode="decimal" value={value} onChange={(event) => setCantidades((actual) => ({ ...actual, [insumo.id]: event.target.value }))} placeholder={`Cantidad en ${insumo.unidadMedida}`} aria-label={`Cantidad contada de ${insumo.nombre} en ${insumo.unidadMedida}`} />
+                                    <strong style={{ minWidth: 34, color: 'var(--color-primary)' }}>{insumo.unidadMedida}</strong>
+                                </div>
+                            </td>
                             <td style={{ color: diferencia === null || Math.abs(diferencia) < 0.000001 ? 'var(--color-gray-400)' : diferencia > 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 700 }}>
                                 {diferencia === null ? '—' : `${diferencia > 0 ? '+' : ''}${diferencia.toLocaleString('es-AR', { maximumFractionDigits: 3 })}`}
                             </td>

@@ -25,6 +25,7 @@ interface Insumo {
     diasReposicion: number
     activo: boolean
     proveedor: Proveedor | null
+    proveedores: Array<{ proveedor: Proveedor; esPrincipal: boolean }>
     familia: Familia | null
     unidadSecundaria: string | null
     factorConversion: number | null
@@ -69,6 +70,7 @@ export default function InsumosPage() {
         precioUnitario: '',
         diasReposicion: '1',
         proveedorId: '',
+        proveedorIds: [] as string[],
         familiaId: '',
         unidadSecundaria: '',
         factorConversion: '',
@@ -78,6 +80,11 @@ export default function InsumosPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
     const [historialInsumoId, setHistorialInsumoId] = useState<string | null>(null)
+    const [origenUnificacion, setOrigenUnificacion] = useState<Insumo | null>(null)
+    const [destinoUnificacionId, setDestinoUnificacionId] = useState('')
+    const [factorUnificacion, setFactorUnificacion] = useState('')
+    const [factorSecundarioUnificacion, setFactorSecundarioUnificacion] = useState('0')
+    const [unificando, setUnificando] = useState(false)
 
     useEffect(() => {
         fetchData()
@@ -108,6 +115,7 @@ export default function InsumosPage() {
         setForm({ 
             nombre: '', unidadMedida: 'kg', stockActual: '', stockMinimo: '', 
             precioUnitario: '', diasReposicion: '1', proveedorId: '', familiaId: '',
+            proveedorIds: [],
             unidadSecundaria: '', factorConversion: '', stockActualSecundario: ''
         })
     }
@@ -122,6 +130,7 @@ export default function InsumosPage() {
             precioUnitario: String(ins.precioUnitario),
             diasReposicion: String(ins.diasReposicion),
             proveedorId: ins.proveedor?.id || '',
+            proveedorIds: ins.proveedores?.map(item => item.proveedor.id) || (ins.proveedor ? [ins.proveedor.id] : []),
             familiaId: ins.familia?.id || '',
             unidadSecundaria: ins.unidadSecundaria || '',
             factorConversion: ins.factorConversion ? String(ins.factorConversion) : '',
@@ -189,6 +198,55 @@ export default function InsumosPage() {
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Error al guardar')
+        }
+    }
+
+    function openUnificar(insumo: Insumo) {
+        setOrigenUnificacion(insumo)
+        setDestinoUnificacionId('')
+        setFactorUnificacion('')
+        setFactorSecundarioUnificacion('0')
+    }
+
+    function seleccionarDestinoUnificacion(destinoId: string) {
+        const destino = insumos.find(item => item.id === destinoId)
+        setDestinoUnificacionId(destinoId)
+        const usaUnidadSecundaria = Boolean(destino?.unidadSecundaria && destino.factorConversion)
+        setFactorUnificacion(usaUnidadSecundaria ? String(destino?.factorConversion) : '1')
+        setFactorSecundarioUnificacion(usaUnidadSecundaria ? '1' : '0')
+    }
+
+    async function handleUnificar(e: React.FormEvent) {
+        e.preventDefault()
+        if (!origenUnificacion || !destinoUnificacionId) return
+        const destino = insumos.find(item => item.id === destinoUnificacionId)
+        const factor = Number(factorUnificacion.replace(',', '.'))
+        const convertido = origenUnificacion.stockActual * factor
+        if (!window.confirm(`¿Unificar "${origenUnificacion.nombre}" dentro de "${destino?.nombre}"?\n\nSe transferirán ${origenUnificacion.stockActual.toLocaleString('es-AR')} ${origenUnificacion.unidadMedida} como ${convertido.toLocaleString('es-AR')} ${destino?.unidadMedida}. El duplicado quedará inactivo y los movimientos históricos no se modificarán.`)) return
+
+        setUnificando(true)
+        setError('')
+        try {
+            const res = await fetch('/api/insumos/unificar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    origenId: origenUnificacion.id,
+                    destinoId: destinoUnificacionId,
+                    factorPrimario: factorUnificacion,
+                    factorSecundario: factorSecundarioUnificacion,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'No se pudieron unificar los insumos')
+            setSuccess(`Insumos unificados: se transfirieron ${Number(data.cantidadDestino).toLocaleString('es-AR')} ${data.unidadDestino}.`)
+            setOrigenUnificacion(null)
+            await fetchData()
+            setTimeout(() => setSuccess(''), 5000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'No se pudieron unificar los insumos')
+        } finally {
+            setUnificando(false)
         }
     }
 
@@ -409,7 +467,13 @@ export default function InsumosPage() {
                                             {ins.stockMinimo.toLocaleString('es-AR', { maximumFractionDigits: 2 })} {ins.unidadMedida}
                                         </td>
                                         <td>${ins.precioUnitario.toLocaleString('es-AR', { minimumFractionDigits: 2 })}/{ins.unidadMedida}</td>
-                                        <td>{ins.proveedor?.nombre || '—'}</td>
+                                        <td>
+                                            {(ins.proveedores?.length > 0
+                                                ? ins.proveedores.map(item => item.proveedor.nombre)
+                                                : (ins.proveedor ? [ins.proveedor.nombre] : [])
+                                            ).map(nombre => <span key={nombre} className="badge" style={{ margin: '2px' }}>{nombre}</span>)}
+                                            {!ins.proveedor && !ins.proveedores?.length && <span style={{ color: 'var(--color-gray-400)' }}>—</span>}
+                                        </td>
                                         <td>{ins.diasReposicion} días</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -418,6 +482,9 @@ export default function InsumosPage() {
                                                 </button>
                                                 <button className="btn btn-ghost btn-sm" onClick={() => openEdit(ins)}>
                                                     Editar
+                                                </button>
+                                                <button className="btn btn-ghost btn-sm" style={{ color: '#8E44AD' }} onClick={() => openUnificar(ins)} title="Unificar este duplicado dentro de otro insumo">
+                                                    Unificar
                                                 </button>
                                                 <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => handleDelete(ins.id, ins.nombre)}>
                                                     Eliminar
@@ -593,17 +660,27 @@ export default function InsumosPage() {
                                 </div>
 
                                 <div className="form-group">
-                                    <label className="form-label">Proveedor</label>
-                                    <select
-                                        className="form-select"
-                                        value={form.proveedorId}
-                                        onChange={(e) => setForm({ ...form, proveedorId: e.target.value })}
-                                    >
-                                        <option value="">Sin proveedor</option>
-                                        {proveedores.map((p) => (
-                                            <option key={p.id} value={p.id}>{p.nombre}</option>
+                                    <label className="form-label">Proveedores del insumo</label>
+                                    <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', padding: 'var(--space-2)', background: '#fff' }}>
+                                        {proveedores.map((proveedor) => (
+                                            <label key={proveedor.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.proveedorIds.includes(proveedor.id)}
+                                                    onChange={(event) => {
+                                                        const proveedorIds = event.target.checked
+                                                            ? [...form.proveedorIds, proveedor.id]
+                                                            : form.proveedorIds.filter(id => id !== proveedor.id)
+                                                        setForm({ ...form, proveedorIds, proveedorId: proveedorIds[0] || '' })
+                                                    }}
+                                                />
+                                                {proveedor.nombre}
+                                                {form.proveedorIds[0] === proveedor.id && <span className="badge">Principal</span>}
+                                            </label>
                                         ))}
-                                    </select>
+                                        {proveedores.length === 0 && <span style={{ color: 'var(--color-gray-500)' }}>No hay proveedores activos.</span>}
+                                    </div>
+                                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: 6 }}>El primero seleccionado se usa como proveedor principal; cada factura conserva el proveedor real.</p>
                                 </div>
                             </div>
                             <div className="modal-footer">
@@ -695,6 +772,54 @@ export default function InsumosPage() {
                                 </div>
                             </form>
                         </div>
+                    </div>
+                </div>
+            )}
+            {origenUnificacion && (
+                <div className="modal-overlay" onClick={() => !unificando && setOrigenUnificacion(null)}>
+                    <div className="modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 620 }}>
+                        <div className="modal-header">
+                            <h2>🔗 Unificar insumo duplicado</h2>
+                            <button className="btn btn-ghost btn-icon" disabled={unificando} onClick={() => setOrigenUnificacion(null)}>✕</button>
+                        </div>
+                        <form onSubmit={handleUnificar}>
+                            <div className="modal-body">
+                                <div style={{ padding: 'var(--space-3)', background: '#F4ECF7', color: '#6C3483', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>
+                                    Origen: <strong>{origenUnificacion.nombre}</strong> — {origenUnificacion.stockActual.toLocaleString('es-AR')} {origenUnificacion.unidadMedida}. Se desactivará después de transferir su stock vigente; sus facturas y movimientos anteriores quedarán intactos.
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Insumo principal de destino</label>
+                                    <select className="form-select" value={destinoUnificacionId} onChange={(event) => seleccionarDestinoUnificacion(event.target.value)} required>
+                                        <option value="">Seleccionar insumo...</option>
+                                        {insumos.filter(item => item.activo && item.id !== origenUnificacion.id).map(item => (
+                                            <option key={item.id} value={item.id}>{item.nombre} ({item.unidadMedida}{item.unidadSecundaria ? ` / ${item.unidadSecundaria}` : ''})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {destinoUnificacionId && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                        <div className="form-group">
+                                            <label className="form-label">1 {origenUnificacion.unidadMedida} equivale a</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input className="form-input" inputMode="decimal" value={factorUnificacion} onChange={(event) => setFactorUnificacion(event.target.value)} required />
+                                                <strong>{insumos.find(item => item.id === destinoUnificacionId)?.unidadMedida}</strong>
+                                            </div>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Y en unidad secundaria</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input className="form-input" inputMode="decimal" value={factorSecundarioUnificacion} onChange={(event) => setFactorSecundarioUnificacion(event.target.value)} required />
+                                                <strong>{insumos.find(item => item.id === destinoUnificacionId)?.unidadSecundaria || '—'}</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" disabled={unificando} onClick={() => setOrigenUnificacion(null)}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary" disabled={unificando || !destinoUnificacionId}>{unificando ? 'Unificando...' : 'Confirmar unificación'}</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

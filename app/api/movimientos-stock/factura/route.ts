@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { ComprasService } from '@/lib/services/compras.service'
+import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
 import {
     CompraValidationError,
     estadoPagoDesdeMontos,
@@ -144,9 +145,8 @@ export async function POST(request: Request) {
                     const clave = item.insumoNombre.toLocaleLowerCase('es-AR')
                     insumoId = cacheInsumos.get(clave) || null
                     if (!insumoId) {
-                        const existente = await tx.insumo.findFirst({
-                            where: { nombre: { equals: item.insumoNombre, mode: 'insensitive' } },
-                        })
+                        const candidatos = await tx.insumo.findMany({ where: { activo: true } })
+                        const existente = candidatos.find(insumo => normalizarNombreInsumo(insumo.nombre) === normalizarNombreInsumo(item.insumoNombre!))
                         if (existente) {
                             insumoId = existente.id
                         } else {
@@ -163,6 +163,13 @@ export async function POST(request: Request) {
                     }
                 }
                 if (!insumoId) throw new CompraValidationError('No se pudo resolver un insumo de la factura')
+                if (proveedorId) {
+                    await tx.insumoProveedor.upsert({
+                        where: { insumoId_proveedorId: { insumoId, proveedorId } },
+                        update: {},
+                        create: { insumoId, proveedorId },
+                    })
+                }
 
                 const pagoItem = costoTotal > 0 ? montoPagado * (item.costoTotal / costoTotal) : 0
                 const movimiento = await tx.movimientoStock.create({

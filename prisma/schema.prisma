@@ -106,6 +106,7 @@ model Proveedor {
   insumos          Insumo[]
   movimientosStock MovimientoStock[]
   compras          Compra[]
+  insumosAsociados InsumoProveedor[]
 
   @@map("proveedores")
 }
@@ -186,8 +187,22 @@ model Insumo {
   movimientos           MovimientoStock[]
   stocks                StockInsumo[]
   detallesConteo        ConteoInsumoDetalle[]
+  proveedores           InsumoProveedor[]
 
   @@map("insumos")
+}
+
+model InsumoProveedor {
+  insumoId    String    @map("id_insumo")
+  proveedorId String    @map("id_proveedor")
+  esPrincipal Boolean   @default(false) @map("es_principal")
+  createdAt   DateTime  @default(now())
+  insumo      Insumo    @relation(fields: [insumoId], references: [id], onDelete: Cascade)
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+
+  @@id([insumoId, proveedorId])
+  @@index([proveedorId])
+  @@map("insumos_proveedores")
 }
 
 model FichaTecnica {

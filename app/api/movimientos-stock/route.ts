@@ -104,6 +104,13 @@ export async function POST(request: Request) {
             : []
 
         const result = await prisma.$transaction(async tx => {
+            if (tipo === 'entrada' && proveedorId) {
+                await tx.insumoProveedor.upsert({
+                    where: { insumoId_proveedorId: { insumoId, proveedorId } },
+                    update: {},
+                    create: { insumoId, proveedorId },
+                })
+            }
             const compra = tipo === 'entrada'
                 ? await tx.compra.create({
                     data: {

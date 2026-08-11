@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 interface StockInsumoResumen { ubicacionId: string; cantidad: number }
-interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string } }
+interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
 interface Proveedor { id: string; nombre: string }
 interface Ubicacion { id: string; nombre: string; tipo: string }
 interface CajaCompra { tipo: string }
@@ -1202,7 +1202,7 @@ function ComprasContent() {
                                                     setTempItem({ ...tempItem, insumoId: id, useBultos: false, bultos: '', unidadesPorBulto: '', cantidad: '', cantidadSecundaria: '', unidadMedida: ins?.unidadMedida || 'unidades' });
                                                 }}>
                                                     <option value="">Seleccionar insumo...</option>
-                                                    {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId).map((ins) => (
+                                                    {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId || i.proveedores?.some(item => item.proveedor.id === facturaForm.proveedorId)).map((ins) => (
                                                         <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
                                                     ))}
                                                 </select>
