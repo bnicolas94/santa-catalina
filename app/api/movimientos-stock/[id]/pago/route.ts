@@ -38,26 +38,12 @@ export async function PUT(
             }
 
             if (movimiento.compraId) {
-                await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'pago-compra:' + movimiento.compraId}))::text AS lock_result`
+                await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'compra:' + movimiento.compraId}))::text AS lock_result`
             }
 
-            let compraId = movimiento.compraId
+            const compraId = movimiento.compraId
             if (!compraId) {
-                const compra = await tx.compra.create({
-                    data: {
-                        proveedorId: movimiento.proveedorId,
-                        ubicacionId: movimiento.ubicacionId,
-                        numeroFactura: movimiento.numeroFactura,
-                        fechaMovimiento: movimiento.fecha,
-                        fechaFactura: movimiento.fechaFactura,
-                        estadoPago: movimiento.estadoPago || 'pendiente',
-                        costoTotal: movimiento.costoTotal,
-                        montoPagado: movimiento.montoPagado || 0,
-                        observaciones: movimiento.observaciones,
-                        movimientosStock: { connect: { id: movimiento.id } },
-                    },
-                })
-                compraId = compra.id
+                throw new CompraValidationError('Las facturas históricas son de solo lectura y no admiten pagos nuevos')
             }
 
             const items = await tx.movimientoStock.findMany({

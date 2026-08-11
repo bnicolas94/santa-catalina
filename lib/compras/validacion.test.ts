@@ -1,11 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+    distribuirMontoPagadoPorCostos,
     distribuirPagoEntreItems,
     estadoPagoDesdeMontos,
     numeroPositivo,
     validarCajaCompra,
     validarPagosDivididos,
+    validarIdsEdicionCompra,
 } from './validacion'
 
 test('rechaza cantidades negativas, cero y valores no numéricos', () => {
@@ -45,4 +47,17 @@ test('deriva el estado desde el total y lo efectivamente pagado', () => {
     assert.equal(estadoPagoDesdeMontos(100, 0), 'pendiente')
     assert.equal(estadoPagoDesdeMontos(100, 50), 'a_cuenta')
     assert.equal(estadoPagoDesdeMontos(100, 100), 'pagado')
+})
+
+test('la edición integral sólo acepta ítems pertenecientes a la compra y sin duplicados', () => {
+    assert.doesNotThrow(() => validarIdsEdicionCompra(['a', 'b'], ['a']))
+    assert.throws(() => validarIdsEdicionCompra(['a', 'b'], ['a', 'a']))
+    assert.throws(() => validarIdsEdicionCompra(['a', 'b'], ['c']))
+})
+
+test('redistribuye el monto ya pagado sin alterar su total', () => {
+    const distribucion = distribuirMontoPagadoPorCostos([250, 250, 500], 333.33)
+    assert.equal(distribucion.length, 3)
+    assert.ok(Math.abs(distribucion.reduce((acc, monto) => acc + monto, 0) - 333.33) < 0.000001)
+    assert.throws(() => distribuirMontoPagadoPorCostos([100, 200], 400))
 })

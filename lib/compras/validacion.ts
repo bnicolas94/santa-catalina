@@ -64,6 +64,29 @@ export function validarMontoPagado(total: number, pagado: number): void {
     }
 }
 
+export function validarIdsEdicionCompra(idsOriginales: string[], idsRecibidos: string[]): void {
+    if (new Set(idsRecibidos).size !== idsRecibidos.length) {
+        throw new CompraValidationError('La factura contiene ítems duplicados')
+    }
+    const originales = new Set(idsOriginales)
+    if (idsRecibidos.some(id => !originales.has(id))) {
+        throw new CompraValidationError('Uno de los ítems no pertenece a esta factura')
+    }
+}
+
+export function distribuirMontoPagadoPorCostos(costos: number[], montoPagado: number): number[] {
+    const total = costos.reduce((acc, costo) => acc + costo, 0)
+    validarMontoPagado(total, montoPagado)
+    let restante = montoPagado
+    return costos.map((costo, index) => {
+        const asignado = index === costos.length - 1
+            ? restante
+            : (total > 0 ? montoPagado * (costo / total) : 0)
+        restante -= asignado
+        return asignado
+    })
+}
+
 export function validarPagosDivididos(
     pagosRaw: unknown,
     montoEsperado: number,

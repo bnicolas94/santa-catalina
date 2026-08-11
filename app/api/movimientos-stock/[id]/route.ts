@@ -73,7 +73,7 @@ export async function DELETE(
             if (!movimiento) throw new CompraValidationError('Movimiento no encontrado')
 
             if (movimiento.compraId) {
-                await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'eliminar-compra:' + movimiento.compraId}))::text AS lock_result`
+                await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'compra:' + movimiento.compraId}))::text AS lock_result`
                 const items = await tx.movimientoStock.findMany({ where: { compraId: movimiento.compraId } })
                 for (const item of items) {
                     await aplicarStock(tx, {
@@ -92,6 +92,9 @@ export async function DELETE(
             }
 
             // Compatibilidad defensiva para movimientos antiguos aún sin cabecera.
+            if (!movimiento.compraId) {
+                throw new CompraValidationError('Las facturas históricas son de solo lectura y no pueden eliminarse')
+            }
             if (movimiento.gastoId) {
                 const asociados = await tx.movimientoStock.count({ where: { gastoId: movimiento.gastoId } })
                 if (asociados > 1) {
@@ -137,6 +140,9 @@ export async function PATCH(
         const result = await prisma.$transaction(async tx => {
             const original = await tx.movimientoStock.findUnique({ where: { id } })
             if (!original) throw new CompraValidationError('Movimiento no encontrado')
+            if (!original.compraId) {
+                throw new CompraValidationError('Las facturas históricas son de solo lectura y no pueden editarse')
+            }
 
             const tipo = String(body.tipo || original.tipo)
             if (tipo !== original.tipo) throw new CompraValidationError('No se puede cambiar el tipo de un movimiento existente')

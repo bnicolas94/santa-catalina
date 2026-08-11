@@ -10,6 +10,7 @@ interface Ubicacion { id: string; nombre: string; tipo: string }
 interface CajaCompra { tipo: string }
 interface PagoForm { cajaOrigen: string; monto: string }
 interface ItemFacturaForm {
+    movimientoId?: string
     insumoId: string
     insumoNombre: string
     cantidad: string
@@ -24,6 +25,26 @@ interface ItemFacturaForm {
     unidadSecundaria?: string
 }
 interface CompraResumen { id: string; costoTotal: number; montoPagado: number; estadoPago: string; numeroFactura: string | null }
+interface CompraCompleta {
+    id: string
+    numeroFactura: string | null
+    fechaMovimiento: string
+    fechaFactura: string | null
+    estadoPago: string
+    costoTotal: number
+    montoPagado: number
+    observaciones: string | null
+    proveedor: { id: string; nombre: string } | null
+    ubicacion: { id: string; nombre: string } | null
+    movimientosStock: Array<{
+        id: string
+        cantidad: number
+        cantidadSecundaria: number | null
+        costoTotal: number | null
+        fechaVencimiento: string | null
+        insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
+    }>
+}
 interface Movimiento {
     id: string; tipo: string; cantidad: number; cantidadSecundaria: number | null; fecha: string; observaciones: string | null
     costoTotal: number | null; estadoPago: string | null; fechaVencimiento: string | null; numeroFactura: string | null;
@@ -44,6 +65,9 @@ function ComprasContent() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
+    const [editingCompraId, setEditingCompraId] = useState<string | null>(null)
+    const [editingFacturaItemIndex, setEditingFacturaItemIndex] = useState<number | null>(null)
+    const [loadingFactura, setLoadingFactura] = useState(false)
     const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '' })
     const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
@@ -70,6 +94,17 @@ function ComprasContent() {
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+
+    const emptyTempItem = () => ({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
+    const fechaInput = (fecha: string | null | undefined) => fecha ? new Date(fecha).toLocaleDateString('en-CA') : ''
+
+    function closeFacturaModal() {
+        setShowFacturaModal(false)
+        setEditingCompraId(null)
+        setEditingFacturaItemIndex(null)
+        setTempItem(emptyTempItem())
+        setIsManualInsumo(false)
+    }
 
     useEffect(() => { fetchData() }, [])
 
@@ -172,23 +207,53 @@ function ComprasContent() {
         }
 
         const insData = insumos.find(i => i.id === tempItem.insumoId)
-        const itemToAdd = { 
+        const itemToAdd: ItemFacturaForm = {
             ...tempItem, 
+            movimientoId: editingFacturaItemIndex === null ? undefined : facturaForm.items[editingFacturaItemIndex].movimientoId,
             cantidad: finalCantidad,
             insumoNombre: isManualInsumo ? tempItem.insumoNombre : (insData?.nombre || ''),
             unidadMedida: isManualInsumo ? (tempItem.unidadMedida || 'unidades') : (insData?.unidadMedida || 'u'),
             unidadSecundaria: insData?.unidadSecundaria
         }
 
-        setFacturaForm({ ...facturaForm, items: [...facturaForm.items, itemToAdd] })
-        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
+        const items = [...facturaForm.items]
+        if (editingFacturaItemIndex === null) items.push(itemToAdd)
+        else items[editingFacturaItemIndex] = itemToAdd
+        setFacturaForm({ ...facturaForm, items })
+        setEditingFacturaItemIndex(null)
+        setTempItem(emptyTempItem())
         setIsManualInsumo(false)
+    }
+
+    const editFacturaItem = (index: number) => {
+        const item = facturaForm.items[index]
+        setEditingFacturaItemIndex(index)
+        setIsManualInsumo(!item.insumoId)
+        setTempItem({
+            insumoId: item.insumoId,
+            insumoNombre: item.insumoNombre,
+            cantidad: item.cantidad,
+            cantidadSecundaria: item.cantidadSecundaria,
+            costoTotal: item.costoTotal,
+            actualizarCosto: item.actualizarCosto,
+            useBultos: false,
+            bultos: '',
+            unidadesPorBulto: '',
+            fechaVencimiento: item.fechaVencimiento,
+            unidadMedida: item.unidadMedida,
+        })
     }
 
     const removeFacturaItem = (index: number) => {
         const newItems = [...facturaForm.items]
         newItems.splice(index, 1)
         setFacturaForm({ ...facturaForm, items: newItems })
+        if (editingFacturaItemIndex === index) {
+            setEditingFacturaItemIndex(null)
+            setTempItem(emptyTempItem())
+        } else if (editingFacturaItemIndex !== null && editingFacturaItemIndex > index) {
+            setEditingFacturaItemIndex(editingFacturaItemIndex - 1)
+        }
     }
 
     async function handleFacturaSubmit(e: React.FormEvent) {
@@ -198,7 +263,7 @@ function ComprasContent() {
         if (isManualProveedor && !facturaForm.proveedorNombre) return setError('Ingrese el nombre del proveedor manual')
         if (facturaForm.items.length === 0) return setError('Debe agregar al menos un insumo a la factura')
         
-        if ((facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && facturaForm.pagoDividido) {
+        if (!editingCompraId && (facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && facturaForm.pagoDividido) {
             const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
             const totalEsperado = facturaForm.estadoPago === 'a_cuenta' ? parseFloat(facturaForm.montoPagado || '0') : totalFactura;
             const totalPagos = facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
@@ -207,7 +272,7 @@ function ComprasContent() {
             }
         }
 
-        if (facturaForm.estadoPago === 'a_cuenta') {
+        if (!editingCompraId && facturaForm.estadoPago === 'a_cuenta') {
             const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
             const montoP = parseFloat(facturaForm.montoPagado || '0');
             if (montoP <= 0) return setError('Ingrese el monto a pagar a cuenta');
@@ -215,45 +280,68 @@ function ComprasContent() {
         }
 
         try {
-            const res = await fetch('/api/movimientos-stock/factura', {
-                method: 'POST',
+            const res = await fetch(editingCompraId ? `/api/compras/${editingCompraId}` : '/api/movimientos-stock/factura', {
+                method: editingCompraId ? 'PATCH' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(facturaForm),
             })
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
-            setSuccess('Factura registrada correctamente')
-            setShowFacturaModal(false)
+            setSuccess(editingCompraId ? 'Factura actualizada correctamente' : 'Factura registrada correctamente')
+            closeFacturaModal()
             setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
     }
 
-    function handleEdit(mov: Movimiento) {
-        setEditingId(mov.id)
-        setForm({
-            insumoId: mov.insumo.id,
-            tipo: mov.tipo,
-            cantidad: String(mov.cantidad),
-            cantidadSecundaria: mov.cantidadSecundaria ? String(mov.cantidadSecundaria) : '',
-            observaciones: mov.observaciones || '',
-            proveedorId: mov.proveedor?.id || '',
-            costoTotal: mov.costoTotal ? String(mov.costoTotal) : '',
-            estadoPago: mov.compra?.estadoPago || mov.estadoPago || 'pendiente',
-            montoPagado: String(mov.compra?.montoPagado || mov.montoPagado || ''),
-            actualizarCosto: false, // Por defecto false al editar para no pisar sin querer
-            useBultos: false,
-            bultos: '',
-            unidadesPorBulto: '',
-            fechaVencimiento: mov.fechaVencimiento ? new Date(mov.fechaVencimiento).toLocaleDateString('en-CA') : '',
-            fechaMovimiento: mov.fecha ? new Date(mov.fecha).toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA'),
-            fechaFactura: mov.fechaFactura ? new Date(mov.fechaFactura).toLocaleDateString('en-CA') : '',
-            ubicacionId: mov.ubicacion?.id || '',
-            cajaOrigen: 'caja_chica',
-            pagoDividido: false,
-            pagos: [{ cajaOrigen: 'caja_chica', monto: '' }],
-        })
-        setShowModal(true)
+    async function handleEditCompra(compraId: string) {
+        setError('')
+        setLoadingFactura(true)
+        try {
+            const res = await fetch(`/api/compras/${compraId}`)
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
+            const compra = await res.json() as CompraCompleta
+            setEditingCompraId(compra.id)
+            setEditingFacturaItemIndex(null)
+            setIsManualProveedor(false)
+            setIsManualInsumo(false)
+            setMostrarTodosInsumos(true)
+            setTempItem(emptyTempItem())
+            setFacturaForm({
+                proveedorId: compra.proveedor?.id || '',
+                proveedorNombre: '',
+                numeroFactura: compra.numeroFactura || '',
+                fechaFactura: fechaInput(compra.fechaFactura),
+                fechaMovimiento: fechaInput(compra.fechaMovimiento),
+                estadoPago: compra.estadoPago,
+                cajaOrigen: 'caja_chica',
+                pagoDividido: false,
+                pagos: [{ cajaOrigen: 'caja_chica', monto: '' }],
+                ubicacionId: compra.ubicacion?.id || '',
+                observaciones: compra.observaciones || '',
+                montoPagado: String(compra.montoPagado || ''),
+                items: compra.movimientosStock.map(movimiento => ({
+                    movimientoId: movimiento.id,
+                    insumoId: movimiento.insumo.id,
+                    insumoNombre: movimiento.insumo.nombre,
+                    cantidad: String(movimiento.cantidad),
+                    cantidadSecundaria: movimiento.cantidadSecundaria ? String(movimiento.cantidadSecundaria) : '',
+                    costoTotal: String(movimiento.costoTotal || 0),
+                    actualizarCosto: false,
+                    useBultos: false,
+                    bultos: '',
+                    unidadesPorBulto: '',
+                    fechaVencimiento: fechaInput(movimiento.fechaVencimiento),
+                    unidadMedida: movimiento.insumo.unidadMedida,
+                    unidadSecundaria: movimiento.insumo.unidadSecundaria || undefined,
+                })),
+            })
+            setShowFacturaModal(true)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al cargar la factura')
+        } finally {
+            setLoadingFactura(false)
+        }
     }
 
     async function handlePago(id: string, esParcial = false) {
@@ -391,7 +479,11 @@ function ComprasContent() {
                 {mov.tipo === 'entrada' && mov.costoTotal ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span style={{ fontWeight: 600 }}>${mov.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-                        {estadoPago === 'pendiente' ? (
+                        {!mov.compra ? (
+                            <span className="badge" title="Factura histórica de solo lectura" style={{ backgroundColor: '#F2F3F4', color: '#616A6B', border: '1px solid #AAB7B8', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
+                                🔒 {estadoPago === 'pagado' ? 'Pagado histórico' : estadoPago === 'a_cuenta' ? 'A cuenta histórico' : 'Pendiente histórico'}
+                            </span>
+                        ) : estadoPago === 'pendiente' ? (
                             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                 <button onClick={() => handlePago(mov.id)} className="badge" style={{ cursor: 'pointer', backgroundColor: '#F39C1220', color: '#E67E22', border: '1px solid #F39C12', alignSelf: 'flex-start', padding: '0.2rem 0.6rem' }}>
                                     ⏳ Pagar todo
@@ -450,22 +542,29 @@ function ComprasContent() {
             <td className="hidden-mobile" style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mov.observaciones || '—'}</td>
             <td style={{ textAlign: 'right' }}>
                 <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                    <button
-                        onClick={() => handleEdit(mov)}
-                        className="btn btn-icon btn-ghost"
-                        style={{ color: 'var(--color-primary)' }}
-                        title="Editar movimiento"
-                    >
-                        ✏️
-                    </button>
-                    <button
-                        onClick={() => handleDelete(mov.id)}
-                        className="btn btn-icon btn-ghost"
-                        style={{ color: '#E74C3C' }}
-                        title="Eliminar movimiento"
-                    >
-                        🗑️
-                    </button>
+                    {mov.compra ? (
+                        <>
+                            <button
+                                onClick={() => handleEditCompra(mov.compra!.id)}
+                                className="btn btn-icon btn-ghost"
+                                style={{ color: 'var(--color-primary)' }}
+                                title="Editar factura completa"
+                                disabled={loadingFactura}
+                            >
+                                ✏️
+                            </button>
+                            <button
+                                onClick={() => handleDelete(mov.id)}
+                                className="btn btn-icon btn-ghost"
+                                style={{ color: '#E74C3C' }}
+                                title="Eliminar factura completa"
+                            >
+                                🗑️
+                            </button>
+                        </>
+                    ) : (
+                        <span title="Factura histórica de solo lectura" style={{ padding: '6px', color: 'var(--color-gray-500)' }}>🔒</span>
+                    )}
                 </div>
             </td>
         </tr>
@@ -504,8 +603,10 @@ function ComprasContent() {
                     )}
                     <button className="btn btn-primary" style={{ backgroundColor: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => {
                         const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
+                        setEditingCompraId(null)
+                        setEditingFacturaItemIndex(null)
                         setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
-                        setTempItem({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
+                        setTempItem(emptyTempItem())
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
                         setIsManualInsumo(false)
@@ -896,14 +997,19 @@ function ComprasContent() {
 
             {/* Modal Factura Multiple */}
             {showFacturaModal && (
-                <div className="modal-overlay" onClick={() => setShowFacturaModal(false)}>
+                <div className="modal-overlay" onClick={closeFacturaModal}>
                     <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
                         <div className="modal-header">
-                            <h2>📑 Registrar Factura Múltiple</h2>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowFacturaModal(false)}>✕</button>
+                            <h2>📑 {editingCompraId ? 'Editar Factura Completa' : 'Registrar Factura Múltiple'}</h2>
+                            <button className="btn btn-ghost btn-icon" onClick={closeFacturaModal}>✕</button>
                         </div>
                         <form onSubmit={handleFacturaSubmit}>
                             <div className="modal-body">
+                                {editingCompraId && (
+                                    <div style={{ padding: '10px 12px', marginBottom: 'var(--space-4)', borderRadius: 'var(--radius-md)', backgroundColor: '#EBF5FB', color: '#21618C', fontSize: '0.85rem' }}>
+                                        Podés modificar la cabecera y todos los ítems en una sola operación. Los pagos ya registrados se conservan; el total nuevo no puede quedar por debajo de los <strong>${Number(facturaForm.montoPagado || 0).toLocaleString('es-AR')}</strong> abonados.
+                                    </div>
+                                )}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Sede de entrada</label>
@@ -944,13 +1050,13 @@ function ComprasContent() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Estado de Pago</label>
-                                        <select className="form-select" value={facturaForm.estadoPago} onChange={(e) => setFacturaForm({ ...facturaForm, estadoPago: e.target.value })}>
+                                        <select className="form-select" value={facturaForm.estadoPago} disabled={!!editingCompraId} onChange={(e) => setFacturaForm({ ...facturaForm, estadoPago: e.target.value })}>
                                             <option value="pagado">✅ Pagado (Contado)</option>
                                             <option value="a_cuenta">💰 A Cuenta (Parcial)</option>
                                             <option value="pendiente">⏳ Pendiente (Cta. Cte.)</option>
                                         </select>
                                     </div>
-                                    {facturaForm.estadoPago === 'a_cuenta' && (
+                                    {!editingCompraId && facturaForm.estadoPago === 'a_cuenta' && (
                                         <div className="form-group">
                                             <label className="form-label">Monto a pagar ahora ($)</label>
                                             <input type="number" step="0.01" className="form-input" 
@@ -968,7 +1074,7 @@ function ComprasContent() {
                                         <label className="form-label">Fecha del Movimiento</label>
                                         <input type="date" className="form-input" value={facturaForm.fechaMovimiento} onChange={(e) => setFacturaForm({ ...facturaForm, fechaMovimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} required />
                                     </div>
-                                    {(facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && (
+                                    {!editingCompraId && (facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && (
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                                 <label className="form-label" style={{ margin: 0 }}>Caja de Origen</label>
@@ -1046,10 +1152,15 @@ function ComprasContent() {
                                     )}
                                 </div>
 
+                                <div className="form-group" style={{ marginBottom: 'var(--space-4)' }}>
+                                    <label className="form-label">Observaciones de la factura</label>
+                                    <input className="form-input" value={facturaForm.observaciones} onChange={(e) => setFacturaForm({ ...facturaForm, observaciones: e.target.value })} placeholder="Opcional" />
+                                </div>
+
                                 <hr style={{ margin: 'var(--space-4) 0' }} />
 
                                 {/* Seleccion de Insumos */}
-                                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-2)' }}>🛒 Agregar Insumos al carro</h3>
+                                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-2)' }}>🛒 {editingFacturaItemIndex === null ? 'Agregar insumo a la factura' : 'Editar ítem de la factura'}</h3>
                                 <div style={{ padding: 'var(--space-3)', backgroundColor: '#F8F9F9', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7E9', marginBottom: 'var(--space-4)' }}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1162,6 +1273,19 @@ function ComprasContent() {
                                         </div>
                                     </div>
 
+                                    <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-end', marginTop: 'var(--space-3)', flexWrap: 'wrap' }}>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Vencimiento del ítem</label>
+                                            <input type="date" className="form-input" value={tempItem.fechaVencimiento} onChange={(e) => setTempItem({ ...tempItem, fechaVencimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
+                                        </div>
+                                        {!isManualInsumo && (
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', paddingBottom: '8px' }}>
+                                                <input type="checkbox" checked={tempItem.actualizarCosto} onChange={(e) => setTempItem({ ...tempItem, actualizarCosto: e.target.checked })} />
+                                                Actualizar costo unitario del insumo al guardar
+                                            </label>
+                                        )}
+                                    </div>
+
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
                                         <div style={{ display: 'flex', gap: '15px' }}>
                                             {!isManualInsumo && (
@@ -1176,7 +1300,18 @@ function ComprasContent() {
                                                 </span>
                                             )}
                                         </div>
-                                        <button type="button" className="btn btn-sm btn-ghost" onClick={addItemToFactura} style={{ border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '4px 12px' }}>+ Agregar a Factura</button>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            {editingFacturaItemIndex !== null && (
+                                                <button type="button" className="btn btn-sm btn-ghost" onClick={() => {
+                                                    setEditingFacturaItemIndex(null)
+                                                    setTempItem(emptyTempItem())
+                                                    setIsManualInsumo(false)
+                                                }}>Cancelar edición</button>
+                                            )}
+                                            <button type="button" className="btn btn-sm btn-ghost" onClick={addItemToFactura} style={{ border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '4px 12px' }}>
+                                                {editingFacturaItemIndex === null ? '+ Agregar a Factura' : 'Guardar ítem'}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1196,7 +1331,7 @@ function ComprasContent() {
                                             {facturaForm.items.map((it, idx) => {
                                                 const insData = insumos.find(i => i.id === it.insumoId)
                                                 return (
-                                                    <tr key={idx}>
+                                                    <tr key={it.movimientoId || idx} style={editingFacturaItemIndex === idx ? { backgroundColor: '#EBF5FB' } : undefined}>
                                                         <td>
                                                             <div style={{ fontWeight: 600 }}>{it.insumoNombre || insData?.nombre}</div>
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)' }}>Vto: {it.fechaVencimiento || '—'}</div>
@@ -1217,7 +1352,12 @@ function ComprasContent() {
                                                                 </div>
                                                             ) : '—'}
                                                         </td>
-                                                        <td><button type="button" className="btn btn-icon btn-ghost" onClick={() => removeFacturaItem(idx)} style={{ color: 'var(--color-danger)' }}>✕</button></td>
+                                                        <td>
+                                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                                <button type="button" className="btn btn-icon btn-ghost" title="Editar ítem" onClick={() => editFacturaItem(idx)} style={{ color: 'var(--color-primary)' }}>✏️</button>
+                                                                <button type="button" className="btn btn-icon btn-ghost" title="Quitar ítem" onClick={() => removeFacturaItem(idx)} style={{ color: 'var(--color-danger)' }}>✕</button>
+                                                            </div>
+                                                        </td>
                                                     </tr>
                                                 )
                                             })}
@@ -1234,8 +1374,8 @@ function ComprasContent() {
                                 )}
                             </div>
                             <div className="modal-footer">
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowFacturaModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary">Registrar Factura Completa</button>
+                                <button type="button" className="btn btn-ghost" onClick={closeFacturaModal}>Cancelar</button>
+                                <button type="submit" className="btn btn-primary">{editingCompraId ? 'Guardar Factura Completa' : 'Registrar Factura Completa'}</button>
                             </div>
                         </form>
                     </div>

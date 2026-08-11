@@ -13,7 +13,48 @@ type RegistrarPagoInput = {
     ubicacionId?: string | null
 }
 
+type StockCompraInput = {
+    insumoId: string
+    ubicacionId: string | null
+    cantidad: number
+    cantidadSecundaria?: number | null
+}
+
 export class ComprasService {
+    static async aplicarStockEnTx(tx: TxClient, input: StockCompraInput, factor: 1 | -1) {
+        const delta = factor * input.cantidad
+        const deltaSecundario = factor * (input.cantidadSecundaria || 0)
+
+        await tx.insumo.update({
+            where: { id: input.insumoId },
+            data: {
+                stockActual: { increment: delta },
+                stockActualSecundario: { increment: deltaSecundario },
+            },
+        })
+
+        if (input.ubicacionId) {
+            await tx.stockInsumo.upsert({
+                where: {
+                    insumoId_ubicacionId: {
+                        insumoId: input.insumoId,
+                        ubicacionId: input.ubicacionId,
+                    },
+                },
+                update: {
+                    cantidad: { increment: delta },
+                    cantidadSecundaria: { increment: deltaSecundario },
+                },
+                create: {
+                    insumoId: input.insumoId,
+                    ubicacionId: input.ubicacionId,
+                    cantidad: delta,
+                    cantidadSecundaria: deltaSecundario,
+                },
+            })
+        }
+    }
+
     static async registrarPagoEnTx(tx: TxClient, input: RegistrarPagoInput) {
         let categoria = await tx.categoriaGasto.findUnique({ where: { nombre: 'Proveedores' } })
         if (!categoria) {
