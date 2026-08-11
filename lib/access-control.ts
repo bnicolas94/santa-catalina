@@ -49,6 +49,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/movimientos-producto', permissions: ['permisoProduccion', 'permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
 
     // Catálogo, compras y stock.
+    { path: '/api/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/familias-insumo', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/fichas-tecnicas', permissions: ['permisoStock', 'permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
@@ -86,6 +87,7 @@ const accessRules: AccessRule[] = [
     { path: '/produccion', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO'] },
     { path: '/productos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
+    { path: '/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/compras', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/stock', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/caja', permissions: ['permisoCaja'], legacyRoles: ['ADMIN'] },

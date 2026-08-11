@@ -1,7 +1,7 @@
 // components/produccion/v2/modals/CloseLotModal.tsx
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useProduccion } from '../ProduccionContext'
 import { Lote } from '../types'
 
@@ -10,14 +10,44 @@ interface CloseLotModalProps {
     onClose: () => void
 }
 
+type Distribucion = { presentacionId: string, cantidad: number }
+type LoteConDetalle = Omit<Lote, 'distribucion'> & {
+    distribucion?: Distribucion[]
+    movimientosProducto?: Distribucion[]
+}
+
+function obtenerDistribucionInicial(lote: Lote): Distribucion[] {
+    const detalle = lote as LoteConDetalle
+    const presentaciones = lote.producto.presentaciones || []
+    const movimientos = detalle.movimientosProducto || []
+
+    return presentaciones.map((presentacion) => {
+        const guardada = detalle.distribucion?.find(item => item.presentacionId === presentacion.id)
+        const movimiento = movimientos.find(item => item.presentacionId === presentacion.id)
+        return {
+            presentacionId: presentacion.id,
+            cantidad: guardada
+                ? Number(guardada.cantidad)
+                : movimiento?.cantidad ?? (presentaciones.length === 1 ? lote.unidadesProducidas : 0),
+        }
+    })
+}
+
+function ajustarDistribucionSimple(
+    distribucion: { presentacionId: string, cantidad: number }[],
+    paquetesBuenos: number,
+) {
+    const conCantidad = distribucion.filter(item => item.cantidad > 0)
+    if (conCantidad.length > 1 || distribucion.length === 0) return distribucion
+    const objetivo = conCantidad[0]?.presentacionId || distribucion[0].presentacionId
+    return distribucion.map(item => ({
+        ...item,
+        cantidad: item.presentacionId === objetivo ? Math.max(paquetesBuenos, 0) : 0,
+    }))
+}
+
 export const CloseLotModal: React.FC<CloseLotModalProps> = ({ lote, onClose }) => {
-    const { 
-        coordinadores, 
-        ubicaciones, 
-        mutate, 
-        setError, 
-        setSuccess 
-    } = useProduccion()
+    const { mutate, setError, setSuccess } = useProduccion()
 
     const [form, setForm] = useState({
         unidadesRechazadas: String(lote.unidadesRechazadas),
@@ -28,28 +58,18 @@ export const CloseLotModal: React.FC<CloseLotModalProps> = ({ lote, onClose }) =
         fechaProduccion: lote.fechaProduccion.slice(0, 10),
         coordinadorId: lote.coordinador?.id || '',
         ubicacionId: lote.ubicacion?.id || '',
-        distribucionPresentaciones: [] as { presentacionId: string, cantidad: number }[]
+        distribucionPresentaciones: obtenerDistribucionInicial(lote),
     })
-
-    useEffect(() => {
-        const presentaciones = lote.producto.presentaciones || []
-        const currentMovableItems = (lote as any).movimientosProducto || []
-        
-        const distribucion = presentaciones.map((p: any) => {
-            const savedDist = (lote as any).distribucion?.find((d: any) => d.presentacionId === p.id)
-            const mov = currentMovableItems.find((m: any) => m.presentacionId === p.id)
-            
-            return {
-                presentacionId: p.id,
-                cantidad: savedDist ? Number(savedDist.cantidad) : (mov ? mov.cantidad : (presentaciones.length === 1 ? lote.unidadesProducidas : 0))
-            }
-        })
-        setForm(f => ({ ...f, distribucionPresentaciones: distribucion }))
-    }, [lote])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
+            const totalProducido = Number(form.unidadesProducidas)
+            const totalRechazado = Number(form.unidadesRechazadas)
+            if (totalRechazado > totalProducido) {
+                setError('Los paquetes rechazados no pueden superar el total producido')
+                return
+            }
             const res = await fetch(`/api/lotes/${lote.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -66,7 +86,7 @@ export const CloseLotModal: React.FC<CloseLotModalProps> = ({ lote, onClose }) =
                 const data = await res.json()
                 setError(data.error || 'Error al actualizar')
             }
-        } catch (err) { setError('Error de red') }
+        } catch { setError('Error de red') }
     }
 
     return (
@@ -90,13 +110,38 @@ export const CloseLotModal: React.FC<CloseLotModalProps> = ({ lote, onClose }) =
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                             <div className="form-group">
-                                <label className="form-label">Paquetes Producidos</label>
-                                <input type="number" className="form-input" value={form.unidadesProducidas} onChange={(e) => setForm({ ...form, unidadesProducidas: e.target.value })} />
+                                <label className="form-label">Total producido (incluye rechazados)</label>
+                                <input type="number" className="form-input" value={form.unidadesProducidas} onChange={(e) => {
+                                    const unidadesProducidas = e.target.value
+                                    setForm({
+                                        ...form,
+                                        unidadesProducidas,
+                                        distribucionPresentaciones: ajustarDistribucionSimple(
+                                            form.distribucionPresentaciones,
+                                            Number(unidadesProducidas || 0) - Number(form.unidadesRechazadas || 0),
+                                        ),
+                                    })
+                                }} />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Paquetes Rechazados</label>
-                                <input type="number" className="form-input" value={form.unidadesRechazadas} onChange={(e) => setForm({ ...form, unidadesRechazadas: e.target.value })} />
+                                <label className="form-label">Rechazados (incluidos en el total)</label>
+                                <input type="number" className="form-input" value={form.unidadesRechazadas} onChange={(e) => {
+                                    const unidadesRechazadas = e.target.value
+                                    setForm({
+                                        ...form,
+                                        unidadesRechazadas,
+                                        distribucionPresentaciones: ajustarDistribucionSimple(
+                                            form.distribucionPresentaciones,
+                                            Number(form.unidadesProducidas || 0) - Number(unidadesRechazadas || 0),
+                                        ),
+                                    })
+                                }} />
                             </div>
+                        </div>
+
+                        <div style={{ margin: '10px 0', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                            A cámara: <strong>{Math.max(Number(form.unidadesProducidas || 0) - Number(form.unidadesRechazadas || 0), 0)} paquetes buenos</strong>
+                            {' · '}Merma: <strong>{Number(form.unidadesRechazadas || 0)}</strong>
                         </div>
 
                         {lote.producto.presentaciones && lote.producto.presentaciones.length > 0 && (

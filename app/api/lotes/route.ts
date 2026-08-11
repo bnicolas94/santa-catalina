@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { calcularConsumosProduccion, registrarConsumoInicial } from '@/lib/services/produccion-insumos'
 import fs from 'fs'
 import path from 'path'
 
@@ -61,8 +62,13 @@ export async function POST(request: Request) {
         const body = await request.json()
         const { productoId, presentacionId, fechaProduccion, unidadesProducidas, empleadosRonda, coordinadorId, estado, ubicacionId } = body
 
-        if (!productoId || !fechaProduccion || !unidadesProducidas || !ubicacionId) {
+        if (!productoId || !fechaProduccion || unidadesProducidas === undefined || !ubicacionId) {
             return NextResponse.json({ error: 'Producto, fecha, unidades y ubicación son requeridos' }, { status: 400 })
+        }
+
+        const qtyPaquetes = Number(unidadesProducidas)
+        if (!Number.isInteger(qtyPaquetes) || qtyPaquetes <= 0) {
+            return NextResponse.json({ error: 'La cantidad de paquetes debe ser un entero mayor a cero' }, { status: 400 })
         }
 
         // Operaciones de fecha únicas
@@ -82,10 +88,26 @@ export async function POST(request: Request) {
 
         const presentacionSeleccionada = presentacionId
             ? await prisma.presentacion.findFirst({ where: { id: presentacionId, productoId } })
-            : null
+            : await prisma.presentacion.findFirst({ where: { productoId }, orderBy: { cantidad: 'desc' } })
         if (presentacionId && !presentacionSeleccionada) {
             return NextResponse.json({ error: 'La presentación seleccionada no corresponde al producto' }, { status: 400 })
         }
+        if (!presentacionSeleccionada) {
+            return NextResponse.json({ error: 'El producto no tiene una presentación configurada' }, { status: 400 })
+        }
+
+        const fichasT = await prisma.fichaTecnica.findMany({
+            where: { productoId },
+            select: { insumoId: true, cantidadPorUnidad: true, merma: true },
+        })
+        if (fichasT.length === 0) {
+            return NextResponse.json({ error: 'El producto no tiene una ficha técnica configurada' }, { status: 400 })
+        }
+        const consumosIniciales = calcularConsumosProduccion(
+            fichasT,
+            qtyPaquetes,
+            presentacionSeleccionada.cantidad,
+        )
 
         // Buscar el número más alto existente para este producto+día para evitar colisiones
         const prefix = `SC-${yyyymmdd}-${producto.codigoInterno}-`
@@ -107,8 +129,6 @@ export async function POST(request: Request) {
         }
 
         const loteId = `${prefix}${String(nextNum).padStart(2, '0')}`
-        const qtyPaquetes = parseInt(unidadesProducidas)
-
         // Obtener posicionamiento para el día
         const posicionamientosStr = await prisma.asignacionOperario.findMany({
             where: {
@@ -127,15 +147,14 @@ export async function POST(request: Request) {
                     id: loteId,
                     fechaProduccion: fecha,
                     horaInicio: new Date(),
+                    unidadesPlanificadas: qtyPaquetes,
                     unidadesProducidas: qtyPaquetes,
                     empleadosRonda: parseInt(empleadosRonda) || 1,
                     estado: estado || 'en_camara',
                     productoId,
                     coordinadorId: coordinadorId || null,
                     ubicacionId,
-                    distribucion: presentacionId
-                        ? [{ presentacionId, cantidad: qtyPaquetes }]
-                        : body.distribucionPresentaciones || null,
+                    distribucion: [{ presentacionId: presentacionSeleccionada.id, cantidad: qtyPaquetes }],
                 },
                 include: {
                     producto: true,
@@ -143,34 +162,15 @@ export async function POST(request: Request) {
                 },
             })
 
-            const fichasT = await tx.fichaTecnica.findMany({
-                where: { productoId }
+            await registrarConsumoInicial(tx, {
+                loteId,
+                ubicacionId,
+                consumos: consumosIniciales,
+                personal: posicionamientosStr || undefined,
             })
 
-            if (fichasT.length > 0) {
-                const obsPersonal = posicionamientosStr ? `. Personal: ${posicionamientosStr}` : ''
-                await tx.movimientoStock.createMany({
-                    data: fichasT.map(f => ({
-                        insumoId: f.insumoId,
-                        tipo: 'salida',
-                        cantidad: f.cantidadPorUnidad * qtyPaquetes,
-                        observaciones: `Consumo automático por Lote ${loteId}${obsPersonal}`,
-                        loteOrigenId: loteId
-                    }))
-                })
-
-                for (const f of fichasT) {
-                    await tx.insumo.update({
-                        where: { id: f.insumoId },
-                        data: { stockActual: { decrement: f.cantidadPorUnidad * qtyPaquetes } }
-                    })
-                }
-            }
-
             if ((estado || 'en_camara') !== 'en_produccion') {
-                const presentacion = presentacionSeleccionada || await tx.presentacion.findFirst({
-                    where: { productoId }, orderBy: { cantidad: 'desc' }
-                })
+                const presentacion = presentacionSeleccionada
                 if (presentacion) {
                     await tx.stockProducto.upsert({
                         where: { productoId_presentacionId_ubicacionId: { productoId, presentacionId: presentacion.id, ubicacionId } },

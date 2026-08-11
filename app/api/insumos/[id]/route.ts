@@ -15,7 +15,6 @@ export async function PUT(
             data: {
                 ...(body.nombre !== undefined && { nombre: body.nombre }),
                 ...(body.unidadMedida !== undefined && { unidadMedida: body.unidadMedida }),
-                ...(body.stockActual !== undefined && { stockActual: parseFloat(body.stockActual) || 0 }),
                 ...(body.stockMinimo !== undefined && { stockMinimo: parseFloat(body.stockMinimo) || 0 }),
                 ...(body.precioUnitario !== undefined && { precioUnitario: parseFloat(body.precioUnitario) || 0 }),
                 ...(body.diasReposicion !== undefined && { diasReposicion: parseInt(body.diasReposicion) || 1 }),
@@ -28,7 +27,6 @@ export async function PUT(
                 ...(body.activo !== undefined && { activo: body.activo }),
                 ...(body.unidadSecundaria !== undefined && { unidadSecundaria: body.unidadSecundaria || null }),
                 ...(body.factorConversion !== undefined && { factorConversion: parseFloat(body.factorConversion) || null }),
-                ...(body.stockActualSecundario !== undefined && { stockActualSecundario: parseFloat(body.stockActualSecundario) || 0 }),
             },
             include: { proveedor: true, familia: true },
         })

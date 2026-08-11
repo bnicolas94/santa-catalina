@@ -3,11 +3,17 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
+type SessionUser = {
+    rol?: string
+    permisos?: { permisoStock?: boolean; permisoProduccion?: boolean }
+}
+
 export async function POST(request: Request) {
     try {
         const session = await getServerSession(authOptions)
-        const userRol = (session?.user as any)?.rol
-        const permisos = (session?.user as any)?.permisos || {}
+        const user = session?.user as SessionUser | undefined
+        const userRol = user?.rol
+        const permisos = user?.permisos || {}
 
         // Verificar permisos de stock o producción
         if (userRol !== 'ADMIN' && !permisos.permisoStock && !permisos.permisoProduccion) {
@@ -36,30 +42,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No se encontró la ubicación de FÁBRICA' }, { status: 404 })
         }
 
-        // 3. Obtener necesidades a descontar (solo FABRICA)
-        // Rutas del turno
-        const rutas = await prisma.ruta.findMany({
-            where: { fecha: { gte: startOfDay, lte: endOfDay }, turno },
-            include: { 
-                entregas: { 
-                    include: { 
-                        pedido: { 
-                            include: { 
-                                detalles: { 
-                                    include: { 
-                                        presentacion: {
-                                            include: { producto: { select: { codigoInterno: true } } }
-                                        } 
-                                    } 
-                                } 
-                            } 
-                        } 
-                    } 
-                } 
-            }
-        })
-
-        // Requerimientos manuales del turno que NO sean LOCAL
+        // 3. Obtener necesidades manuales a descontar (solo FABRICA).
+        // Los pedidos incluidos en rutas ya descuentan producto terminado al crear
+        // la ruta y no deben volver a descontarse desde planificación.
         const manuales = await prisma.requerimientoProduccion.findMany({
             where: { fecha: { gte: startOfDay, lte: endOfDay }, turno, destino: { not: 'LOCAL' } },
             include: { 
@@ -71,27 +56,6 @@ export async function POST(request: Request) {
 
         // Consolidar UNIDADES
         const consolidadoUnidades: Record<string, { productoId: string, presentacionId: string, totalUnidades: number, presCant: number }> = {}
-
-        rutas.forEach(ruta => {
-            ruta.entregas.forEach(ent => {
-                ent.pedido.detalles.forEach(det => {
-                    // OMITIR ELEGIDOS Y PREMIUM: Son bajo demanda y no tienen stock físico real
-                    const code = det.presentacion.producto.codigoInterno
-                    if (code === 'ELE' || code === 'PRE') return
-
-                    const key = det.presentacionId
-                    if (!consolidadoUnidades[key]) {
-                        consolidadoUnidades[key] = { 
-                            productoId: det.presentacion.productoId, 
-                            presentacionId: det.presentacionId, 
-                            totalUnidades: 0,
-                            presCant: det.presentacion.cantidad
-                        }
-                    }
-                    consolidadoUnidades[key].totalUnidades += (det.cantidad * det.presentacion.cantidad)
-                })
-            })
-        })
 
         manuales.forEach(m => {
             if (!m.presentacionId || !m.presentacion) return 
@@ -119,7 +83,14 @@ export async function POST(request: Request) {
         })).filter(i => i.paquetes > 0)
 
         if (itemsADescontar.length === 0) {
-            return NextResponse.json({ error: 'No hay paquetes para descontar en este turno.' }, { status: 400 })
+            await prisma.planificacionDescuento.create({
+                data: { fecha: startOfDay, turno },
+            })
+            return NextResponse.json({
+                success: true,
+                message: 'No hay requerimientos manuales para descontar. Los pedidos de rutas ya se descuentan automáticamente al despachar.',
+                resumen: [],
+            })
         }
 
         // 4. Ejecutar en transacción
@@ -170,17 +141,18 @@ export async function POST(request: Request) {
             resumen: itemsADescontar.map(i => ({ id: i.presentacionId, paquetes: i.paquetes }))
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error en descuento de stock:', error)
-        return NextResponse.json({ error: 'Error interno', details: error.message }, { status: 500 })
+        return NextResponse.json({ error: 'Error interno', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
     }
 }
 
 export async function DELETE(request: Request) {
     try {
         const session = await getServerSession(authOptions)
-        const userRol = (session?.user as any)?.rol
-        const permisos = (session?.user as any)?.permisos || {}
+        const user = session?.user as SessionUser | undefined
+        const userRol = user?.rol
+        const permisos = user?.permisos || {}
 
         // Verificar permisos de stock o producción (solo ADMIN por seguridad adicional en reversión)
         if (userRol !== 'ADMIN' && !permisos.permisoStock && !permisos.permisoProduccion) {
@@ -258,8 +230,8 @@ export async function DELETE(request: Request) {
             message: `Reversión exitosa. Se han reincorporado ${movimientos.length} productos al stock.`
         })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error en reversión de stock:', error)
-        return NextResponse.json({ error: 'Error interno', details: error.message }, { status: 500 })
+        return NextResponse.json({ error: 'Error interno', details: error instanceof Error ? error.message : String(error) }, { status: 500 })
     }
 }
