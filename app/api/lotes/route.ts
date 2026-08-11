@@ -193,13 +193,23 @@ export async function POST(request: Request) {
             }
 
             return nuevoLote
+        }, {
+            // El inicio descuenta varios insumos y registra cada movimiento dentro
+            // de la misma transacción. En bases remotas puede superar los 5 segundos
+            // predeterminados de Prisma sin que exista un error de datos.
+            maxWait: 10000,
+            timeout: 60000,
         })
 
         return NextResponse.json(lote, { status: 201 })
     } catch (error: any) {
         logError(error)
         console.error('Error creating lote:', error)
-        const message = error?.message || 'Error al crear lote'
+        const esTimeoutTransaccion = String(error?.message || '').includes('Transaction not found')
+            || String(error?.message || '').includes('Transaction API error')
+        const message = esTimeoutTransaccion
+            ? 'La operación demoró más de lo esperado y fue revertida. Volvé a intentar.'
+            : error?.message || 'Error al crear lote'
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }
