@@ -40,10 +40,14 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         const { productoId, presentacionId, tipo, cantidad, observaciones, ubicacionId, destinoUbicacionId, motivo } = body
 
-        const cant = parseInt(cantidad)
         const tiposPermitidos = ['traslado', 'venta_local', 'reparto', 'merma', 'ajuste', 'ajuste_fabrica', 'ajuste_local']
         if (!tiposPermitidos.includes(tipo)) {
             return NextResponse.json({ error: `Tipo inválido. Permitidos: ${tiposPermitidos.join(', ')}` }, { status: 400 })
+        }
+        const cant = Number(cantidad)
+        const esAjuste = tipo === 'ajuste' || tipo === 'ajuste_fabrica' || tipo === 'ajuste_local'
+        if (!Number.isInteger(cant) || cant < 0 || (!esAjuste && cant === 0)) {
+            return NextResponse.json({ error: esAjuste ? 'El stock debe ser un número entero mayor o igual a cero' : 'La cantidad debe ser un número entero mayor a cero' }, { status: 400 })
         }
 
         const result = await prisma.$transaction(async (tx) => {

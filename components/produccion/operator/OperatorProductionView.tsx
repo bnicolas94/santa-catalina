@@ -31,6 +31,12 @@ const PRODUCTION_OPTIONS = [
 ]
 const PACKAGES_PER_ROUND = 7
 const REJECTION_REASONS = ['Rotura', 'Mal sellado', 'Calidad', 'Producto dañado', 'Otro']
+const STOCK_ADJUSTMENT_REASONS = ['Conteo físico', 'Diferencia de inventario', 'Error de carga anterior', 'Rotura no registrada']
+const STOCK_PRESENTATIONS = [
+    { code: 'JQ', sizes: [48, 24] },
+    { code: 'ESP', sizes: [48] },
+    { code: 'CLA', sizes: [48] },
+]
 
 function localDate(date: Date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -53,6 +59,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
     const [reason, setReason] = useState('')
     const [busy, setBusy] = useState(false)
     const [notice, setNotice] = useState<Notice>(null)
+    const [stockOpen, setStockOpen] = useState(false)
 
     const productionOptions = useMemo<ProductionOption[]>(() => {
         const availableProducts = data?.productos || []
@@ -155,6 +162,11 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
             <div className={styles.operator}>Hola, <strong>{userName.split(' ')[0]}</strong><small>● Actualizado</small></div>
         </header>
         {notice && <div className={`${styles.notice} ${styles[notice.type]}`} role="status">{notice.text}</div>}
+        <nav className={styles.operatorActions} aria-label="Herramientas de producción">
+            <button type="button" className={styles.actionButton} onClick={() => setStockOpen(true)}>
+                <span className={styles.actionIcon}>▦</span><span><strong>Stock en cámara</strong><small>Consultar y corregir cantidades</small></span>
+            </button>
+        </nav>
         <section className={styles.toolbar} aria-label="Fecha de producción">
             <button onClick={() => changeDay(-1)} aria-label="Día anterior">←</button>
             <label><span>Fecha de producción</span><input type="date" value={date} onChange={event => onDateChange(event.target.value)} /></label>
@@ -173,6 +185,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
         </section>}
         <DailyProductionSummary lots={historyLots} />
         <ProductionHistory lots={historyLots} />
+        {stockOpen && <StockModal products={data?.productos || []} stocks={data?.stockProductos || []} locations={locations} userLocationId={userLocationId} onRefresh={onRefresh} onClose={() => setStockOpen(false)} />}
         {selected && <StartModal item={selected} rounds={rounds} setRounds={setRounds} busy={busy} onClose={() => setSelected(null)} onStart={startProduction} />}
         {closing && <FinishModal lot={closing} produced={produced} setProduced={setProduced} rejected={rejected} setRejected={setRejected} reason={reason} setReason={setReason} busy={busy} onClose={() => setClosing(null)} onFinish={finishProduction} />}
     </main>
@@ -303,6 +316,126 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
         </div>
         {Number(rejected) > 0 && <div className={styles.reason}><span>Motivo del rechazo</span><div className={styles.reasonOptions}>{REJECTION_REASONS.map(option => <button type="button" key={option} className={reason === option ? styles.reasonSelected : ''} onClick={() => setReason(option)}>{option}</button>)}</div></div>}
         <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={() => onFinish(distribution)} disabled={busy || !validTotals || !validSplit || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : `✓ Finalizar: ${goodPackages} a cámara · ${rejectedPackages} merma`}</button></footer>
+    </section></div>
+}
+
+interface OperatorStockItem {
+    key: string
+    productoId: string
+    presentacionId: string
+    code: string
+    name: string
+    presentationSize: number
+    quantity: number
+}
+
+function StockModal({ products, stocks, locations, userLocationId, onRefresh, onClose }: any) {
+    const location = locations.find((item: any) => item.id === userLocationId) || locations.find((item: any) => item.tipo === 'FABRICA')
+    const stockItems = useMemo<OperatorStockItem[]>(() => STOCK_PRESENTATIONS.flatMap(config => {
+        const product = products.find((item: any) => item.codigoInterno === config.code)
+        if (!product) return []
+        return config.sizes.map(size => {
+            const presentation = product.presentaciones?.find((item: any) => item.cantidad === size)
+            if (!presentation) return null
+            const stock = stocks.find((item: any) => item.productoId === product.id && item.presentacionId === presentation.id)
+            return {
+                key: `${product.id}-${presentation.id}`,
+                productoId: product.id,
+                presentacionId: presentation.id,
+                code: product.codigoInterno,
+                name: product.nombre,
+                presentationSize: presentation.cantidad,
+                quantity: Number(stock?.ubicaciones?.[location?.nombre] || 0),
+            }
+        }).filter(Boolean) as OperatorStockItem[]
+    }), [products, stocks, location?.nombre])
+    const [editing, setEditing] = useState<OperatorStockItem | null>(null)
+    const [quantity, setQuantity] = useState('0')
+    const [reason, setReason] = useState('')
+    const [hasEdited, setHasEdited] = useState(false)
+    const [busy, setBusy] = useState(false)
+    const [feedback, setFeedback] = useState<Notice>(null)
+
+    function openAdjustment(item: OperatorStockItem) {
+        setEditing(item); setQuantity(String(item.quantity)); setReason(''); setHasEdited(false); setFeedback(null)
+    }
+
+    function appendDigit(digit: number) {
+        if (!hasEdited) {
+            setQuantity(String(digit)); setHasEdited(true); return
+        }
+        const base = quantity === '0' ? '' : quantity
+        setQuantity(`${base}${digit}`.replace(/^0+(?=\d)/, '').slice(0, 6))
+    }
+
+    function clearQuantity() { setQuantity('0'); setHasEdited(true) }
+    function removeDigit() { setQuantity(quantity.slice(0, -1) || '0'); setHasEdited(true) }
+
+    async function saveAdjustment() {
+        if (!editing || !location || busy || !reason) return
+        const nextQuantity = Number(quantity)
+        if (!Number.isInteger(nextQuantity) || nextQuantity < 0) return
+        setBusy(true); setFeedback(null)
+        try {
+            const response = await fetch('/api/movimientos-producto', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    productoId: editing.productoId,
+                    presentacionId: editing.presentacionId,
+                    tipo: location.tipo === 'FABRICA' ? 'ajuste_fabrica' : 'ajuste_local',
+                    cantidad: nextQuantity,
+                    ubicacionId: location.id,
+                    observaciones: `Ajuste desde vista operativa · ${reason} · de ${editing.quantity} a ${nextQuantity}`,
+                }),
+            })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error || 'No se pudo ajustar el stock')
+            await onRefresh()
+            setEditing(null)
+            setFeedback({ type: 'success', text: `${editing.name} x${editing.presentationSize}: stock actualizado a ${nextQuantity}.` })
+        } catch (error) {
+            setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'No se pudo ajustar el stock' })
+        } finally { setBusy(false) }
+    }
+
+    const nextQuantity = Number(quantity)
+    const difference = editing ? nextQuantity - editing.quantity : 0
+    const validQuantity = Number.isInteger(nextQuantity) && nextQuantity >= 0
+
+    return <div className={styles.overlay} onMouseDown={() => !busy && onClose()}><section className={`${styles.modal} ${styles.stockModal}`} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Stock en cámara">
+        <header><div><span className={styles.eyebrow}>Herramienta operativa</span><h2>Stock en cámara</h2><p>{location?.nombre || 'Sin cámara asignada'}</p></div><button type="button" onClick={() => !busy && onClose()}>×</button></header>
+        {feedback && <div className={`${styles.stockFeedback} ${styles[feedback.type]}`} role="status">{feedback.text}</div>}
+        {!location ? <div className={styles.empty}>No hay una cámara o fábrica asignada al operador.</div> : editing ? <>
+            <div className={styles.stockEditor}>
+                <button type="button" className={styles.backButton} onClick={() => setEditing(null)}>← Volver al stock</button>
+                <div className={styles.stockEditorHeading}><div className={styles.stockBadge}>{editing.code}</div><div><span>{editing.name}</span><h3>Presentación x{editing.presentationSize}</h3></div></div>
+                <div className={styles.stockComparison}>
+                    <div><span>Stock registrado</span><strong>{editing.quantity}</strong></div>
+                    <div className={styles.stockArrow}>→</div>
+                    <div className={styles.stockNewValue}><span>Nuevo stock</span><strong>{quantity}</strong></div>
+                </div>
+                <div className={`${styles.stockDifference} ${difference === 0 ? '' : difference > 0 ? styles.stockIncrease : styles.stockDecrease}`}>
+                    {difference === 0 ? 'Sin diferencias' : `${difference > 0 ? '+' : ''}${difference} paquetes de diferencia`}
+                </div>
+            </div>
+            <div className={styles.numberPad} aria-label="Teclado para nuevo stock">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(number => <button type="button" key={number} onClick={() => appendDigit(number)}>{number}</button>)}
+                <button type="button" className={styles.clearKey} onClick={clearQuantity}>C</button>
+                <button type="button" onClick={() => appendDigit(0)}>0</button>
+                <button type="button" className={styles.deleteKey} onClick={removeDigit} aria-label="Borrar último número">⌫</button>
+            </div>
+            <div className={styles.reason}><span>Motivo de la corrección</span><div className={styles.reasonOptions}>{STOCK_ADJUSTMENT_REASONS.map(option => <button type="button" key={option} className={reason === option ? styles.reasonSelected : ''} onClick={() => setReason(option)}>{option}</button>)}</div></div>
+            <footer><button type="button" onClick={() => setEditing(null)} disabled={busy}>Cancelar</button><button type="button" className={styles.primary} onClick={saveAdjustment} disabled={busy || !validQuantity || !reason || difference === 0}>{busy ? 'Guardando…' : `✓ Guardar stock: ${quantity}`}</button></footer>
+        </> : <>
+            <div className={styles.stockIntro}><strong>Conteo actual de paquetes</strong><span>Tocá un producto únicamente si necesitás corregir una diferencia.</span></div>
+            <div className={styles.stockGrid}>{stockItems.map(item => <article className={styles.stockCard} key={item.key}>
+                <div className={styles.stockCardTop}><div className={styles.stockBadge}>{item.code}</div><div><span>{item.name}</span><small>Presentación x{item.presentationSize}</small></div></div>
+                <strong>{item.quantity}<small> paquetes</small></strong>
+                <button type="button" onClick={() => openAdjustment(item)}>Corregir cantidad</button>
+            </article>)}</div>
+            {stockItems.length === 0 && <div className={styles.empty}>No hay productos configurados para mostrar.</div>}
+            <footer><button type="button" onClick={onClose}>Cerrar</button></footer>
+        </>}
     </section></div>
 }
 
