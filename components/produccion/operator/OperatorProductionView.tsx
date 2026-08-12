@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from 'react'
+import { buildDailyProductionSummary } from '@/lib/produccion/dailyProductionSummary'
 import { calculateJqPresentationSplit } from '@/lib/produccion/presentationConversion'
 import styles from './operator-production.module.css'
 
@@ -170,6 +171,7 @@ export function OperatorProductionView({ userName, userLocationId, date, onDateC
                 <button onClick={() => openClose(lot)}>Finalizar lote</button>
             </article>)}</div>
         </section>}
+        <DailyProductionSummary lots={historyLots} />
         <ProductionHistory lots={historyLots} />
         {selected && <StartModal item={selected} rounds={rounds} setRounds={setRounds} busy={busy} onClose={() => setSelected(null)} onStart={startProduction} />}
         {closing && <FinishModal lot={closing} produced={produced} setProduced={setProduced} rejected={rejected} setRejected={setRejected} reason={reason} setReason={setReason} busy={busy} onClose={() => setClosing(null)} onFinish={finishProduction} />}
@@ -302,6 +304,24 @@ function FinishModal({ lot, produced, setProduced, rejected, setRejected, reason
         {Number(rejected) > 0 && <div className={styles.reason}><span>Motivo del rechazo</span><div className={styles.reasonOptions}>{REJECTION_REASONS.map(option => <button type="button" key={option} className={reason === option ? styles.reasonSelected : ''} onClick={() => setReason(option)}>{option}</button>)}</div></div>}
         <footer><button onClick={onClose}>Cancelar</button><button className={styles.primary} onClick={() => onFinish(distribution)} disabled={busy || !validTotals || !validSplit || (Number(rejected) > 0 && !reason)}>{busy ? 'Finalizando…' : `✓ Finalizar: ${goodPackages} a cámara · ${rejectedPackages} merma`}</button></footer>
     </section></div>
+}
+
+function DailyProductionSummary({ lots }: { lots: any[] }) {
+    const summary = buildDailyProductionSummary(lots)
+    const totalPackages = summary.reduce((total, item) => total + item.packages, 0)
+
+    return <section className={`${styles.section} ${styles.dailySummary}`} aria-live="polite">
+        <div className={styles.sectionTitle}>
+            <div><span className={styles.eyebrow}>Resumen final</span><h2>Producción del día</h2></div>
+            <span>{totalPackages} paquete{totalPackages === 1 ? '' : 's'} en total</span>
+        </div>
+        {summary.length === 0
+            ? <div className={styles.empty}>El resumen aparecerá cuando se finalice el primer lote.</div>
+            : <div className={styles.summaryGrid}>{summary.map(item => <article className={styles.summaryCard} key={item.key}>
+                <div className={styles.summaryIcon}>{item.code.slice(0, 3)}</div>
+                <div><span>{item.name}{item.presentationSize ? ` · x${item.presentationSize}` : ''}</span><strong>{item.packages}</strong><small>paquetes producidos</small></div>
+            </article>)}</div>}
+    </section>
 }
 
 function ProductionHistory({ lots }: { lots: any[] }) {
