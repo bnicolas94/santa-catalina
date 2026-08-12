@@ -22,6 +22,7 @@ const accessRules: AccessRule[] = [
     // La administración de roles puede escalar privilegios y queda reservada a ADMIN.
     { path: '/api/empleados/roles', legacyRoles: ['ADMIN'] },
     { path: '/api/admin', legacyRoles: ['ADMIN'] },
+    { path: '/api/pedidos/entregar-masivo', legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
 
     // Vistas mínimas de sólo lectura para pantallas operativas.
     { path: '/api/operaciones/roles', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO'] },

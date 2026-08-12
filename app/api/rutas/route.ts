@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { descontarStockPorPedido } from '@/lib/pedidos/stockPedido'
 
 // GET /api/rutas
 export async function GET(request: Request) {
@@ -96,56 +97,19 @@ export async function POST(request: Request) {
                 data: { estado: 'en_ruta' }
             })
 
-            // 3. Descontar Stock y crear Movimientos
-            // Obtenemos todos los detalles de los pedidos para consolidar el descuento
-            const detallesPedidos = await tx.detallePedido.findMany({
-                where: { pedidoId: { in: pedidos.map((p: { pedidoId: string }) => p.pedidoId) } },
-                include: { presentacion: true }
-            })
-
-            // Consolidar por presentacionId
-            const consolidado: Record<string, { productoId: string, cantidad: number }> = {}
-            detallesPedidos.forEach(det => {
-                const key = det.presentacionId
-                if (!consolidado[key] && det.presentacion) {
-                    consolidado[key] = { productoId: det.presentacion.productoId, cantidad: 0 }
-                }
-                if (consolidado[key]) {
-                    consolidado[key].cantidad += det.cantidad
+            // 3. Descontar stock con trazabilidad por pedido.
+            const pedidosConDetalles = await tx.pedido.findMany({
+                where: { id: { in: pedidos.map((p: { pedidoId: string }) => p.pedidoId) } },
+                include: {
+                    detalles: { include: { presentacion: { select: { productoId: true } } } }
                 }
             })
 
-            for (const [presId, info] of Object.entries(consolidado)) {
-                // Descontar de StockProducto
-                await tx.stockProducto.upsert({
-                    where: { 
-                        productoId_presentacionId_ubicacionId: { 
-                            productoId: info.productoId, 
-                            presentacionId: presId, 
-                            ubicacionId: finalOrigenId 
-                        } 
-                    },
-                    update: { cantidad: { decrement: info.cantidad } },
-                    create: { 
-                        productoId: info.productoId, 
-                        presentacionId: presId, 
-                        ubicacionId: finalOrigenId, 
-                        cantidad: -info.cantidad 
-                    }
-                })
-
-                // Registro de Movimiento
-                await tx.movimientoProducto.create({
-                    data: {
-                        tipo: 'salida_ruta',
-                        cantidad: info.cantidad,
-                        signo: 'salida',
-                        productoId: info.productoId,
-                        presentacionId: presId,
-                        ubicacionId: finalOrigenId,
-                        rutaId: nuevaRuta.id,
-                        observaciones: `Salida por Ruta ${nuevaRuta.id} - Chofer ${choferId}`
-                    }
+            for (const pedido of pedidosConDetalles) {
+                await descontarStockPorPedido(tx, pedido, finalOrigenId, {
+                    tipo: 'salida_ruta',
+                    rutaId: nuevaRuta.id,
+                    observaciones: `Salida por Ruta ${nuevaRuta.id} - Pedido ${pedido.id} - Chofer ${choferId}`,
                 })
             }
 
@@ -235,7 +199,6 @@ export async function DELETE(request: Request) {
             // Eliminar movimientos asociados a la ruta (salida_ruta originales)
             await tx.movimientoProducto.deleteMany({ where: { rutaId: id } })
             // Eliminar movimientos asociados a entregas de esta ruta
-            const entregaIds = entregas.map(e => e.pedidoId)
             const entregaRecords = await tx.entrega.findMany({ where: { rutaId: id }, select: { id: true } })
             if (entregaRecords.length > 0) {
                 await tx.movimientoProducto.deleteMany({ 

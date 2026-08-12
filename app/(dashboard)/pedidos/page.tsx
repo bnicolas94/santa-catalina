@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import ImportarPedidosModal from '@/components/pedidos/ImportarPedidosModal'
 
 interface Presentacion {
@@ -65,6 +64,7 @@ export default function PedidosPage() {
     const [showEditModal, setShowEditModal] = useState(false)
     const [showImportModal, setShowImportModal] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
+    const [isEntregandoMasivo, setIsEntregandoMasivo] = useState(false)
 
     // Paginación y Filtros
     const [currentPage, setCurrentPage] = useState(1)
@@ -171,7 +171,7 @@ export default function PedidosPage() {
                     console.log('Admin: Real-time update received');
                     fetchPedidos();
                 }
-            } catch (e) {
+            } catch {
                 // Ignore parse errors from heartbeat
             }
         };
@@ -321,7 +321,7 @@ export default function PedidosPage() {
         try {
             setLoading(true);
             // Enviar los filtros al backend para que borre todo server-side sin límite de paginación
-            const deleteBody: any = {};
+            const deleteBody: Record<string, string> = {};
             if (fechaDesde) deleteBody.fechaDesde = fechaDesde;
             if (fechaHasta) deleteBody.fechaHasta = fechaHasta;
             if (filterEstado) deleteBody.estado = filterEstado;
@@ -342,6 +342,59 @@ export default function PedidosPage() {
             setError('Error al eliminar pedidos de forma masiva');
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function handleEntregarMasivo() {
+        if (!fechaDesde && !fechaHasta) {
+            setError('Seleccioná una fecha o un rango antes de realizar la entrega masiva.')
+            return
+        }
+
+        const fechaLabel = fechaDesde === fechaHasta && fechaDesde
+            ? new Date(`${fechaDesde}T12:00:00`).toLocaleDateString('es-AR')
+            : `${fechaDesde || 'inicio'} al ${fechaHasta || 'fin'}`
+        const alcance = [
+            fechaLabel,
+            filterTurno ? `turno ${filterTurno}` : 'todos los turnos',
+            filterCanal ? `canal ${filterCanal}` : 'todos los canales',
+        ].join(', ')
+
+        const confirmado = confirm(
+            `¿Marcar como entregados todos los pedidos abiertos de ${alcance}?\n\n` +
+            'Los pedidos que ya salieron en una ruta no volverán a descontar stock. ' +
+            'Los demás generarán un descuento trazable asociado a cada pedido.',
+        )
+        if (!confirmado) return
+
+        setIsEntregandoMasivo(true)
+        setError('')
+        try {
+            const res = await fetch('/api/pedidos/entregar-masivo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fechaDesde,
+                    fechaHasta,
+                    turno: filterTurno || undefined,
+                    canal: filterCanal || undefined,
+                    estado: filterEstado || undefined,
+                    search: searchTerm || undefined,
+                }),
+            })
+            const result = await res.json()
+            if (!res.ok) throw new Error(result.error || 'No se pudo completar la entrega masiva.')
+
+            setSuccess(
+                `${result.marcados} pedido(s) entregados · ` +
+                `${result.descontados} con descuento nuevo · ${result.yaDescontados} ya descontados`,
+            )
+            await fetchData()
+            setTimeout(() => setSuccess(''), 5000)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'No se pudo completar la entrega masiva.')
+        } finally {
+            setIsEntregandoMasivo(false)
         }
     }
 
@@ -377,7 +430,6 @@ export default function PedidosPage() {
         // Lógica de Descuento por Efectivo:
         // Agrupamos en bultos teóricos de hasta 48 unidades
         let totalDescuento = 0;
-        let packsTemp: number[] = [];
         let currentPackUnits = 0;
 
         // Ordenamos de mayor a menor para optimizar bultos (similar al parser)
@@ -416,6 +468,17 @@ export default function PedidosPage() {
             <div className="page-header">
                 <h1>📋 Pedidos</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    {totalRecords > 0 && (!filterEstado || ['pendiente', 'confirmado', 'en_ruta'].includes(filterEstado)) && (
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleEntregarMasivo}
+                            disabled={isEntregandoMasivo || (!fechaDesde && !fechaHasta)}
+                            title="Entrega todos los pedidos abiertos que coinciden con los filtros actuales"
+                            style={{ backgroundColor: '#27AE60', borderColor: '#27AE60' }}
+                        >
+                            {isEntregandoMasivo ? 'Procesando…' : '✓ Entregar filtrados'}
+                        </button>
+                    )}
                     {totalRecords > 0 && (
                         <button className="btn btn-ghost" style={{ color: 'var(--color-danger)' }} onClick={handleLimpiarPedidos}>🧹 Limpiar</button>
                     )}
