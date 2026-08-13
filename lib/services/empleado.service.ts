@@ -193,6 +193,11 @@ export class EmpleadoService {
             throw new EmpleadoValidationError('Nombre y rol son requeridos')
         }
 
+        const rolSeleccionado = input.rolId
+            ? await prisma.rolEmpleado.findUnique({ where: { id: input.rolId }, select: { nombre: true } })
+            : null
+        if (input.rolId && !rolSeleccionado) throw new EmpleadoValidationError('El tipo de empleado seleccionado ya no existe.')
+
         // Validar unicidad de email
         if (input.email && input.email.trim() !== '') {
             const existingEmail = await prisma.empleado.findUnique({ where: { email: input.email } })
@@ -230,7 +235,7 @@ export class EmpleadoService {
                 dni: (input.dni && input.dni.trim() !== '') ? input.dni : null,
                 email: (input.email && input.email.trim() !== '') ? input.email : null,
                 password: hashedPassword,
-                rol: input.rol,
+                rol: rolSeleccionado?.nombre || input.rol,
                 telefono: (input.telefono && input.telefono.trim() !== '') ? input.telefono : null,
                 fechaIngreso: input.fechaIngreso ? new Date(input.fechaIngreso) : null,
                 sueldoBaseMensual: input.sueldoBaseMensual ? parseFloat(String(input.sueldoBaseMensual)) : 0,
@@ -280,12 +285,17 @@ export class EmpleadoService {
             }
         }
 
+        const rolSeleccionado = input.rolId
+            ? await prisma.rolEmpleado.findUnique({ where: { id: input.rolId }, select: { nombre: true } })
+            : null
+        if (input.rolId && !rolSeleccionado) throw new EmpleadoValidationError('El tipo de empleado seleccionado ya no existe.')
+
         const dataToUpdate: any = {
             nombre: input.nombre || undefined,
             apellido: (input.apellido !== undefined) ? input.apellido : undefined,
             dni: (input.dni !== undefined) ? (input.dni || null) : undefined,
             email: (input.email !== undefined) ? (input.email || null) : undefined,
-            rol: input.rol || undefined,
+            rol: rolSeleccionado?.nombre || input.rol || undefined,
             telefono: (input.telefono !== undefined) ? (input.telefono || null) : undefined,
             fechaIngreso: validatedFechaIngreso,
             sueldoBaseMensual: !isNaN(parseFloat(String(input.sueldoBaseMensual))) ? parseFloat(String(input.sueldoBaseMensual)) : undefined,

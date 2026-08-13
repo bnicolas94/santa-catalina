@@ -1,6 +1,15 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import styles from './RolesConfigModal.module.css'
+
+type PermissionKey =
+    | 'permisoDashboard'
+    | 'permisoStock'
+    | 'permisoCaja'
+    | 'permisoPersonal'
+    | 'permisoProduccion'
+    | 'permisoCostos'
 
 interface Role {
     id: string
@@ -16,6 +25,7 @@ interface Role {
     jornal: number
     valorHoraExtra: number
     cicloPago: string
+    _count?: { empleados: number }
 }
 
 interface RolesConfigModalProps {
@@ -23,224 +33,295 @@ interface RolesConfigModalProps {
     onRolesChanged: () => void
 }
 
+const PERMISSIONS: Array<{ id: PermissionKey; title: string; description: string; icon: string }> = [
+    { id: 'permisoDashboard', title: 'Dashboard', description: 'Indicadores generales y pantalla de inicio.', icon: '⌂' },
+    { id: 'permisoStock', title: 'Stock y compras', description: 'Insumos, compras, proveedores e inventario.', icon: '□' },
+    { id: 'permisoCaja', title: 'Caja', description: 'Saldos, movimientos y rendiciones.', icon: '$' },
+    { id: 'permisoPersonal', title: 'Personal', description: 'Legajos, asistencia y liquidaciones.', icon: '●' },
+    { id: 'permisoProduccion', title: 'Producción', description: 'Lotes, recetas y operación diaria.', icon: '△' },
+    { id: 'permisoCostos', title: 'Costos', description: 'Costeo, rentabilidad y reportes.', icon: '%' },
+]
+
+const EMPTY_ROLE: Partial<Role> = {
+    nombre: '',
+    descripcion: '',
+    color: '#9b1c31',
+    permisoDashboard: false,
+    permisoStock: false,
+    permisoCaja: false,
+    permisoPersonal: false,
+    permisoProduccion: false,
+    permisoCostos: false,
+    jornal: 0,
+    valorHoraExtra: 0,
+    cicloPago: 'SEMANAL',
+}
+
+const money = (value: number) => value.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+
 export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfigModalProps) {
     const [roles, setRoles] = useState<Role[]>([])
     const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [editRole, setEditRole] = useState<Partial<Role> | null>(null)
     const [error, setError] = useState('')
+    const [search, setSearch] = useState('')
 
-    useEffect(() => {
-        fetchRoles()
-    }, [])
-
-    const fetchRoles = async () => {
+    const fetchRoles = useCallback(async () => {
         setLoading(true)
+        setError('')
         try {
             const res = await fetch('/api/empleados/roles')
             const data = await res.json()
-            setRoles(data)
-        } catch (err) {
-            setError('Error al cargar roles')
+            if (!res.ok) throw new Error(data.error || 'No se pudieron cargar los tipos de empleado.')
+            setRoles(Array.isArray(data) ? data : [])
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'No se pudieron cargar los tipos de empleado.')
         } finally {
             setLoading(false)
         }
+    }, [])
+
+    useEffect(() => {
+        void fetchRoles()
+    }, [fetchRoles])
+
+    const visibleRoles = useMemo(() => {
+        const term = search.trim().toLowerCase()
+        if (!term) return roles
+        return roles.filter(role => `${role.nombre} ${role.descripcion || ''}`.toLowerCase().includes(term))
+    }, [roles, search])
+
+    const assignedEmployees = roles.reduce((total, role) => total + (role._count?.empleados || 0), 0)
+    const enabledPermissions = editRole
+        ? PERMISSIONS.filter(permission => Boolean(editRole[permission.id])).length
+        : 0
+
+    const updateRole = <K extends keyof Role>(key: K, value: Role[K]) => {
+        setEditRole(current => current ? { ...current, [key]: value } : current)
+        setError('')
     }
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!editRole?.nombre) return
-
+    const handleSave = async (event: React.FormEvent) => {
+        event.preventDefault()
+        if (!editRole?.nombre?.trim()) {
+            setError('Ingresá un nombre para el tipo de empleado.')
+            return
+        }
+        setSaving(true)
+        setError('')
         try {
             const url = editRole.id ? `/api/empleados/roles/${editRole.id}` : '/api/empleados/roles'
-            const method = editRole.id ? 'PUT' : 'POST'
-
             const res = await fetch(url, {
-                method,
+                method: editRole.id ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(editRole)
+                body: JSON.stringify(editRole),
             })
-
-            if (!res.ok) {
-                const data = await res.json()
-                throw new Error(data.error || 'Error al guardar rol')
-            }
-
-            setEditRole(null)
-            fetchRoles()
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'No se pudo guardar el tipo de empleado.')
+            setEditRole(data)
+            await fetchRoles()
             onRolesChanged()
-        } catch (err: any) {
-            alert(err.message)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'No se pudo guardar el tipo de empleado.')
+        } finally {
+            setSaving(false)
         }
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('¿Seguro que desea eliminar este rol?')) return
-
+    const handleDelete = async (role: Role) => {
+        const count = role._count?.empleados || 0
+        if (count > 0) {
+            setError(`No se puede eliminar ${role.nombre}: tiene ${count} empleado${count === 1 ? '' : 's'} asignado${count === 1 ? '' : 's'}.`)
+            return
+        }
+        if (!window.confirm(`¿Eliminar el tipo de empleado “${role.nombre}”? Esta acción no se puede deshacer.`)) return
+        setSaving(true)
+        setError('')
         try {
-            const res = await fetch(`/api/empleados/roles/${id}`, { method: 'DELETE' })
-            if (!res.ok) {
-                const data = await res.json()
-                throw new Error(data.error || 'Error al eliminar')
-            }
-            fetchRoles()
+            const res = await fetch(`/api/empleados/roles/${role.id}`, { method: 'DELETE' })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'No se pudo eliminar el tipo de empleado.')
+            if (editRole?.id === role.id) setEditRole(null)
+            await fetchRoles()
             onRolesChanged()
-        } catch (err: any) {
-            alert(err.message)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'No se pudo eliminar el tipo de empleado.')
+        } finally {
+            setSaving(false)
         }
     }
 
     return (
-        <div className="modal-overlay" style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-            <div className="modal-content" style={{
-                backgroundColor: 'white', padding: '2rem', borderRadius: '12px',
-                width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Gestionar Roles</h2>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+        <div className={styles.overlay} onMouseDown={onClose}>
+            <section className={styles.modal} onMouseDown={event => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="roles-title">
+                <header className={styles.header}>
+                    <div>
+                        <span className={styles.eyebrow}>Configuración de Personal</span>
+                        <h2 id="roles-title">Tipos de empleado</h2>
+                        <p>Centralizá accesos y valores salariales base. Cada empleado hereda la configuración del tipo que tenga asignado.</p>
+                    </div>
+                    <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Cerrar">×</button>
+                </header>
+
+                <div className={styles.stats}>
+                    <div><strong>{roles.length}</strong><span>Tipos configurados</span></div>
+                    <div><strong>{assignedEmployees}</strong><span>Empleados vinculados</span></div>
+                    <div><strong>{roles.filter(role => PERMISSIONS.some(permission => role[permission.id])).length}</strong><span>Con acceso al sistema</span></div>
                 </div>
 
-                {editRole ? (
-                    <form onSubmit={handleSave} style={{ marginBottom: '2rem', padding: '1rem', border: '1px solid #eee', borderRadius: '8px' }}>
-                        <h3>{editRole.id ? 'Editar Rol' : 'Nuevo Rol'}</h3>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Nombre</label>
-                            <input
-                                className="form-input"
-                                value={editRole.nombre || ''}
-                                onChange={e => setEditRole({ ...editRole, nombre: e.target.value.toUpperCase() })}
-                                placeholder="EJ: SUPERVISOR"
-                                required
-                            />
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Descripción</label>
-                            <input
-                                className="form-input"
-                                value={editRole.descripcion || ''}
-                                onChange={e => setEditRole({ ...editRole, descripcion: e.target.value })}
-                            />
+                {error && <div className={styles.error} role="alert">{error}</div>}
+
+                <div className={styles.workspace}>
+                    <aside className={styles.sidebar}>
+                        <div className={styles.sidebarTop}>
+                            <label className={styles.searchBox}>
+                                <span>⌕</span>
+                                <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar tipo…" />
+                            </label>
+                            <button type="button" className="btn btn-primary" onClick={() => { setEditRole({ ...EMPTY_ROLE }); setError('') }}>
+                                + Nuevo tipo
+                            </button>
                         </div>
 
-                        <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f5f5f5', borderRadius: '8px' }}>
-                            <h4 style={{ margin: '0 0 1rem 0' }}>Permisos de Acceso</h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                {[
-                                    { id: 'permisoDashboard', label: '🏠 Dashboard', color: '#f39c12' },
-                                    { id: 'permisoStock', label: '📦 Stock', color: '#2ecc71' },
-                                    { id: 'permisoCaja', label: '💰 Caja', color: '#f1c40f' },
-                                    { id: 'permisoPersonal', label: '👥 Personal', color: '#e74c3c' },
-                                    { id: 'permisoProduccion', label: '🏗️ Producción', color: '#3498db' },
-                                    { id: 'permisoCostos', label: '📉 Costos', color: '#9b59b6' },
-                                ].map(p => (
-                                    <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!(editRole as any)[p.id]}
-                                            onChange={e => setEditRole({ ...editRole, [p.id]: e.target.checked })}
-                                        />
-                                        {p.label}
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#eef7ee', borderRadius: '8px', border: '1px solid #c3e6c3' }}>
-                            <h4 style={{ margin: '0 0 1rem 0' }}>💰 Configuración Salarial</h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Monto Base ($)</label>
-                                    <input
-                                        className="form-input"
-                                        type="number"
-                                        step="0.01"
-                                        value={editRole.jornal || 0}
-                                        onChange={e => setEditRole({ ...editRole, jornal: parseFloat(e.target.value) || 0 })}
-                                        placeholder="Ej: 168414"
-                                    />
-                                    <small style={{ color: '#666' }}>
-                                        Monto según el ciclo seleccionado (ej: sueldo semanal).
-                                    </small>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Ciclo de Pago</label>
-                                    <select
-                                        className="form-input"
-                                        value={editRole.cicloPago || 'SEMANAL'}
-                                        onChange={e => setEditRole({ ...editRole, cicloPago: e.target.value })}
-                                    >
-                                        <option value="DIARIO">Diario</option>
-                                        <option value="SEMANAL">Semanal</option>
-                                        <option value="MENSUAL">Mensual</option>
-                                    </select>
-                                    <small style={{ color: '#666' }}>
-                                        Define cómo se calcula el jornal diario a partir del monto base.
-                                    </small>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px' }}>Valor Hora Extra ($)</label>
-                                    <input
-                                        className="form-input"
-                                        type="number"
-                                        step="0.01"
-                                        value={editRole.valorHoraExtra || 0}
-                                        onChange={e => setEditRole({ ...editRole, valorHoraExtra: parseFloat(e.target.value) || 0 })}
-                                        placeholder="Ej: 1500"
-                                    />
-                                    <small style={{ color: '#666' }}>Monto por hora extra. Si es 0, el sistema calcula el doble del valor hora normal.</small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button type="submit" className="btn btn-primary">Guardar</button>
-                            <button type="button" className="btn btn-secondary" onClick={() => setEditRole(null)}>Cancelar</button>
-                        </div>
-                    </form>
-                ) : (
-                    <button
-                        className="btn btn-primary"
-                        style={{ marginBottom: '1.5rem', width: '100%' }}
-                        onClick={() => setEditRole({ nombre: '', descripcion: '' })}
-                    >
-                        + Crear Nuevo Rol
-                    </button>
-                )}
-
-                {loading ? <p>Cargando...</p> : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {roles.map(rol => (
-                            <div key={rol.id} style={{
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                padding: '0.75rem', backgroundColor: '#f9f9f9', borderRadius: '6px'
-                            }}>
-                                <div>
-                                    <strong style={{ display: 'block' }}>{rol.nombre}</strong>
-                                    {rol.descripcion && <small style={{ color: '#666' }}>{rol.descripcion}</small>}
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div className={styles.roleList}>
+                            {loading ? <div className={styles.empty}>Cargando tipos…</div> : visibleRoles.length === 0 ? (
+                                <div className={styles.empty}>No hay tipos que coincidan con la búsqueda.</div>
+                            ) : visibleRoles.map(role => {
+                                const permissionCount = PERMISSIONS.filter(permission => role[permission.id]).length
+                                const selected = editRole?.id === role.id
+                                return (
                                     <button
-                                        onClick={() => setEditRole(rol)}
-                                        style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer' }}
+                                        type="button"
+                                        key={role.id}
+                                        className={`${styles.roleCard} ${selected ? styles.roleCardSelected : ''}`}
+                                        onClick={() => { setEditRole({ ...role }); setError('') }}
                                     >
-                                        Editar
+                                        <span className={styles.colorMark} style={{ backgroundColor: role.color || '#9b1c31' }} />
+                                        <span className={styles.roleCardBody}>
+                                            <span className={styles.roleCardHeader}>
+                                                <strong>{role.nombre}</strong>
+                                                <span>{role._count?.empleados || 0} pers.</span>
+                                            </span>
+                                            <small>{role.descripcion || 'Sin descripción'}</small>
+                                            <span className={styles.roleMeta}>
+                                                <span>{permissionCount} acceso{permissionCount === 1 ? '' : 's'}</span>
+                                                <span>{role.jornal > 0 ? `$${money(role.jornal)} / ${role.cicloPago.toLowerCase()}` : 'Sin base salarial'}</span>
+                                            </span>
+                                        </span>
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(rol.id)}
-                                        style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer' }}
-                                    >
-                                        Borrar
-                                    </button>
-                                </div>
+                                )
+                            })}
+                        </div>
+                    </aside>
+
+                    <main className={styles.editor}>
+                        {!editRole ? (
+                            <div className={styles.welcome}>
+                                <div className={styles.welcomeIcon}>R</div>
+                                <h3>Seleccioná un tipo de empleado</h3>
+                                <p>Podrás revisar quiénes lo usan, qué módulos habilita y qué valores toma como referencia cada ficha.</p>
+                                <button type="button" className="btn btn-primary" onClick={() => setEditRole({ ...EMPTY_ROLE })}>Crear el primer tipo</button>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                        ) : (
+                            <form onSubmit={handleSave} className={styles.form}>
+                                <div className={styles.editorHeading}>
+                                    <div>
+                                        <span className={styles.eyebrow}>{editRole.id ? 'Editando tipo' : 'Nuevo tipo'}</span>
+                                        <h3>{editRole.nombre || 'Sin nombre'}</h3>
+                                    </div>
+                                    {editRole.id && (
+                                        <span className={styles.employeeCount}>{editRole._count?.empleados || 0} empleado{(editRole._count?.empleados || 0) === 1 ? '' : 's'}</span>
+                                    )}
+                                </div>
+
+                                <section className={styles.section}>
+                                    <div className={styles.sectionHeading}>
+                                        <div><h4>Identidad del tipo</h4><p>Nombre y referencia visual que aparecerán en las fichas.</p></div>
+                                    </div>
+                                    <div className={styles.identityGrid}>
+                                        <label className={styles.field}>
+                                            <span>Nombre</span>
+                                            <input className="form-input" value={editRole.nombre || ''} onChange={event => updateRole('nombre', event.target.value.toUpperCase())} placeholder="EJ: ADMINISTRACIÓN" required />
+                                        </label>
+                                        <label className={styles.colorField}>
+                                            <span>Color</span>
+                                            <span className={styles.colorControl}>
+                                                <input type="color" value={editRole.color || '#9b1c31'} onChange={event => updateRole('color', event.target.value)} />
+                                                <code>{editRole.color || '#9b1c31'}</code>
+                                            </span>
+                                        </label>
+                                        <label className={`${styles.field} ${styles.fullWidth}`}>
+                                            <span>Descripción</span>
+                                            <textarea className="form-input" rows={2} value={editRole.descripcion || ''} onChange={event => updateRole('descripcion', event.target.value)} placeholder="Responsabilidades o alcance de este tipo de empleado." />
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section className={styles.section}>
+                                    <div className={styles.sectionHeading}>
+                                        <div><h4>Accesos al sistema</h4><p>Estos permisos se heredan automáticamente en todas las fichas vinculadas.</p></div>
+                                        <span className={styles.counter}>{enabledPermissions} de {PERMISSIONS.length}</span>
+                                    </div>
+                                    <div className={styles.permissionsGrid}>
+                                        {PERMISSIONS.map(permission => {
+                                            const checked = Boolean(editRole[permission.id])
+                                            return (
+                                                <label key={permission.id} className={`${styles.permissionCard} ${checked ? styles.permissionCardActive : ''}`}>
+                                                    <input type="checkbox" checked={checked} onChange={event => updateRole(permission.id, event.target.checked)} />
+                                                    <span className={styles.permissionIcon}>{permission.icon}</span>
+                                                    <span><strong>{permission.title}</strong><small>{permission.description}</small></span>
+                                                    <span className={styles.switch} aria-hidden="true"><span /></span>
+                                                </label>
+                                            )
+                                        })}
+                                    </div>
+                                </section>
+
+                                <section className={styles.section}>
+                                    <div className={styles.sectionHeading}>
+                                        <div><h4>Valores salariales de referencia</h4><p>Se usan únicamente cuando la ficha del empleado no tiene un valor personalizado.</p></div>
+                                        <span className={styles.inheritanceBadge}>Base heredable</span>
+                                    </div>
+                                    <div className={styles.salaryGrid}>
+                                        <label className={styles.field}>
+                                            <span>Monto base por período</span>
+                                            <div className={styles.moneyInput}><b>$</b><input type="number" min="0" step="0.01" value={editRole.jornal ?? 0} onChange={event => updateRole('jornal', Number(event.target.value))} /></div>
+                                        </label>
+                                        <label className={styles.field}>
+                                            <span>Período de referencia</span>
+                                            <select className="form-select" value={editRole.cicloPago || 'SEMANAL'} onChange={event => updateRole('cicloPago', event.target.value)}>
+                                                <option value="DIARIO">Diario</option>
+                                                <option value="SEMANAL">Semanal</option>
+                                                <option value="MENSUAL">Mensual</option>
+                                            </select>
+                                        </label>
+                                        <label className={styles.field}>
+                                            <span>Valor fijo de hora extra</span>
+                                            <div className={styles.moneyInput}><b>$</b><input type="number" min="0" step="0.01" value={editRole.valorHoraExtra ?? 0} onChange={event => updateRole('valorHoraExtra', Number(event.target.value))} /></div>
+                                            <small>En cero, se calcula según la jornada del empleado.</small>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <footer className={styles.formFooter}>
+                                    <div>
+                                        {editRole.id && (
+                                            <button type="button" className={styles.deleteButton} disabled={saving || (editRole._count?.empleados || 0) > 0} onClick={() => void handleDelete(editRole as Role)}>
+                                                Eliminar tipo
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className={styles.footerActions}>
+                                        <button type="button" className="btn btn-ghost" onClick={() => setEditRole(null)} disabled={saving}>Cancelar</button>
+                                        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+                                    </div>
+                                </footer>
+                            </form>
+                        )}
+                    </main>
+                </div>
+            </section>
         </div>
     )
 }

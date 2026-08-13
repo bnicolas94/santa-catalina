@@ -44,6 +44,15 @@ test('Caja queda aislada de usuarios con otros permisos', () => {
     )
 })
 
+test('permisoStock incluye el circuito visible de compras y proveedores', () => {
+    const token = { rol: 'COMPRAS', permisos: { permisoStock: true } }
+    assert.equal(canAccessPath('/compras', token), true)
+    assert.equal(canAccessPath('/api/compras/cuenta-corriente', token), true)
+    assert.equal(canAccessPath('/proveedores', token), true)
+    assert.equal(canAccessPath('/api/proveedores', token), true)
+    assert.equal(canAccessPath('/caja', token), false)
+})
+
 test('el personal del LOCAL accede a Caja sin un permiso manual', () => {
     const token = {
         rol: 'OPERARIO',

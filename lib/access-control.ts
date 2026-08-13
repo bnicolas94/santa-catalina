@@ -94,7 +94,7 @@ const accessRules: AccessRule[] = [
     { path: '/stock', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/caja', permissions: ['permisoCaja'], legacyRoles: ['ADMIN'] },
     { path: '/costos', permissions: ['permisoCostos'], legacyRoles: ['ADMIN'] },
-    { path: '/proveedores', legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
+    { path: '/proveedores', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
     { path: '/clientes', legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
     { path: '/pedidos', legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
 ]

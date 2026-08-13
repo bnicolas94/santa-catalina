@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { normalizarRolEmpleado, RolEmpleadoValidationError } from '@/lib/empleados/roles'
 
 export async function GET() {
     try {
         const roles = await prisma.rolEmpleado.findMany({
-            orderBy: { nombre: 'asc' }
+            orderBy: { nombre: 'asc' },
+            include: { _count: { select: { empleados: true } } },
         })
 
         // Si no hay roles, podríamos sembrar los básicos
@@ -19,7 +21,10 @@ export async function GET() {
                     })
                 )
             )
-            const updatedRoles = await prisma.rolEmpleado.findMany({ orderBy: { nombre: 'asc' } })
+            const updatedRoles = await prisma.rolEmpleado.findMany({
+                orderBy: { nombre: 'asc' },
+                include: { _count: { select: { empleados: true } } },
+            })
             return NextResponse.json(updatedRoles)
         }
 
@@ -32,39 +37,20 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json()
-        const { 
-            nombre, descripcion, color, permisoDashboard, permisoStock, 
-            permisoCaja, permisoPersonal, permisoProduccion, permisoCostos, 
-            jornal, valorHoraExtra, cicloPago 
-        } = body
-
-        if (!nombre) {
-            return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
-        }
+        const data = normalizarRolEmpleado(await req.json())
 
         const nuevoRol = await prisma.rolEmpleado.create({
-            data: {
-                nombre,
-                descripcion,
-                color,
-                permisoDashboard: !!permisoDashboard,
-                permisoStock: !!permisoStock,
-                permisoCaja: !!permisoCaja,
-                permisoPersonal: !!permisoPersonal,
-                permisoProduccion: !!permisoProduccion,
-                permisoCostos: !!permisoCostos,
-                jornal: jornal ? parseFloat(jornal) : 0,
-                cicloPago: cicloPago || 'SEMANAL',
-                valorHoraExtra: valorHoraExtra ? parseFloat(valorHoraExtra) : 0
-            }
+            data,
+            include: { _count: { select: { empleados: true } } },
         })
 
         return NextResponse.json(nuevoRol)
-    } catch (error: any) {
-        if (error.code === 'P2002') {
+    } catch (error: unknown) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
             return NextResponse.json({ error: 'Ya existe un rol con ese nombre' }, { status: 400 })
         }
+        if (error instanceof RolEmpleadoValidationError) return NextResponse.json({ error: error.message }, { status: 400 })
+        console.error('Error creating role:', error)
         return NextResponse.json({ error: 'Error al crear rol' }, { status: 500 })
     }
 }

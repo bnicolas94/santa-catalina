@@ -51,6 +51,7 @@ const menuItems: MenuItem[] = [
         href: '/productos',
         icon: '📋',
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
+        permissionKey: 'permisoStock',
     },
     {
         label: 'Insumos',
@@ -78,6 +79,7 @@ const menuItems: MenuItem[] = [
         href: '/proveedores',
         icon: '🚛',
         roles: ['ADMIN', 'ADMIN_OPS'],
+        permissionKey: 'permisoStock',
     },
     {
         label: 'Clientes',

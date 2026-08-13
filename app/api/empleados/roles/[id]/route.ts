@@ -1,37 +1,32 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { normalizarRolEmpleado, RolEmpleadoValidationError } from '@/lib/empleados/roles'
 
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await context.params
-        const body = await req.json()
-        const { 
-            nombre, descripcion, color, permisoDashboard, permisoStock, 
-            permisoCaja, permisoPersonal, permisoProduccion, permisoCostos, 
-            jornal, valorHoraExtra, cicloPago 
-        } = body
+        const data = normalizarRolEmpleado(await req.json())
 
-        const actualizado = await prisma.rolEmpleado.update({
-            where: { id },
-            data: {
-                nombre,
-                descripcion,
-                color,
-                permisoDashboard: !!permisoDashboard,
-                permisoStock: !!permisoStock,
-                permisoCaja: !!permisoCaja,
-                permisoPersonal: !!permisoPersonal,
-                permisoProduccion: !!permisoProduccion,
-                permisoCostos: !!permisoCostos,
-                jornal: jornal !== undefined ? parseFloat(jornal) : undefined,
-                cicloPago: cicloPago !== undefined ? cicloPago : undefined,
-                valorHoraExtra: valorHoraExtra !== undefined ? parseFloat(valorHoraExtra) : undefined
-            }
+        const actualizado = await prisma.$transaction(async tx => {
+            await tx.rolEmpleado.update({ where: { id }, data })
+            // `Empleado.rol` se conserva por compatibilidad con accesos históricos.
+            // Al renombrar el tipo, ambos vínculos deben seguir diciendo lo mismo.
+            await tx.empleado.updateMany({ where: { rolId: id }, data: { rol: data.nombre } })
+            return tx.rolEmpleado.findUniqueOrThrow({
+                where: { id },
+                include: { _count: { select: { empleados: true } } },
+            })
         })
 
         return NextResponse.json(actualizado)
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('Error actualizando rol:', error)
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
+            return NextResponse.json({ error: 'Ya existe un tipo de empleado con ese nombre.' }, { status: 400 })
+        }
+        if (error instanceof RolEmpleadoValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
         return NextResponse.json({ error: 'Error al actualizar rol' }, { status: 500 })
     }
 }

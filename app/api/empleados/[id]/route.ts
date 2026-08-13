@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { EmpleadoService } from '@/lib/services/empleado.service'
+import { EmpleadoService, EmpleadoValidationError } from '@/lib/services/empleado.service'
 
 // PUT /api/empleados/:id — Actualizar empleado
 export async function PUT(
@@ -21,6 +21,9 @@ export async function PUT(
         return NextResponse.json(empleado)
     } catch (error: any) {
         console.error(`[EMPLEADOS API] ERROR CRITICO actualizando empleado ${employeeId}:`, error);
+        if (error instanceof EmpleadoValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
         // Detalles específicos de PrismaP2002 (Unique constraint)
         if (error?.code === 'P2002') {
             const field = error.meta?.target?.[0] || 'campo';
