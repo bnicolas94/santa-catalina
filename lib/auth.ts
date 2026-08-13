@@ -1,7 +1,36 @@
 import { NextAuthOptions } from 'next-auth'
+import type { RolEmpleado } from '@prisma/client'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
+import { aplicarAccesosOperativos, permisosDesdeRol } from './auth/permisosRol'
+
+type UsuarioAutenticado = {
+    id?: string
+    rol?: string
+    ubicacionId?: string | null
+    ubicacionTipo?: string | null
+    permisos?: ReturnType<typeof permisosDesdeRol>
+}
+
+async function resolverRolAsignado(
+    rolRelacionado: RolEmpleado | null,
+    nombreRolLegado: string,
+): Promise<RolEmpleado | null> {
+    if (rolRelacionado) return rolRelacionado
+
+    // Algunas cuentas anteriores al vínculo por rolId conservan únicamente el
+    // nombre del tipo. Resolverlo evita que caigan en los permisos heredados
+    // antiguos aunque todavía no se haya vuelto a guardar su ficha.
+    return prisma.rolEmpleado.findFirst({
+        where: {
+            nombre: {
+                equals: nombreRolLegado,
+                mode: 'insensitive',
+            },
+        },
+    })
+}
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -41,21 +70,19 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Credenciales inválidas')
                 }
 
+                const rolAsignado = await resolverRolAsignado(empleado.rolRel, empleado.rol)
+
                 return {
                     id: empleado.id,
                     name: empleado.nombre,
                     email: empleado.email,
-                    rol: empleado.rol,
+                    rol: rolAsignado?.nombre || empleado.rol,
                     ubicacionId: empleado.ubicacionId,
                     ubicacionTipo: empleado.ubicacion?.tipo || null,
-                    permisos: empleado.rolRel ? {
-                        permisoDashboard: empleado.rolRel.permisoDashboard,
-                        permisoStock: empleado.rolRel.permisoStock,
-                        permisoCaja: empleado.rolRel.permisoCaja,
-                        permisoPersonal: empleado.rolRel.permisoPersonal,
-                        permisoProduccion: empleado.rolRel.permisoProduccion,
-                        permisoCostos: empleado.rolRel.permisoCostos,
-                    } : null
+                    permisos: aplicarAccesosOperativos(
+                        permisosDesdeRol(rolAsignado),
+                        empleado.ubicacion?.tipo,
+                    ),
                 }
             },
         }),
@@ -63,30 +90,63 @@ export const authOptions: NextAuthOptions = {
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
+                const usuario = user as UsuarioAutenticado
                 token.id = user.id
-                token.rol = (user as any).rol
-                token.ubicacionId = (user as any).ubicacionId
-                token.ubicacionTipo = (user as any).ubicacionTipo
-                token.permisos = (user as any).permisos
+                token.rol = usuario.rol
+                token.ubicacionId = usuario.ubicacionId
+                token.ubicacionTipo = usuario.ubicacionTipo
+                token.permisos = usuario.permisos
+            } else if (token.id) {
+                // La sesión JWT puede sobrevivir a un cambio de rol. Volvemos a
+                // leer la asignación para que los accesos marcados se apliquen
+                // sin obligar al usuario a borrar cookies o autenticarse de cero.
+                try {
+                    const empleadoActual = await prisma.empleado.findUnique({
+                        where: { id: String(token.id) },
+                        select: {
+                            activo: true,
+                            rol: true,
+                            ubicacionId: true,
+                            ubicacion: { select: { tipo: true } },
+                            rolRel: true,
+                        },
+                    })
+                    if (empleadoActual?.activo) {
+                        const rolAsignado = await resolverRolAsignado(
+                            empleadoActual.rolRel,
+                            empleadoActual.rol,
+                        )
+                        token.rol = rolAsignado?.nombre || empleadoActual.rol
+                        token.ubicacionId = empleadoActual.ubicacionId
+                        token.ubicacionTipo = empleadoActual.ubicacion?.tipo || null
+                        token.permisos = aplicarAccesosOperativos(
+                            permisosDesdeRol(rolAsignado),
+                            empleadoActual.ubicacion?.tipo,
+                        )
+                    }
+                } catch (error) {
+                    // Una caída temporal de la base no invalida una sesión que ya
+                    // estaba autenticada; se conserva el último acceso conocido.
+                    console.error('No se pudieron refrescar los permisos de la sesión:', error)
+                }
             }
 
             // Caja es una herramienta operativa obligatoria para quienes trabajan
             // en el local. Se aplica también a sesiones ya iniciadas.
-            if (String(token.ubicacionTipo || '').toUpperCase() === 'LOCAL') {
-                token.permisos = {
-                    ...((token.permisos as Record<string, boolean> | null) || {}),
-                    permisoCaja: true,
-                }
-            }
+            token.permisos = aplicarAccesosOperativos(
+                token.permisos as ReturnType<typeof permisosDesdeRol>,
+                token.ubicacionTipo,
+            )
             return token
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).id = token.id;
-                (session.user as any).rol = token.rol;
-                (session.user as any).ubicacionId = token.ubicacionId;
-                (session.user as any).ubicacionTipo = token.ubicacionTipo;
-                (session.user as any).permisos = token.permisos;
+                const usuarioSesion = session.user as typeof session.user & UsuarioAutenticado
+                usuarioSesion.id = String(token.id)
+                usuarioSesion.rol = token.rol as string | undefined
+                usuarioSesion.ubicacionId = token.ubicacionId as string | null | undefined
+                usuarioSesion.ubicacionTipo = token.ubicacionTipo as string | null | undefined
+                usuarioSesion.permisos = token.permisos as ReturnType<typeof permisosDesdeRol>
             }
             return session
         },
