@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { CajaService } from '@/lib/services/caja.service'
+import { puedeTransferirEntreCajas } from '@/lib/caja/acceso'
 
 export async function POST(req: Request) {
     try {
@@ -23,20 +24,18 @@ export async function POST(req: Request) {
         const userRol = (session?.user as any)?.rol
         if (userRol !== 'ADMIN') {
             const uType = (session?.user as any)?.ubicacionTipo?.toUpperCase()
-            if (uType === 'LOCAL') {
-                const localBoxes = ['local', 'caja_chica_local']
-                if (!localBoxes.includes(origen) && !localBoxes.includes(destino)) {
-                    return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
-                }
-            } else if (uType === 'FABRICA') {
-                const fabricBoxes = ['caja_madre', 'caja_chica']
-                if (!fabricBoxes.includes(origen) && !fabricBoxes.includes(destino)) {
-                    return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
-                }
+            if (!puedeTransferirEntreCajas(uType, origen, destino)) {
+                return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
             }
         }
 
-        const result = await CajaService.transferir(origen, destino, numericMonto, fecha)
+        const result = await CajaService.transferir(
+            origen,
+            destino,
+            numericMonto,
+            fecha,
+            (session?.user as any)?.id || null,
+        )
 
         return NextResponse.json(result)
     } catch (error: any) {

@@ -68,7 +68,8 @@ export async function getCajaReport(
     }
 
     const queryWhere: any = {
-        fecha: { gte: start, lte: end }
+        fecha: { gte: start, lte: end },
+        estado: 'activo',
     }
     if (allowedBoxes) {
         queryWhere.cajaOrigen = { in: allowedBoxes }

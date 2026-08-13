@@ -4,6 +4,22 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import useSWR from 'swr'
 
+interface UsuarioCaja {
+    id: string
+    nombre: string
+    apellido: string | null
+}
+
+interface AuditoriaCaja {
+    id: string
+    accion: string
+    motivo: string | null
+    createdAt: string
+    valoresAnteriores: Record<string, unknown> | null
+    valoresNuevos: Record<string, unknown> | null
+    usuario: UsuarioCaja | null
+}
+
 interface MovCaja {
     id: string; tipo: string; concepto: string; monto: number; medioPago: string
     cajaOrigen: string | null; descripcion: string | null; fecha: string
@@ -11,6 +27,14 @@ interface MovCaja {
     rendicion: { id: string; chofer: { id: string, nombre: string } } | null
     movimientoMp?: { mpId: string; comisionMp: number; montoNeto: number; estado: string; metodoPago: string | null } | null
     gestionadoPorRRHH?: boolean
+    estado: string
+    createdAt: string
+    anuladoAt: string | null
+    motivoAnulacion: string | null
+    creadoPor: UsuarioCaja | null
+    actualizadoPor: UsuarioCaja | null
+    anuladoPor: UsuarioCaja | null
+    auditorias?: AuditoriaCaja[]
 }
 
 interface PendingPedido {
@@ -40,6 +64,41 @@ interface Concepto {
 function formatCurrency(n: number, visible = true) {
     if (!visible) return '$ ••••••'
     return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+function nombreUsuario(usuario: UsuarioCaja | null | undefined) {
+    if (!usuario) return 'Sistema'
+    return [usuario.nombre, usuario.apellido].filter(Boolean).join(' ')
+}
+
+const etiquetasAuditoria: Record<string, string> = {
+    tipo: 'Tipo',
+    concepto: 'Concepto',
+    monto: 'Monto',
+    medioPago: 'Medio de pago',
+    cajaOrigen: 'Caja',
+    descripcion: 'Descripción',
+    fecha: 'Fecha',
+    estado: 'Estado',
+}
+
+function valorAuditoria(clave: string, valor: unknown) {
+    if (valor === null || valor === undefined || valor === '') return '—'
+    if (clave === 'monto' && typeof valor === 'number') return formatCurrency(valor)
+    if (clave === 'fecha' && typeof valor === 'string') return new Date(valor).toLocaleString('es-AR')
+    return String(valor)
+}
+
+function cambiosAuditoria(auditoria: AuditoriaCaja) {
+    const anteriores = auditoria.valoresAnteriores || {}
+    const nuevos = auditoria.valoresNuevos || {}
+    return Object.keys({ ...anteriores, ...nuevos })
+        .filter(clave => JSON.stringify(anteriores[clave]) !== JSON.stringify(nuevos[clave]))
+        .map(clave => ({
+            clave,
+            anterior: anteriores[clave],
+            nuevo: nuevos[clave],
+        }))
 }
 
 const cajaFetcher = async ([_, fecha]: [string, string]) => {
@@ -146,6 +205,7 @@ export default function CajaPage() {
     const [showConceptosModal, setShowConceptosModal] = useState(false)
     const [nuevoConcepto, setNuevoConcepto] = useState('')
     const [editingMov, setEditingMov] = useState<MovCaja | null>(null)
+    const [auditMov, setAuditMov] = useState<MovCaja | null>(null)
     const [showDepositModal, setShowDepositModal] = useState(false)
     const [depositAmount, setDepositAmount] = useState('')
     const [depositConfig, setDepositConfig] = useState<any>(null)
@@ -333,14 +393,24 @@ export default function CajaPage() {
     }
 
     async function handleDelete(id: string) {
-        if (!confirm('¿Eliminar este movimiento?')) return
+        const motivo = prompt('Indicá el motivo de la anulación (mínimo 5 caracteres):')
+        if (motivo === null) return
         try {
-            const res = await fetch(`/api/caja?id=${id}`, { method: 'DELETE' })
-            if (!res.ok) throw new Error()
-            setSuccess('Movimiento eliminado')
+            const res = await fetch(`/api/caja?id=${id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motivo }),
+            })
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                throw new Error(data.error || 'Error al anular')
+            }
+            setSuccess('Movimiento anulado; se conservó en el historial')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
-        } catch { setError('Error al eliminar') }
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al anular')
+        }
     }
 
     function startEdit(m: MovCaja) {
@@ -1035,15 +1105,16 @@ export default function CajaPage() {
                             <th>Caja</th>
                             <th>Medio</th>
                             <th>Descripción</th>
+                            <th>Registrado por</th>
                             <th>Hora</th>
                             <th style={{ width: 110 }}>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         {movimientosFiltrados.length === 0 ? (
-                            <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>No se encontraron movimientos con estos filtros</td></tr>
+                            <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>No se encontraron movimientos con estos filtros</td></tr>
                         ) : movimientosFiltrados.map((m: MovCaja) => (
-                            <tr key={m.id}>
+                            <tr key={m.id} style={m.estado === 'anulado' ? { opacity: 0.65, backgroundColor: '#f8fafc' } : undefined}>
                                 <td>
                                     <span className="badge" style={{
                                         backgroundColor: m.tipo === 'ingreso' ? '#2ECC7115' : '#E74C3C15',
@@ -1052,6 +1123,9 @@ export default function CajaPage() {
                                     }}>
                                         {m.tipo === 'ingreso' ? '⬆️' : '⬇️'} {m.tipo}
                                     </span>
+                                    {m.estado === 'anulado' && (
+                                        <div><span className="badge" style={{ marginTop: 4, color: '#b42318', background: '#fef3f2' }}>ANULADO</span></div>
+                                    )}
                                 </td>
                                 <td style={{ fontWeight: 600 }}>
                                     {conceptos.find(c => c.clave === m.concepto)?.nombre || m.concepto}
@@ -1083,20 +1157,37 @@ export default function CajaPage() {
                                         </div>
                                     )}
                                 </td>
+                                <td style={{ fontSize: '0.78rem', minWidth: 130 }}>
+                                    <strong>{nombreUsuario(m.creadoPor)}</strong>
+                                    {m.actualizadoPor && (
+                                        <div style={{ color: 'var(--color-gray-500)', marginTop: 2 }}>
+                                            Editado por {nombreUsuario(m.actualizadoPor)}
+                                        </div>
+                                    )}
+                                    {m.estado === 'anulado' && (
+                                        <div style={{ color: '#b42318', marginTop: 2 }}>
+                                            Anulado por {nombreUsuario(m.anuladoPor)}
+                                        </div>
+                                    )}
+                                </td>
                                 <td style={{ fontSize: '0.8rem', color: 'var(--color-gray-400)' }}>
                                     {new Date(m.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                                 </td>
                                 <td>
                                     <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
-                                        {m.gestionadoPorRRHH ? <span
+                                        {userRol === 'ADMIN' && (
+                                            <button className="btn btn-ghost btn-sm" title="Ver trazabilidad" style={{ fontSize: '0.8rem', padding: '2px 6px' }}
+                                                onClick={() => setAuditMov(m)}>📜</button>
+                                        )}
+                                        {m.estado === 'anulado' ? null : m.gestionadoPorRRHH ? <span
                                             className="badge"
                                             title="Este movimiento se gestiona desde Empleados. Podés corregir su caja o anularlo desde RR. HH."
                                             style={{ color: '#175cd3', background: '#eff8ff', fontSize: '10px', whiteSpace: 'nowrap' }}
                                         >🔒 RRHH</span> : <>
                                         <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '0.8rem', padding: '2px 6px' }}
                                             onClick={() => startEdit(m)}>✏️</button>
-                                        <button className="btn btn-ghost btn-sm" title="Eliminar" style={{ fontSize: '0.8rem', padding: '2px 6px', color: 'var(--color-danger)' }}
-                                            onClick={() => handleDelete(m.id)}>🗑️</button>
+                                        <button className="btn btn-ghost btn-sm" title="Anular" style={{ fontSize: '0.8rem', padding: '2px 6px', color: 'var(--color-danger)' }}
+                                            onClick={() => handleDelete(m.id)}>⊘</button>
                                         </>}
                                     </div>
                                 </td>
@@ -1663,6 +1754,62 @@ export default function CajaPage() {
                                 <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#27AE60' }}>Confirmar Depósito</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {auditMov && userRol === 'ADMIN' && (
+                <div className="modal-overlay" style={{ zIndex: 10000 }} onClick={() => setAuditMov(null)}>
+                    <div className="modal" style={{ maxWidth: 720, width: '95%' }} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div>
+                                <h2>Trazabilidad del movimiento</h2>
+                                <div style={{ color: 'var(--color-gray-500)', fontSize: '0.85rem', marginTop: 4 }}>
+                                    {auditMov.concepto} · {formatCurrency(auditMov.monto)} · {getBoxLabel(auditMov.cajaOrigen)}
+                                </div>
+                            </div>
+                            <button className="btn btn-ghost btn-icon" onClick={() => setAuditMov(null)}>✕</button>
+                        </div>
+                        <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                            {(auditMov.auditorias || []).length === 0 ? (
+                                <div className="empty-state" style={{ padding: '2rem' }}>
+                                    Movimiento histórico: no posee eventos de auditoría anteriores a esta actualización.
+                                </div>
+                            ) : (auditMov.auditorias || []).map(auditoria => {
+                                const cambios = cambiosAuditoria(auditoria)
+                                return (
+                                    <div key={auditoria.id} style={{ border: '1px solid var(--color-gray-200)', borderRadius: 10, padding: '1rem', marginBottom: '0.75rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                                            <strong>{auditoria.accion}</strong>
+                                            <span style={{ color: 'var(--color-gray-500)', fontSize: '0.8rem' }}>
+                                                {new Date(auditoria.createdAt).toLocaleString('es-AR')}
+                                            </span>
+                                        </div>
+                                        <div style={{ marginTop: 4, fontSize: '0.85rem' }}>
+                                            Responsable: <strong>{nombreUsuario(auditoria.usuario)}</strong>
+                                        </div>
+                                        {auditoria.motivo && (
+                                            <div style={{ marginTop: 8, padding: '8px 10px', background: '#fff7ed', borderRadius: 6, fontSize: '0.85rem' }}>
+                                                Motivo: {auditoria.motivo}
+                                            </div>
+                                        )}
+                                        {cambios.length > 0 && (
+                                            <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                                                {cambios.map(cambio => (
+                                                    <div key={cambio.clave} style={{ fontSize: '0.8rem', display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8 }}>
+                                                        <strong>{etiquetasAuditoria[cambio.clave] || cambio.clave}</strong>
+                                                        <span>
+                                                            {auditoria.accion !== 'CREACION' && <><span style={{ color: '#b42318' }}>{valorAuditoria(cambio.clave, cambio.anterior)}</span> → </>}
+                                                            <span style={{ color: '#067647' }}>{valorAuditoria(cambio.clave, cambio.nuevo)}</span>
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
                     </div>
                 </div>
             )}

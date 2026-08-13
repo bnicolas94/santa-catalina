@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { PrismaClient, Prisma } from '@prisma/client'
 
 import { esMovimientoGestionadoPorRRHH, validarMotivoReasignacionCaja } from '@/lib/caja/movimientosProtegidos'
+import { validarMotivoAnulacionCaja } from '@/lib/caja/auditoria'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
@@ -22,6 +23,7 @@ export interface CreateMovimientoInput {
     liquidacionFinalId?: string | null
     pagoCierreMensualId?: string | null
     movimientoReversaDeId?: string | null
+    usuarioId?: string | null
     fecha?: Date | string | null
 }
 
@@ -32,6 +34,7 @@ export interface UpdateMovimientoInput {
     medioPago?: string
     cajaOrigen?: string | null
     descripcion?: string | null
+    usuarioId?: string | null
     fecha?: Date | string | null
 }
 
@@ -52,6 +55,42 @@ function normalizeFecha(fecha?: Date | string | null): Date {
         return new Date(fecha + 'T12:00:00Z')
     }
     return new Date(fecha)
+}
+
+function snapshotMovimiento(movimiento: Record<string, unknown>): Prisma.InputJsonValue {
+    return {
+        tipo: String(movimiento.tipo || ''),
+        concepto: String(movimiento.concepto || ''),
+        monto: Number(movimiento.monto || 0),
+        medioPago: String(movimiento.medioPago || ''),
+        cajaOrigen: movimiento.cajaOrigen ? String(movimiento.cajaOrigen) : null,
+        descripcion: movimiento.descripcion ? String(movimiento.descripcion) : null,
+        fecha: movimiento.fecha instanceof Date ? movimiento.fecha.toISOString() : String(movimiento.fecha || ''),
+        estado: String(movimiento.estado || 'activo'),
+    }
+}
+
+async function registrarAuditoria(
+    tx: TxClient,
+    input: {
+        movimientoId: string
+        accion: 'CREACION' | 'MODIFICACION' | 'ANULACION' | 'REASIGNACION'
+        usuarioId?: string | null
+        valoresAnteriores?: Prisma.InputJsonValue
+        valoresNuevos?: Prisma.InputJsonValue
+        motivo?: string | null
+    },
+) {
+    return (tx as any).auditoriaMovimientoCaja.create({
+        data: {
+            movimientoId: input.movimientoId,
+            accion: input.accion,
+            usuarioId: input.usuarioId || null,
+            valoresAnteriores: input.valoresAnteriores,
+            valoresNuevos: input.valoresNuevos,
+            motivo: input.motivo || null,
+        },
+    })
 }
 
 /**
@@ -138,6 +177,7 @@ export class CajaService {
                     liquidacionFinalId: input.liquidacionFinalId || null,
                     pagoCierreMensualId: input.pagoCierreMensualId || null,
                     movimientoReversaDeId: input.movimientoReversaDeId || null,
+                    creadoPorId: input.usuarioId || null,
                     fecha: normalizeFecha(input.fecha),
                 },
             })
@@ -145,6 +185,13 @@ export class CajaService {
             if (input.cajaOrigen) {
                 await aplicarImpactoSaldo(client, input.cajaOrigen, input.tipo, input.monto)
             }
+
+            await registrarAuditoria(client, {
+                movimientoId: mov.id,
+                accion: 'CREACION',
+                usuarioId: input.usuarioId,
+                valoresNuevos: snapshotMovimiento(mov),
+            })
 
             return mov
         }
@@ -165,6 +212,7 @@ export class CajaService {
         return prisma.$transaction(async (tx) => {
             const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!oldMov) throw new Error('Movimiento no encontrado')
+            if (oldMov.estado === 'anulado') throw new Error('Un movimiento anulado no puede modificarse.')
             if (esMovimientoGestionadoPorRRHH(oldMov)) {
                 throw new Error('Este movimiento pertenece a RR. HH. y sólo puede corregirse desde el módulo Empleados.')
             }
@@ -191,6 +239,7 @@ export class CajaService {
                     medioPago: finalMedioPago,
                     ...(input.cajaOrigen !== undefined && { cajaOrigen: input.cajaOrigen || null }),
                     ...(input.descripcion !== undefined && { descripcion: input.descripcion || null }),
+                    actualizadoPorId: input.usuarioId || null,
                     ...(input.fecha && { fecha: normalizeFecha(input.fecha) }),
                 },
             })
@@ -200,6 +249,14 @@ export class CajaService {
                 await aplicarImpactoSaldo(tx, mov.cajaOrigen, mov.tipo, mov.monto)
             }
 
+            await registrarAuditoria(tx, {
+                movimientoId: mov.id,
+                accion: 'MODIFICACION',
+                usuarioId: input.usuarioId,
+                valoresAnteriores: snapshotMovimiento(oldMov),
+                valoresNuevos: snapshotMovimiento(mov),
+            })
+
             return mov
         })
     }
@@ -208,12 +265,14 @@ export class CajaService {
     /**
      * Revierte el impacto del movimiento en SaldoCaja, revierte el estado de los pedidos asociados a la rendición, y lo elimina.
      */
-    static async deleteMovimiento(id: string) {
+    static async anularMovimiento(id: string, motivoInformado: unknown, usuarioId?: string | null) {
+        const motivo = validarMotivoAnulacionCaja(motivoInformado)
         return prisma.$transaction(async (tx) => {
             const mov = await tx.movimientoCaja.findUnique({ where: { id } })
             if (!mov) return
+            if (mov.estado === 'anulado') throw new Error('El movimiento ya se encuentra anulado.')
             if (esMovimientoGestionadoPorRRHH(mov)) {
-                throw new Error('Este movimiento pertenece a RR. HH. y no puede eliminarse desde Caja. Anulá el pago desde Empleados.')
+                throw new Error('Este movimiento pertenece a RR. HH. y no puede anularse desde Caja. Anulá el pago desde Empleados.')
             }
 
             // Revertir impacto de saldo
@@ -242,11 +301,11 @@ export class CajaService {
                         })
                     }
                 }
-                
-                // Desvincular de MovimientoCaja para no violar la FK al borrar RendicionChofer
+
+                // Mantener el movimiento anulado, pero liberar la rendición que se revierte.
                 await tx.movimientoCaja.update({
                     where: { id },
-                    data: { rendicionId: null }
+                    data: { rendicionId: null },
                 })
 
                 await tx.rendicionChofer.delete({
@@ -254,8 +313,27 @@ export class CajaService {
                 })
             }
 
-            await tx.movimientoCaja.delete({ where: { id } })
-            return mov
+            const anulado = await tx.movimientoCaja.update({
+                where: { id },
+                data: {
+                    estado: 'anulado',
+                    anuladoAt: new Date(),
+                    anuladoPorId: usuarioId || null,
+                    motivoAnulacion: motivo,
+                    ...(mov.rendicionId && { rendicionId: null }),
+                },
+            })
+
+            await registrarAuditoria(tx, {
+                movimientoId: id,
+                accion: 'ANULACION',
+                usuarioId,
+                valoresAnteriores: snapshotMovimiento(mov),
+                valoresNuevos: snapshotMovimiento(anulado),
+                motivo,
+            })
+
+            return anulado
         })
     }
 
@@ -300,7 +378,7 @@ export class CajaService {
             await revertirImpactoSaldo(tx, cajaAnterior, movimiento.tipo, movimiento.monto)
             const actualizado = await tx.movimientoCaja.update({
                 where: { id: movimiento.id },
-                data: { cajaOrigen: input.cajaNueva, medioPago: medioNuevo },
+                data: { cajaOrigen: input.cajaNueva, medioPago: medioNuevo, actualizadoPorId: input.usuarioId },
             })
             await aplicarImpactoSaldo(tx, input.cajaNueva, movimiento.tipo, movimiento.monto)
 
@@ -334,6 +412,14 @@ export class CajaService {
                     motivo,
                 },
             })
+            await registrarAuditoria(tx, {
+                movimientoId: movimiento.id,
+                accion: 'REASIGNACION',
+                usuarioId: input.usuarioId,
+                valoresAnteriores: snapshotMovimiento(movimiento),
+                valoresNuevos: snapshotMovimiento(actualizado),
+                motivo,
+            })
             return { movimiento: actualizado, auditoria }
         })
     }
@@ -342,7 +428,7 @@ export class CajaService {
     /**
      * Crea un egreso en origen y un ingreso en destino, actualizando ambos saldos.
      */
-    static async transferir(origen: string, destino: string, monto: number, fecha?: Date | string | null) {
+    static async transferir(origen: string, destino: string, monto: number, fecha?: Date | string | null, usuarioId?: string | null) {
         const customDate = normalizeFecha(fecha)
         const egresoMedio = (origen === 'mercado_pago' || origen === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
         const ingresoMedio = (destino === 'mercado_pago' || destino === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
@@ -365,6 +451,7 @@ export class CajaService {
                     medioPago: egresoMedio,
                     cajaOrigen: origen,
                     descripcion: `Transferencia hacia ${destino}`,
+                    creadoPorId: usuarioId || null,
                     fecha: customDate,
                 },
             })
@@ -377,12 +464,16 @@ export class CajaService {
                     medioPago: ingresoMedio,
                     cajaOrigen: destino,
                     descripcion: `Transferencia desde ${origen}`,
+                    creadoPorId: usuarioId || null,
                     fecha: customDate,
                 },
             })
 
             await aplicarImpactoSaldo(tx, origen, 'egreso', monto)
             await aplicarImpactoSaldo(tx, destino, 'ingreso', monto)
+
+            await registrarAuditoria(tx, { movimientoId: egreso.id, accion: 'CREACION', usuarioId, valoresNuevos: snapshotMovimiento(egreso) })
+            await registrarAuditoria(tx, { movimientoId: ingreso.id, accion: 'CREACION', usuarioId, valoresNuevos: snapshotMovimiento(ingreso) })
 
             return { egreso, ingreso }
         })
@@ -396,7 +487,8 @@ export class CajaService {
         rutaId: string,
         montoEsperado: number,
         montoEntregado: number,
-        observaciones?: string | null
+        observaciones?: string | null,
+        usuarioId?: string | null,
     ) {
         const diferencia = montoEntregado - montoEsperado
 
@@ -478,7 +570,7 @@ export class CajaService {
             const turnoStr = rutaActual.turno ? ` - Turno ${rutaActual.turno}` : ''
             const desc = `Rendición chofer ${rutaActual.chofer.nombre} - Ruta ${fechaRutaStr}${turnoStr}${diferencia !== 0 ? ` (Dif: $${diferencia.toFixed(2)})` : ''}`
 
-            await (tx as any).movimientoCaja.create({
+            const movimiento = await (tx as any).movimientoCaja.create({
                 data: {
                     tipo: 'ingreso',
                     concepto: 'rendicion_chofer',
@@ -487,11 +579,18 @@ export class CajaService {
                     cajaOrigen: 'caja_chica',
                     descripcion: desc,
                     rendicionId: rendicion.id,
+                    creadoPorId: usuarioId || null,
                     fecha: new Date(),
                 },
             })
 
             await aplicarImpactoSaldo(tx, 'caja_chica', 'ingreso', montoEntregado)
+            await registrarAuditoria(tx, {
+                movimientoId: movimiento.id,
+                accion: 'CREACION',
+                usuarioId,
+                valoresNuevos: snapshotMovimiento(movimiento),
+            })
 
             return rendicion
         })

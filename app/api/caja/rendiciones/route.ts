@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { CajaService } from '@/lib/services/caja.service'
 
 // GET /api/caja/rendiciones — Rendiciones pendientes de choferes por ruta/turno
@@ -97,6 +99,9 @@ export async function GET() {
 // POST /api/caja/rendiciones — Confirmar rendición de una ruta
 export async function POST(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
         const body = await request.json()
         const { rutaId, montoEsperado, montoEntregado, observaciones } = body
 
@@ -108,7 +113,8 @@ export async function POST(request: Request) {
             rutaId,
             parseFloat(montoEsperado),
             parseFloat(montoEntregado),
-            observaciones
+            observaciones,
+            (session.user as any)?.id || null,
         )
 
         return NextResponse.json(result, { status: 201 })

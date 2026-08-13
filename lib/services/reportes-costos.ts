@@ -128,6 +128,7 @@ export async function getCostosReport(
             prisma.movimientoCaja.findMany({
                 where: {
                     tipo: 'egreso',
+                    estado: 'activo',
                     concepto: { in: conceptosCajaTildados },
                     gastoId: null,
                     fecha: { gte: startOfCurrent, lte: endOfCurrent }
@@ -137,6 +138,7 @@ export async function getCostosReport(
             prisma.movimientoCaja.findMany({
                 where: {
                     tipo: 'egreso',
+                    estado: 'activo',
                     concepto: { in: conceptosCajaTildados },
                     gastoId: null,
                     fecha: { gte: startAnterior, lte: endAnterior }
@@ -522,6 +524,7 @@ export async function getCostosReport(
                 ? prisma.movimientoCaja.aggregate({
                     where: {
                         tipo: 'egreso',
+                        estado: 'activo',
                         concepto: { in: conceptosCajaTildados },
                         gastoId: null,
                         fecha: { gte: s, lte: e }

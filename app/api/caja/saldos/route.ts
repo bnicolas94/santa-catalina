@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest) {
 
             // 2. Si hay diferencia, registrar el movimiento
             if (diferencia !== 0) {
-                await tx.movimientoCaja.create({
+                const movimiento = await tx.movimientoCaja.create({
                     data: {
                         tipo: diferencia > 0 ? 'ingreso' : 'egreso',
                         concepto: motivo || 'ajuste', // ajuste o arqueo
@@ -104,8 +104,27 @@ export async function PUT(request: NextRequest) {
                         medioPago: 'efectivo',
                         cajaOrigen: tipo,
                         descripcion: descripcion || `Cambio manual de saldo (${motivo || 'ajuste'})`,
+                        creadoPorId: (session?.user as any)?.id || null,
                         fecha: new Date()
                     }
+                })
+                await tx.auditoriaMovimientoCaja.create({
+                    data: {
+                        movimientoId: movimiento.id,
+                        usuarioId: (session?.user as any)?.id || null,
+                        accion: 'CREACION',
+                        motivo: motivo || 'ajuste',
+                        valoresNuevos: {
+                            tipo: movimiento.tipo,
+                            concepto: movimiento.concepto,
+                            monto: movimiento.monto,
+                            medioPago: movimiento.medioPago,
+                            cajaOrigen: movimiento.cajaOrigen,
+                            descripcion: movimiento.descripcion,
+                            fecha: movimiento.fecha.toISOString(),
+                            estado: movimiento.estado,
+                        },
+                    },
                 })
             }
 

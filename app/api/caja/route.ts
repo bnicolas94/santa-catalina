@@ -55,10 +55,12 @@ export async function GET(request: Request) {
 
         const ubicacionTipo = (session?.user as any)?.ubicacionTipo
         const allowedBoxes = getAllowedBoxes(userRol, ubicacionTipo)
+        const esAdmin = userRol === 'ADMIN'
 
         const movimientos = await prisma.movimientoCaja.findMany({
             where: {
                 fecha: { gte: startOfDay, lte: endOfDay },
+                ...(!esAdmin && { estado: 'activo' }),
                 ...(allowedBoxes && { cajaOrigen: { in: allowedBoxes } })
             },
             orderBy: { fecha: 'desc' },
@@ -66,6 +68,13 @@ export async function GET(request: Request) {
                 pedido: { select: { id: true, totalImporte: true, cliente: { select: { nombreComercial: true } } } },
                 rendicion: { select: { id: true, chofer: { select: { nombre: true } } } },
                 movimientoMp: true,
+                creadoPor: { select: { id: true, nombre: true, apellido: true } },
+                actualizadoPor: { select: { id: true, nombre: true, apellido: true } },
+                anuladoPor: { select: { id: true, nombre: true, apellido: true } },
+                auditorias: esAdmin ? {
+                    orderBy: { createdAt: 'desc' },
+                    include: { usuario: { select: { id: true, nombre: true, apellido: true } } },
+                } : false,
             },
         })
 
@@ -74,6 +83,7 @@ export async function GET(request: Request) {
         let egresosTotal = 0
 
         for (const m of movimientos) {
+            if (m.estado === 'anulado') continue
             if (m.tipo === 'ingreso') {
                 if (m.medioPago === 'efectivo') ingresosEfectivo += m.monto
                 else ingresosTransferencia += m.monto
@@ -162,6 +172,7 @@ export async function POST(request: Request) {
             gastoId: gastoId || null,
             rendicionId,
             fecha,
+            usuarioId: (session?.user as any)?.id || null,
         })
 
         console.log('[CAJA API] Movimiento creado exitosamente:', result.id)
@@ -216,6 +227,7 @@ export async function PUT(request: Request) {
             cajaOrigen,
             descripcion,
             fecha,
+            usuarioId: (session?.user as any)?.id || null,
         })
 
         return NextResponse.json(result)
@@ -242,6 +254,8 @@ export async function DELETE(request: Request) {
         const { searchParams } = new URL(request.url)
         const id = searchParams.get('id')
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+        const body = await request.json().catch(() => ({}))
+        const motivo = body?.motivo
 
         // Validar acceso
         if (userRol !== 'ADMIN') {
@@ -253,13 +267,17 @@ export async function DELETE(request: Request) {
             }
         }
 
-        await CajaService.deleteMovimiento(id)
+        await CajaService.anularMovimiento(id, motivo, (session?.user as any)?.id || null)
 
-        return NextResponse.json({ ok: true })
+        return NextResponse.json({ ok: true, estado: 'anulado' })
     } catch (error) {
-        console.error('Error eliminando movimiento:', error)
-        const mensaje = error instanceof Error ? error.message : 'Error al eliminar movimiento'
-        const status = mensaje.includes('pertenece a RR. HH.') ? 409 : 500
+        console.error('Error anulando movimiento:', error)
+        const mensaje = error instanceof Error ? error.message : 'Error al anular movimiento'
+        const status = mensaje.includes('motivo') || mensaje.includes('500 caracteres')
+            ? 400
+            : mensaje.includes('pertenece a RR. HH.') || mensaje.includes('ya se encuentra anulado')
+                ? 409
+                : 500
         return NextResponse.json({ error: mensaje }, { status })
     }
 }

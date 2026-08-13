@@ -9,68 +9,72 @@ datasource db {
 }
 
 model Empleado {
-  id                        String                   @id @default(uuid())
+  id                        String                    @id @default(uuid())
   nombre                    String
   apellido                  String?
-  dni                       String?                  @unique
-  email                     String?                  @unique
+  dni                       String?                   @unique
+  email                     String?                   @unique
   password                  String?
   rol                       String
   telefono                  String?
-  activo                    Boolean                  @default(true)
-  fechaIngreso              DateTime?                @map("fecha_ingreso")
-  createdAt                 DateTime                 @default(now())
-  updatedAt                 DateTime                 @updatedAt
-  sueldoBaseMensual         Float                    @default(0) @map("sueldo_base_mensual")
-  jornal                    Float                    @default(0)
-  valorHoraNormal           Float?                   @map("valor_hora_normal")
-  cicloPago                 String                   @default("SEMANAL") @map("ciclo_pago")
-  modalidadPago             String                   @default("SEMANAL_EFECTIVO") @map("modalidad_pago")
-  porcentajeHoraExtra       Float                    @default(50) @map("porcentaje_hora_extra")
-  valorHoraExtra            Float                    @default(0) @map("valor_hora_extra")
-  porcentajeFeriado         Float                    @default(100) @map("porcentaje_feriado")
-  horasTrabajoDiarias       Float                    @default(8) @map("horas_trabajo_diarias")
-  diasTrabajoSemana         String                   @default("Lunes a Viernes") @map("dias_trabajo_semana")
-  horarioEntrada            String?                  @map("horario_entrada")
-  horarioSalida             String?                  @map("horario_salida")
-  codigoBiometrico          String?                  @unique @map("codigo_biometrico")
-  ubicacionId               String?                  @map("id_ubicacion")
-  rolId                     String?                  @map("id_rol")
-  preferenciasReporte       Json?                    @map("preferencias_reporte")
-  areaId                    String?                  @map("id_area")
-  puestoId                  String?                  @map("id_puesto")
-  turnoId                   String?                  @map("id_turno")
-  areasResponsable          Area[]                   @relation("ResponsableArea")
+  activo                    Boolean                   @default(true)
+  fechaIngreso              DateTime?                 @map("fecha_ingreso")
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  sueldoBaseMensual         Float                     @default(0) @map("sueldo_base_mensual")
+  jornal                    Float                     @default(0)
+  valorHoraNormal           Float?                    @map("valor_hora_normal")
+  cicloPago                 String                    @default("SEMANAL") @map("ciclo_pago")
+  modalidadPago             String                    @default("SEMANAL_EFECTIVO") @map("modalidad_pago")
+  porcentajeHoraExtra       Float                     @default(50) @map("porcentaje_hora_extra")
+  valorHoraExtra            Float                     @default(0) @map("valor_hora_extra")
+  porcentajeFeriado         Float                     @default(100) @map("porcentaje_feriado")
+  horasTrabajoDiarias       Float                     @default(8) @map("horas_trabajo_diarias")
+  diasTrabajoSemana         String                    @default("Lunes a Viernes") @map("dias_trabajo_semana")
+  horarioEntrada            String?                   @map("horario_entrada")
+  horarioSalida             String?                   @map("horario_salida")
+  codigoBiometrico          String?                   @unique @map("codigo_biometrico")
+  ubicacionId               String?                   @map("id_ubicacion")
+  rolId                     String?                   @map("id_rol")
+  preferenciasReporte       Json?                     @map("preferencias_reporte")
+  areaId                    String?                   @map("id_area")
+  puestoId                  String?                   @map("id_puesto")
+  turnoId                   String?                   @map("id_turno")
+  areasResponsable          Area[]                    @relation("ResponsableArea")
   asignaciones              AsignacionOperario[]
-  asignacionesVehiculo      AsignacionVehiculo[]     @relation("AsignacionesVehiculo")
+  asignacionesVehiculo      AsignacionVehiculo[]      @relation("AsignacionesVehiculo")
   documentos                DocumentoEmpleado[]
-  area                      Area?                    @relation("EmpleadoArea", fields: [areaId], references: [id])
-  puesto                    Puesto?                  @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
-  rolRel                    RolEmpleado?             @relation(fields: [rolId], references: [id])
-  turno                     TurnoTrabajo?            @relation("EmpleadoTurno", fields: [turnoId], references: [id])
-  ubicacion                 Ubicacion?               @relation(fields: [ubicacionId], references: [id])
-  evaluaciones              Evaluacion[]             @relation("EmpleadoEvaluado")
-  evaluacionesHechas        Evaluacion[]             @relation("Evaluador")
+  area                      Area?                     @relation("EmpleadoArea", fields: [areaId], references: [id])
+  puesto                    Puesto?                   @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
+  rolRel                    RolEmpleado?              @relation(fields: [rolId], references: [id])
+  turno                     TurnoTrabajo?             @relation("EmpleadoTurno", fields: [turnoId], references: [id])
+  ubicacion                 Ubicacion?                @relation(fields: [ubicacionId], references: [id])
+  evaluaciones              Evaluacion[]              @relation("EmpleadoEvaluado")
+  evaluacionesHechas        Evaluacion[]              @relation("Evaluador")
   fichadas                  FichadaEmpleado[]
   horasPendientes           HoraExtraPendiente[]
   inasistencias             Inasistencia[]
   liquidacionesFinales      LiquidacionFinal[]
   liquidaciones             LiquidacionSueldo[]
-  liquidacionesAnuladas     LiquidacionSueldo[]      @relation("LiquidacionAnuladaPor")
+  liquidacionesAnuladas     LiquidacionSueldo[]       @relation("LiquidacionAnuladaPor")
   cierresMensualesMixtos    CierreMensualMixto[]
-  pagosMensualesRegistrados PagoCierreMensual[]      @relation("PagoMensualRegistradoPor")
+  pagosMensualesRegistrados PagoCierreMensual[]       @relation("PagoMensualRegistradoPor")
   seguimientosDiariosMixtos SeguimientoDiarioMixto[]
-  seguimientosMixtosCreados SeguimientoDiarioMixto[] @relation("SeguimientoMixtoRegistradoPor")
-  reasignacionesCajaRRHH    ReasignacionCajaRRHH[]   @relation("ReasignacionCajaRRHHUsuario")
-  lotesCoordinados          Lote[]                   @relation("CoordinadorLote")
+  seguimientosMixtosCreados SeguimientoDiarioMixto[]  @relation("SeguimientoMixtoRegistradoPor")
+  reasignacionesCajaRRHH    ReasignacionCajaRRHH[]    @relation("ReasignacionCajaRRHHUsuario")
+  movimientosCajaCreados    MovimientoCaja[]          @relation("MovimientoCajaCreadoPor")
+  movimientosCajaEditados   MovimientoCaja[]          @relation("MovimientoCajaActualizadoPor")
+  movimientosCajaAnulados   MovimientoCaja[]          @relation("MovimientoCajaAnuladoPor")
+  auditoriasCaja            AuditoriaMovimientoCaja[] @relation("AuditoriaMovimientoCajaUsuario")
+  lotesCoordinados          Lote[]                    @relation("CoordinadorLote")
   prestamos                 PrestamoEmpleado[]
-  prestamosAnulados         PrestamoEmpleado[]       @relation("PrestamoAnuladoPor")
-  rendiciones               RendicionChofer[]        @relation("RendicionesChofer")
-  rutasChofer               Ruta[]                   @relation("ChoferRuta")
+  prestamosAnulados         PrestamoEmpleado[]        @relation("PrestamoAnuladoPor")
+  rendiciones               RendicionChofer[]         @relation("RendicionesChofer")
+  rutasChofer               Ruta[]                    @relation("ChoferRuta")
   sanciones                 Sancion[]
   talleUniforme             TalleUniforme?
-  entregasUniforme          EntregaUniforme[]        @relation("EmpleadoEntregasUniforme")
-  conteosInsumo             ConteoInsumo[]           @relation("ResponsableConteoInsumo")
+  entregasUniforme          EntregaUniforme[]         @relation("EmpleadoEntregasUniforme")
+  conteosInsumo             ConteoInsumo[]            @relation("ResponsableConteoInsumo")
 
   @@map("empleados")
 }
@@ -582,38 +586,70 @@ model GastoOperativo {
 }
 
 model MovimientoCaja {
-  id                    String                 @id @default(uuid())
-  fecha                 DateTime               @default(now())
+  id                    String                    @id @default(uuid())
+  fecha                 DateTime                  @default(now())
   tipo                  String
   concepto              String
   monto                 Float
-  medioPago             String                 @default("efectivo") @map("medio_pago")
-  cajaOrigen            String?                @map("caja_origen")
+  medioPago             String                    @default("efectivo") @map("medio_pago")
+  cajaOrigen            String?                   @map("caja_origen")
   descripcion           String?
-  createdAt             DateTime               @default(now())
-  pedidoId              String?                @map("id_pedido")
-  gastoId               String?                @map("id_gasto")
-  rendicionId           String?                @map("id_rendicion")
-  prestamoId            String?                @map("id_prestamo")
-  cuotaPrestamoId       String?                @unique @map("id_cuota_prestamo")
-  liquidacionSueldoId   String?                @map("id_liquidacion_sueldo")
-  liquidacionFinalId    String?                @unique @map("id_liquidacion_final")
-  pagoCierreMensualId   String?                @unique @map("id_pago_cierre_mensual")
-  movimientoReversaDeId String?                @unique @map("id_movimiento_reversado")
-  pedido                Pedido?                @relation(fields: [pedidoId], references: [id])
-  rendicion             RendicionChofer?       @relation(fields: [rendicionId], references: [id])
-  gasto                 GastoOperativo?        @relation(fields: [gastoId], references: [id])
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  estado                String                    @default("activo")
+  creadoPorId           String?                   @map("id_creado_por")
+  actualizadoPorId      String?                   @map("id_actualizado_por")
+  anuladoPorId          String?                   @map("id_anulado_por")
+  anuladoAt             DateTime?                 @map("anulado_en")
+  motivoAnulacion       String?                   @map("motivo_anulacion")
+  pedidoId              String?                   @map("id_pedido")
+  gastoId               String?                   @map("id_gasto")
+  rendicionId           String?                   @map("id_rendicion")
+  prestamoId            String?                   @map("id_prestamo")
+  cuotaPrestamoId       String?                   @unique @map("id_cuota_prestamo")
+  liquidacionSueldoId   String?                   @map("id_liquidacion_sueldo")
+  liquidacionFinalId    String?                   @unique @map("id_liquidacion_final")
+  pagoCierreMensualId   String?                   @unique @map("id_pago_cierre_mensual")
+  movimientoReversaDeId String?                   @unique @map("id_movimiento_reversado")
+  pedido                Pedido?                   @relation(fields: [pedidoId], references: [id])
+  rendicion             RendicionChofer?          @relation(fields: [rendicionId], references: [id])
+  gasto                 GastoOperativo?           @relation(fields: [gastoId], references: [id])
   movimientoMp          MovimientoMercadoPago?
-  prestamo              PrestamoEmpleado?      @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
-  cuotaPrestamo         CuotaPrestamo?         @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
-  liquidacionSueldo     LiquidacionSueldo?     @relation(fields: [liquidacionSueldoId], references: [id], onDelete: SetNull)
-  liquidacionFinal      LiquidacionFinal?      @relation(fields: [liquidacionFinalId], references: [id], onDelete: SetNull)
-  pagoCierreMensual     PagoCierreMensual?     @relation(fields: [pagoCierreMensualId], references: [id], onDelete: SetNull)
-  movimientoReversaDe   MovimientoCaja?        @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
-  movimientoReversion   MovimientoCaja?        @relation("ReversionMovimientoCaja")
+  prestamo              PrestamoEmpleado?         @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
+  cuotaPrestamo         CuotaPrestamo?            @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
+  liquidacionSueldo     LiquidacionSueldo?        @relation(fields: [liquidacionSueldoId], references: [id], onDelete: SetNull)
+  liquidacionFinal      LiquidacionFinal?         @relation(fields: [liquidacionFinalId], references: [id], onDelete: SetNull)
+  pagoCierreMensual     PagoCierreMensual?        @relation(fields: [pagoCierreMensualId], references: [id], onDelete: SetNull)
+  movimientoReversaDe   MovimientoCaja?           @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
+  movimientoReversion   MovimientoCaja?           @relation("ReversionMovimientoCaja")
   reasignacionesRRHH    ReasignacionCajaRRHH[]
+  creadoPor             Empleado?                 @relation("MovimientoCajaCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  actualizadoPor        Empleado?                 @relation("MovimientoCajaActualizadoPor", fields: [actualizadoPorId], references: [id], onDelete: SetNull)
+  anuladoPor            Empleado?                 @relation("MovimientoCajaAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  auditorias            AuditoriaMovimientoCaja[]
 
+  @@index([estado, fecha])
+  @@index([creadoPorId])
+  @@index([actualizadoPorId])
+  @@index([anuladoPorId])
   @@map("movimientos_caja")
+}
+
+model AuditoriaMovimientoCaja {
+  id                String         @id @default(uuid())
+  accion            String
+  valoresAnteriores Json?          @map("valores_anteriores")
+  valoresNuevos     Json?          @map("valores_nuevos")
+  motivo            String?
+  createdAt         DateTime       @default(now())
+  movimientoId      String         @map("id_movimiento")
+  usuarioId         String?        @map("id_usuario")
+  movimiento        MovimientoCaja @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
+  usuario           Empleado?      @relation("AuditoriaMovimientoCajaUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([movimientoId, createdAt])
+  @@index([usuarioId])
+  @@map("auditorias_movimientos_caja")
 }
 
 model ReasignacionCajaRRHH {
