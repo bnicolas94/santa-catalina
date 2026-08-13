@@ -6,6 +6,11 @@ import styles from './Header.module.css'
 export default function Header() {
     const { data: session } = useSession()
 
+    const handleSignOut = async () => {
+        await signOut({ redirect: false })
+        window.location.assign('/login')
+    }
+
     const rolLabels: Record<string, string> = {
         ADMIN: 'Administrador',
         COORD_PROD: 'Coord. Producción',
@@ -45,7 +50,7 @@ export default function Header() {
                     </span>
                 </div>
                 <button
-                    onClick={() => signOut({ callbackUrl: '/login' })}
+                    onClick={handleSignOut}
                     className={styles.logoutBtn}
                     title="Cerrar sesión"
                 >
