@@ -107,6 +107,14 @@ test('endpoints administrativos no admiten permisos dinámicos', () => {
     )
 })
 
+test('la entrega masiva de pedidos queda limitada a administración operativa', () => {
+    assert.equal(canAccessPath('/api/pedidos/entregar-masivo', { rol: 'ADMIN_OPS' }), true)
+    assert.equal(
+        canAccessPath('/api/pedidos/entregar-masivo', { rol: 'OPERARIO', permisos: { permisoStock: true } }),
+        false,
+    )
+})
+
 test('Logística accede sólo a los directorios operativos mínimos', () => {
     const token = { rol: 'LOGISTICA' }
     assert.equal(canAccessPath('/api/operaciones/empleados', token), true)
