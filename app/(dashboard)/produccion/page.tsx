@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { useProduccionData } from '@/components/produccion/hooks/useProduccionData'
 import { OperatorProductionView } from '@/components/produccion/operator/OperatorProductionView'
 
@@ -96,6 +97,7 @@ function formatDateOnly(isoString: string) {
 }
 
 export default function ProduccionPage() {
+    const router = useRouter()
     const [showModal, setShowModal] = useState(false)
     const [showCerrarModal, setShowCerrarModal] = useState(false)
     const [loteSeleccionado, setLoteSeleccionado] = useState<Lote | null>(null)
@@ -108,6 +110,19 @@ export default function ProduccionPage() {
         setFilterFecha(getLocalDateString(d))
     }
     const { data: session, status: sessionStatus } = useSession()
+    const sessionUser = session?.user as {
+        rol?: string
+        name?: string | null
+        ubicacionId?: string | null
+        ubicacionTipo?: string | null
+    } | undefined
+    const ubicacionTipoUsuario = sessionUser?.ubicacionTipo?.toUpperCase()
+
+    useEffect(() => {
+        if (sessionStatus === 'authenticated' && sessionUser?.rol !== 'ADMIN' && ubicacionTipoUsuario === 'LOCAL') {
+            router.replace('/caja')
+        }
+    }, [router, sessionStatus, sessionUser?.rol, ubicacionTipoUsuario])
 
     const { data: swrData, isLoading: loading, mutate } = useProduccionData(filterFecha || getLocalDateString())
     const fetchData = () => mutate()
@@ -687,8 +702,19 @@ export default function ProduccionPage() {
 
     if (sessionStatus === 'loading') return <div className="loading-container"><div className="loader"></div><p>Cargando sesión...</p></div>
 
-    const sessionUser = session?.user as { rol?: string; name?: string | null; ubicacionId?: string | null } | undefined
+    if (sessionUser?.rol !== 'ADMIN' && ubicacionTipoUsuario === 'LOCAL') {
+        return <div className="loading-container"><div className="loader"></div><p>Abriendo Caja...</p></div>
+    }
+
     if (sessionUser?.rol && sessionUser.rol !== 'ADMIN') {
+        if (ubicacionTipoUsuario !== 'FABRICA') {
+            return (
+                <div className="empty-state">
+                    <p>La vista operativa de Producción está disponible solamente para personal de Fábrica.</p>
+                </div>
+            )
+        }
+
         return (
             <OperatorProductionView
                 userName={sessionUser.name || 'Operario'}

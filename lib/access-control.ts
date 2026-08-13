@@ -8,6 +8,7 @@ export type PermissionKey =
 
 export type AccessToken = {
     rol?: string | null
+    ubicacionTipo?: string | null
     permisos?: Partial<Record<PermissionKey, boolean>> | null
 }
 
@@ -108,6 +109,15 @@ export function getAccessRule(pathname: string): AccessRule | undefined {
 
 export function canAccessPath(pathname: string, token: AccessToken): boolean {
     if (token.rol === 'ADMIN') return true
+
+    // El personal asignado al local necesita Caja para registrar el depósito
+    // diario, aunque su rol no tenga el permiso configurado manualmente.
+    if (
+        token.ubicacionTipo?.toUpperCase() === 'LOCAL'
+        && (isPathWithin(pathname, '/caja') || isPathWithin(pathname, '/api/caja'))
+    ) {
+        return true
+    }
 
     const rule = getAccessRule(pathname)
     if (!rule) return true

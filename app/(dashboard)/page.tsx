@@ -87,9 +87,12 @@ export default function DashboardPage() {
             const user = session.user as any
             const rol = user.rol
             const permisos = user.permisos || {}
+            const ubicacionTipo = String(user.ubicacionTipo || '').toUpperCase()
 
             if (rol !== 'ADMIN' && !permisos.permisoDashboard) {
-                if (permisos.permisoProduccion || rol === 'COORD_PROD' || rol === 'OPERARIO') {
+                if (ubicacionTipo === 'LOCAL') {
+                    router.replace('/caja')
+                } else if (permisos.permisoProduccion || rol === 'COORD_PROD' || rol === 'OPERARIO') {
                     router.replace('/produccion')
                 } else if (permisos.permisoStock || rol === 'ADMIN_OPS') {
                     router.replace('/compras')

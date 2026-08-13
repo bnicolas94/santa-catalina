@@ -69,6 +69,15 @@ export const authOptions: NextAuthOptions = {
                 token.ubicacionTipo = (user as any).ubicacionTipo
                 token.permisos = (user as any).permisos
             }
+
+            // Caja es una herramienta operativa obligatoria para quienes trabajan
+            // en el local. Se aplica también a sesiones ya iniciadas.
+            if (String(token.ubicacionTipo || '').toUpperCase() === 'LOCAL') {
+                token.permisos = {
+                    ...((token.permisos as Record<string, boolean> | null) || {}),
+                    permisoCaja: true,
+                }
+            }
             return token
         },
         async session({ session, token }) {

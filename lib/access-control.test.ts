@@ -44,6 +44,25 @@ test('Caja queda aislada de usuarios con otros permisos', () => {
     )
 })
 
+test('el personal del LOCAL accede a Caja sin un permiso manual', () => {
+    const token = {
+        rol: 'OPERARIO',
+        ubicacionTipo: 'LOCAL',
+        permisos: { permisoProduccion: true },
+    }
+
+    assert.equal(canAccessPath('/caja', token), true)
+    assert.equal(canAccessPath('/api/caja/config-deposito', token), true)
+    assert.equal(canAccessPath('/costos', token), false)
+})
+
+test('la ubicación FABRICA no habilita Caja automáticamente', () => {
+    assert.equal(
+        canAccessPath('/caja', { rol: 'OPERARIO', ubicacionTipo: 'FABRICA', permisos: { permisoProduccion: true } }),
+        false,
+    )
+})
+
 test('Compras puede listar cajas de pago sin habilitar la administración de Caja', () => {
     const token = { rol: 'ADMIN_OPS', permisos: { permisoStock: true } }
     assert.equal(canAccessPath('/api/compras/cajas', token), true)

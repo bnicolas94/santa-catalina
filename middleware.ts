@@ -40,6 +40,7 @@ export default withAuth(
 
         const accessToken = {
             rol: typeof token.rol === 'string' ? token.rol : null,
+            ubicacionTipo: typeof token.ubicacionTipo === 'string' ? token.ubicacionTipo : null,
             permisos: token.permisos && typeof token.permisos === 'object'
                 ? token.permisos as Partial<Record<PermissionKey, boolean>>
                 : null,

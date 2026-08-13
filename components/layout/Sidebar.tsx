@@ -167,9 +167,12 @@ export default function Sidebar() {
         // ADMIN siempre ve todo
         if (userRol === 'ADMIN') return true
 
-        // Ocultar Posicionamiento para usuarios de LOCAL (aunque tengan permiso de producción)
-        if (ubicacionTipo === 'LOCAL' && (item.label === 'Posicionamiento' || item.label === 'Historial Pos.')) {
-            return false
+        if (ubicacionTipo === 'LOCAL') {
+            // La vista operativa de Producción pertenece exclusivamente a Fábrica.
+            if (item.href === '/produccion' || item.href.startsWith('/produccion/')) return false
+
+            // En el local Caja siempre debe estar disponible para registrar depósitos.
+            if (item.href === '/caja') return true
         }
 
         // Si tiene un permiso específico para esta sección, y está activo, lo dejamos pasar
