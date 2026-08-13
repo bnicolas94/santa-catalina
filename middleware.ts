@@ -1,6 +1,9 @@
 import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
 import { canAccessPath, type PermissionKey } from '@/lib/access-control'
+import { COOKIE_SESION_PRODUCCION } from '@/lib/auth/cookies'
+
+const esProduccion = process.env.NODE_ENV === 'production'
 
 export default withAuth(
     function middleware(req) {
@@ -56,6 +59,11 @@ export default withAuth(
         return shouldRewrite ? NextResponse.rewrite(url) : NextResponse.next()
     },
     {
+        // Debe coincidir con authOptions: de lo contrario el middleware no
+        // encuentra la sesión compartida entre los dos subdominios.
+        cookies: esProduccion
+            ? { sessionToken: { name: COOKIE_SESION_PRODUCCION } }
+            : undefined,
         callbacks: {
             // La respuesta 401 de las API se genera arriba en lugar de redirigir a HTML.
             authorized: () => true,

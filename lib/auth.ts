@@ -4,6 +4,9 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import { aplicarAccesosOperativos, permisosDesdeRol } from './auth/permisosRol'
+import { COOKIE_SESION_PRODUCCION, DOMINIO_COOKIE_PRODUCCION } from './auth/cookies'
+
+const esProduccion = process.env.NODE_ENV === 'production'
 
 type UsuarioAutenticado = {
     id?: string
@@ -33,6 +36,24 @@ async function resolverRolAsignado(
 }
 
 export const authOptions: NextAuthOptions = {
+    // La aplicación opera en app.santacatalina.online y en
+    // empleados.santacatalina.online. Una cookie limitada al host dejaba una
+    // sesión distinta en cada módulo y podía mostrar permisos antiguos.
+    useSecureCookies: esProduccion,
+    cookies: esProduccion
+        ? {
+            sessionToken: {
+                name: COOKIE_SESION_PRODUCCION,
+                options: {
+                    httpOnly: true,
+                    sameSite: 'lax',
+                    path: '/',
+                    secure: true,
+                    domain: DOMINIO_COOKIE_PRODUCCION,
+                },
+            },
+        }
+        : undefined,
     providers: [
         CredentialsProvider({
             name: 'Credenciales',
