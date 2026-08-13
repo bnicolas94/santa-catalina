@@ -54,6 +54,33 @@ interface Movimiento {
     ubicacion: { id: string; nombre: string } | null
     compra: CompraResumen | null
 }
+interface CuentaCorrienteFactura {
+    id: string
+    numeroFactura: string | null
+    fecha: string
+    costoTotal: number
+    montoPagado: number
+    saldoPendiente: number
+    origen: 'compra' | 'historico'
+}
+interface CuentaCorrienteProveedor {
+    proveedorId: string | null
+    proveedorNombre: string
+    cantidadFacturas: number
+    totalFacturado: number
+    totalPagado: number
+    saldoPendiente: number
+    fechaMasAntigua: string | null
+    facturas: CuentaCorrienteFactura[]
+}
+interface CuentaCorriente {
+    cantidadProveedores: number
+    cantidadFacturas: number
+    totalFacturado: number
+    totalPagado: number
+    totalPendiente: number
+    proveedores: CuentaCorrienteProveedor[]
+}
 
 function ComprasContent() {
     const searchParams = useSearchParams()
@@ -62,6 +89,8 @@ function ComprasContent() {
     const [proveedores, setProveedores] = useState<Proveedor[]>([])
     const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
     const [cajas, setCajas] = useState<CajaCompra[]>([])
+    const [cuentaCorriente, setCuentaCorriente] = useState<CuentaCorriente | null>(null)
+    const [cuentasExpandidas, setCuentasExpandidas] = useState<Record<string, boolean>>({})
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [showFacturaModal, setShowFacturaModal] = useState(false)
@@ -118,23 +147,28 @@ function ComprasContent() {
 
     async function fetchData() {
         try {
-            const [movRes, insRes, provRes, ubiRes, cajasRes] = await Promise.all([
+            const [movRes, insRes, provRes, ubiRes, cajasRes, cuentaRes] = await Promise.all([
                 fetch('/api/movimientos-stock?tipo=entrada&limit=500'),
                 fetch('/api/insumos'),
                 fetch('/api/proveedores?activos=true'),
                 fetch('/api/operaciones/ubicaciones'),
-                fetch('/api/compras/cajas')
+                fetch('/api/compras/cajas'),
+                fetch('/api/compras/cuenta-corriente'),
             ])
             const movData = await movRes.json()
             const insData = await insRes.json()
             const provData = await provRes.json()
             const ubiData = await ubiRes.json()
             const cajasData: unknown = await cajasRes.json()
+            const cuentaData: unknown = await cuentaRes.json()
 
             setMovimientos(Array.isArray(movData) ? movData : [])
             setInsumos(Array.isArray(insData) ? insData : [])
             setProveedores(Array.isArray(provData) ? provData : [])
             setUbicaciones(Array.isArray(ubiData) ? ubiData : [])
+            if (cuentaRes.ok && cuentaData && typeof cuentaData === 'object') {
+                setCuentaCorriente(cuentaData as CuentaCorriente)
+            }
             
             if (Array.isArray(cajasData)) {
                 const list = cajasData.filter((c): c is CajaCompra => Boolean(c && typeof c === 'object' && typeof c.tipo === 'string'))
@@ -621,12 +655,97 @@ function ComprasContent() {
                 </div>
             </div>
 
+            {success && <div className="toast toast-success">{success}</div>}
+            {error && <div className="toast toast-error">{error}</div>}
+
+            {cuentaCorriente && (
+                <section className="card" style={{ marginBottom: 'var(--space-6)', overflow: 'hidden' }}>
+                    <div style={{ padding: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap', background: '#FFF8E7', borderBottom: '1px solid #F5D98B' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🏦 Cuenta corriente de proveedores</h2>
+                            <p style={{ margin: '4px 0 0', color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>Saldos reales de facturas pendientes y pagos a cuenta. No depende del filtro de fecha del historial.</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', fontWeight: 700 }}>Total pendiente</div>
+                            <div style={{ fontSize: '1.8rem', color: '#C0392B', fontWeight: 800 }}>${cuentaCorriente.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{cuentaCorriente.cantidadFacturas} factura{cuentaCorriente.cantidadFacturas === 1 ? '' : 's'} · {cuentaCorriente.cantidadProveedores} proveedor{cuentaCorriente.cantidadProveedores === 1 ? '' : 'es'}</div>
+                        </div>
+                    </div>
+
+                    {cuentaCorriente.proveedores.length === 0 ? (
+                        <div style={{ padding: 'var(--space-5)', textAlign: 'center', color: 'var(--color-success)', fontWeight: 700 }}>✅ No hay saldos pendientes con proveedores.</div>
+                    ) : (
+                        <div className="table-container" style={{ border: 0, borderRadius: 0 }}>
+                            <table className="table" style={{ margin: 0 }}>
+                                <thead>
+                                    <tr>
+                                        <th>Proveedor</th>
+                                        <th>Facturas impagas</th>
+                                        <th>Total facturado</th>
+                                        <th>Pagado</th>
+                                        <th>Saldo pendiente</th>
+                                        <th>Más antigua</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cuentaCorriente.proveedores.map((proveedor) => {
+                                        const clave = proveedor.proveedorId || proveedor.proveedorNombre
+                                        const expandida = cuentasExpandidas[clave] || false
+                                        return (
+                                            <Fragment key={clave}>
+                                                <tr>
+                                                    <td style={{ fontWeight: 700 }}>{proveedor.proveedorNombre}</td>
+                                                    <td>{proveedor.cantidadFacturas}</td>
+                                                    <td>${proveedor.totalFacturado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                                    <td style={{ color: proveedor.totalPagado > 0 ? 'var(--color-success)' : 'var(--color-gray-500)' }}>${proveedor.totalPagado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                                    <td style={{ color: '#C0392B', fontWeight: 800 }}>${proveedor.saldoPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                                    <td>{proveedor.fechaMasAntigua ? new Date(proveedor.fechaMasAntigua).toLocaleDateString('es-AR') : '—'}</td>
+                                                    <td style={{ textAlign: 'right' }}>
+                                                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setCuentasExpandidas(actual => ({ ...actual, [clave]: !expandida }))}>
+                                                            {expandida ? 'Ocultar' : 'Ver facturas'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                {expandida && (
+                                                    <tr style={{ background: '#FAFAFA' }}>
+                                                        <td colSpan={7} style={{ padding: 'var(--space-3) var(--space-5)' }}>
+                                                            <div style={{ display: 'grid', gap: '8px' }}>
+                                                                {proveedor.facturas.map(factura => (
+                                                                    <div key={`${factura.origen}-${factura.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, 1fr) minmax(90px, 0.8fr) repeat(3, minmax(110px, 1fr))', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 10px', background: '#fff', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)' }}>
+                                                                        <strong>Fac. {factura.numeroFactura || 'S/N'}</strong>
+                                                                        <span>{new Date(factura.fecha).toLocaleDateString('es-AR')}</span>
+                                                                        <span>Total: ${factura.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                                                                        <span>Pagado: ${factura.montoPagado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                                                                        <strong style={{ color: '#C0392B' }}>Debe: ${factura.saldoPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </Fragment>
+                                        )
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colSpan={2} style={{ textAlign: 'right', fontWeight: 800 }}>Totales:</td>
+                                        <td style={{ fontWeight: 800 }}>${cuentaCorriente.totalFacturado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ fontWeight: 800 }}>${cuentaCorriente.totalPagado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ color: '#C0392B', fontWeight: 900 }}>${cuentaCorriente.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                        <td colSpan={2}></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    )}
+                </section>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
                 <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>📜 Historial de Compras y Ajustes</h2>
             </div>
-
-            {success && <div className="toast toast-success">{success}</div>}
-            {error && <div className="toast toast-error">{error}</div>}
 
             {/* Filtros */}
             <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
