@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useProduccionData } from '@/components/produccion/hooks/useProduccionData'
 import { OperatorProductionView } from '@/components/produccion/operator/OperatorProductionView'
+import { usaVistaOperativaProduccion } from '@/lib/produccion/vistaProduccion'
 
 interface Producto {
     id: string
@@ -115,6 +116,14 @@ export default function ProduccionPage() {
         name?: string | null
         ubicacionId?: string | null
         ubicacionTipo?: string | null
+        permisos?: {
+            permisoDashboard?: boolean
+            permisoStock?: boolean
+            permisoCaja?: boolean
+            permisoPersonal?: boolean
+            permisoProduccion?: boolean
+            permisoCostos?: boolean
+        } | null
     } | undefined
     const ubicacionTipoUsuario = sessionUser?.ubicacionTipo?.toUpperCase()
 
@@ -706,7 +715,7 @@ export default function ProduccionPage() {
         return <div className="loading-container"><div className="loader"></div><p>Abriendo Caja...</p></div>
     }
 
-    if (sessionUser?.rol && sessionUser.rol !== 'ADMIN') {
+    if (usaVistaOperativaProduccion(sessionUser?.rol, sessionUser?.permisos)) {
         if (ubicacionTipoUsuario !== 'FABRICA') {
             return (
                 <div className="empty-state">
@@ -717,8 +726,8 @@ export default function ProduccionPage() {
 
         return (
             <OperatorProductionView
-                userName={sessionUser.name || 'Operario'}
-                userLocationId={sessionUser.ubicacionId || undefined}
+                userName={sessionUser?.name || 'Operario'}
+                userLocationId={sessionUser?.ubicacionId || undefined}
                 date={filterFecha || getLocalDateString()}
                 onDateChange={setFilterFecha}
                 data={swrData}
