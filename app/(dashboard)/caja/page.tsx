@@ -27,6 +27,7 @@ interface MovCaja {
     rendicion: { id: string; chofer: { id: string, nombre: string } } | null
     movimientoMp?: { mpId: string; comisionMp: number; montoNeto: number; estado: string; metodoPago: string | null } | null
     gestionadoPorRRHH?: boolean
+    gestionadoPorDeposito?: boolean
     estado: string
     createdAt: string
     anuladoAt: string | null
@@ -51,6 +52,21 @@ interface Rendicion {
     turno: string | null
     choferId: string; choferNombre: string; montoEsperado: number
     pedidosEfectivo: number; bloqueada: boolean; pedidos: PendingPedido[]
+}
+
+interface DepositoCaja {
+    id: string
+    fecha: string
+    montoDeclarado: number
+    montoReal: number | null
+    diferencia: number | null
+    estado: string
+    cajaOrigen: string
+    cajaDestino: string | null
+    concepto: string
+    observaciones: string | null
+    declaradoPor: UsuarioCaja
+    validadoPor: UsuarioCaja | null
 }
 
 interface Resumen {
@@ -102,12 +118,13 @@ function cambiosAuditoria(auditoria: AuditoriaCaja) {
 }
 
 const cajaFetcher = async ([_, fecha]: [string, string]) => {
-    const [cajaRes, rendRes, saldosRes, conceptosRes, empRes] = await Promise.all([
+    const [cajaRes, rendRes, saldosRes, conceptosRes, empRes, depositosRes] = await Promise.all([
         fetch(`/api/caja?fecha=${fecha}`),
         fetch('/api/caja/rendiciones'),
         fetch('/api/caja/saldos'),
         fetch('/api/caja/conceptos'),
-        fetch('/api/operaciones/empleados')
+        fetch('/api/operaciones/empleados'),
+        fetch('/api/caja/depositos')
     ])
     
     return {
@@ -115,7 +132,8 @@ const cajaFetcher = async ([_, fecha]: [string, string]) => {
         rendicionesData: await rendRes.json(),
         saldosData: await saldosRes.json(),
         conceptosData: await conceptosRes.json(),
-        empleadosData: await empRes.json()
+        empleadosData: await empRes.json(),
+        depositosData: await depositosRes.json()
     }
 }
 
@@ -137,6 +155,7 @@ export default function CajaPage() {
     
     const rendDataRaw = swrData?.rendicionesData
     const rendiciones = Array.isArray(rendDataRaw) ? rendDataRaw.filter((r: Rendicion) => r.montoEsperado > 0) : []
+    const depositosPendientes: DepositoCaja[] = Array.isArray(swrData?.depositosData) ? swrData.depositosData : []
 
     const saldosData = swrData?.saldosData || {}
     const saldoMadre = saldosData.cajaMadre?.saldo ?? 0
@@ -208,6 +227,8 @@ export default function CajaPage() {
     const [auditMov, setAuditMov] = useState<MovCaja | null>(null)
     const [showDepositModal, setShowDepositModal] = useState(false)
     const [depositAmount, setDepositAmount] = useState('')
+    const [showValidacionDeposito, setShowValidacionDeposito] = useState<DepositoCaja | null>(null)
+    const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', observaciones: '', fecha: new Date().toISOString().split('T')[0] })
     const [depositConfig, setDepositConfig] = useState<any>(null)
     const [showAdminConfig, setShowAdminConfig] = useState(false)
     const [allConfigs, setAllConfigs] = useState<any>(null)
@@ -579,25 +600,65 @@ export default function CajaPage() {
         if (!depositAmount || !depositConfig) return
         setError('')
         try {
-            const res = await fetch('/api/caja', {
+            const cajaOrigen = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig.cajaDepositoId
+            const res = await fetch('/api/caja/depositos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    tipo: 'ingreso',
+                    montoDeclarado: parseFloat(depositAmount),
+                    cajaOrigen,
                     concepto: depositConfig.conceptoDeposito,
-                    monto: parseFloat(depositAmount),
-                    medioPago: 'efectivo',
-                    cajaOrigen: userRol === 'ADMIN' ? selectedDepositTarget : depositConfig.cajaDepositoId,
-                    descripcion: `Depósito rápido desde ${ubicacionTipo}`,
                     fecha: new Date().toISOString().split('T')[0]
                 }),
             })
-            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
-            setSuccess('Depósito registrado con éxito')
+            if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'Error al registrar el depósito') }
+            setSuccess(userRol === 'ADMIN' ? 'Depósito registrado; quedó pendiente de validación' : 'Depósito informado; un administrador debe validarlo')
             setShowDepositModal(false)
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error al depositar') }
+    }
+
+    function abrirValidacionDeposito(deposito: DepositoCaja) {
+        const destinos = allowedBoxes.filter(box => box !== deposito.cajaOrigen)
+        const destinoPreferido = destinos.includes('caja_chica') ? 'caja_chica' : (destinos[0] || '')
+        setValidacionDepositoForm({
+            montoReal: String(deposito.montoDeclarado),
+            cajaDestino: destinoPreferido,
+            observaciones: '',
+            fecha: new Date().toISOString().split('T')[0],
+        })
+        setShowValidacionDeposito(deposito)
+    }
+
+    async function handleValidarDeposito(e: React.FormEvent) {
+        e.preventDefault()
+        if (!showValidacionDeposito) return
+        setError('')
+        try {
+            const res = await fetch('/api/caja/depositos', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: showValidacionDeposito.id,
+                    montoReal: Number(validacionDepositoForm.montoReal),
+                    cajaDestino: validacionDepositoForm.cajaDestino,
+                    observaciones: validacionDepositoForm.observaciones,
+                    fecha: validacionDepositoForm.fecha,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Error al validar el depósito')
+            const diferencia = Number(data.diferencia || 0)
+            setSuccess(diferencia === 0
+                ? 'Depósito validado y transferido sin diferencias'
+                : `Depósito validado: ${diferencia < 0 ? 'faltante' : 'sobrante'} de ${formatCurrency(Math.abs(diferencia))}`)
+            setShowValidacionDeposito(null)
+            fetchData()
+            setTimeout(() => setSuccess(''), 5000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al validar el depósito')
+        }
     }
 
     async function handleSaveAdminConfig(e: React.FormEvent) {
@@ -956,6 +1017,40 @@ export default function CajaPage() {
             </div>
 
             {/* ═══ Rendiciones Pendientes ═══ */}
+            {depositosPendientes.length > 0 && (
+                <div style={{ marginBottom: 'var(--space-6)' }}>
+                    <h3 style={{ marginBottom: 'var(--space-3)', fontSize: '1rem' }}>
+                        {userRol === 'ADMIN' ? 'Depósitos pendientes de validar' : 'Tus depósitos pendientes de validación'}
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 'var(--space-4)' }}>
+                        {depositosPendientes.map(deposito => (
+                            <div key={deposito.id} className="card" style={{ borderLeft: '4px solid #F39C12' }}>
+                                <div className="card-body" style={{ padding: 'var(--space-4)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start' }}>
+                                        <div>
+                                            <strong>{nombreUsuario(deposito.declaradoPor)}</strong>
+                                            <div style={{ color: 'var(--color-gray-500)', fontSize: '0.8rem', marginTop: 3 }}>
+                                                {new Date(deposito.fecha).toLocaleString('es-AR')} · {getBoxLabel(deposito.cajaOrigen)}
+                                            </div>
+                                        </div>
+                                        <span className="badge" style={{ backgroundColor: '#FFF7E6', color: '#B45309', border: '1px solid #F59E0B' }}>
+                                            Pendiente
+                                        </span>
+                                    </div>
+                                    <div style={{ marginTop: 'var(--space-4)', color: 'var(--color-gray-500)', fontSize: '0.8rem' }}>Monto declarado</div>
+                                    <div style={{ fontSize: '1.65rem', fontWeight: 700 }}>{formatCurrency(deposito.montoDeclarado, showMontos)}</div>
+                                    {userRol === 'ADMIN' && (
+                                        <button type="button" className="btn btn-primary" style={{ width: '100%', marginTop: 'var(--space-4)' }} onClick={() => abrirValidacionDeposito(deposito)}>
+                                            Validar y transferir
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {rendiciones.length > 0 && (
                 <div style={{ marginBottom: 'var(--space-6)' }}>
                     <h3 style={{ marginBottom: 'var(--space-3)', fontSize: '1rem' }}>🚛 Rendiciones Pendientes de Choferes</h3>
@@ -1179,7 +1274,11 @@ export default function CajaPage() {
                                             <button className="btn btn-ghost btn-sm" title="Ver trazabilidad" style={{ fontSize: '0.8rem', padding: '2px 6px' }}
                                                 onClick={() => setAuditMov(m)}>📜</button>
                                         )}
-                                        {m.estado === 'anulado' ? null : m.gestionadoPorRRHH ? <span
+                                        {m.estado === 'anulado' ? null : m.gestionadoPorDeposito ? <span
+                                            className="badge"
+                                            title="Este movimiento forma parte de un depósito validado y se conserva como trazabilidad."
+                                            style={{ color: '#92400e', background: '#fffbeb', fontSize: '10px', whiteSpace: 'nowrap' }}
+                                        >Depósito</span> : m.gestionadoPorRRHH ? <span
                                             className="badge"
                                             title="Este movimiento se gestiona desde Empleados. Podés corregir su caja o anularlo desde RR. HH."
                                             style={{ color: '#175cd3', background: '#eff8ff', fontSize: '10px', whiteSpace: 'nowrap' }}
@@ -1702,11 +1801,82 @@ export default function CajaPage() {
                 </div>
             )}
             {/* MODAL DE DEPOSITO RÁPIDO */}
+            {showValidacionDeposito && userRol === 'ADMIN' && (() => {
+                const montoReal = Number(validacionDepositoForm.montoReal || 0)
+                const diferencia = Math.round((montoReal - showValidacionDeposito.montoDeclarado) * 100) / 100
+                const hayDiferencia = diferencia !== 0
+                return (
+                    <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={() => setShowValidacionDeposito(null)}>
+                        <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <div>
+                                    <h2>Validar depósito</h2>
+                                    <div style={{ color: 'var(--color-gray-500)', fontSize: '0.85rem', marginTop: 4 }}>
+                                        Declarado por {nombreUsuario(showValidacionDeposito.declaradoPor)}
+                                    </div>
+                                </div>
+                                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setShowValidacionDeposito(null)}>×</button>
+                            </div>
+                            <form onSubmit={handleValidarDeposito}>
+                                <div className="modal-body">
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                                        <div style={{ padding: '12px', background: 'var(--color-gray-50)', borderRadius: 8 }}>
+                                            <div style={{ color: 'var(--color-gray-500)', fontSize: '0.75rem' }}>DECLARADO</div>
+                                            <strong style={{ fontSize: '1.25rem' }}>{formatCurrency(showValidacionDeposito.montoDeclarado)}</strong>
+                                        </div>
+                                        <div style={{ padding: '12px', background: hayDiferencia ? '#FFF7E6' : '#ECFDF5', borderRadius: 8 }}>
+                                            <div style={{ color: 'var(--color-gray-500)', fontSize: '0.75rem' }}>DIFERENCIA</div>
+                                            <strong style={{ fontSize: '1.25rem', color: diferencia < 0 ? '#DC2626' : diferencia > 0 ? '#16A34A' : '#15803D' }}>
+                                                {hayDiferencia ? `${diferencia < 0 ? 'Faltante' : 'Sobrante'} ${formatCurrency(Math.abs(diferencia))}` : 'Sin diferencia'}
+                                            </strong>
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Monto real contado ($)</label>
+                                        <input type="number" min="0" step="0.01" className="form-input" value={validacionDepositoForm.montoReal}
+                                            onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, montoReal: e.target.value })}
+                                            style={{ fontSize: '1.35rem', textAlign: 'center', fontWeight: 700 }} autoFocus required />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Transferir el monto real hacia</label>
+                                        <select className="form-select" value={validacionDepositoForm.cajaDestino}
+                                            onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, cajaDestino: e.target.value })}
+                                            disabled={montoReal === 0} required={montoReal > 0}>
+                                            {allowedBoxes.filter(box => box !== showValidacionDeposito.cajaOrigen).map(box => (
+                                                <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Fecha del retiro</label>
+                                        <input type="date" className="form-input" value={validacionDepositoForm.fecha}
+                                            onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, fecha: e.target.value })} required />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Observaciones {hayDiferencia ? '(obligatorias)' : '(opcionales)'}</label>
+                                        <textarea className="form-input" rows={3} value={validacionDepositoForm.observaciones}
+                                            onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, observaciones: e.target.value })}
+                                            placeholder={hayDiferencia ? 'Ej.: faltante detectado al contar el efectivo' : 'Detalle del control'}
+                                            required={hayDiferencia} minLength={hayDiferencia ? 5 : undefined} />
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-ghost" onClick={() => setShowValidacionDeposito(null)}>Cancelar</button>
+                                    <button type="submit" className="btn btn-primary" disabled={montoReal < 0 || (montoReal > 0 && !validacionDepositoForm.cajaDestino)}>
+                                        {montoReal > 0 ? `Validar y transferir ${formatCurrency(montoReal)}` : 'Validar sin transferencia'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            })()}
+
             {showDepositModal && (
                 <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={() => setShowDepositModal(false)}>
                     <div className="modal" style={{ maxWidth: '400px', backgroundColor: '#ffffff', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>💰 Registrar Depósito</h2>
+                            <h2>💰 Informar depósito</h2>
                             <button className="btn btn-ghost btn-icon" onClick={() => setShowDepositModal(false)}>✕</button>
                         </div>
                         <form onSubmit={handleDeposit}>
@@ -1732,7 +1902,7 @@ export default function CajaPage() {
                                 )}
                                 
                                 <div style={{ textAlign: 'center' }}>
-                                    <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe a Depositar</label>
+                                    <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe declarado</label>
                                     <div style={{ position: 'relative', marginTop: '0.5rem' }}>
                                         <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', fontSize: '1.2rem' }}>$</span>
                                         <input 
@@ -1751,7 +1921,7 @@ export default function CajaPage() {
                             </div>
                             <div className="form-actions">
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowDepositModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#27AE60' }}>Confirmar Depósito</button>
+                                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#27AE60' }}>Informar depósito</button>
                             </div>
                         </form>
                     </div>

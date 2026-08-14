@@ -3,6 +3,7 @@ import type { PrismaClient, Prisma } from '@prisma/client'
 
 import { esMovimientoGestionadoPorRRHH, validarMotivoReasignacionCaja } from '@/lib/caja/movimientosProtegidos'
 import { validarMotivoAnulacionCaja } from '@/lib/caja/auditoria'
+import { calcularDiferenciaDeposito, validarMontoDeposito, validarObservacionesDiferencia } from '@/lib/caja/depositos'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
@@ -68,6 +69,15 @@ function snapshotMovimiento(movimiento: Record<string, unknown>): Prisma.InputJs
         fecha: movimiento.fecha instanceof Date ? movimiento.fecha.toISOString() : String(movimiento.fecha || ''),
         estado: String(movimiento.estado || 'activo'),
     }
+}
+
+function esMovimientoDeDeposito(movimiento: Record<string, unknown>): boolean {
+    return Boolean(
+        movimiento.depositoIngreso ||
+        movimiento.depositoAjuste ||
+        movimiento.depositoTransferenciaOrigen ||
+        movimiento.depositoTransferenciaDestino
+    )
 }
 
 async function registrarAuditoria(
@@ -210,9 +220,20 @@ export class CajaService {
      */
     static async updateMovimiento(id: string, input: UpdateMovimientoInput) {
         return prisma.$transaction(async (tx) => {
-            const oldMov = await tx.movimientoCaja.findUnique({ where: { id } })
+            const oldMov = await tx.movimientoCaja.findUnique({
+                where: { id },
+                include: {
+                    depositoIngreso: { select: { id: true } },
+                    depositoAjuste: { select: { id: true } },
+                    depositoTransferenciaOrigen: { select: { id: true } },
+                    depositoTransferenciaDestino: { select: { id: true } },
+                },
+            })
             if (!oldMov) throw new Error('Movimiento no encontrado')
             if (oldMov.estado === 'anulado') throw new Error('Un movimiento anulado no puede modificarse.')
+            if (esMovimientoDeDeposito(oldMov)) {
+                throw new Error('Este movimiento pertenece a un depósito controlado y no puede editarse por separado.')
+            }
             if (esMovimientoGestionadoPorRRHH(oldMov)) {
                 throw new Error('Este movimiento pertenece a RR. HH. y sólo puede corregirse desde el módulo Empleados.')
             }
@@ -268,9 +289,20 @@ export class CajaService {
     static async anularMovimiento(id: string, motivoInformado: unknown, usuarioId?: string | null) {
         const motivo = validarMotivoAnulacionCaja(motivoInformado)
         return prisma.$transaction(async (tx) => {
-            const mov = await tx.movimientoCaja.findUnique({ where: { id } })
+            const mov = await tx.movimientoCaja.findUnique({
+                where: { id },
+                include: {
+                    depositoIngreso: { select: { id: true } },
+                    depositoAjuste: { select: { id: true } },
+                    depositoTransferenciaOrigen: { select: { id: true } },
+                    depositoTransferenciaDestino: { select: { id: true } },
+                },
+            })
             if (!mov) return
             if (mov.estado === 'anulado') throw new Error('El movimiento ya se encuentra anulado.')
+            if (esMovimientoDeDeposito(mov)) {
+                throw new Error('Este movimiento pertenece a un depósito controlado y no puede anularse por separado.')
+            }
             if (esMovimientoGestionadoPorRRHH(mov)) {
                 throw new Error('Este movimiento pertenece a RR. HH. y no puede anularse desde Caja. Anulá el pago desde Empleados.')
             }
@@ -476,6 +508,152 @@ export class CajaService {
             await registrarAuditoria(tx, { movimientoId: ingreso.id, accion: 'CREACION', usuarioId, valoresNuevos: snapshotMovimiento(ingreso) })
 
             return { egreso, ingreso }
+        })
+    }
+
+    // ─── Depósitos declarados y validados ───────────────────────────────────
+    static async registrarDeposito(input: {
+        montoDeclarado: number
+        cajaOrigen: string
+        concepto: string
+        declaradoPorId: string
+        ubicacionTipo?: string | null
+        fecha?: Date | string | null
+    }) {
+        const montoDeclarado = validarMontoDeposito(input.montoDeclarado)
+        if (!input.cajaOrigen) throw new Error('No hay una caja configurada para recibir el depósito.')
+        if (!input.declaradoPorId) throw new Error('No se pudo identificar a la persona que declara el depósito.')
+
+        return prisma.$transaction(async tx => {
+            const movimientoIngreso = await CajaService.createMovimiento({
+                tipo: 'ingreso',
+                concepto: input.concepto,
+                monto: montoDeclarado,
+                medioPago: 'efectivo',
+                cajaOrigen: input.cajaOrigen,
+                descripcion: `Depósito declarado desde ${input.ubicacionTipo || 'ubicación no informada'} (pendiente de validación)`,
+                usuarioId: input.declaradoPorId,
+                fecha: input.fecha,
+            }, tx)
+
+            return (tx as any).depositoCaja.create({
+                data: {
+                    fecha: normalizeFecha(input.fecha),
+                    montoDeclarado,
+                    cajaOrigen: input.cajaOrigen,
+                    concepto: input.concepto,
+                    declaradoPorId: input.declaradoPorId,
+                    movimientoIngresoId: movimientoIngreso.id,
+                },
+                include: {
+                    declaradoPor: { select: { id: true, nombre: true, apellido: true } },
+                },
+            })
+        })
+    }
+
+    static async validarDeposito(input: {
+        depositoId: string
+        montoReal: number
+        cajaDestino: string
+        observaciones?: string | null
+        validadoPorId: string
+        fecha?: Date | string | null
+    }) {
+        const montoReal = validarMontoDeposito(input.montoReal, true)
+        if (!input.depositoId) throw new Error('Depósito requerido.')
+        if (!input.validadoPorId) throw new Error('No se pudo identificar al administrador.')
+
+        return prisma.$transaction(async tx => {
+            const lockKey = `validar-deposito-caja:${input.depositoId}`
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
+
+            const deposito = await (tx as any).depositoCaja.findUnique({
+                where: { id: input.depositoId },
+            })
+            if (!deposito) throw new Error('Depósito no encontrado.')
+            if (deposito.estado !== 'pendiente') throw new Error('El depósito ya fue validado.')
+            if (montoReal > 0 && !input.cajaDestino) throw new Error('Seleccioná la caja que recibe el dinero real.')
+            if (montoReal > 0 && deposito.cajaOrigen === input.cajaDestino) {
+                throw new Error('La caja de destino debe ser diferente de la caja donde se declaró el depósito.')
+            }
+            if (montoReal > 0) {
+                const cajaDestino = await (tx as any).saldoCaja.findUnique({ where: { tipo: input.cajaDestino } })
+                if (!cajaDestino) throw new Error('La caja de destino no existe.')
+            }
+
+            const diferencia = calcularDiferenciaDeposito(deposito.montoDeclarado, montoReal)
+            const observaciones = validarObservacionesDiferencia(diferencia, input.observaciones)
+            const fechaValidacion = normalizeFecha(input.fecha)
+            let movimientoAjusteId: string | null = null
+            let movimientoTransferenciaOrigenId: string | null = null
+            let movimientoTransferenciaDestinoId: string | null = null
+
+            if (diferencia !== 0) {
+                const esSobrante = diferencia > 0
+                const ajuste = await CajaService.createMovimiento({
+                    tipo: esSobrante ? 'ingreso' : 'egreso',
+                    concepto: 'diferencia_deposito',
+                    monto: Math.abs(diferencia),
+                    medioPago: 'efectivo',
+                    cajaOrigen: deposito.cajaOrigen,
+                    descripcion: `${esSobrante ? 'Sobrante' : 'Faltante'} al validar depósito declarado por $${deposito.montoDeclarado.toLocaleString('es-AR')}: ${observaciones}`,
+                    usuarioId: input.validadoPorId,
+                    fecha: fechaValidacion,
+                }, tx)
+                movimientoAjusteId = ajuste.id
+            }
+
+            if (montoReal > 0) {
+                const saldoRecord = await (tx as any).saldoCaja.findUnique({ where: { tipo: deposito.cajaOrigen } })
+                const saldoActual = saldoRecord?.saldo ?? 0
+                if (saldoActual < montoReal) {
+                    throw new Error(`Saldo insuficiente luego del ajuste. Disponible: $${saldoActual.toLocaleString('es-AR')}`)
+                }
+
+                const egreso = await CajaService.createMovimiento({
+                    tipo: 'egreso',
+                    concepto: 'transferencia_interna',
+                    monto: montoReal,
+                    medioPago: 'efectivo',
+                    cajaOrigen: deposito.cajaOrigen,
+                    descripcion: `Validación de depósito: transferencia hacia ${input.cajaDestino}`,
+                    usuarioId: input.validadoPorId,
+                    fecha: fechaValidacion,
+                }, tx)
+                const ingreso = await CajaService.createMovimiento({
+                    tipo: 'ingreso',
+                    concepto: 'transferencia_interna',
+                    monto: montoReal,
+                    medioPago: 'efectivo',
+                    cajaOrigen: input.cajaDestino,
+                    descripcion: `Validación de depósito: transferencia desde ${deposito.cajaOrigen}`,
+                    usuarioId: input.validadoPorId,
+                    fecha: fechaValidacion,
+                }, tx)
+                movimientoTransferenciaOrigenId = egreso.id
+                movimientoTransferenciaDestinoId = ingreso.id
+            }
+
+            return (tx as any).depositoCaja.update({
+                where: { id: deposito.id },
+                data: {
+                    montoReal,
+                    diferencia,
+                    estado: 'validado',
+                    cajaDestino: montoReal > 0 ? input.cajaDestino : null,
+                    observaciones,
+                    validadoAt: new Date(),
+                    validadoPorId: input.validadoPorId,
+                    movimientoAjusteId,
+                    movimientoTransferenciaOrigenId,
+                    movimientoTransferenciaDestinoId,
+                },
+                include: {
+                    declaradoPor: { select: { id: true, nombre: true, apellido: true } },
+                    validadoPor: { select: { id: true, nombre: true, apellido: true } },
+                },
+            })
         })
     }
 

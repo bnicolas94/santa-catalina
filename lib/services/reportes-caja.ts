@@ -17,6 +17,7 @@ function formatConceptLabel(concept: string): string {
         gasto_operativo: 'Gastos Operativos',
         caja_chica: 'Caja Chica',
         arqueo_caja: 'Ajuste de Arqueo',
+        diferencia_deposito: 'Diferencias de Depósitos',
         retiro_socio: 'Retiro Socio',
         gastos_generales: 'Gastos Generales'
     }

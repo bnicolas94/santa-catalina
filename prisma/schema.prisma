@@ -66,6 +66,8 @@ model Empleado {
   movimientosCajaEditados   MovimientoCaja[]          @relation("MovimientoCajaActualizadoPor")
   movimientosCajaAnulados   MovimientoCaja[]          @relation("MovimientoCajaAnuladoPor")
   auditoriasCaja            AuditoriaMovimientoCaja[] @relation("AuditoriaMovimientoCajaUsuario")
+  depositosCajaDeclarados   DepositoCaja[]            @relation("DepositoCajaDeclaradoPor")
+  depositosCajaValidados    DepositoCaja[]            @relation("DepositoCajaValidadoPor")
   lotesCoordinados          Lote[]                    @relation("CoordinadorLote")
   prestamos                 PrestamoEmpleado[]
   prestamosAnulados         PrestamoEmpleado[]        @relation("PrestamoAnuladoPor")
@@ -591,53 +593,90 @@ model GastoOperativo {
 }
 
 model MovimientoCaja {
-  id                    String                    @id @default(uuid())
-  fecha                 DateTime                  @default(now())
-  tipo                  String
-  concepto              String
-  monto                 Float
-  medioPago             String                    @default("efectivo") @map("medio_pago")
-  cajaOrigen            String?                   @map("caja_origen")
-  descripcion           String?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  estado                String                    @default("activo")
-  creadoPorId           String?                   @map("id_creado_por")
-  actualizadoPorId      String?                   @map("id_actualizado_por")
-  anuladoPorId          String?                   @map("id_anulado_por")
-  anuladoAt             DateTime?                 @map("anulado_en")
-  motivoAnulacion       String?                   @map("motivo_anulacion")
-  pedidoId              String?                   @map("id_pedido")
-  gastoId               String?                   @map("id_gasto")
-  rendicionId           String?                   @map("id_rendicion")
-  prestamoId            String?                   @map("id_prestamo")
-  cuotaPrestamoId       String?                   @unique @map("id_cuota_prestamo")
-  liquidacionSueldoId   String?                   @map("id_liquidacion_sueldo")
-  liquidacionFinalId    String?                   @unique @map("id_liquidacion_final")
-  pagoCierreMensualId   String?                   @unique @map("id_pago_cierre_mensual")
-  movimientoReversaDeId String?                   @unique @map("id_movimiento_reversado")
-  pedido                Pedido?                   @relation(fields: [pedidoId], references: [id])
-  rendicion             RendicionChofer?          @relation(fields: [rendicionId], references: [id])
-  gasto                 GastoOperativo?           @relation(fields: [gastoId], references: [id])
-  movimientoMp          MovimientoMercadoPago?
-  prestamo              PrestamoEmpleado?         @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
-  cuotaPrestamo         CuotaPrestamo?            @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
-  liquidacionSueldo     LiquidacionSueldo?        @relation(fields: [liquidacionSueldoId], references: [id], onDelete: SetNull)
-  liquidacionFinal      LiquidacionFinal?         @relation(fields: [liquidacionFinalId], references: [id], onDelete: SetNull)
-  pagoCierreMensual     PagoCierreMensual?        @relation(fields: [pagoCierreMensualId], references: [id], onDelete: SetNull)
-  movimientoReversaDe   MovimientoCaja?           @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
-  movimientoReversion   MovimientoCaja?           @relation("ReversionMovimientoCaja")
-  reasignacionesRRHH    ReasignacionCajaRRHH[]
-  creadoPor             Empleado?                 @relation("MovimientoCajaCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
-  actualizadoPor        Empleado?                 @relation("MovimientoCajaActualizadoPor", fields: [actualizadoPorId], references: [id], onDelete: SetNull)
-  anuladoPor            Empleado?                 @relation("MovimientoCajaAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
-  auditorias            AuditoriaMovimientoCaja[]
+  id                           String                    @id @default(uuid())
+  fecha                        DateTime                  @default(now())
+  tipo                         String
+  concepto                     String
+  monto                        Float
+  medioPago                    String                    @default("efectivo") @map("medio_pago")
+  cajaOrigen                   String?                   @map("caja_origen")
+  descripcion                  String?
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime                  @updatedAt
+  estado                       String                    @default("activo")
+  creadoPorId                  String?                   @map("id_creado_por")
+  actualizadoPorId             String?                   @map("id_actualizado_por")
+  anuladoPorId                 String?                   @map("id_anulado_por")
+  anuladoAt                    DateTime?                 @map("anulado_en")
+  motivoAnulacion              String?                   @map("motivo_anulacion")
+  pedidoId                     String?                   @map("id_pedido")
+  gastoId                      String?                   @map("id_gasto")
+  rendicionId                  String?                   @map("id_rendicion")
+  prestamoId                   String?                   @map("id_prestamo")
+  cuotaPrestamoId              String?                   @unique @map("id_cuota_prestamo")
+  liquidacionSueldoId          String?                   @map("id_liquidacion_sueldo")
+  liquidacionFinalId           String?                   @unique @map("id_liquidacion_final")
+  pagoCierreMensualId          String?                   @unique @map("id_pago_cierre_mensual")
+  movimientoReversaDeId        String?                   @unique @map("id_movimiento_reversado")
+  pedido                       Pedido?                   @relation(fields: [pedidoId], references: [id])
+  rendicion                    RendicionChofer?          @relation(fields: [rendicionId], references: [id])
+  gasto                        GastoOperativo?           @relation(fields: [gastoId], references: [id])
+  movimientoMp                 MovimientoMercadoPago?
+  prestamo                     PrestamoEmpleado?         @relation(fields: [prestamoId], references: [id], onDelete: SetNull)
+  cuotaPrestamo                CuotaPrestamo?            @relation(fields: [cuotaPrestamoId], references: [id], onDelete: SetNull)
+  liquidacionSueldo            LiquidacionSueldo?        @relation(fields: [liquidacionSueldoId], references: [id], onDelete: SetNull)
+  liquidacionFinal             LiquidacionFinal?         @relation(fields: [liquidacionFinalId], references: [id], onDelete: SetNull)
+  pagoCierreMensual            PagoCierreMensual?        @relation(fields: [pagoCierreMensualId], references: [id], onDelete: SetNull)
+  movimientoReversaDe          MovimientoCaja?           @relation("ReversionMovimientoCaja", fields: [movimientoReversaDeId], references: [id], onDelete: SetNull)
+  movimientoReversion          MovimientoCaja?           @relation("ReversionMovimientoCaja")
+  reasignacionesRRHH           ReasignacionCajaRRHH[]
+  creadoPor                    Empleado?                 @relation("MovimientoCajaCreadoPor", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  actualizadoPor               Empleado?                 @relation("MovimientoCajaActualizadoPor", fields: [actualizadoPorId], references: [id], onDelete: SetNull)
+  anuladoPor                   Empleado?                 @relation("MovimientoCajaAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  auditorias                   AuditoriaMovimientoCaja[]
+  depositoIngreso              DepositoCaja?             @relation("DepositoMovimientoIngreso")
+  depositoAjuste               DepositoCaja?             @relation("DepositoMovimientoAjuste")
+  depositoTransferenciaOrigen  DepositoCaja?             @relation("DepositoMovimientoTransferenciaOrigen")
+  depositoTransferenciaDestino DepositoCaja?             @relation("DepositoMovimientoTransferenciaDestino")
 
   @@index([estado, fecha])
   @@index([creadoPorId])
   @@index([actualizadoPorId])
   @@index([anuladoPorId])
   @@map("movimientos_caja")
+}
+
+model DepositoCaja {
+  id                               String          @id @default(uuid())
+  fecha                            DateTime        @default(now())
+  montoDeclarado                   Float           @map("monto_declarado")
+  montoReal                        Float?          @map("monto_real")
+  diferencia                       Float?
+  estado                           String          @default("pendiente")
+  cajaOrigen                       String          @map("caja_origen")
+  cajaDestino                      String?         @map("caja_destino")
+  concepto                         String
+  observaciones                    String?
+  createdAt                        DateTime        @default(now())
+  updatedAt                        DateTime        @updatedAt
+  validadoAt                       DateTime?       @map("validado_en")
+  declaradoPorId                   String          @map("id_declarado_por")
+  validadoPorId                    String?         @map("id_validado_por")
+  movimientoIngresoId              String          @unique @map("id_movimiento_ingreso")
+  movimientoAjusteId               String?         @unique @map("id_movimiento_ajuste")
+  movimientoTransferenciaOrigenId  String?         @unique @map("id_movimiento_transferencia_origen")
+  movimientoTransferenciaDestinoId String?         @unique @map("id_movimiento_transferencia_destino")
+  declaradoPor                     Empleado        @relation("DepositoCajaDeclaradoPor", fields: [declaradoPorId], references: [id], onDelete: Restrict)
+  validadoPor                      Empleado?       @relation("DepositoCajaValidadoPor", fields: [validadoPorId], references: [id], onDelete: SetNull)
+  movimientoIngreso                MovimientoCaja  @relation("DepositoMovimientoIngreso", fields: [movimientoIngresoId], references: [id], onDelete: Restrict)
+  movimientoAjuste                 MovimientoCaja? @relation("DepositoMovimientoAjuste", fields: [movimientoAjusteId], references: [id], onDelete: Restrict)
+  movimientoTransferenciaOrigen    MovimientoCaja? @relation("DepositoMovimientoTransferenciaOrigen", fields: [movimientoTransferenciaOrigenId], references: [id], onDelete: Restrict)
+  movimientoTransferenciaDestino   MovimientoCaja? @relation("DepositoMovimientoTransferenciaDestino", fields: [movimientoTransferenciaDestinoId], references: [id], onDelete: Restrict)
+
+  @@index([estado, fecha])
+  @@index([declaradoPorId, fecha])
+  @@index([validadoPorId, validadoAt])
+  @@map("depositos_caja")
 }
 
 model AuditoriaMovimientoCaja {
