@@ -1,5 +1,6 @@
 export interface MPPaymentResponse {
   id: number;
+  collector_id?: number | string;
   status: string;
   status_detail: string;
   transaction_amount: number;
@@ -28,6 +29,11 @@ export interface MPPaymentResponse {
       number: string;
     };
   };
+}
+
+export function isOwnMercadoPagoPayment(payment: Pick<MPPaymentResponse, 'collector_id'>): boolean {
+  const expectedCollectorId = process.env.MP_COLLECTOR_ID || '231378824';
+  return Boolean(payment.collector_id) && String(payment.collector_id) === expectedCollectorId;
 }
 
 export async function getPayment(paymentId: string | number): Promise<MPPaymentResponse | null> {

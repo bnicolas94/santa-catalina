@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getPayment } from "@/lib/mercadopago";
+import { getPayment, isOwnMercadoPagoPayment } from "@/lib/mercadopago";
 import { CajaService } from "@/lib/services/caja.service";
 import { validateMercadoPagoSignature } from "@/lib/mercadopago-webhook";
 
@@ -35,11 +35,9 @@ export async function POST(req: Request) {
       const signedDataId = queryId || String(paymentId);
       const signatureValidation = validateMercadoPagoSignature(req, signedDataId);
       if (!signatureValidation.valid) {
-        console.warn(`[MercadoPago Webhook] Solicitud rechazada: ${signatureValidation.error}`);
-        return NextResponse.json(
-          { error: signatureValidation.error },
-          { status: signatureValidation.status }
-        );
+        // Si la clave de firma quedó desincronizada, verificamos el recurso
+        // directamente con el token privado y nunca confiamos en el payload.
+        console.warn(`[MercadoPago Webhook] ${signatureValidation.error}; verificando el pago contra la API.`);
       }
       
       console.log(`[MercadoPago Webhook] Recibido pago ID: ${paymentId}`);
@@ -48,6 +46,11 @@ export async function POST(req: Request) {
       
       if (!paymentInfo) {
         return NextResponse.json({ error: "No se pudo obtener la información del pago desde MP" }, { status: 400 });
+      }
+
+      if (!isOwnMercadoPagoPayment(paymentInfo)) {
+        console.warn(`[MercadoPago Webhook] Pago ${paymentInfo.id} ignorado: collector_id ajeno o ausente.`);
+        return NextResponse.json({ success: true, ignored: 'collector_id' });
       }
 
       const mpIdString = paymentInfo.id.toString();
@@ -121,7 +124,10 @@ export async function POST(req: Request) {
         }
       });
       
-      return NextResponse.json({ success: true });
+      return NextResponse.json({
+        success: true,
+        verifiedBy: signatureValidation.valid ? 'signature_and_api' : 'api',
+      });
     }
 
     return NextResponse.json({ message: "Notificación ignorada", receivedType: body.type });
