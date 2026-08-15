@@ -194,7 +194,9 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                 {diasOrdenados.length > 0 ? (
                     diasOrdenados.map(dia => {
                         const marcas = gruposPorDia[dia]
-                        const resumen = calcularResumenDia(marcas, empleado?.horasTrabajoDiarias || 8)
+                        const resumen = calcularResumenDia(marcas, empleado?.horasTrabajoDiarias || 8, {
+                            horarioEntrada: empleado?.turno?.horaInicio || empleado?.horarioEntrada,
+                        })
                         const isExpanded = expandedDays[dia]
                         const [yyyy, mm, dd] = dia.split('-')
                         const fechaLegible = `${dd}/${mm}/${yyyy}`

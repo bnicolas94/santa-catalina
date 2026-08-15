@@ -155,6 +155,7 @@ export class PayrollService {
             where: { id: empleadoId },
             include: {
                 rolRel: true,
+                turno: { select: { horaInicio: true } },
                 fichadas: {
                     where: {
                         fechaHora: {
@@ -285,7 +286,9 @@ export class PayrollService {
 
             const marcas = marcasRaw
 
-            const resumen = calcularResumenDia(marcas, hsJornada)
+            const resumen = calcularResumenDia(marcas, hsJornada, {
+                horarioEntrada: empleado.turno?.horaInicio || empleado.horarioEntrada,
+            })
 
             const esFeriado = !!feriadosMap[fechaStr]
             

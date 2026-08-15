@@ -17,7 +17,31 @@ export interface ResumenDia {
     marcas: Marca[];
 }
 
-import { fechaClaveRRHH } from '@/lib/rrhh/fechas';
+import { fechaClaveRRHH, instanteRRHH } from '@/lib/rrhh/fechas';
+
+export interface OpcionesResumenDia {
+    /**
+     * Hora desde la que empieza a computarse el trabajo del día. Las fichadas
+     * anteriores siguen visibles, pero ese tramo no genera horas pagas ni extras.
+     */
+    horarioEntrada?: string | null;
+}
+
+function inicioComputableDelDia(entrada: Date, horarioEntrada?: string | null): Date | null {
+    if (!horarioEntrada) return null;
+
+    const coincidencia = horarioEntrada.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!coincidencia) return null;
+
+    const [, horas, minutos, segundos = '00'] = coincidencia;
+    const horaNormalizada = `${horas}:${minutos}:${segundos}`;
+
+    try {
+        return instanteRRHH(fechaClaveRRHH(entrada), horaNormalizada);
+    } catch {
+        return null;
+    }
+}
 
 /**
  * Proporción del jornal que corresponde pagar según las horas normales reales.
@@ -36,7 +60,11 @@ export function calcularProporcionJornal(horasTrabajadas: number, horasJornada: 
  * Calcula el resumen de un día basado en sus marcas.
  * Asume que las marcas están ordenadas cronológicamente.
  */
-export function calcularResumenDia(marcas: Marca[], horasJornada: number = 8): ResumenDia {
+export function calcularResumenDia(
+    marcas: Marca[],
+    horasJornada: number = 8,
+    opciones: OpcionesResumenDia = {},
+): ResumenDia {
     let milisegundosTrabajados = 0;
     let esAusencia = marcas.some(m => m.tipo === 'ausencia');
     let esAusenciaRemunerada = marcas.some(m => m.tipo === 'ausencia' && m.tipoLicencia?.conGoceSueldo);
@@ -62,7 +90,12 @@ export function calcularResumenDia(marcas: Marca[], horasJornada: number = 8): R
             entradaActual = new Date(marca.fechaHora);
         } else if (marca.tipo === 'salida' && entradaActual) {
             const salida = new Date(marca.fechaHora);
-            milisegundosTrabajados += (salida.getTime() - entradaActual.getTime());
+            const inicioComputable = inicioComputableDelDia(entradaActual, opciones.horarioEntrada);
+            const inicioTramo = inicioComputable && entradaActual < inicioComputable
+                ? inicioComputable
+                : entradaActual;
+
+            milisegundosTrabajados += Math.max(0, salida.getTime() - inicioTramo.getTime());
             entradaActual = null;
         }
     }

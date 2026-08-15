@@ -41,6 +41,30 @@ test('suma varios tramos trabajados durante el mismo día', () => {
     assert.equal(resultado.horasExtras, 1)
 })
 
+test('no computa como trabajadas ni extras las horas anteriores al horario de entrada', () => {
+    const marcas: Marca[] = [
+        { tipo: 'entrada', fechaHora: '2026-07-20T07:00:00-03:00' },
+        { tipo: 'salida', fechaHora: '2026-07-20T17:00:00-03:00' },
+    ]
+
+    const resultado = calcularResumenDia(marcas, 9, { horarioEntrada: '08:00' })
+
+    assert.equal(resultado.horasTrabajadas, 9)
+    assert.equal(resultado.horasExtras, 0)
+})
+
+test('mantiene como extra el tiempo posterior a la jornada aunque la entrada haya sido anticipada', () => {
+    const marcas: Marca[] = [
+        { tipo: 'entrada', fechaHora: '2026-07-20T07:00:00-03:00' },
+        { tipo: 'salida', fechaHora: '2026-07-20T18:00:00-03:00' },
+    ]
+
+    const resultado = calcularResumenDia(marcas, 9, { horarioEntrada: '08:00' })
+
+    assert.equal(resultado.horasTrabajadas, 10)
+    assert.equal(resultado.horasExtras, 1)
+})
+
 test('ordena las fichadas antes de emparejar entradas y salidas', () => {
     const entrada: Marca = { tipo: 'entrada', fechaHora: fechaLocal(2026, 7, 20, 8) }
     const salida: Marca = { tipo: 'salida', fechaHora: fechaLocal(2026, 7, 20, 16) }
