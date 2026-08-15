@@ -5,6 +5,8 @@ export type PermissionKey =
     | 'permisoPersonal'
     | 'permisoProduccion'
     | 'permisoCostos'
+    | 'permisoAtencion'
+    | 'permisoAtencionAdmin'
 
 export type AccessToken = {
     rol?: string | null

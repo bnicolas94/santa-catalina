@@ -11,6 +11,8 @@ export function permisosDesdeRol(rol: RolConPermisos): Record<PermissionKey, boo
         permisoPersonal: rol.permisoPersonal === true,
         permisoProduccion: rol.permisoProduccion === true,
         permisoCostos: rol.permisoCostos === true,
+        permisoAtencion: rol.permisoAtencion === true,
+        permisoAtencionAdmin: rol.permisoAtencionAdmin === true,
     }
 }
 
@@ -26,5 +28,7 @@ export function aplicarAccesosOperativos(
         permisoPersonal: permisos?.permisoPersonal === true,
         permisoProduccion: permisos?.permisoProduccion === true,
         permisoCostos: permisos?.permisoCostos === true,
+        permisoAtencion: permisos?.permisoAtencion === true,
+        permisoAtencionAdmin: permisos?.permisoAtencionAdmin === true,
     }
 }

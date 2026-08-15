@@ -17,6 +17,8 @@ interface EmployeeRole {
     permisoPersonal: boolean
     permisoProduccion: boolean
     permisoCostos: boolean
+    permisoAtencion: boolean
+    permisoAtencionAdmin: boolean
     jornal: number
     valorHoraExtra: number
     cicloPago: string
@@ -90,6 +92,8 @@ const ROLE_PERMISSIONS: Array<{ key: keyof EmployeeRole; label: string }> = [
     { key: 'permisoPersonal', label: 'Personal' },
     { key: 'permisoProduccion', label: 'Producción' },
     { key: 'permisoCostos', label: 'Costos' },
+    { key: 'permisoAtencion', label: 'Atención' },
+    { key: 'permisoAtencionAdmin', label: 'Supervisión de atención' },
 ]
 
 interface EmpleadoDialogProps {

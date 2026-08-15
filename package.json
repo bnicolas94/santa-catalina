@@ -2,6 +2,10 @@
   "name": "santa-catalina",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "npx prisma generate && next build",
@@ -17,7 +21,15 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:build:msi": "tauri build --target x86_64-pc-windows-msvc --bundles msi"
+    "tauri:build:msi": "tauri build --target x86_64-pc-windows-msvc --bundles msi",
+    "crm:dev": "npm --workspace @santa-catalina/crm run dev",
+    "crm:build": "npm --workspace @santa-catalina/crm run build",
+    "crm:lint": "npm --workspace @santa-catalina/crm run lint",
+    "crm:test": "npm --workspace @santa-catalina/crm run test",
+    "crm:db:generate": "npm --workspace @santa-catalina/crm run db:generate",
+    "crm:db:validate": "npm --workspace @santa-catalina/crm run db:validate",
+    "crm:db:deploy": "npm --workspace @santa-catalina/crm run db:deploy",
+    "crm:db:seed": "npm --workspace @santa-catalina/crm run db:seed"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -29,6 +41,7 @@
     "date-fns": "^4.1.0",
     "next": "16.1.6",
     "next-auth": "^4.24.13",
+    "pg": "^8.23.0",
     "prisma": "^6.19.2",
     "react": "19.2.3",
     "react-chartjs-2": "^5.3.1",
@@ -42,6 +55,7 @@
     "@tauri-apps/cli": "^2.0.0-rc.18",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/pg": "^8.21.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",

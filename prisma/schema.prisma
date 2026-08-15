@@ -979,22 +979,24 @@ model PagoCierreMensual {
 }
 
 model RolEmpleado {
-  id                String     @id @default(uuid())
-  nombre            String     @unique
-  descripcion       String?
-  color             String?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  permisoCaja       Boolean    @default(false)
-  permisoCostos     Boolean    @default(false)
-  permisoPersonal   Boolean    @default(false)
-  permisoProduccion Boolean    @default(false)
-  permisoStock      Boolean    @default(false)
-  permisoDashboard  Boolean    @default(false)
-  jornal            Float      @default(0)
-  valorHoraExtra    Float      @default(0) @map("valor_hora_extra")
-  cicloPago         CicloPago  @default(SEMANAL) @map("ciclo_pago")
-  empleados         Empleado[]
+  id                   String     @id @default(uuid())
+  nombre               String     @unique
+  descripcion          String?
+  color                String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  permisoCaja          Boolean    @default(false)
+  permisoCostos        Boolean    @default(false)
+  permisoPersonal      Boolean    @default(false)
+  permisoProduccion    Boolean    @default(false)
+  permisoStock         Boolean    @default(false)
+  permisoDashboard     Boolean    @default(false)
+  permisoAtencion      Boolean    @default(false) @map("permiso_atencion")
+  permisoAtencionAdmin Boolean    @default(false) @map("permiso_atencion_admin")
+  jornal               Float      @default(0)
+  valorHoraExtra       Float      @default(0) @map("valor_hora_extra")
+  cicloPago            CicloPago  @default(SEMANAL) @map("ciclo_pago")
+  empleados            Empleado[]
 
   @@map("roles_empleado")
 }

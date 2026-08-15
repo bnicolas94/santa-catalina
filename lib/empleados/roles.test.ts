@@ -12,6 +12,7 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         jornal: '150000.129',
         valorHoraExtra: '4500',
         permisoCaja: true,
+        permisoAtencion: true,
     }), {
         nombre: 'ADMINISTRACIÓN_GENERAL',
         descripcion: 'Gestión interna',
@@ -22,6 +23,8 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         permisoPersonal: false,
         permisoProduccion: false,
         permisoCostos: false,
+        permisoAtencion: true,
+        permisoAtencionAdmin: false,
         jornal: 150000.13,
         valorHoraExtra: 4500,
         cicloPago: 'MENSUAL',

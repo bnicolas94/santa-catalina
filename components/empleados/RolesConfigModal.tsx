@@ -10,6 +10,8 @@ type PermissionKey =
     | 'permisoPersonal'
     | 'permisoProduccion'
     | 'permisoCostos'
+    | 'permisoAtencion'
+    | 'permisoAtencionAdmin'
 
 interface Role {
     id: string
@@ -22,6 +24,8 @@ interface Role {
     permisoPersonal: boolean
     permisoProduccion: boolean
     permisoCostos: boolean
+    permisoAtencion: boolean
+    permisoAtencionAdmin: boolean
     jornal: number
     valorHoraExtra: number
     cicloPago: string
@@ -40,6 +44,8 @@ const PERMISSIONS: Array<{ id: PermissionKey; title: string; description: string
     { id: 'permisoPersonal', title: 'Personal', description: 'Legajos, asistencia y liquidaciones.', icon: '●' },
     { id: 'permisoProduccion', title: 'Producción', description: 'Lotes, recetas y operación diaria.', icon: '△' },
     { id: 'permisoCostos', title: 'Costos', description: 'Costeo, rentabilidad y reportes.', icon: '%' },
+    { id: 'permisoAtencion', title: 'Atención', description: 'Bandeja, conversaciones y respuesta a clientes.', icon: '@' },
+    { id: 'permisoAtencionAdmin', title: 'Supervisión de atención', description: 'Configuración, reasignaciones y métricas del equipo.', icon: '★' },
 ]
 
 const EMPTY_ROLE: Partial<Role> = {
@@ -52,6 +58,8 @@ const EMPTY_ROLE: Partial<Role> = {
     permisoPersonal: false,
     permisoProduccion: false,
     permisoCostos: false,
+    permisoAtencion: false,
+    permisoAtencionAdmin: false,
     jornal: 0,
     valorHoraExtra: 0,
     cicloPago: 'SEMANAL',

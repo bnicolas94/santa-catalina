@@ -94,6 +94,13 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN', 'ADMIN_OPS'],
     },
     {
+        label: 'Atención',
+        href: 'https://atencion.santacatalina.online',
+        icon: '💬',
+        roles: ['ADMIN', 'ATENCION'],
+        permissionKey: 'permisoAtencion',
+    },
+    {
         label: 'Importar',
         href: '/importar',
         icon: '📥',

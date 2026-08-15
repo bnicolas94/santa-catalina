@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["crm"]
+}
+
+enum ConversationStatus {
+  UNASSIGNED
+  OPEN
+  WAITING_CUSTOMER
+  RESOLVED
+  ARCHIVED
+
+  @@schema("crm")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+
+  @@schema("crm")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  LOCATION
+  CONTACT
+  TEMPLATE
+  SYSTEM
+
+  @@schema("crm")
+}
+
+enum MessageStatus {
+  RECEIVED
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+
+  @@schema("crm")
+}
+
+enum AssignmentAction {
+  ASSIGNED
+  TRANSFERRED
+  RELEASED
+  FORCE_RELEASED
+
+  @@schema("crm")
+}
+
+model WhatsAppChannel {
+  id                     String         @id @default(uuid())
+  name                   String
+  active                 Boolean        @default(false)
+  phoneNumberId          String         @unique @map("phone_number_id")
+  displayPhoneNumber     String?        @map("display_phone_number")
+  wabaId                 String         @map("waba_id")
+  businessPortfolioId    String?        @map("business_portfolio_id")
+  graphApiVersion        String         @map("graph_api_version")
+  accessTokenCiphertext  String?        @map("access_token_ciphertext") @db.Text
+  accessTokenIv          String?        @map("access_token_iv")
+  accessTokenTag         String?        @map("access_token_tag")
+  appSecretCiphertext    String?        @map("app_secret_ciphertext") @db.Text
+  appSecretIv            String?        @map("app_secret_iv")
+  appSecretTag           String?        @map("app_secret_tag")
+  webhookVerifyTokenHash String?        @map("webhook_verify_token_hash")
+  connectionStatus       String         @default("PENDING") @map("connection_status")
+  lastValidatedAt        DateTime?      @map("last_validated_at")
+  createdById            String         @map("created_by_id")
+  updatedById            String         @map("updated_by_id")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+  conversations          Conversation[]
+
+  @@index([active])
+  @@map("whatsapp_channels")
+  @@schema("crm")
+}
+
+model Contact {
+  id            String         @id @default(uuid())
+  erpClientId   String?        @map("erp_client_id")
+  waId          String         @unique @map("wa_id")
+  phoneE164     String         @unique @map("phone_e164")
+  displayName   String         @map("display_name")
+  profileName   String?        @map("profile_name")
+  optedOutAt    DateTime?      @map("opted_out_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  conversations Conversation[]
+
+  @@index([erpClientId])
+  @@map("contacts")
+  @@schema("crm")
+}
+
+model Conversation {
+  id                     String                   @id @default(uuid())
+  channelId              String                   @map("channel_id")
+  contactId              String                   @map("contact_id")
+  status                 ConversationStatus       @default(UNASSIGNED)
+  priority               Int                      @default(0)
+  assignedToId           String?                  @map("assigned_to_id")
+  activeById             String?                  @map("active_by_id")
+  lockToken              String?                  @unique @map("lock_token")
+  lockExpiresAt          DateTime?                @map("lock_expires_at")
+  lockVersion            Int                      @default(0) @map("lock_version")
+  unreadCount            Int                      @default(0) @map("unread_count")
+  lastMessageAt          DateTime                 @default(now()) @map("last_message_at")
+  lastInboundAt          DateTime?                @map("last_inbound_at")
+  lastOutboundAt         DateTime?                @map("last_outbound_at")
+  serviceWindowExpiresAt DateTime?                @map("service_window_expires_at")
+  resolvedAt             DateTime?                @map("resolved_at")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  channel                WhatsAppChannel          @relation(fields: [channelId], references: [id])
+  contact                Contact                  @relation(fields: [contactId], references: [id])
+  messages               Message[]
+  assignments            ConversationAssignment[]
+  events                 ConversationEvent[]
+  tags                   ConversationTag[]
+
+  @@unique([channelId, contactId])
+  @@index([status, assignedToId, lastMessageAt])
+  @@index([activeById, lockExpiresAt])
+  @@index([contactId, lastMessageAt])
+  @@map("conversations")
+  @@schema("crm")
+}
+
+model Message {
+  id                 String           @id @default(uuid())
+  conversationId     String           @map("conversation_id")
+  waMessageId        String?          @unique @map("wa_message_id")
+  clientMessageId    String?          @unique @map("client_message_id")
+  direction          MessageDirection
+  type               MessageType
+  status             MessageStatus
+  body               String?          @db.Text
+  mediaId            String?          @map("media_id")
+  mimeType           String?          @map("mime_type")
+  fileName           String?          @map("file_name")
+  caption            String?          @db.Text
+  replyToWaMessageId String?          @map("reply_to_wa_message_id")
+  sentById           String?          @map("sent_by_id")
+  providerTimestamp  DateTime?        @map("provider_timestamp")
+  errorCode          String?          @map("error_code")
+  errorMessage       String?          @map("error_message") @db.Text
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  conversation       Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, providerTimestamp])
+  @@index([status, createdAt])
+  @@map("messages")
+  @@schema("crm")
+}
+
+model ConversationAssignment {
+  id             String           @id @default(uuid())
+  conversationId String           @map("conversation_id")
+  fromAgentId    String?          @map("from_agent_id")
+  toAgentId      String?          @map("to_agent_id")
+  action         AssignmentAction
+  reason         String?
+  performedById  String           @map("performed_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([toAgentId, createdAt])
+  @@map("conversation_assignments")
+  @@schema("crm")
+}
+
+model ConversationEvent {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  type           String
+  actorId        String?      @map("actor_id")
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("conversation_events")
+  @@schema("crm")
+}
+
+model Tag {
+  id            String            @id @default(uuid())
+  name          String            @unique
+  color         String
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  conversations ConversationTag[]
+
+  @@map("tags")
+  @@schema("crm")
+}
+
+model ConversationTag {
+  conversationId String       @map("conversation_id")
+  tagId          String       @map("tag_id")
+  addedById      String       @map("added_by_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, tagId])
+  @@map("conversation_tags")
+  @@schema("crm")
+}
+
+model QuickReply {
+  id          String   @id @default(uuid())
+  shortcut    String   @unique
+  title       String
+  body        String   @db.Text
+  active      Boolean  @default(true)
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([active, title])
+  @@map("quick_replies")
+  @@schema("crm")
+}
+
+model WebhookReceipt {
+  id               String    @id @default(uuid())
+  providerEventKey String    @unique @map("provider_event_key")
+  payloadHash      String    @map("payload_hash")
+  receivedAt       DateTime  @default(now()) @map("received_at")
+  processedAt      DateTime? @map("processed_at")
+  attempts         Int       @default(0)
+  lastError        String?   @map("last_error") @db.Text
+
+  @@index([processedAt, receivedAt])
+  @@map("webhook_receipts")
+  @@schema("crm")
+}
