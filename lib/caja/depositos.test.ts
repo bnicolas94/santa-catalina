@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calcularDiferenciaDeposito, validarMontoDeposito, validarObservacionesDiferencia } from './depositos'
+import {
+    calcularDiferenciaDeposito,
+    esDeclaracionDepositoConfigurada,
+    validarMontoDeposito,
+    validarObservacionesDiferencia,
+} from './depositos'
 
 test('calcula faltantes y sobrantes con precisión monetaria', () => {
     assert.equal(calcularDiferenciaDeposito(1_110_000, 1_002_000), -108_000)
@@ -26,4 +31,25 @@ test('exige observación cuando existe una diferencia', () => {
     assert.equal(validarObservacionesDiferencia(0, ''), null)
     assert.equal(validarObservacionesDiferencia(-108_000, 'Faltante al contar'), 'Faltante al contar')
     assert.throws(() => validarObservacionesDiferencia(-1, ''), /observación/)
+})
+
+test('reconoce el formulario antiguo como una declaración de depósito', () => {
+    const config = {
+        habilitarDeposito: true,
+        conceptoDeposito: 'Depósito Diario Local',
+        cajaDepositoId: 'local',
+    }
+
+    assert.equal(esDeclaracionDepositoConfigurada({
+        tipo: 'ingreso',
+        concepto: 'Depósito Diario Local',
+        medioPago: 'efectivo',
+        cajaOrigen: 'local',
+    }, config), true)
+    assert.equal(esDeclaracionDepositoConfigurada({
+        tipo: 'egreso',
+        concepto: 'Depósito Diario Local',
+        medioPago: 'efectivo',
+        cajaOrigen: 'local',
+    }, config), false)
 })

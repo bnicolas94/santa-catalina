@@ -14,6 +14,24 @@ export function calcularDiferenciaDeposito(montoDeclarado: number, montoReal: nu
     return redondearMonto(montoReal - montoDeclarado)
 }
 
+export function esDeclaracionDepositoConfigurada(input: {
+    tipo: unknown
+    concepto: unknown
+    medioPago: unknown
+    cajaOrigen: unknown
+}, config: {
+    habilitarDeposito: boolean
+    conceptoDeposito: string
+    cajaDepositoId: string
+} | undefined): boolean {
+    if (!config?.habilitarDeposito) return false
+
+    return input.tipo === 'ingreso'
+        && input.medioPago === 'efectivo'
+        && input.concepto === config.conceptoDeposito
+        && input.cajaOrigen === config.cajaDepositoId
+}
+
 export function validarObservacionesDiferencia(diferencia: number, observaciones: unknown): string | null {
     const texto = typeof observaciones === 'string' ? observaciones.trim() : ''
     if (diferencia !== 0 && texto.length < 5) {

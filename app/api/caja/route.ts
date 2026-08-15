@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { CajaService } from '@/lib/services/caja.service'
 import { esMovimientoGestionadoPorRRHH } from '@/lib/caja/movimientosProtegidos'
+import { esDeclaracionDepositoConfigurada } from '@/lib/caja/depositos'
+import { leerConfigDepositos } from '@/lib/caja/configDepositos'
 
 // ─── Helpers de Autorización ─────────────────────────────────────────────────
 
@@ -150,6 +152,31 @@ export async function POST(request: Request) {
         const numericMonto = parseFloat(monto)
         if (isNaN(numericMonto)) {
             return NextResponse.json({ error: 'El monto debe ser un número válido' }, { status: 400 })
+        }
+
+        // Compatibilidad con pestañas abiertas antes de incorporar el circuito de
+        // validación. El formulario antiguo enviaba el depósito a /api/caja como
+        // un ingreso común. El servidor lo reconduce al flujo controlado para que
+        // siempre quede pendiente de validación administrativa.
+        const ubicacionTipo = String((session?.user as any)?.ubicacionTipo || '').toUpperCase()
+        const configDepositos = await leerConfigDepositos()
+        const configUbicacion = configDepositos[ubicacionTipo]
+        if (userRol !== 'ADMIN' && esDeclaracionDepositoConfigurada({
+            tipo,
+            concepto,
+            medioPago: medioPago || 'efectivo',
+            cajaOrigen,
+        }, configUbicacion)) {
+            const deposito = await CajaService.registrarDeposito({
+                montoDeclarado: numericMonto,
+                cajaOrigen: configUbicacion.cajaDepositoId,
+                concepto: configUbicacion.conceptoDeposito,
+                declaradoPorId: (session?.user as any)?.id,
+                ubicacionTipo,
+                fecha,
+            })
+
+            return NextResponse.json(deposito, { status: 201 })
         }
 
         // Rendición de chofer: buscar o crear rendición del día
