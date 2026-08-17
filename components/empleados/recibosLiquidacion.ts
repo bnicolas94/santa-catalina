@@ -177,6 +177,22 @@ function tablaConceptos(recibo: DatosReciboLiquidacion) {
     return `<table class="tabla-detalle"><thead><tr><th>Concepto</th><th>Haberes</th><th>Descuentos</th></tr></thead><tbody>${filas || '<tr><td colspan="3">Sin conceptos detallados</td></tr>'}</tbody><tfoot><tr><td>Totales</td><td>$${dinero(totalHaberes)}</td><td>$${dinero(totalDescuentos)}</td></tr><tr class="neto"><td colspan="2">Total neto recibido</td><td>$${dinero(recibo.totalNeto)}</td></tr></tfoot></table>`
 }
 
+export function contenidoReciboFinalRenuncia(recibo: DatosReciboLiquidacion): string | null {
+    const calc = datosCalculados(recibo)
+    const tipoEgreso = String(calc.desglose.tipoEgreso || '').trim().toUpperCase()
+    if (!calc.esFinal || tipoEgreso !== 'RENUNCIA') return null
+
+    const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
+    const dni = recibo.empleado.dni || '________________'
+
+    return `
+        <div class="titulo-especial"><h2>Liquidación final por renuncia</h2></div>
+        <p class="declaracion-renuncia">Quien suscribe, <strong>${escaparHtml(nombre)}</strong>, con DNI <strong>${escaparHtml(dni)}</strong>, manifiesta haber recibido a su entera satisfacción la cantidad de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}), misma es entregada por Eliana Melisa Bassi en efectivo, por concepto de tareas realizadas en Sandwicheria Santa Catalina a la fecha.</p>
+        ${tablaConceptos(recibo)}
+        <p class="clausula-renuncia">Por la que sirva el presente como recibo mas amplio y eficaz que en derecho proceda, no reservándome acción legal alguna por ejercer.</p>
+        <p class="recibi">Recibí</p>`
+}
+
 function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
     const especial = contenidoEspecialClasico(recibo)
     if (especial) return especial
@@ -194,10 +210,13 @@ function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
 
 function reciboHtml(recibo: DatosReciboLiquidacion, modelo: ModeloRecibo, logo: string, watermark: string, pageBreak: boolean) {
     const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
-    const contenido = modelo === 'A'
-        ? `<div class="texto">${cuerpoModeloA(recibo)}</div>`
-        : `<div class="encabezado-detalle"><span>RECIBO DE PAGO</span><strong>${escaparHtml(recibo.periodo)}</strong></div>${recibo.licenciaNombre ? `<p class="aviso">Incluye licencia: ${escaparHtml(recibo.licenciaNombre)}</p>` : ''}${tablaConceptos(recibo)}<p class="en-letras">Son pesos ${formatCurrencyToWords(numero(recibo.totalNeto))}.</p>`
-    return `<section class="recibo ${pageBreak ? 'salto' : ''}"><img src="${watermark}" class="watermark" alt=""><header><img src="${logo}" alt="Santa Catalina"><p>Berazategui, ${fechaLarga(recibo.fechaImpresion || recibo.fechaGeneracion)}</p></header><main>${contenido}</main><footer><div class="firma">Firma</div><div>Aclaración: ${escaparHtml(nombre)}</div><div>D.N.I: ${escaparHtml(recibo.empleado.dni || '')}</div></footer></section>`
+    const contenidoRenuncia = contenidoReciboFinalRenuncia(recibo)
+    const contenido = contenidoRenuncia
+        ? `<div class="texto texto-renuncia">${contenidoRenuncia}</div>`
+        : modelo === 'A'
+            ? `<div class="texto">${cuerpoModeloA(recibo)}</div>`
+            : `<div class="encabezado-detalle"><span>RECIBO DE PAGO</span><strong>${escaparHtml(recibo.periodo)}</strong></div>${recibo.licenciaNombre ? `<p class="aviso">Incluye licencia: ${escaparHtml(recibo.licenciaNombre)}</p>` : ''}${tablaConceptos(recibo)}<p class="en-letras">Son pesos ${formatCurrencyToWords(numero(recibo.totalNeto))}.</p>`
+    return `<section class="recibo ${contenidoRenuncia ? 'recibo-renuncia' : ''} ${pageBreak ? 'salto' : ''}"><img src="${watermark}" class="watermark" alt=""><header><img src="${logo}" alt="Santa Catalina"><p>Berazategui, ${fechaLarga(recibo.fechaImpresion || recibo.fechaGeneracion)}</p></header><main>${contenido}</main><footer><div class="firma">Firma</div><div>Aclaración: ${escaparHtml(nombre)}</div><div>D.N.I: ${escaparHtml(recibo.empleado.dni || '')}</div></footer></section>`
 }
 
 export async function imprimirRecibosLiquidacion(recibos: DatosReciboLiquidacion[], modelo: ModeloRecibo, ventanaReservada?: Window | null) {
@@ -216,6 +235,7 @@ export async function imprimirRecibosLiquidacion(recibos: DatosReciboLiquidacion
         .recibo{border:1px solid #ddd;min-height:245mm;padding:34px 38px;position:relative;overflow:hidden}.salto{page-break-after:always}.watermark{position:absolute;width:78%;max-width:500px;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.3;z-index:0}.recibo>*:not(.watermark){position:relative;z-index:1}
         header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:42px}header img{height:60px;max-width:170px;object-fit:contain}header p{margin:0;text-align:right}.texto{text-align:justify;line-height:1.65;margin-top:35px}.titulo-especial{text-align:center;margin-bottom:24px}.titulo-especial h2{text-decoration:underline;margin:0 0 4px}.titulo-especial p{font-size:10pt;margin:0}
         .tabla-especial,.tabla-detalle{width:100%;border-collapse:collapse;margin:24px 0;background:rgba(255,255,255,.72)}th,td{border:1px solid #555;padding:8px;text-align:right}.tabla-especial th:first-child,.tabla-especial td:first-child,.tabla-detalle th:first-child,.tabla-detalle td:first-child{text-align:left}.tabla-detalle th{background:#222;color:#fff;text-transform:uppercase;font-size:9pt;letter-spacing:.04em}.tabla-detalle th:first-child{width:58%}.tabla-detalle td small{display:block;color:#555;margin-top:3px}.tabla-detalle tfoot{font-weight:700}.tabla-detalle .neto{font-size:13pt;background:#eee}.encabezado-detalle{border-left:5px solid #dc1f3d;padding:10px 14px;margin-bottom:24px;display:flex;flex-direction:column;gap:4px}.encabezado-detalle span{color:#dc1f3d;font-size:10pt;font-weight:800;letter-spacing:.08em}.encabezado-detalle strong{font-size:15pt}.aviso{background:#f3f4f6;padding:10px 12px}.en-letras{font-family:'Times New Roman',serif;font-style:italic;margin-top:24px}
+        .texto-renuncia{margin-top:0}.declaracion-renuncia,.clausula-renuncia{text-align:justify}.clausula-renuncia{margin-top:28px}.recibi{font-weight:700;margin-top:28px}.recibo-renuncia footer{margin-top:48px}
         footer{display:flex;flex-direction:column;align-items:flex-end;gap:14px;margin-top:75px}footer>div{width:250px}.firma{border-top:1px solid #111;text-align:center;padding-top:5px}.detalle-observacion{font-size:10pt}@media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
     </style></head><body>${paginas}<script>window.onload=()=>{const i=[...document.images];Promise.all(i.map(x=>x.complete?Promise.resolve():new Promise(r=>{x.onload=r;x.onerror=r}))).then(()=>window.print())}<\/script></body></html>`)
     ventana.document.close()
