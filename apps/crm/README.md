@@ -45,6 +45,8 @@ Si el CRM comparte la base productiva del ERP, su `DATABASE_URL` debe usar
 ```text
 GET  /api/conversations
 GET  /api/conversations/{id}
+GET  /api/conversations/{id}/customer-context
+POST /api/conversations/{id}/customer-context
 POST /api/conversations/{id}/claim
 POST /api/conversations/{id}/heartbeat
 POST /api/conversations/{id}/release
@@ -63,6 +65,12 @@ POST /api/webhooks/whatsapp
 `claim` entrega un `lockToken`. `heartbeat`, `release` y `messages` requieren ese
 token; el lease dura 75 segundos. Cada envío debe incluir un
 `clientMessageId` único para que un reintento no duplique el mensaje.
+
+`customer-context` consulta el ERP con la misma sesión segura del agente. Si el
+teléfono coincide con un único cliente activo, conserva el vínculo en
+`Contact.erpClientId`; si existen duplicados, devuelve candidatos para que el
+operador elija. El panel muestra dirección, zona, segmento y los cinco pedidos
+más recientes sin habilitar acceso directo del CRM al esquema `public`.
 
 La pantalla `/settings` es exclusiva para administradores. Muestra el estado de
 la clave maestra y de cada secreto sin devolver su contenido, permite conservar

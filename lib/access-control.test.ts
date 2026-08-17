@@ -24,6 +24,17 @@ test('sólo ADMIN puede administrar roles, incluso con permisoPersonal', () => {
     assert.equal(canAccessPath('/api/empleados/roles', token), false)
 })
 
+test('las APIs internas del CRM exigen permisos de Atención', () => {
+    assert.equal(
+        canAccessPath('/api/internal/crm/customers/resolve', { rol: 'ATENCION', permisos: { permisoAtencion: true } }),
+        true,
+    )
+    assert.equal(
+        canAccessPath('/api/internal/crm/customers/resolve', { rol: 'OPERARIO', permisos: { permisoProduccion: true } }),
+        false,
+    )
+})
+
 test('la coincidencia usa límites de segmento y no prefijos parciales', () => {
     assert.equal(getAccessRule('/api/empleados-malicioso'), undefined)
     assert.equal(getAccessRule('/productos-copia'), undefined)

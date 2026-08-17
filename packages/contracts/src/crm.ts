@@ -77,3 +77,40 @@ export interface ApiErrorResponse {
   code: string
   correlationId?: string
 }
+
+export type ErpCustomerMatchQuality = 'EXACT' | 'NATIONAL'
+
+export interface ErpCustomerCandidate {
+  id: string
+  commercialName: string
+  contactName?: string | null
+  phone?: string | null
+  address?: string | null
+  zone?: string | null
+  locality?: string | null
+  matchQuality: ErpCustomerMatchQuality
+}
+
+export interface ErpOrderSummary {
+  id: string
+  orderedAt: string
+  deliveryAt: string
+  status: string
+  totalUnits: number
+  totalPacks: number
+  totalAmount: number
+  paid: boolean
+}
+
+export interface ErpCustomerDetails extends Omit<ErpCustomerCandidate, 'matchQuality'> {
+  segment?: string | null
+  active: boolean
+  orderCount: number
+  recentOrders: ErpOrderSummary[]
+}
+
+export type CustomerContextResponse =
+  | { status: 'LINKED'; customer: ErpCustomerDetails; linkedAutomatically: boolean }
+  | { status: 'CANDIDATES'; candidates: ErpCustomerCandidate[] }
+  | { status: 'NOT_FOUND'; candidates: [] }
+  | { status: 'UNAVAILABLE'; candidates: []; message: string }

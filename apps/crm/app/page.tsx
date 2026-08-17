@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationStatus, CrmSessionUser } from '@santa-catalina/contracts'
+import type { ConversationStatus, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate } from '@santa-catalina/contracts'
 
 type ApiTag = { id: string; name: string; color: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
@@ -34,6 +34,15 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
 function initials(name: string) { return name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'SC' }
 function agentName(id?: string | null) { return id ? DEMO_AGENT_NAMES[id] || 'Otro agente' : '' }
 function formatTime(value: string) { return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function formatDate(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(value)) }
+function formatMoney(value: number) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) }
+function orderStatus(value: string) {
+  const normalized = value.toLowerCase()
+  if (normalized === 'entregado') return 'Entregado'
+  if (normalized === 'cancelado') return 'Cancelado'
+  if (normalized === 'en_preparacion' || normalized === 'preparando') return 'En preparación'
+  return normalized === 'pendiente' ? 'Pendiente' : value
+}
 function serviceWindow(value: string | null) {
   if (!value) return { expired: true, text: 'Ventana no disponible' }
   const remaining = new Date(value).getTime() - Date.now()
@@ -60,6 +69,9 @@ export default function AttentionWorkspace() {
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
   const [showContext, setShowContext] = useState(true)
+  const [customerContext, setCustomerContext] = useState<CustomerContextResponse | null>(null)
+  const [contextLoading, setContextLoading] = useState(false)
+  const [contextBusy, setContextBusy] = useState(false)
   const [mobileChat, setMobileChat] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -76,6 +88,22 @@ export default function AttentionWorkspace() {
     Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
   }, [refreshList])
   useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 10_000); return () => window.clearInterval(timer) }, [refreshList])
+
+  const refreshCustomerContext = useCallback(async (conversationId: string) => {
+    setContextLoading(true)
+    try {
+      setCustomerContext(await api<CustomerContextResponse>(`/api/conversations/${conversationId}/customer-context`))
+    } catch {
+      setCustomerContext({ status: 'UNAVAILABLE', candidates: [], message: 'El contexto comercial no está disponible por el momento.' })
+    } finally {
+      setContextLoading(false)
+    }
+  }, [])
+  useEffect(() => {
+    if (!activeId) return
+    setCustomerContext(null)
+    void refreshCustomerContext(activeId)
+  }, [activeId, refreshCustomerContext])
 
   const acquire = useCallback(async (conversationId: string) => {
     const result = await api<{ lock: Lock }>(`/api/conversations/${conversationId}/claim`, { method: 'POST', body: '{}' })
@@ -118,6 +146,21 @@ export default function AttentionWorkspace() {
     catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo tomar la conversación.'); await refreshList() }
     finally { setBusy(false) }
   }
+  const linkCustomer = async (candidate: ErpCustomerCandidate) => {
+    if (!active) return
+    setContextBusy(true)
+    try {
+      const linked = await api<CustomerContextResponse>(`/api/conversations/${active.id}/customer-context`, {
+        method: 'POST',
+        body: JSON.stringify({ erpClientId: candidate.id }),
+      })
+      setCustomerContext(linked)
+    } catch (cause) {
+      setCustomerContext({ status: 'UNAVAILABLE', candidates: [], message: cause instanceof Error ? cause.message : 'No se pudo vincular el cliente.' })
+    } finally {
+      setContextBusy(false)
+    }
+  }
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault(); const text = draft.trim(); if (!text || !detail || !lock) return
     setBusy(true); setError(null)
@@ -153,6 +196,40 @@ export default function AttentionWorkspace() {
       <div className="messageCanvas"><div className="dateDivider"><span>Conversación</span></div>{detail?.messages.map(m => m.direction === 'INTERNAL' ? <div className="systemNote" key={m.id}><span><Icon name="check" size={14} /></span>{m.body} · {formatTime(m.createdAt)}</div> : <div className={`messageRow ${m.direction === 'OUTBOUND' ? 'messageRowOut' : ''}`} key={m.id}><div className={`messageBubble ${m.direction === 'OUTBOUND' ? 'messageOut' : 'messageIn'}`}>{m.direction === 'OUTBOUND' && <span className="messageSender">{agentName(m.sentById) || 'Atención'}</span>}<p>{m.body || 'Mensaje sin texto'}</p><span className="messageTime">{formatTime(m.providerTimestamp || m.createdAt)}{m.direction === 'OUTBOUND' && <b className={m.status === 'READ' ? 'readChecks' : ''}>✓✓</b>}</span></div></div>)}</div>
       <div className="composerArea"><div className={`serviceWindow ${service.expired ? 'serviceWindowExpired' : ''}`}><Icon name="clock" size={14} /><span>{service.text}</span></div><form className={`composer ${!canReply ? 'composerDisabled' : ''}`} onSubmit={sendMessage}><button type="button" aria-label="Adjuntar archivo" disabled={!canReply}><Icon name="attach" /></button><textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={assignedToOther ? `Respuesta bloqueada por ${agentName(active.assignedToId)}` : !active.assignedToId ? 'Tomá la conversación para responder' : active.status === 'RESOLVED' ? 'Conversación resuelta' : !lock ? 'Obteniendo control seguro…' : 'Escribí un mensaje…'} rows={1} disabled={!canReply || busy} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} /><button type="button" aria-label="Agregar emoji" disabled={!canReply}><Icon name="smile" /></button><button className="sendButton" type="submit" aria-label="Enviar mensaje" disabled={!canReply || !draft.trim() || busy}><Icon name="send" size={18} /></button></form><div className="composerHints"><button disabled={!canReply}>/ respuestas rápidas</button><span>Enter para enviar · Shift + Enter para salto</span></div></div>
     </section>
-    {showContext && <aside className="contextPanel"><header><span>Información del cliente</span><button className="iconButton" onClick={() => setShowContext(false)}>×</button></header><div className="customerHero"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#67717f'} /><h3>{active.contact.displayName}</h3><p>{active.contact.profileName || 'Contacto de WhatsApp'}</p><div className="customerTags">{active.tags.map(tag => <span key={tag.id}>{tag.name}</span>)}</div></div><section className="detailSection"><div className="sectionLabel"><span>Contacto</span><button>Vincular al ERP</button></div><dl><div><dt>WhatsApp</dt><dd>{active.contact.phoneE164}</dd></div><div><dt>Asignación</dt><dd>{agentName(active.assignedToId) || 'Sin asignar'}</dd></div><div><dt>Origen</dt><dd>CRM</dd></div></dl></section><section className="detailSection"><div className="sectionLabel"><span>Pedidos</span><button>Vincular cliente</button></div><div className="noOrder"><Icon name="bag" /><span>Integración ERP pendiente</span></div></section><section className="detailSection notesSection"><div className="sectionLabel"><span>Seguridad operativa</span></div><div className="internalNote"><Icon name="note" size={16} /><p>El editor se habilita solamente mientras este agente conserva el lease activo.</p><span>Renovación automática cada 25 segundos</span></div></section><footer className="contextFooter"><button disabled>Transferir</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer></aside>}
+    {showContext && <aside className="contextPanel">
+      <header><span>Información del cliente</span><button className="iconButton" onClick={() => setShowContext(false)}>×</button></header>
+      <div className="customerHero">
+        <Avatar name={customerContext?.status === 'LINKED' ? customerContext.customer.commercialName : active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#67717f'} />
+        <h3>{customerContext?.status === 'LINKED' ? customerContext.customer.commercialName : active.contact.displayName}</h3>
+        <p>{customerContext?.status === 'LINKED' ? customerContext.customer.contactName || 'Cliente del ERP' : active.contact.profileName || 'Contacto de WhatsApp'}</p>
+        <div className="customerTags">
+          {customerContext?.status === 'LINKED' && <span className="erpTag">Cliente ERP</span>}
+          {active.tags.map(tag => <span key={tag.id}>{tag.name}</span>)}
+        </div>
+      </div>
+      <section className="detailSection">
+        <div className="sectionLabel"><span>Contacto</span><button onClick={() => refreshCustomerContext(active.id)} disabled={contextLoading}>{contextLoading ? 'Buscando…' : 'Actualizar'}</button></div>
+        {contextLoading && !customerContext ? <div className="contextSkeleton"><i /><i /><i /></div> : customerContext?.status === 'LINKED' ? <dl>
+          <div><dt>WhatsApp</dt><dd>{active.contact.phoneE164}</dd></div>
+          <div><dt>Dirección</dt><dd>{customerContext.customer.address || 'Sin informar'}</dd></div>
+          <div><dt>Localidad</dt><dd>{customerContext.customer.locality || 'Sin informar'}</dd></div>
+          <div><dt>Zona</dt><dd>{customerContext.customer.zone || 'Sin informar'}</dd></div>
+          <div><dt>Segmento</dt><dd>{customerContext.customer.segment || 'General'}</dd></div>
+        </dl> : <dl>
+          <div><dt>WhatsApp</dt><dd>{active.contact.phoneE164}</dd></div>
+          <div><dt>Asignación</dt><dd>{agentName(active.assignedToId) || 'Sin asignar'}</dd></div>
+          <div><dt>Origen</dt><dd>WhatsApp</dd></div>
+        </dl>}
+        {customerContext?.status === 'CANDIDATES' && <div className="candidateBox"><strong>Encontramos más de un cliente</strong><p>Elegí el comercio correcto para evitar cruces.</p>{customerContext.candidates.map(candidate => <button key={candidate.id} onClick={() => linkCustomer(candidate)} disabled={contextBusy}><span>{candidate.commercialName}</span><small>{candidate.phone || candidate.address || 'Sin teléfono registrado'}</small></button>)}</div>}
+        {customerContext?.status === 'NOT_FOUND' && <div className="contextNotice"><strong>Contacto nuevo</strong><span>No coincide con ningún cliente activo del ERP.</span></div>}
+        {customerContext?.status === 'UNAVAILABLE' && <div className="contextNotice contextNoticeWarning"><strong>ERP temporalmente no disponible</strong><span>{customerContext.message}</span></div>}
+      </section>
+      <section className="detailSection">
+        <div className="sectionLabel"><span>Pedidos recientes</span>{customerContext?.status === 'LINKED' && <b>{customerContext.customer.orderCount} históricos</b>}</div>
+        {customerContext?.status === 'LINKED' && customerContext.customer.recentOrders.length > 0 ? <div className="orderList">{customerContext.customer.recentOrders.map(order => <div className="orderCard" key={order.id}><span className="orderIcon"><Icon name="bag" size={16} /></span><div><strong>{formatDate(order.deliveryAt)} · {orderStatus(order.status)}</strong><span>{order.totalPacks} packs · {order.totalUnits} unidades</span></div><div className="orderAmount"><strong>{formatMoney(order.totalAmount)}</strong><span>{order.paid ? 'Abonado' : 'Pendiente'}</span></div></div>)}</div> : <div className="noOrder"><Icon name="bag" /><span>{customerContext?.status === 'LINKED' ? 'Todavía no tiene pedidos' : 'Vinculá el cliente para ver pedidos'}</span></div>}
+      </section>
+      <section className="detailSection notesSection"><div className="sectionLabel"><span>Seguridad operativa</span></div><div className="internalNote"><Icon name="note" size={16} /><p>El editor se habilita solamente mientras este agente conserva el lease activo.</p><span>Renovación automática cada 25 segundos</span></div></section>
+      <footer className="contextFooter"><button disabled>Transferir</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer>
+    </aside>}
   </main>
 }

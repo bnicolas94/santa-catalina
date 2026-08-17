@@ -186,6 +186,10 @@ Implementado:
   entorno, URL de webhook y bloqueo de activación incompleta.
 - Validación de solo lectura contra Meta que confirma token, WABA y Phone Number
   ID antes de permitir activar un canal.
+- APIs internas de sólo lectura para resolver clientes por teléfono y consultar
+  su resumen comercial y pedidos recientes.
+- Vinculación automática conservadora con el ERP, selección asistida ante
+  teléfonos duplicados y auditoría de cada asociación.
 - Pruebas unitarias de leases, cifrado, firmas y parsing de eventos.
 - Seed repetible de cinco conversaciones ficticias, aisladas de los clientes ERP.
 - Backup previo consistente y de solo lectura como condición de despliegue.

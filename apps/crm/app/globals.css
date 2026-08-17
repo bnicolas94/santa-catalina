@@ -212,22 +212,46 @@ button { color: inherit; }
 .customerHero p { color: var(--muted); font-size: 9px; margin: 0; }
 .customerTags { margin-top: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 .customerTags span { padding: 4px 7px; background: #f3efe6; border-radius: 7px; font-size: 7px; color: #65645f; }
+.customerTags .erpTag { background: #e2f5eb; color: #24785c; font-weight: 800; }
 .detailSection { padding: 14px; border-bottom: 1px solid var(--line); }
 .sectionLabel { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .sectionLabel span { color: #99968f; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .sectionLabel button { border: 0; background: transparent; color: var(--red); font-size: 8px; cursor: pointer; }
+.sectionLabel button:disabled { color: #aaa69d; cursor: default; }
+.sectionLabel b { color: #77756f; font-size: 8px; font-weight: 700; }
 .detailSection dl { margin: 0; }
 .detailSection dl div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 9px; }
 .detailSection dt { color: #92918b; }
 .detailSection dd { margin: 0; color: #44464c; text-align: right; font-weight: 600; }
 .orderCard { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fbfaf6; }
+.orderList { display: flex; flex-direction: column; gap: 7px; }
 .orderIcon { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: var(--red); background: #f9e7e7; }
 .orderCard > div { display: flex; flex-direction: column; }
+.orderCard > div { min-width: 0; }
 .orderCard strong { font-size: 9px; }
 .orderCard span { color: var(--muted); font-size: 7px; margin-top: 2px; }
 .orderAmount { margin-left: auto; text-align: right; align-items: flex-end; }
+.orderAmount { flex: 0 0 auto; }
 .orderAmount span { color: var(--green); }
 .noOrder { height: 52px; border: 1px dashed #ddd7ca; border-radius: 12px; color: #aaa69d; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 9px; }
+.contextSkeleton { display: flex; flex-direction: column; gap: 8px; }
+.contextSkeleton i { display: block; height: 9px; border-radius: 8px; background: linear-gradient(90deg, #f1eee7, #faf8f3, #f1eee7); background-size: 200% 100%; animation: contextShimmer 1.2s linear infinite; }
+.contextSkeleton i:nth-child(2) { width: 82%; }
+.contextSkeleton i:nth-child(3) { width: 64%; }
+@keyframes contextShimmer { to { background-position: -200% 0; } }
+.contextNotice { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; padding: 10px; border: 1px dashed #d8d2c6; border-radius: 11px; background: #fbfaf6; }
+.contextNotice strong { color: #55565b; font-size: 9px; }
+.contextNotice span { color: #8b8982; font-size: 8px; line-height: 1.4; }
+.contextNoticeWarning { border-color: #efcf99; background: #fff8e9; }
+.contextNoticeWarning strong { color: #8c651e; }
+.candidateBox { display: flex; flex-direction: column; gap: 6px; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); }
+.candidateBox > strong { color: #4d4e53; font-size: 9px; }
+.candidateBox > p { margin: -2px 0 3px; color: #8d8b84; font-size: 8px; line-height: 1.4; }
+.candidateBox button { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 9px; border: 1px solid #e2d9cd; border-radius: 10px; background: #fff; text-align: left; cursor: pointer; }
+.candidateBox button:hover { border-color: #d9aeb2; background: #fff8f7; }
+.candidateBox button:disabled { opacity: .55; cursor: wait; }
+.candidateBox button span { color: var(--wine); font-size: 9px; font-weight: 750; }
+.candidateBox button small { color: #8d8b84; font-size: 7px; }
 .notesSection { flex: 1; }
 .internalNote { padding: 10px; border-left: 3px solid #e4a83c; border-radius: 4px 10px 10px 4px; background: #fff8e9; color: #796443; }
 .internalNote > svg { float: left; margin-right: 6px; }
@@ -237,7 +261,11 @@ button { color: inherit; }
 .contextFooter button { flex: 1; min-height: 34px; border: 1px solid var(--line); background: white; border-radius: 9px; font-size: 8px; font-weight: 700; cursor: pointer; }
 .contextFooter .resolveButton { background: var(--wine); color: white; border-color: var(--wine); display: flex; align-items: center; justify-content: center; gap: 5px; }
 
-@media (max-width: 1260px) {
+@media (max-width: 1340px) {
+  .workspaceShell { grid-template-columns: 62px 200px minmax(290px, 330px) minmax(370px, 1fr) 280px; }
+}
+
+@media (max-width: 1200px) {
   .workspaceShell { grid-template-columns: 62px 210px minmax(300px, 350px) 1fr; }
   .contextPanel { display: none; }
 }
