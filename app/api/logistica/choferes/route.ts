@@ -3,14 +3,15 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
     try {
-        // Buscamos empleados con el rol "LOGISTICA"
-        // Nota: En la base de datos el nombre del rol es "LOGISTICA" (en mayúsculas)
+        // Los choferes se identifican por el permiso del módulo. El nombre
+        // histórico se conserva para cuentas que aún no tienen rol vinculado.
         const choferes = await prisma.empleado.findMany({
             where: {
-                rolRel: {
-                    nombre: 'LOGISTICA'
-                },
-                activo: true
+                activo: true,
+                OR: [
+                    { rolRel: { permisoLogistica: true } },
+                    { rol: 'LOGISTICA', rolRel: null },
+                ],
             },
             include: {
                 documentos: {

@@ -87,21 +87,34 @@ export default function DashboardPage() {
             const user = session.user as any
             const rol = user.rol
             const permisos = user.permisos || {}
+            const usaPermisosDinamicos = user.permisos != null
             const ubicacionTipo = String(user.ubicacionTipo || '').toUpperCase()
 
             if (rol !== 'ADMIN' && !permisos.permisoDashboard) {
                 if (ubicacionTipo === 'LOCAL') {
                     router.replace('/caja')
-                } else if (permisos.permisoProduccion || rol === 'COORD_PROD' || rol === 'OPERARIO') {
+                } else if (permisos.permisoProduccion || (!usaPermisosDinamicos && (rol === 'COORD_PROD' || rol === 'OPERARIO'))) {
                     router.replace('/produccion')
-                } else if (permisos.permisoStock || rol === 'ADMIN_OPS') {
+                } else if (permisos.permisoCompras) {
                     router.replace('/compras')
+                } else if (permisos.permisoStock) {
+                    router.replace('/productos')
+                } else if (permisos.permisoPedidos) {
+                    router.replace('/pedidos')
+                } else if (permisos.permisoClientes) {
+                    router.replace('/clientes')
+                } else if (permisos.permisoFlota) {
+                    router.replace('/logistica/flota')
+                } else if (permisos.permisoLogistica) {
+                    router.replace('/logistica')
                 } else if (permisos.permisoCaja) {
                     router.replace('/caja')
+                } else if (permisos.permisoCostos) {
+                    router.replace('/costos')
+                } else if (permisos.permisoReportes) {
+                    router.replace('/reportes')
                 } else if (permisos.permisoPersonal) {
                     router.replace('/empleados')
-                } else if (rol === 'LOGISTICA') {
-                    router.replace('/logistica')
                 } else {
                     router.replace('/login')
                 }

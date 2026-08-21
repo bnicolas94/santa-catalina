@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { tienePermisoEnSesion } from "@/lib/auth/permisosSesion";
 
 export interface ExcelLocalRow {
     rowId: number;
@@ -30,9 +31,8 @@ export async function POST(req: NextRequest) {
         if (!session || !session.user) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const user = session.user as any;
-        if (user.rol !== "ADMIN" && user.rol !== "ADMIN_OPS") {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        if (!tienePermisoEnSesion(session, 'permisoPedidos')) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
         const { rows }: { rows: ExcelLocalRow[] } = await req.json();

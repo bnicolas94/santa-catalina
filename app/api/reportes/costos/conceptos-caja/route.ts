@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { tienePermisoEnSesion } from '@/lib/auth/permisosSesion'
 import { prisma } from '@/lib/prisma'
 import { getGlobalConfig, updateGlobalConfig } from '@/lib/services/reportes'
 
@@ -12,7 +13,7 @@ const CONFIG_KEY = 'conceptos_caja_en_costos'
 export async function GET() {
     try {
         const session = await getServerSession(authOptions)
-        if (!session || (session.user as any).rol !== 'ADMIN') {
+        if (!tienePermisoEnSesion(session, 'permisoReportes') && !tienePermisoEnSesion(session, 'permisoCostos')) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 
@@ -53,7 +54,7 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
         const session = await getServerSession(authOptions)
-        if (!session || (session.user as any).rol !== 'ADMIN') {
+        if ((session?.user as { rol?: string } | undefined)?.rol !== 'ADMIN') {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 

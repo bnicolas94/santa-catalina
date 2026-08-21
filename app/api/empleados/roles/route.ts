@@ -11,13 +11,19 @@ export async function GET() {
 
         // Si no hay roles, podríamos sembrar los básicos
         if (roles.length === 0) {
-            const basicRoles = ['ADMIN', 'COORD_PROD', 'OPERARIO', 'LOGISTICA', 'ADMIN_OPS']
+            const basicRoles = [
+                { nombre: 'ADMIN' },
+                { nombre: 'COORD_PROD', permisoDashboard: true, permisoStock: true, permisoCompras: true, permisoProduccion: true },
+                { nombre: 'OPERARIO', permisoProduccion: true },
+                { nombre: 'LOGISTICA', permisoLogistica: true, permisoFlota: true },
+                { nombre: 'ADMIN_OPS', permisoDashboard: true, permisoStock: true, permisoCompras: true, permisoClientes: true, permisoPedidos: true },
+            ]
             await Promise.all(
                 basicRoles.map(rol =>
                     prisma.rolEmpleado.upsert({
-                        where: { nombre: rol },
+                        where: { nombre: rol.nombre },
                         update: {},
-                        create: { nombre: rol }
+                        create: rol,
                     })
                 )
             )

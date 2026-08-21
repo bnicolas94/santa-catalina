@@ -72,26 +72,28 @@ const menuItems: MenuItem[] = [
         href: '/compras',
         icon: '🛒',
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
-        permissionKey: 'permisoStock',
+        permissionKey: 'permisoCompras',
     },
     {
         label: 'Proveedores',
         href: '/proveedores',
         icon: '🚛',
         roles: ['ADMIN', 'ADMIN_OPS'],
-        permissionKey: 'permisoStock',
+        permissionKey: 'permisoCompras',
     },
     {
         label: 'Clientes',
         href: '/clientes',
         icon: '👥',
         roles: ['ADMIN', 'ADMIN_OPS'],
+        permissionKey: 'permisoClientes',
     },
     {
         label: 'Pedidos',
         href: '/pedidos',
         icon: '🧾',
         roles: ['ADMIN', 'ADMIN_OPS'],
+        permissionKey: 'permisoPedidos',
     },
     {
         label: 'Atención',
@@ -105,18 +107,21 @@ const menuItems: MenuItem[] = [
         href: '/importar',
         icon: '📥',
         roles: ['ADMIN', 'ADMIN_OPS'],
+        permissionKey: 'permisoPedidos',
     },
     {
         label: 'Logística',
         href: '/logistica',
         icon: '🚚',
         roles: ['ADMIN', 'LOGISTICA'],
+        permissionKey: 'permisoLogistica',
     },
     {
         label: 'Flota',
         href: '/logistica/flota',
         icon: '🚐',
         roles: ['ADMIN', 'LOGISTICA'],
+        permissionKey: 'permisoFlota',
     },
     {
         label: 'Costos',
@@ -138,6 +143,7 @@ const menuItems: MenuItem[] = [
         href: '/reportes',
         icon: '📈',
         roles: ['ADMIN'],
+        permissionKey: 'permisoReportes',
     },
     {
         label: 'Empleados',
@@ -170,7 +176,7 @@ export default function Sidebar() {
 
     const userRol = (session?.user as any)?.rol
     const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
-    const permisos = (session?.user as any)?.permisos || {}
+    const permisos = (session?.user as any)?.permisos as Record<string, boolean> | null | undefined
 
     const filteredItems = menuItems.filter(item => {
         // ADMIN siempre ve todo
@@ -185,8 +191,8 @@ export default function Sidebar() {
         }
 
         // Si tiene un permiso específico para esta sección, y está activo, lo dejamos pasar
-        if (item.permissionKey && permisos[item.permissionKey]) {
-            return true
+        if (item.permissionKey && permisos) {
+            return permisos[item.permissionKey] === true
         }
 
         // Fallback a los roles hardcodeados antiguos si no hay permiso dinámico seteado

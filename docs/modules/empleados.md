@@ -35,6 +35,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 1. Se crea el empleado asignándole un **Rol** y un **Turno**.
 2. La configuración salarial sigue una **cascada de prioridad**:
    `Empleado (Config Específica) -> Rol (Valores por Defecto) -> Saldo Base Global`.
+3. El rol también define accesos independientes por módulo. La sesión hereda esas casillas y el middleware aplica el mismo permiso tanto a la página como a sus APIs; `ADMIN` conserva acceso total.
 
 ### B. Ciclo de Asistencia Diaria
 1. El empleado ficha en el reloj biométrico.

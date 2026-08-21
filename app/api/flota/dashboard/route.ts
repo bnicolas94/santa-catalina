@@ -18,7 +18,13 @@ export async function GET() {
       prisma.documentoEmpleado.findMany({
         where: {
           tipoDocumento: 'LICENCIA_CONDUCIR',
-          empleado: { rolRel: { nombre: 'LOGISTICA' }, activo: true }
+          empleado: {
+            activo: true,
+            OR: [
+              { rolRel: { permisoLogistica: true } },
+              { rol: 'LOGISTICA', rolRel: null },
+            ],
+          }
         },
         include: { empleado: true }
       })

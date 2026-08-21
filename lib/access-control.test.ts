@@ -55,8 +55,8 @@ test('Caja queda aislada de usuarios con otros permisos', () => {
     )
 })
 
-test('permisoStock incluye el circuito visible de compras y proveedores', () => {
-    const token = { rol: 'COMPRAS', permisos: { permisoStock: true } }
+test('permisoCompras habilita compras y proveedores sin abrir Caja', () => {
+    const token = { rol: 'COMPRAS', permisos: { permisoCompras: true } }
     assert.equal(canAccessPath('/compras', token), true)
     assert.equal(canAccessPath('/api/compras/cuenta-corriente', token), true)
     assert.equal(canAccessPath('/proveedores', token), true)
@@ -84,7 +84,7 @@ test('la ubicación FABRICA no habilita Caja automáticamente', () => {
 })
 
 test('Compras puede listar cajas de pago sin habilitar la administración de Caja', () => {
-    const token = { rol: 'ADMIN_OPS', permisos: { permisoStock: true } }
+    const token = { rol: 'ADMIN_OPS', permisos: { permisoCompras: true } }
     assert.equal(canAccessPath('/api/compras/cajas', token), true)
     assert.equal(canAccessPath('/api/caja/saldos', token), false)
 })
@@ -138,4 +138,50 @@ test('los roles completos siguen reservados a ADMIN', () => {
     const produccion = { rol: 'OPERARIO', permisos: { permisoProduccion: true } }
     assert.equal(canAccessPath('/api/operaciones/roles', produccion), true)
     assert.equal(canAccessPath('/api/empleados/roles', produccion), false)
+})
+
+test('Flota habilita vehículos, asignaciones y gastos sin abrir Logística', () => {
+    const token = { rol: 'MECANICO', permisos: { permisoFlota: true } }
+    assert.equal(canAccessPath('/logistica/flota/gastos', token), true)
+    assert.equal(canAccessPath('/api/flota/vehiculos', token), true)
+    assert.equal(canAccessPath('/api/logistica/flota/gastos', token), true)
+    assert.equal(canAccessPath('/api/reportes/categorias', token), true)
+    assert.equal(canAccessPath('/logistica/rutas', token), false)
+    assert.equal(canAccessPath('/api/rutas', token), false)
+})
+
+test('Logística habilita rutas y entregas sin conceder gestión de Flota', () => {
+    const token = { rol: 'DESPACHO', permisos: { permisoLogistica: true } }
+    assert.equal(canAccessPath('/logistica/rutas', token), true)
+    assert.equal(canAccessPath('/api/rutas/auto-assign', token), true)
+    assert.equal(canAccessPath('/api/entregas/abc', token), true)
+    assert.equal(canAccessPath('/logistica/flota/gastos', token), false)
+    assert.equal(canAccessPath('/api/logistica/flota/gastos', token), false)
+})
+
+test('Clientes y Pedidos se pueden asignar de forma independiente', () => {
+    const clientes = { permisos: { permisoClientes: true } }
+    const pedidos = { permisos: { permisoPedidos: true } }
+    assert.equal(canAccessPath('/clientes', clientes), true)
+    assert.equal(canAccessPath('/pedidos', clientes), false)
+    assert.equal(canAccessPath('/pedidos', pedidos), true)
+    assert.equal(canAccessPath('/importar', pedidos), true)
+    assert.equal(canAccessPath('/api/importar-pedidos/preview', pedidos), true)
+})
+
+test('Reportes habilita la página y sus fuentes de datos', () => {
+    const token = { permisos: { permisoReportes: true } }
+    assert.equal(canAccessPath('/reportes', token), true)
+    assert.equal(canAccessPath('/api/reportes/rentabilidad', token), true)
+    assert.equal(canAccessPath('/api/reportes/caja', token), true)
+})
+
+test('los permisos dinámicos pueden revocar accesos de nombres históricos', () => {
+    assert.equal(canAccessPath('/logistica', { rol: 'LOGISTICA', permisos: { permisoLogistica: false } }), false)
+    assert.equal(canAccessPath('/compras', { rol: 'ADMIN_OPS', permisos: { permisoCompras: false } }), false)
+})
+
+test('el respaldo por nombre histórico se conserva para cuentas aún no vinculadas', () => {
+    assert.equal(canAccessPath('/logistica', { rol: 'LOGISTICA', permisos: null }), true)
+    assert.equal(canAccessPath('/compras', { rol: 'ADMIN_OPS' }), true)
 })

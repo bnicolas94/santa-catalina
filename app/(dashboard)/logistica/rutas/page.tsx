@@ -18,7 +18,7 @@ interface Pedido {
     totalUnidades: number; totalImporte: number
     cliente: Cliente; detalles: DetallePedido[]
 }
-interface Empleado { id: string; nombre: string; rol: string }
+interface Empleado { id: string; nombre: string; rol: string; rolRel?: { permisoLogistica?: boolean } | null }
 interface Entrega {
     id: string; horaEntrega: string | null; tempEntrega: number | null
     unidadesRechazadas: number; motivoRechazo: string | null; observaciones: string | null
@@ -136,7 +136,7 @@ export default function PlanificacionRutasPage() {
             setPedidosDisponibles(disponibles)
 
             const soloChoferes = Array.isArray(empData)
-                ? empData.filter((e: Empleado) => e.rol === 'LOGISTICA' || e.rol === 'ADMIN')
+                ? empData.filter((e: Empleado) => e.rol === 'ADMIN' || e.rolRel?.permisoLogistica === true || (!e.rolRel && e.rol === 'LOGISTICA'))
                 : []
             setChoferes(soloChoferes)
             setRutas(Array.isArray(rutaData) ? rutaData : [])

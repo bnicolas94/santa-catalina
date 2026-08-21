@@ -4,7 +4,12 @@ import { authOptions } from '@/lib/auth'
 
 export default async function LogisticaPage() {
     const session = await getServerSession(authOptions)
-    const rol = (session?.user as { rol?: string })?.rol
+    const user = session?.user as { rol?: string; permisos?: Record<string, boolean> } | undefined
+    const esAdmin = user?.rol === 'ADMIN'
+    const esLogisticaLegado = user?.permisos == null && user?.rol === 'LOGISTICA'
+    const puedeLogistica = esAdmin || esLogisticaLegado || user?.permisos?.permisoLogistica === true
+    const puedeFlota = esAdmin || esLogisticaLegado || user?.permisos?.permisoFlota === true
+    const puedeAdministrarChoferes = puedeLogistica && (esAdmin || user?.permisos?.permisoPersonal === true)
 
     return (
         <div>
@@ -13,7 +18,7 @@ export default async function LogisticaPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
-                {(rol === 'ADMIN' || rol === 'ADMIN_OPS' || rol === 'COORD_PROD') && (
+                {puedeLogistica && (
                     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)' }}>Rutas y Planificación</h2>
                         <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', flex: 1 }}>
@@ -25,7 +30,7 @@ export default async function LogisticaPage() {
                     </div>
                 )}
 
-                {(rol === 'ADMIN' || rol === 'LOGISTICA') && (
+                {puedeLogistica && (
                     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)' }}>Mis Repartos</h2>
                         <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', flex: 1 }}>
@@ -37,7 +42,7 @@ export default async function LogisticaPage() {
                     </div>
                 )}
 
-                {(rol === 'ADMIN' || rol === 'ADMIN_OPS') && (
+                {puedeFlota && (
                     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <h2 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-2)' }}>Gestión de Flota</h2>
                         <p style={{ color: 'var(--color-gray-600)', marginBottom: 'var(--space-4)', flex: 1 }}>
@@ -52,9 +57,11 @@ export default async function LogisticaPage() {
                                     Dashboard Flota
                                 </Link>
                             </div>
-                            <Link href="/logistica/choferes" className="btn btn-ghost" style={{ width: '100%', textAlign: 'center', border: '1px solid var(--color-gray-200)' }}>
-                                👤 Administración de Choferes
-                            </Link>
+                            {puedeAdministrarChoferes && (
+                                <Link href="/logistica/choferes" className="btn btn-ghost" style={{ width: '100%', textAlign: 'center', border: '1px solid var(--color-gray-200)' }}>
+                                    👤 Administración de Choferes
+                                </Link>
+                            )}
                         </div>
                     </div>
                 )}

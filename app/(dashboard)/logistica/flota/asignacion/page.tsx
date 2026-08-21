@@ -19,6 +19,11 @@ interface Chofer {
     apellido: string
 }
 
+interface EmpleadoOperativo extends Chofer {
+    rol: string
+    rolRel?: { permisoLogistica?: boolean } | null
+}
+
 interface Asignacion {
     id: string
     fecha: string
@@ -63,7 +68,7 @@ export default function AsignacionFlotaPage() {
 
             // Filter for drivers
             const chofs = Array.isArray(empData) 
-                ? empData.filter((e: any) => e.rol === 'LOGISTICA' || e.rol === 'ADMIN')
+                ? empData.filter((e: EmpleadoOperativo) => e.rol === 'ADMIN' || e.rolRel?.permisoLogistica === true || (!e.rolRel && e.rol === 'LOGISTICA'))
                 : []
             setChoferes(chofs)
             

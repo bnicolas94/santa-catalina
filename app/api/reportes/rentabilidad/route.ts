@@ -3,12 +3,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRentabilidadReport } from '@/lib/services/reportes'
 import { revalidateTag } from 'next/cache'
+import { tienePermisoEnSesion } from '@/lib/auth/permisosSesion'
 
 // GET /api/reportes/rentabilidad
 export async function GET(request: Request) {
     try {
         const session = await getServerSession(authOptions)
-        if (!session || (session.user as any).rol !== 'ADMIN') {
+        if (!tienePermisoEnSesion(session, 'permisoReportes')) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 

@@ -10,6 +10,12 @@ type PermissionKey =
     | 'permisoPersonal'
     | 'permisoProduccion'
     | 'permisoCostos'
+    | 'permisoCompras'
+    | 'permisoClientes'
+    | 'permisoPedidos'
+    | 'permisoLogistica'
+    | 'permisoFlota'
+    | 'permisoReportes'
     | 'permisoAtencion'
     | 'permisoAtencionAdmin'
 
@@ -24,6 +30,12 @@ interface Role {
     permisoPersonal: boolean
     permisoProduccion: boolean
     permisoCostos: boolean
+    permisoCompras: boolean
+    permisoClientes: boolean
+    permisoPedidos: boolean
+    permisoLogistica: boolean
+    permisoFlota: boolean
+    permisoReportes: boolean
     permisoAtencion: boolean
     permisoAtencionAdmin: boolean
     jornal: number
@@ -39,11 +51,17 @@ interface RolesConfigModalProps {
 
 const PERMISSIONS: Array<{ id: PermissionKey; title: string; description: string; icon: string }> = [
     { id: 'permisoDashboard', title: 'Dashboard', description: 'Indicadores generales y pantalla de inicio.', icon: '⌂' },
-    { id: 'permisoStock', title: 'Stock y compras', description: 'Insumos, compras, proveedores e inventario.', icon: '□' },
+    { id: 'permisoStock', title: 'Stock', description: 'Productos, insumos, conteos e inventario.', icon: '□' },
+    { id: 'permisoCompras', title: 'Compras', description: 'Compras, proveedores y cuentas corrientes.', icon: '◇' },
+    { id: 'permisoClientes', title: 'Clientes', description: 'Alta, consulta y edición de clientes.', icon: '◉' },
+    { id: 'permisoPedidos', title: 'Pedidos', description: 'Pedidos, ventas e importación de planillas.', icon: '≡' },
+    { id: 'permisoLogistica', title: 'Logística', description: 'Rutas, repartos, entregas y choferes.', icon: '→' },
+    { id: 'permisoFlota', title: 'Flota', description: 'Vehículos, asignaciones, gastos y mantenimientos.', icon: '◈' },
     { id: 'permisoCaja', title: 'Caja', description: 'Saldos, movimientos y rendiciones.', icon: '$' },
     { id: 'permisoPersonal', title: 'Personal', description: 'Legajos, asistencia y liquidaciones.', icon: '●' },
     { id: 'permisoProduccion', title: 'Producción', description: 'Lotes, recetas y operación diaria.', icon: '△' },
     { id: 'permisoCostos', title: 'Costos', description: 'Costeo, rentabilidad y reportes.', icon: '%' },
+    { id: 'permisoReportes', title: 'Reportes', description: 'Indicadores y reportes generales de gestión.', icon: '▤' },
     { id: 'permisoAtencion', title: 'Atención', description: 'Bandeja, conversaciones y respuesta a clientes.', icon: '@' },
     { id: 'permisoAtencionAdmin', title: 'Supervisión de atención', description: 'Configuración, reasignaciones y métricas del equipo.', icon: '★' },
 ]
@@ -58,6 +76,12 @@ const EMPTY_ROLE: Partial<Role> = {
     permisoPersonal: false,
     permisoProduccion: false,
     permisoCostos: false,
+    permisoCompras: false,
+    permisoClientes: false,
+    permisoPedidos: false,
+    permisoLogistica: false,
+    permisoFlota: false,
+    permisoReportes: false,
     permisoAtencion: false,
     permisoAtencionAdmin: false,
     jornal: 0,

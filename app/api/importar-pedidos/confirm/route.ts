@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PreviewRowResult } from "../preview/route";
 import { parseDireccion } from "@/lib/parsers/addressUtils";
+import { tienePermisoEnSesion } from "@/lib/auth/permisosSesion";
 // geocodeAddress deshabilitado — se resuelve desde logística
 
 /** Normaliza un turno quitando tildes y pasando a minúsculas: 'Mañana' y 'MANANA' → 'manana' */
@@ -18,9 +19,8 @@ export async function POST(req: NextRequest) {
         if (!session || !session.user) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const user = session.user as any;
-        if (user.rol !== "ADMIN" && user.rol !== "ADMIN_OPS") {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        if (!tienePermisoEnSesion(session, 'permisoPedidos')) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
         const { rows, medioPago } = await req.json();

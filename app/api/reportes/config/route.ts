@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const session = await getServerSession(authOptions)
-        if ((session?.user as any)?.rol !== 'ADMIN') {
+        if ((session?.user as { rol?: string } | undefined)?.rol !== 'ADMIN') {
             return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
         }
 

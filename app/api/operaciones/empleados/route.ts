@@ -12,6 +12,7 @@ export async function GET() {
                 nombre: true,
                 apellido: true,
                 rol: true,
+                rolRel: { select: { permisoLogistica: true } },
                 activo: true,
                 ubicacionId: true,
             },

@@ -17,6 +17,12 @@ interface EmployeeRole {
     permisoPersonal: boolean
     permisoProduccion: boolean
     permisoCostos: boolean
+    permisoCompras: boolean
+    permisoClientes: boolean
+    permisoPedidos: boolean
+    permisoLogistica: boolean
+    permisoFlota: boolean
+    permisoReportes: boolean
     permisoAtencion: boolean
     permisoAtencionAdmin: boolean
     jornal: number
@@ -87,11 +93,17 @@ interface ShiftOption { id: string; nombre: string; horaInicio: string; horaFin:
 
 const ROLE_PERMISSIONS: Array<{ key: keyof EmployeeRole; label: string }> = [
     { key: 'permisoDashboard', label: 'Dashboard' },
-    { key: 'permisoStock', label: 'Stock y compras' },
+    { key: 'permisoStock', label: 'Stock' },
+    { key: 'permisoCompras', label: 'Compras' },
+    { key: 'permisoClientes', label: 'Clientes' },
+    { key: 'permisoPedidos', label: 'Pedidos' },
+    { key: 'permisoLogistica', label: 'Logística' },
+    { key: 'permisoFlota', label: 'Flota' },
     { key: 'permisoCaja', label: 'Caja' },
     { key: 'permisoPersonal', label: 'Personal' },
     { key: 'permisoProduccion', label: 'Producción' },
     { key: 'permisoCostos', label: 'Costos' },
+    { key: 'permisoReportes', label: 'Reportes' },
     { key: 'permisoAtencion', label: 'Atención' },
     { key: 'permisoAtencionAdmin', label: 'Supervisión de atención' },
 ]

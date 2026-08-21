@@ -1391,7 +1391,7 @@ export default function CajaPage() {
                                             style={{ border: '2px solid #F39C12' }}
                                         >
                                             <option value="">Seleccionar chofer...</option>
-                                            {choferes.filter(e => e.activo && e.rol === 'LOGISTICA').map(c => (
+                                            {choferes.filter(e => e.activo && (e.rolRel?.permisoLogistica === true || (!e.rolRel && e.rol === 'LOGISTICA'))).map(c => (
                                                 <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
                                             ))}
                                         </select>

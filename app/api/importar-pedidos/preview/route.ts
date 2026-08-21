@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseOrderText, ParseResult } from "@/lib/parsers/orderText";
 import { matchClient, ClientMatchResult } from "@/lib/parsers/clientMatch";
+import { tienePermisoEnSesion } from "@/lib/auth/permisosSesion";
 
 // Tipo esperado del frontend
 export interface ExcelRow {
@@ -33,9 +34,8 @@ export async function POST(req: NextRequest) {
         if (!session || !session.user) {
             return NextResponse.json({ error: "No autorizado" }, { status: 401 });
         }
-        const user = session.user as any;
-        if (user.rol !== "ADMIN" && user.rol !== "ADMIN_OPS") {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+        if (!tienePermisoEnSesion(session, 'permisoPedidos')) {
+            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
         const { rows }: { rows: ExcelRow[] } = await req.json();
