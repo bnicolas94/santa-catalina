@@ -291,6 +291,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                         {d.tipo === 'HORAS_EXTRAS_ADEUDADAS' && (
                                                             <span style={{ backgroundColor: 'var(--color-warning-light)', color: 'var(--color-warning)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>HS. ADEUDADAS</span>
                                                         )}
+                                                        {d.tipo === 'FERIADO_ADEUDADO' && (
+                                                            <span style={{ backgroundColor: '#fff7ed', color: '#c2410c', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>FERIADO ADEUDADO</span>
+                                                        )}
                                                         {d.esMixtoEfectivo && (
                                                             <span style={{ backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>MIXTO · SÓLO EFECTIVO</span>
                                                         )}

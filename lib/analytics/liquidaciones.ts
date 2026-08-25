@@ -1,4 +1,4 @@
-export type TipoLiquidacionAnalytics = 'NORMAL' | 'SAC' | 'VACACIONES' | 'FINAL' | 'HORAS_EXTRAS_ADEUDADAS' | 'OTRA'
+export type TipoLiquidacionAnalytics = 'NORMAL' | 'SAC' | 'VACACIONES' | 'FINAL' | 'HORAS_EXTRAS_ADEUDADAS' | 'FERIADO_ADEUDADO' | 'OTRA'
 
 export interface LiquidacionClasificable {
     tipo?: string | null
@@ -12,6 +12,7 @@ const ETIQUETAS: Record<TipoLiquidacionAnalytics, string> = {
     VACACIONES: 'Vacaciones',
     FINAL: 'Liquidación final',
     HORAS_EXTRAS_ADEUDADAS: 'Horas extras adeudadas',
+    FERIADO_ADEUDADO: 'Feriados adeudados',
     OTRA: 'Otras liquidaciones',
 }
 
@@ -22,6 +23,7 @@ export function normalizarTipoLiquidacion(tipo: string | null | undefined, perio
     if (valor === 'VACACIONES' || descripcion.includes('VACACIONES')) return 'VACACIONES'
     if (valor === 'FINAL' || valor === 'LIQUIDACION_FINAL' || descripcion.includes('LIQUIDACIÓN FINAL') || descripcion.includes('LIQUIDACION FINAL')) return 'FINAL'
     if (valor === 'HORAS_EXTRAS_ADEUDADAS' || descripcion.includes('HORAS EXTRAS ADEUDADAS')) return 'HORAS_EXTRAS_ADEUDADAS'
+    if (valor === 'FERIADO_ADEUDADO' || descripcion.includes('FERIADO ADEUDADO')) return 'FERIADO_ADEUDADO'
     if (valor === 'NORMAL' || valor === 'SEMANAL' || valor === 'MENSUAL' || valor === 'QUINCENAL' || valor === 'MENSUAL_MIXTA') return 'NORMAL'
     return 'OTRA'
 }

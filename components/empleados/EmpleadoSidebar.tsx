@@ -51,6 +51,12 @@ const menuItems: MenuItem[] = [
         openModal: 'horas-adeudadas'
     },
     {
+        label: 'Feriados Adeudados',
+        href: '/empleados?open=feriados-adeudados',
+        icon: '🚩',
+        openModal: 'feriados-adeudados'
+    },
+    {
         label: 'Vacaciones / SAC',
         href: '/empleados?open=vacaciones',
         icon: '🏖️',

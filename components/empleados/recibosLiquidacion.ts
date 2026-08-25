@@ -93,6 +93,7 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
         totalNeto,
         rango: rangoPeriodo(periodo),
         esHorasAdeudadas: tipo === 'HORAS_EXTRAS_ADEUDADAS' || desglose.origen === 'HORAS_EXTRAS_ADEUDADAS',
+        esFeriadoAdeudado: tipo === 'FERIADO_ADEUDADO' || desglose.origen === 'FERIADO_ADEUDADO',
         esMixtoEfectivo: tipo === 'MENSUAL_MIXTA' || desglose.origen === 'MENSUAL_MIXTA_EFECTIVO',
         esVacaciones: tipo === 'VACACIONES' || desglose.esVacaciones === true || periodo.toLowerCase().includes('vacaciones'),
         esFinal: tipo === 'FINAL' || desglose.esLiquidacionFinal === true,
@@ -102,17 +103,30 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
 function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRecibo[] {
     const calc = datosCalculados(recibo)
     if (calc.esFinal && Array.isArray(calc.desglose.conceptos)) {
-        return (calc.desglose.conceptos as Array<Record<string, unknown>>).map(concepto => ({
-            nombre: String(concepto.nombre || 'Concepto'),
-            monto: numero(concepto.monto),
-            detalle: concepto.metodologia ? String(concepto.metodologia) : undefined,
-        }))
+        return (calc.desglose.conceptos as Array<Record<string, unknown>>).map(concepto => {
+            const nombre = String(concepto.nombre || 'Concepto')
+            const esDiasTrabajados = nombre.trim().toLocaleLowerCase('es-AR').startsWith('días trabajados')
+            return {
+                nombre,
+                monto: numero(concepto.monto),
+                detalle: !esDiasTrabajados && concepto.metodologia
+                    ? String(concepto.metodologia)
+                    : undefined,
+            }
+        })
     }
     if (calc.esHorasAdeudadas) {
         return [{
             nombre: `Horas extras adeudadas (${dinero(calc.desglose.cantidadHoras || recibo.horasExtras)} h)`,
             monto: numero(calc.desglose.monto || recibo.montoHorasExtras || recibo.totalNeto),
             detalle: `Semana de origen: ${String(calc.desglose.semanaOrigen || recibo.periodo)}`,
+        }]
+    }
+    if (calc.esFeriadoAdeudado) {
+        return [{
+            nombre: `Adicional de feriado adeudado · ${String(calc.desglose.nombreFeriado || 'Feriado')}`,
+            monto: numero(calc.desglose.monto || recibo.montoHorasFeriado || recibo.totalNeto),
+            detalle: `Fecha: ${String(calc.desglose.fechaFeriado || 'Sin informar')} · ${String(calc.desglose.semanaOrigen || recibo.periodo)}`,
         }]
     }
     if (calc.esMixtoEfectivo) {
@@ -138,7 +152,7 @@ function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRecibo[] {
     return conceptos
 }
 
-function contenidoEspecialClasico(recibo: DatosReciboLiquidacion) {
+export function contenidoEspecialClasico(recibo: DatosReciboLiquidacion) {
     const calc = datosCalculados(recibo)
     if (calc.esHorasAdeudadas) {
         const horas = numero(calc.desglose.cantidadHoras || recibo.horasExtras)
@@ -149,6 +163,15 @@ function contenidoEspecialClasico(recibo: DatosReciboLiquidacion) {
             <p>Se deja constancia de la recepción de <strong>$${dinero(monto)}</strong> (pesos ${formatCurrencyToWords(monto)}) en concepto exclusivo de horas extras omitidas de una liquidación anterior.</p>
             <table class="tabla-especial"><thead><tr><th>Semana de origen</th><th>Horas</th><th>Valor hora</th><th>Total</th></tr></thead><tbody><tr><td>${escaparHtml(calc.desglose.semanaOrigen || recibo.periodo)}</td><td>${dinero(horas)} h</td><td>$${dinero(valorHora)}</td><td><strong>$${dinero(monto)}</strong></td></tr></tbody></table>
             <p class="detalle-observacion"><strong>Detalle:</strong> ${escaparHtml(calc.desglose.observaciones || 'Sin observaciones')}</p>`
+    }
+    if (calc.esFeriadoAdeudado) {
+        const monto = numero(calc.desglose.monto || recibo.montoHorasFeriado || recibo.totalNeto)
+        const fecha = String(calc.desglose.fechaFeriado || '').split('-').reverse().join('/')
+        return `
+            <div class="titulo-especial"><h2>Recibo de feriado adeudado</h2><p>Pago complementario independiente de la liquidación semanal</p></div>
+            <p>Se deja constancia de la recepción de <strong>$${dinero(monto)}</strong> (pesos ${formatCurrencyToWords(monto)}) correspondiente exclusivamente al adicional omitido del feriado <strong>${escaparHtml(calc.desglose.nombreFeriado || 'Feriado')}</strong>, trabajado el <strong>${escaparHtml(fecha)}</strong>.</p>
+            ${tablaConceptos(recibo)}
+            <p class="detalle-observacion">Este comprobante se atribuye a <strong>${escaparHtml(calc.desglose.semanaOrigen || recibo.periodo)}</strong> y no modifica ni duplica la liquidación salarial original.</p>`
     }
     if (calc.esMixtoEfectivo) {
         return `

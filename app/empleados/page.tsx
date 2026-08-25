@@ -14,6 +14,7 @@ import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
 import FeriadosConfigModal from '@/components/empleados/FeriadosConfigModal'
 import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
 import { HorasExtrasAdeudadasModal } from '@/components/empleados/HorasExtrasAdeudadasModal'
+import { FeriadosAdeudadosModal } from '@/components/empleados/FeriadosAdeudadosModal'
 import { CierresMensualesMixtosModal } from '@/components/empleados/CierresMensualesMixtosModal'
 import OrganigramaModal from '@/components/empleados/OrganigramaModal'
 import TurnosConfigModal from '@/components/empleados/TurnosConfigModal'
@@ -52,6 +53,7 @@ function EmpleadosContent() {
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
     const [weeklyPayrollOpen, setWeeklyPayrollOpen] = useState(false)
     const [horasAdeudadasOpen, setHorasAdeudadasOpen] = useState(false)
+    const [feriadosAdeudadosOpen, setFeriadosAdeudadosOpen] = useState(false)
     const [cierresMensualesOpen, setCierresMensualesOpen] = useState(false)
     const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
     const [showFeriadosModal, setShowFeriadosModal] = useState(false)
@@ -113,6 +115,7 @@ function EmpleadosContent() {
         // Sincronizar parámetros de URL con estados de modales
         if (openParam === 'weekly') setWeeklyPayrollOpen(true)
         if (openParam === 'horas-adeudadas') setHorasAdeudadasOpen(true)
+        if (openParam === 'feriados-adeudados') setFeriadosAdeudadosOpen(true)
         if (openParam === 'cierres-mensuales') setCierresMensualesOpen(true)
         if (openParam === 'vacaciones') setVacacionesSacOpen(true)
         if (openParam === 'mass') setMassLiquidationOpen(true)
@@ -140,6 +143,7 @@ function EmpleadosContent() {
         // También cerramos los estados locales
         setWeeklyPayrollOpen(false)
         setHorasAdeudadasOpen(false)
+        setFeriadosAdeudadosOpen(false)
         setCierresMensualesOpen(false)
         setVacacionesSacOpen(false)
         setMassLiquidationOpen(false)
@@ -681,6 +685,9 @@ function EmpleadosContent() {
             )}
             {horasAdeudadasOpen && (
                 <HorasExtrasAdeudadasModal empleados={empleados} onClose={closeModal} />
+            )}
+            {feriadosAdeudadosOpen && (
+                <FeriadosAdeudadosModal onClose={closeModal} />
             )}
             {cierresMensualesOpen && (
                 <CierresMensualesMixtosModal onClose={closeModal} />
