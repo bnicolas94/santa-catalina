@@ -90,6 +90,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 
 - El negocio opera con fecha local de Argentina. Evitar conversiones implícitas a UTC que desplacen el día; reutilizar las utilidades y patrones existentes del módulo.
 - No introducir una nueva fórmula de costos, stock, presentaciones, horas o liquidaciones en la UI. La regla de negocio debe vivir en `lib/` y tener pruebas.
+- Todo cambio efectivo de sueldo o valor de hora extra debe conservar su traza en `HistorialSalarial`; la actualización salarial y su auditoría deben ser atómicas.
 - Respetar los movimientos protegidos y las trazas de auditoría de Caja. No borrar o reescribir movimientos financieros relacionados sin revisar `lib/caja` y sus relaciones Prisma.
 - Los cambios de stock y de producto deben conservar trazabilidad hacia compras, lotes o pedidos según corresponda.
 

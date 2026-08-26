@@ -1,17 +1,61 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizarRolEmpleado, RolEmpleadoValidationError } from '@/lib/empleados/roles'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { cambioSalarialRelevante, configuracionSalarialEfectiva } from '@/lib/rrhh/historialSalarial'
 
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
     try {
+        const session = await getServerSession(authOptions)
+        const usuario = session?.user as { id?: string; rol?: string } | undefined
+        if (!usuario?.id) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
+        if (usuario.rol !== 'ADMIN') return NextResponse.json({ error: 'Sólo un administrador puede modificar tipos de empleado.' }, { status: 403 })
+
         const { id } = await context.params
         const data = normalizarRolEmpleado(await req.json())
 
         const actualizado = await prisma.$transaction(async tx => {
-            await tx.rolEmpleado.update({ where: { id }, data })
+            const anterior = await tx.rolEmpleado.findUniqueOrThrow({
+                where: { id },
+                include: {
+                    empleados: {
+                        select: {
+                            id: true,
+                            jornal: true,
+                            sueldoBaseMensual: true,
+                            cicloPago: true,
+                            valorHoraExtra: true,
+                        },
+                    },
+                },
+            })
+            const rolActualizado = await tx.rolEmpleado.update({ where: { id }, data })
             // `Empleado.rol` se conserva por compatibilidad con accesos históricos.
             // Al renombrar el tipo, ambos vínculos deben seguir diciendo lo mismo.
             await tx.empleado.updateMany({ where: { rolId: id }, data: { rol: data.nombre } })
+
+            const cambios = anterior.empleados.flatMap(empleado => {
+                const configuracionAnterior = configuracionSalarialEfectiva({ ...empleado, rolRel: anterior })
+                const configuracionNueva = configuracionSalarialEfectiva({ ...empleado, rolRel: rolActualizado })
+                if (!cambioSalarialRelevante(configuracionAnterior, configuracionNueva)) return []
+                return [{
+                    origen: 'ROL',
+                    empleadoId: empleado.id,
+                    rolId: id,
+                    registradoPorId: usuario.id,
+                    montoAnterior: configuracionAnterior.monto,
+                    montoNuevo: configuracionNueva.monto,
+                    cicloPagoAnterior: configuracionAnterior.cicloPago,
+                    cicloPagoNuevo: configuracionNueva.cicloPago,
+                    valorHoraExtraAnterior: configuracionAnterior.valorHoraExtra,
+                    valorHoraExtraNuevo: configuracionNueva.valorHoraExtra,
+                    fuenteAnterior: configuracionAnterior.fuente,
+                    fuenteNueva: configuracionNueva.fuente,
+                }]
+            })
+            if (cambios.length > 0) await tx.historialSalarial.createMany({ data: cambios })
+
             return tx.rolEmpleado.findUniqueOrThrow({
                 where: { id },
                 include: { _count: { select: { empleados: true } } },

@@ -94,6 +94,7 @@ const menuItems: MenuItem[] = [
             { label: 'Recibos', href: '/empleados?open=recibos', icon: '🖨️', openModal: 'recibos' },
             { label: 'Analíticas', href: '/empleados/analytics', icon: '📉', openModal: '' },
             { label: 'Historial Vacaciones', href: '/empleados?open=historial', icon: '📈', openModal: 'historial' },
+            { label: 'Historial Salarial', href: '/empleados?open=historial-salarial', icon: '💹', openModal: 'historial-salarial' },
             { label: 'Inasistencias', href: '/empleados?open=inasistencias', icon: '🚨', openModal: 'inasistencias' },
         ]
     },

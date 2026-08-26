@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { EmpleadoService, EmpleadoValidationError } from '@/lib/services/empleado.service'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // PUT /api/empleados/:id — Actualizar empleado
 export async function PUT(
@@ -11,13 +13,16 @@ export async function PUT(
         const { id } = await params
         employeeId = id;
         const body = await request.json()
+        const session = await getServerSession(authOptions)
+        const usuario = session?.user as { id?: string } | undefined
+        if (!usuario?.id) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
         
         console.log(`[EMPLEADOS API] Intentando actualizar empleado ${id}:`, {
             ...body,
             password: body.password ? '****' : undefined
         });
 
-        const empleado = await EmpleadoService.update(id, body)
+        const empleado = await EmpleadoService.update(id, body, usuario.id)
         return NextResponse.json(empleado)
     } catch (error: any) {
         console.error(`[EMPLEADOS API] ERROR CRITICO actualizando empleado ${employeeId}:`, error);

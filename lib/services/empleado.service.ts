@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
 import bcrypt from 'bcryptjs'
+import { cambioSalarialRelevante, configuracionSalarialEfectiva } from '@/lib/rrhh/historialSalarial'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ const EMPLEADO_SELECT = {
     puestoId: true,
     turnoId: true,
     ubicacion: { select: { id: true, nombre: true, tipo: true } },
-    rolRel: { select: { id: true, nombre: true, jornal: true, valorHoraExtra: true } },
+    rolRel: { select: { id: true, nombre: true, jornal: true, cicloPago: true, valorHoraExtra: true } },
     area: { select: { id: true, nombre: true, color: true } },
     puesto: { select: { id: true, nombre: true } },
     turno: { select: { id: true, nombre: true, horaInicio: true, horaFin: true, toleranciaMinutos: true } },
@@ -271,7 +272,7 @@ export class EmpleadoService {
      * Actualiza campos del empleado. Maneja correctamente campos opcionales
      * (undefined = no tocar, null = limpiar, valor = actualizar).
      */
-    static async update(id: string, input: UpdateEmpleadoInput) {
+    static async update(id: string, input: UpdateEmpleadoInput, registradoPorId?: string | null) {
         // Robustecimiento de fecha de ingreso
         let validatedFechaIngreso = undefined as Date | null | undefined
         if (input.fechaIngreso !== undefined) {
@@ -330,10 +331,46 @@ export class EmpleadoService {
             dataToUpdate.password = await bcrypt.hash(input.password, 10)
         }
 
-        const empleado = await prisma.empleado.update({
-            where: { id },
-            data: dataToUpdate,
-            select: EMPLEADO_SELECT,
+        const empleado = await prisma.$transaction(async tx => {
+            const anterior = await tx.empleado.findUniqueOrThrow({
+                where: { id },
+                select: {
+                    jornal: true,
+                    sueldoBaseMensual: true,
+                    cicloPago: true,
+                    valorHoraExtra: true,
+                    rolRel: { select: { id: true, nombre: true, jornal: true, cicloPago: true, valorHoraExtra: true } },
+                },
+            })
+
+            const actualizado = await tx.empleado.update({
+                where: { id },
+                data: dataToUpdate,
+                select: EMPLEADO_SELECT,
+            })
+
+            const configuracionAnterior = configuracionSalarialEfectiva(anterior)
+            const configuracionNueva = configuracionSalarialEfectiva(actualizado)
+            if (cambioSalarialRelevante(configuracionAnterior, configuracionNueva)) {
+                await tx.historialSalarial.create({
+                    data: {
+                        origen: 'EMPLEADO',
+                        empleadoId: id,
+                        rolId: actualizado.rolId,
+                        registradoPorId: registradoPorId || null,
+                        montoAnterior: configuracionAnterior.monto,
+                        montoNuevo: configuracionNueva.monto,
+                        cicloPagoAnterior: configuracionAnterior.cicloPago,
+                        cicloPagoNuevo: configuracionNueva.cicloPago,
+                        valorHoraExtraAnterior: configuracionAnterior.valorHoraExtra,
+                        valorHoraExtraNuevo: configuracionNueva.valorHoraExtra,
+                        fuenteAnterior: configuracionAnterior.fuente,
+                        fuenteNueva: configuracionNueva.fuente,
+                    },
+                })
+            }
+
+            return actualizado
         })
 
         // Evento de dominio

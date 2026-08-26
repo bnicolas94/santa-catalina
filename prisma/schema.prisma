@@ -66,6 +66,8 @@ model Empleado {
   movimientosCajaEditados   MovimientoCaja[]          @relation("MovimientoCajaActualizadoPor")
   movimientosCajaAnulados   MovimientoCaja[]          @relation("MovimientoCajaAnuladoPor")
   auditoriasCaja            AuditoriaMovimientoCaja[] @relation("AuditoriaMovimientoCajaUsuario")
+  historialSalarial         HistorialSalarial[]       @relation("HistorialSalarialEmpleado")
+  cambiosSalarialesCreados  HistorialSalarial[]       @relation("HistorialSalarialRegistradoPor")
   depositosCajaDeclarados   DepositoCaja[]            @relation("DepositoCajaDeclaradoPor")
   depositosCajaValidados    DepositoCaja[]            @relation("DepositoCajaValidadoPor")
   lotesCoordinados          Lote[]                    @relation("CoordinadorLote")
@@ -1003,8 +1005,35 @@ model RolEmpleado {
   valorHoraExtra       Float      @default(0) @map("valor_hora_extra")
   cicloPago            CicloPago  @default(SEMANAL) @map("ciclo_pago")
   empleados            Empleado[]
+  historialSalarial    HistorialSalarial[]
 
   @@map("roles_empleado")
+}
+
+model HistorialSalarial {
+  id                     String       @id @default(uuid())
+  origen                 String
+  montoAnterior          Float        @map("monto_anterior")
+  montoNuevo             Float        @map("monto_nuevo")
+  cicloPagoAnterior      String       @map("ciclo_pago_anterior")
+  cicloPagoNuevo         String       @map("ciclo_pago_nuevo")
+  valorHoraExtraAnterior Float        @default(0) @map("valor_hora_extra_anterior")
+  valorHoraExtraNuevo    Float        @default(0) @map("valor_hora_extra_nuevo")
+  fuenteAnterior         String?      @map("fuente_anterior")
+  fuenteNueva            String?      @map("fuente_nueva")
+  fechaVigencia          DateTime     @default(now()) @map("fecha_vigencia")
+  createdAt              DateTime     @default(now())
+  empleadoId             String?      @map("id_empleado")
+  rolId                  String?      @map("id_rol")
+  registradoPorId        String?      @map("id_registrado_por")
+  empleado               Empleado?    @relation("HistorialSalarialEmpleado", fields: [empleadoId], references: [id], onDelete: SetNull)
+  rol                    RolEmpleado? @relation(fields: [rolId], references: [id], onDelete: SetNull)
+  registradoPor          Empleado?    @relation("HistorialSalarialRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+
+  @@index([empleadoId, fechaVigencia])
+  @@index([rolId, fechaVigencia])
+  @@index([fechaVigencia])
+  @@map("historial_salarial")
 }
 
 model Area {

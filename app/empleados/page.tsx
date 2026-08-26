@@ -25,6 +25,7 @@ import { InasistenciasModal } from '@/components/empleados/InasistenciasModal'
 import { SancionesModal } from '@/components/empleados/SancionesModal'
 import LiquidacionFinalModal from '@/components/empleados/LiquidacionFinalModal'
 import { PlanillaUniformesModal } from '@/components/empleados/PlanillaUniformesModal'
+import { HistorialSalarialModal } from '@/components/empleados/HistorialSalarialModal'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -47,6 +48,7 @@ function EmpleadosContent() {
     const [showRolesModal, setShowRolesModal] = useState(false)
     const [showLicenciasModal, setShowLicenciasModal] = useState(false)
     const [showReportePagos, setShowReportePagos] = useState(false)
+    const [showHistorialSalarial, setShowHistorialSalarial] = useState(false)
     const [importLoading, setImportLoading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
@@ -121,6 +123,7 @@ function EmpleadosContent() {
         if (openParam === 'mass') setMassLiquidationOpen(true)
         if (openParam === 'recibos') setShowReportePagos(true)
         if (openParam === 'historial') setShowReporteVacaciones(true)
+        if (openParam === 'historial-salarial') setShowHistorialSalarial(true)
         if (openParam === 'roles') setShowRolesModal(true)
         if (openParam === 'feriados') setShowFeriadosModal(true)
         if (openParam === 'turnos') setShowTurnosModal(true)
@@ -149,6 +152,7 @@ function EmpleadosContent() {
         setMassLiquidationOpen(false)
         setShowReportePagos(false)
         setShowReporteVacaciones(false)
+        setShowHistorialSalarial(false)
         setShowRolesModal(false)
         setShowFeriadosModal(false)
         setShowTurnosModal(false)
@@ -668,6 +672,9 @@ function EmpleadosContent() {
             )}
             {showReporteVacaciones && (
                 <ReporteVacacionesModal onClose={closeModal} />
+            )}
+            {showHistorialSalarial && (
+                <HistorialSalarialModal empleados={empleados} onClose={closeModal} />
             )}
             
             {showReportePagos && (

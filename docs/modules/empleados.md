@@ -72,11 +72,13 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 * **`PrestamoEmpleado` / `CuotaPrestamo`**: Gestión de adelantos y préstamos con descuento automático en liquidación.
 * **`LiquidacionSueldo`**: Registro histórico de haberes pagados.
 * **`LiquidacionFinal`**: Registro de desvinculaciones.
+* **`HistorialSalarial`**: Auditoría inmutable de cambios efectivos de sueldo y valor de hora extra, tanto individuales como heredados por tipo de empleado.
 
 ### Operaciones Críticas
 * **`SELECT`**: Consultas pesadas en `PayrollService` que incluyen `fichadas`, `inasistencias` y `prestamos` en un solo periodo.
 * **`UPDATE` (Soft Delete)**: La desactivación de un empleado cambia el flag `activo` pero **nunca** borra el registro para preservar el historial de liquidaciones.
 * **`TRANSACTION`**: El proceso de liquidación final y periódica usa transacciones de Prisma para asegurar que el pago en caja y la marca de cuotas pagadas ocurra de forma atómica.
+* **Cambios salariales**: La actualización del valor y la creación de su registro de historial ocurren en una misma transacción. El historial no reescribe liquidaciones anteriores.
 
 ---
 
