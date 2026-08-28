@@ -8,6 +8,7 @@ import { novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida
 import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
 import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorFechas, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
 import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
+import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
 import {
     normalizarRangoLiquidacion,
     rangoHistoricoLiquidacion,
@@ -769,6 +770,8 @@ export class PayrollService {
                     tipo: tipoLiquidacion,
                     desglose: calculatedData?.desglosePorDia || (manualData ? {
                         ...manualData,
+                        jornalDiarioSnapshot: jornalDiarioEfectivo(empleado),
+                        horasJornadaSnapshot: empleado.horasTrabajoDiarias || 8,
                         descuentoPrestamos: deduccionCuotas,
                         cuotasPrestamoIds: cuotasAfectadas,
                     } : null),

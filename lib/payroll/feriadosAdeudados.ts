@@ -12,6 +12,8 @@ export interface DiaLiquidadoFeriado {
     valorFeriado?: unknown
 }
 
+type DesgloseExpress = Record<string, unknown>
+
 function numero(valor: unknown): number {
     const convertido = Number(valor)
     return Number.isFinite(convertido) ? convertido : 0
@@ -29,6 +31,36 @@ export function diasDeLiquidacion(desglose: unknown): DiaLiquidadoFeriado[] {
 export function buscarDiaLiquidado(desglose: unknown, fecha: string): DiaLiquidadoFeriado | null {
     const fechaValidada = validarFechaCivilRRHH(fecha)
     return diasDeLiquidacion(desglose).find(dia => String(dia.fecha || '').slice(0, 10) === fechaValidada) || null
+}
+
+export function esLiquidacionExpress(desglose: unknown): desglose is DesgloseExpress {
+    return Boolean(desglose)
+        && typeof desglose === 'object'
+        && !Array.isArray(desglose)
+        && String((desglose as DesgloseExpress).origen || '') === 'LIQUIDACION_EXPRESS'
+}
+
+export function construirDiaFeriadoExpress(
+    desglose: unknown,
+    fecha: string,
+    horasTrabajadas: number,
+    jornalConfigurado: number,
+    montoFeriadoOriginal: number = 0,
+): DiaLiquidadoFeriado | null {
+    if (!esLiquidacionExpress(desglose) || !Number.isFinite(horasTrabajadas) || horasTrabajadas <= 0) return null
+
+    const jornalSnapshot = numero(desglose.jornalDiarioSnapshot)
+    const jornalBase = jornalSnapshot > 0 ? jornalSnapshot : numero(jornalConfigurado)
+    if (jornalBase <= 0) return null
+
+    return {
+        fecha: validarFechaCivilRRHH(fecha),
+        horasTrabajadas,
+        jornalBase,
+        valorDiaBase: jornalBase,
+        multiplicadorJornal: 1,
+        valorFeriado: numero(montoFeriadoOriginal),
+    }
 }
 
 export function calcularAdicionalFeriadoAdeudado(dia: DiaLiquidadoFeriado): number {

@@ -13,6 +13,7 @@ interface CandidatoFeriado {
     horas: number
     monto: number
     liquidacionOriginalId: string
+    origenValidacion: 'DESGLOSE_SEMANAL' | 'FICHADAS_EXPRESS'
     estado: 'DISPONIBLE' | 'YA_INCLUIDO' | 'YA_PAGADO'
     motivo: string | null
 }
@@ -273,13 +274,13 @@ export function FeriadosAdeudadosModal({ onClose }: Props) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 280px', gap: 16, marginTop: 16 }}>
                     <section className="card" style={{ border: '1px solid var(--color-gray-200)' }}>
                         <div className="card-body" style={{ padding: 0 }}>
-                            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--color-gray-200)', display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><h3 style={{ margin: 0 }}>Empleados de la liquidación original</h3><span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>El importe usa el jornal histórico ya liquidado.</span></div>{disponibles.length > 0 && <button className="btn btn-ghost btn-sm" onClick={toggleTodos}>{todosSeleccionados ? 'Quitar todos' : 'Seleccionar todos'}</button>}</div>
+                            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--color-gray-200)', display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><h3 style={{ margin: 0 }}>Empleados con trabajo verificado</h3><span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>Se valida contra la liquidación original y, si fue Express, también contra las fichadas reales.</span></div>{disponibles.length > 0 && <button className="btn btn-ghost btn-sm" onClick={toggleTodos}>{todosSeleccionados ? 'Quitar todos' : 'Seleccionar todos'}</button>}</div>
                             <div className="table-container" style={{ maxHeight: 360, border: 0 }}><table className="table"><thead><tr><th style={{ width: 40 }}></th><th>Empleado</th><th>Estado</th><th style={{ textAlign: 'right' }}>Adicional</th></tr></thead><tbody>
                                 {cargando ? <tr><td colSpan={4} style={{ textAlign: 'center', padding: 28 }}>Analizando liquidaciones…</td></tr> : candidatos.length === 0 ? <tr><td colSpan={4} style={{ textAlign: 'center', padding: 32, color: 'var(--color-gray-500)' }}>No se encontraron empleados con horas trabajadas y una liquidación semanal pagada para este día.</td></tr> : candidatos.map(candidato => {
                                     const disponible = candidato.estado === 'DISPONIBLE'
                                     return <tr key={candidato.empleadoId} style={{ opacity: disponible ? 1 : .58 }}>
                                         <td><input type="checkbox" disabled={!disponible} checked={seleccionados.has(candidato.empleadoId)} onChange={() => toggleEmpleado(candidato.empleadoId)} /></td>
-                                        <td><strong>{candidato.empleadoNombre}</strong><div style={{ color: 'var(--color-gray-500)', fontSize: '10px' }}>{candidato.horas.toLocaleString('es-AR')} h de jornada</div></td>
+                                        <td><strong>{candidato.empleadoNombre}</strong><div style={{ color: 'var(--color-gray-500)', fontSize: '10px' }}>{candidato.horas.toLocaleString('es-AR')} h de jornada</div>{candidato.origenValidacion === 'FICHADAS_EXPRESS' && <div style={{ color: 'var(--color-warning)', fontSize: '10px', fontWeight: 700, marginTop: 2 }}>Express sin detalle diario · trabajo validado con fichadas</div>}</td>
                                         <td>{disponible ? <span className="badge badge-warning">Pendiente</span> : <span title={candidato.motivo || ''}>{candidato.estado === 'YA_PAGADO' ? 'Ya pagado' : 'Incluido en la semana'}</span>}</td>
                                         <td style={{ textAlign: 'right', fontWeight: 700 }}>{disponible ? dinero(candidato.monto) : '—'}</td>
                                     </tr>

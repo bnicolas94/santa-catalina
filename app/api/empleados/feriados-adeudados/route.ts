@@ -4,6 +4,7 @@ import { eventBus } from '@/lib/events'
 import {
     buscarDiaLiquidado,
     calcularAdicionalFeriadoAdeudado,
+    construirDiaFeriadoExpress,
     periodoFeriadoAdeudado,
     TIPO_FERIADO_ADEUDADO,
 } from '@/lib/payroll/feriadosAdeudados'
@@ -11,6 +12,8 @@ import { etiquetaSemanaOrigen, semanaLaboralDeOrigen } from '@/lib/payroll/horas
 import { prisma } from '@/lib/prisma'
 import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 import { CajaService } from '@/lib/services/caja.service'
+import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
+import { calcularResumenDia } from '@/utils/horas'
 
 function mensajeError(error: unknown) {
     return error instanceof Error ? error.message : 'No se pudo procesar el feriado adeudado.'
@@ -22,6 +25,48 @@ async function buscarFeriado(fecha: string) {
         where: { fecha: { gte: rango.gte, lt: rango.lt } },
         select: { id: true, nombre: true, fecha: true },
     })
+}
+
+type LiquidacionOriginalFeriado = {
+    desglose: unknown
+    sueldoProporcional: number
+    montoHorasFeriado: number
+    empleado: {
+        jornal: number
+        sueldoBaseMensual: number
+        cicloPago: string
+        horasTrabajoDiarias: number
+        horarioEntrada: string | null
+        rolRel: { jornal: number; cicloPago: string } | null
+        turno: { horaInicio: string } | null
+        fichadas: Array<{ fechaHora: Date; tipo: string }>
+    }
+}
+
+function resolverDiaOriginal(liquidacion: LiquidacionOriginalFeriado, fecha: string) {
+    const diaLiquidado = buscarDiaLiquidado(liquidacion.desglose, fecha)
+    if (diaLiquidado) return { dia: diaLiquidado, origen: 'DESGLOSE_SEMANAL' as const }
+    if (liquidacion.sueldoProporcional <= 0) return null
+
+    const marcas = liquidacion.empleado.fichadas
+        .filter(fichada => fichada.tipo === 'entrada' || fichada.tipo === 'salida')
+        .map(fichada => ({
+            fechaHora: fichada.fechaHora,
+            tipo: fichada.tipo as 'entrada' | 'salida',
+        }))
+    const resumen = calcularResumenDia(
+        marcas,
+        liquidacion.empleado.horasTrabajoDiarias || 8,
+        { horarioEntrada: liquidacion.empleado.turno?.horaInicio || liquidacion.empleado.horarioEntrada },
+    )
+    const diaExpress = construirDiaFeriadoExpress(
+        liquidacion.desglose,
+        fecha,
+        resumen.horasTrabajadas,
+        jornalDiarioEfectivo(liquidacion.empleado),
+        liquidacion.montoHorasFeriado,
+    )
+    return diaExpress ? { dia: diaExpress, origen: 'FICHADAS_EXPRESS' as const } : null
 }
 
 export async function GET(request: Request) {
@@ -60,6 +105,17 @@ export async function GET(request: Request) {
                             dni: true,
                             activo: true,
                             horasTrabajoDiarias: true,
+                            jornal: true,
+                            sueldoBaseMensual: true,
+                            cicloPago: true,
+                            horarioEntrada: true,
+                            rolRel: { select: { jornal: true, cicloPago: true } },
+                            turno: { select: { horaInicio: true } },
+                            fichadas: {
+                                where: { fechaHora: { gte: rango.gte, lt: rango.lt } },
+                                select: { fechaHora: true, tipo: true },
+                                orderBy: { fechaHora: 'asc' },
+                            },
                         },
                     },
                 },
@@ -84,6 +140,7 @@ export async function GET(request: Request) {
             horas: number
             monto: number
             liquidacionOriginalId: string
+            origenValidacion: 'DESGLOSE_SEMANAL' | 'FICHADAS_EXPRESS'
             estado: 'DISPONIBLE' | 'YA_INCLUIDO' | 'YA_PAGADO'
             motivo: string | null
         }>()
@@ -91,8 +148,9 @@ export async function GET(request: Request) {
         if (fecha) {
             for (const liquidacion of liquidacionesOriginales) {
                 if (candidatosPorEmpleado.has(liquidacion.empleadoId)) continue
-                const dia = buscarDiaLiquidado(liquidacion.desglose, fecha)
-                if (!dia || Number(dia.horasTrabajadas) <= 0) continue
+                const resolucion = resolverDiaOriginal(liquidacion, fecha)
+                if (!resolucion || Number(resolucion.dia.horasTrabajadas) <= 0) continue
+                const { dia, origen } = resolucion
 
                 const empleadoNombre = `${liquidacion.empleado.nombre} ${liquidacion.empleado.apellido || ''}`.trim()
                 const complementoId = yaPagados.get(liquidacion.empleadoId)
@@ -108,6 +166,7 @@ export async function GET(request: Request) {
                     horas: liquidacion.empleado.horasTrabajoDiarias || Number(dia.horasTrabajadas) || 0,
                     monto,
                     liquidacionOriginalId: liquidacion.id,
+                    origenValidacion: origen,
                     estado: complementoId ? 'YA_PAGADO' : yaIncluido ? 'YA_INCLUIDO' : 'DISPONIBLE',
                     motivo: complementoId
                         ? 'El complemento de este feriado ya fue pagado.'
@@ -202,14 +261,37 @@ export async function POST(request: Request) {
                         periodoDesde: { lte: rango.gte },
                         periodoHasta: { gte: rango.gte },
                     },
-                    include: { empleado: true },
+                    include: {
+                        empleado: {
+                            select: {
+                                id: true,
+                                nombre: true,
+                                apellido: true,
+                                dni: true,
+                                jornal: true,
+                                sueldoBaseMensual: true,
+                                cicloPago: true,
+                                horasTrabajoDiarias: true,
+                                horarioEntrada: true,
+                                rolRel: { select: { jornal: true, cicloPago: true } },
+                                turno: { select: { horaInicio: true } },
+                                fichadas: {
+                                    where: { fechaHora: { gte: rango.gte, lt: rango.lt } },
+                                    select: { fechaHora: true, tipo: true },
+                                    orderBy: { fechaHora: 'asc' },
+                                },
+                            },
+                        },
+                    },
                     orderBy: { fechaGeneracion: 'desc' },
                 })
-                const original = originales.find(liquidacion => Boolean(buscarDiaLiquidado(liquidacion.desglose, fecha)))
-                if (!original) throw new Error('No se encontró la liquidación semanal original de uno de los empleados.')
+                const originalResuelto = originales
+                    .map(original => ({ original, resolucion: resolverDiaOriginal(original, fecha) }))
+                    .find(resultado => Boolean(resultado.resolucion))
+                if (!originalResuelto?.resolucion) throw new Error('No se encontró una liquidación original con trabajo verificable para uno de los empleados.')
 
-                const dia = buscarDiaLiquidado(original.desglose, fecha)
-                if (!dia) throw new Error('La liquidación original no contiene el día seleccionado.')
+                const { original, resolucion } = originalResuelto
+                const { dia, origen: origenValidacion } = resolucion
                 const monto = calcularAdicionalFeriadoAdeudado(dia)
                 const cantidadHoras = original.empleado.horasTrabajoDiarias || Number(dia.horasTrabajadas) || 0
                 const nombreEmpleado = `${original.empleado.nombre} ${original.empleado.apellido || ''}`.trim()
@@ -240,6 +322,7 @@ export async function POST(request: Request) {
                             semanaDesde: semana.desde,
                             semanaHasta: semana.hasta,
                             liquidacionOriginalId: original.id,
+                            origenValidacion,
                             cantidadHoras,
                             monto,
                             valorHoraFeriado: cantidadHoras > 0 ? monto / cantidadHoras : 0,
