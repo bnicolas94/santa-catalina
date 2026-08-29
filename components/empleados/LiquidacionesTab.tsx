@@ -6,6 +6,7 @@ import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidati
 import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
 import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
+import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
 
 export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: string, empleadoDatos: any }) {
     const { data: session } = useSession()
@@ -213,6 +214,12 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
         const items = Array.isArray(liq.items) ? liq.items : []
         const esMixto = liq.tipo === 'MENSUAL_MIXTA'
         const efectivoMixto = esMixto ? montoEfectivoReciboMixto(liq.cierreMensualMixto) : 0
+        const detalleHoras = separarHorasExtrasYAdeudadas({
+            horasExtras: liq.horasExtras,
+            ajusteHorasExtras: liq.ajusteHorasExtras,
+            montoHorasExtras: liq.montoHorasExtras,
+            desglose: liq.desglose,
+        })
         if (esMixto && efectivoMixto <= 0) {
             window.alert('Este cierre no tuvo un pago en efectivo. La transferencia se respalda con el recibo oficial del contador.')
             return
@@ -222,10 +229,12 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
             periodo: liq.periodo,
             fechaGeneracion: liq.fechaGeneracion,
             tipo: liq.tipo,
-            horasExtras: esMixto ? 0 : Number(liq.horasExtras || 0) + Number(liq.ajusteHorasExtras || 0),
+            horasExtras: esMixto ? 0 : detalleHoras.horasExtras,
+            ajusteHorasExtras: esMixto ? 0 : detalleHoras.horasAdeudadas,
             sueldoProporcional: esMixto ? efectivoMixto : liq.sueldoProporcional,
             montoHorasNormales: esMixto ? 0 : liq.montoHorasNormales,
             montoHorasExtras: esMixto ? 0 : liq.montoHorasExtras,
+            montoAjusteHorasExtras: esMixto ? 0 : detalleHoras.montoHorasAdeudadas,
             montoHorasFeriado: esMixto ? 0 : liq.montoHorasFeriado,
             montoAdicionales: esMixto ? 0 : items.reduce((total: number, item: any) => total + Number(item.montoCalculado || 0), 0),
             descuentos: esMixto ? 0 : liq.descuentosPrestamos,

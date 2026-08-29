@@ -21,7 +21,9 @@ interface ReporteFila {
     periodo: string
     fechaGeneracion: string
     horasExtras: number
+    ajusteHorasExtras: number
     montoHorasExtras: number
+    montoAjusteHorasExtras: number
     sueldoProporcional: number
     montoHorasNormales: number
     montoHorasFeriado: number
@@ -134,6 +136,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                             <th>Empleado</th>
                             <th>Período Disp.</th>
                             <th class="number">Hs. Ext.</th>
+                            <th class="number">Hs. ajuste / adeudadas</th>
                             <th class="number">Monto Ext. ($)</th>
                             <th class="number">Bruto ($)</th>
                             <th class="number">Descuentos ($)</th>
@@ -147,12 +150,13 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 <td>${row.empleado}</td>
                                 <td>${row.periodo}</td>
                                 <td class="number">${row.horasExtras}</td>
+                                <td class="number">${row.ajusteHorasExtras || '-'}</td>
                                 <td class="number">${row.montoHorasExtras.toLocaleString('es-AR')}</td>
                                 <td class="number">${row.totalBruto.toLocaleString('es-AR')}</td>
                                 <td class="number">${row.descuentos.toLocaleString('es-AR')}</td>
                                 <td class="number"><strong>${row.totalNeto.toLocaleString('es-AR')}</strong></td>
                             </tr>
-                        `).join('') : '<tr><td colspan="8" style="text-align: center;">No hay recibos emitidos en este rango de fechas.</td></tr>'}
+                        `).join('') : '<tr><td colspan="9" style="text-align: center;">No hay recibos emitidos en este rango de fechas.</td></tr>'}
                     </tbody>
                 </table>
 
@@ -206,9 +210,11 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             fechaGeneracion: liq.fechaGeneracion,
             tipo: liq.tipo,
             horasExtras: liq.horasExtras,
+            ajusteHorasExtras: liq.ajusteHorasExtras,
             sueldoProporcional: liq.sueldoProporcional,
             montoHorasNormales: liq.montoHorasNormales,
             montoHorasExtras: liq.montoHorasExtras,
+            montoAjusteHorasExtras: liq.montoAjusteHorasExtras,
             montoHorasFeriado: liq.montoHorasFeriado,
             montoAdicionales: liq.montoAdicionales,
             descuentos: liq.descuentos,
@@ -258,7 +264,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                             />
                                         </th>
                                         <th>Empleado</th>
-                                        <th style={{ textAlign: 'right' }}>Hs Extras</th>
+                                        <th style={{ textAlign: 'right' }}>Hs extras / adeudadas</th>
                                         <th style={{ textAlign: 'right' }}>Ingresos ($)</th>
                                         <th style={{ textAlign: 'right' }}>Descuentos ($)</th>
                                         <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Neto Final ($)</th>
@@ -303,7 +309,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                     </div>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
-                                                    {d.horasExtras > 0 ? `${d.horasExtras}hs ($${d.montoHorasExtras.toLocaleString('es-AR')})` : '-'}
+                                                    {d.horasExtras !== 0 && <div>{d.horasExtras} h semana · ${(d.montoHorasExtras - (d.montoAjusteHorasExtras || 0)).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div>}
+                                                    {d.ajusteHorasExtras !== 0 && <div style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{d.ajusteHorasExtras} h ajuste/adeudadas · {(d.montoAjusteHorasExtras || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div>}
+                                                    {d.horasExtras === 0 && d.ajusteHorasExtras === 0 && '-'}
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>${d.totalBruto.toLocaleString('es-AR')}</td>
                                                 <td style={{ textAlign: 'right', color: d.descuentos > 0 ? 'var(--color-danger)' : 'inherit' }}>

@@ -63,12 +63,15 @@ export function WeeklyPayrollResults(props: Props) {
         <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'white' }}>
         <table className="table table-sm">
             <thead style={{ backgroundColor: 'var(--color-gray-50)' }}><tr>
-                <th style={{ width: '30px' }}></th><th>Empleado</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '90px' }}>Ajuste (hs)</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)' }}>Neto a Pagar</th>
+                <th style={{ width: '30px' }}></th><th>Empleado</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '110px' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)' }}>Neto a Pagar</th>
             </tr></thead>
             <tbody>{resultadosVisibles.map(resultado => {
                 const alertas = obtenerAlertasLiquidacion(resultado)
                 const errores = alertas.filter(alerta => alerta.nivel === 'error').length
                 const advertencias = alertas.length - errores
+                const horasAdeudadas = resultado.ajusteHorasExtras || 0
+                const montoHorasAdeudadas = Math.round(horasAdeudadas * resultado.valorHoraExtra)
+                const montoExtrasSemana = resultado.montoHorasExtras - montoHorasAdeudadas
                 return <Fragment key={resultado.empleadoId}>
                 <tr onClick={() => !resultado.error && setExpandedRow(expandedRow === resultado.empleadoId ? null : resultado.empleadoId)} style={{ cursor: resultado.error ? 'default' : 'pointer', backgroundColor: expandedRow === resultado.empleadoId ? 'var(--color-info-bg)' : 'transparent', opacity: resultado.error ? 0.7 : 1 }}>
                     <td>{!resultado.error && (expandedRow === resultado.empleadoId ? '▼' : '▶')}</td>
@@ -85,8 +88,14 @@ export function WeeklyPayrollResults(props: Props) {
                         <td style={{ textAlign: 'center' }}>{resultado.diasTrabajados}</td><td style={{ textAlign: 'right' }}>${resultado.sueldoBase.toLocaleString()}</td>
                         <td style={{ textAlign: 'center' }}>{resultado.esSeguimientoMensualMixto
                             ? <span title="Ajustá las horas dentro de cada día para conservar su fecha exacta.">Por día</span>
-                            : <input type="number" step="0.5" className="form-input" style={{ padding: '2px 5px', fontSize: '11px', textAlign: 'center', height: '24px' }} value={resultado.ajusteHorasExtras || ''} onChange={evento => props.onAjusteChange(resultado.empleadoId, evento.target.value)} onClick={evento => evento.stopPropagation()} placeholder="0" />}</td>
-                        <td style={{ textAlign: 'right', color: 'var(--color-success)' }}><span style={{ fontSize: '10px', display: 'block' }}>({resultado.horasExtras + (resultado.ajusteHorasExtras || 0)}h){(resultado.ajusteHorasExtras || 0) !== 0 && <span style={{ color: (resultado.ajusteHorasExtras || 0) > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}> {(resultado.ajusteHorasExtras || 0) > 0 ? '+' : ''}{resultado.ajusteHorasExtras}</span>}</span>${resultado.montoHorasExtras.toLocaleString()}</td>
+                            : <input type="number" step="0.5" className="form-input" title="Ingresá horas omitidas o adeudadas. Se identificarán por separado en el recibo." style={{ padding: '2px 5px', fontSize: '11px', textAlign: 'center', height: '24px' }} value={resultado.ajusteHorasExtras || ''} onChange={evento => props.onAjusteChange(resultado.empleadoId, evento.target.value)} onClick={evento => evento.stopPropagation()} placeholder="0" />}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>
+                            <span style={{ fontSize: '10px', display: 'block' }}>Semana: {resultado.horasExtras} h</span>
+                            <strong>${montoExtrasSemana.toLocaleString()}</strong>
+                            {horasAdeudadas !== 0 && <span style={{ fontSize: '10px', display: 'block', marginTop: '2px', color: horasAdeudadas > 0 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
+                                Ajuste/adeudadas: {horasAdeudadas > 0 ? '+' : ''}{horasAdeudadas} h · {montoHorasAdeudadas > 0 ? '+' : '-'}${Math.abs(montoHorasAdeudadas).toLocaleString()}
+                            </span>}
+                        </td>
                         <td style={{ textAlign: 'right' }}>{resultado.montoHorasFeriado > 0 && <span className="badge badge-warning" style={{ fontSize: '9px' }}>FER</span>}${resultado.montoHorasFeriado.toLocaleString()}</td>
                         <td style={{ textAlign: 'right', color: 'var(--color-danger)' }}>{resultado.descuentoPrestamos > 0 && <span style={{ fontSize: '10px' }}>Préstamos</span>}-${resultado.descuentoPrestamos.toLocaleString()}</td>
                         <td style={{ textAlign: 'right', fontWeight: 800 }}>${resultado.totalNeto.toLocaleString()}</td>

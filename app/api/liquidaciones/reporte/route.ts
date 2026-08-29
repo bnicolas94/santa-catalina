@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
+import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
 
 export async function GET(request: Request) {
     try {
@@ -61,6 +62,12 @@ export async function GET(request: Request) {
         // Map the data for easier consumption in the frontend
         const reporteSueldos = liquidaciones.map(liq => {
             const esMixto = liq.tipo === 'MENSUAL_MIXTA'
+            const detalleHoras = separarHorasExtrasYAdeudadas({
+                horasExtras: liq.horasExtras,
+                ajusteHorasExtras: liq.ajusteHorasExtras,
+                montoHorasExtras: liq.montoHorasExtras,
+                desglose: liq.desglose,
+            })
             const efectivoMixto = esMixto ? montoEfectivoReciboMixto(liq.cierreMensualMixto) : 0
             const totalEgresos = liq.descuentosPrestamos
             const montoAdicionales = liq.items.reduce((acc, item) => acc + item.montoCalculado, 0)
@@ -84,8 +91,10 @@ export async function GET(request: Request) {
                 },
                 periodo: liq.periodo,
                 fechaGeneracion: liq.fechaGeneracion,
-                horasExtras: esMixto ? 0 : liq.horasExtras + liq.ajusteHorasExtras,
+                horasExtras: esMixto ? 0 : detalleHoras.horasExtras,
+                ajusteHorasExtras: esMixto ? 0 : detalleHoras.horasAdeudadas,
                 montoHorasExtras: esMixto ? 0 : liq.montoHorasExtras,
+                montoAjusteHorasExtras: esMixto ? 0 : detalleHoras.montoHorasAdeudadas,
                 sueldoProporcional: esMixto ? efectivoMixto : liq.sueldoProporcional,
                 montoHorasNormales: esMixto ? 0 : liq.montoHorasNormales,
                 montoHorasFeriado: esMixto ? 0 : liq.montoHorasFeriado,
@@ -116,7 +125,9 @@ export async function GET(request: Request) {
                 periodo: `Liquidación Final (${liq.tipoEgreso})`,
                 fechaGeneracion: liq.fechaEgreso,
                 horasExtras: 0,
+                ajusteHorasExtras: 0,
                 montoHorasExtras: 0,
+                montoAjusteHorasExtras: 0,
                 sueldoProporcional: 0,
                 montoHorasNormales: 0,
                 montoHorasFeriado: 0,

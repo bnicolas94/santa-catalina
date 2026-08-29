@@ -1,5 +1,6 @@
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
 
 export type ModeloRecibo = 'A' | 'B'
 
@@ -25,9 +26,11 @@ export interface DatosReciboLiquidacion {
     fechaImpresion?: string | Date | null
     tipo?: string | null
     horasExtras?: number | null
+    ajusteHorasExtras?: number | null
     sueldoProporcional?: number | null
     montoHorasNormales?: number | null
     montoHorasExtras?: number | null
+    montoAjusteHorasExtras?: number | null
     montoHorasFeriado?: number | null
     montoAdicionales?: number | null
     descuentos?: number | null
@@ -85,12 +88,23 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
     const totalNeto = numero(recibo.totalNeto)
     const tipo = String(recibo.tipo || '')
     const periodo = String(recibo.periodo || '')
+    const detalleHoras = separarHorasExtrasYAdeudadas({
+        horasExtras: recibo.horasExtras,
+        ajusteHorasExtras: recibo.ajusteHorasExtras,
+        montoHorasExtras: recibo.montoHorasExtras,
+        desglose: recibo.desglose,
+    })
+    if (recibo.montoAjusteHorasExtras != null) {
+        detalleHoras.montoHorasAdeudadas = numero(recibo.montoAjusteHorasExtras)
+        detalleHoras.montoHorasExtras = numero(recibo.montoHorasExtras) - detalleHoras.montoHorasAdeudadas
+    }
     return {
         desglose,
         sueldoBase,
         adicionales,
         descuentos,
         totalNeto,
+        detalleHoras,
         rango: rangoPeriodo(periodo),
         esHorasAdeudadas: tipo === 'HORAS_EXTRAS_ADEUDADAS' || desglose.origen === 'HORAS_EXTRAS_ADEUDADAS',
         esFeriadoAdeudado: tipo === 'FERIADO_ADEUDADO' || desglose.origen === 'FERIADO_ADEUDADO',
@@ -100,7 +114,7 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
     }
 }
 
-function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRecibo[] {
+export function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRecibo[] {
     const calc = datosCalculados(recibo)
     if (calc.esFinal && Array.isArray(calc.desglose.conceptos)) {
         return (calc.desglose.conceptos as Array<Record<string, unknown>>).map(concepto => {
@@ -142,9 +156,14 @@ function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRecibo[] {
 
     const conceptos: ConceptoRecibo[] = []
     if (calc.sueldoBase !== 0) conceptos.push({ nombre: 'Sueldo / período', monto: calc.sueldoBase })
-    if (numero(recibo.montoHorasExtras) !== 0) conceptos.push({
-        nombre: `Horas extras (${dinero(recibo.horasExtras)} h)`,
-        monto: numero(recibo.montoHorasExtras),
+    if (calc.detalleHoras.montoHorasExtras !== 0) conceptos.push({
+        nombre: `Horas extras de la semana (${dinero(calc.detalleHoras.horasExtras)} h)`,
+        monto: calc.detalleHoras.montoHorasExtras,
+    })
+    if (calc.detalleHoras.montoHorasAdeudadas !== 0 || calc.detalleHoras.horasAdeudadas !== 0) conceptos.push({
+        nombre: `Horas de ajuste / adeudadas (${dinero(calc.detalleHoras.horasAdeudadas)} h)`,
+        monto: calc.detalleHoras.montoHorasAdeudadas,
+        detalle: 'Horas incorporadas manualmente a esta liquidación.',
     })
     if (recibo.conceptos?.length) conceptos.push(...recibo.conceptos)
     else if (calc.adicionales !== 0) conceptos.push({ nombre: 'Adicionales / otros', monto: calc.adicionales })
@@ -216,15 +235,17 @@ export function contenidoReciboFinalRenuncia(recibo: DatosReciboLiquidacion): st
         <p class="recibi">Recibí</p>`
 }
 
-function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
+export function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
     const especial = contenidoEspecialClasico(recibo)
     if (especial) return especial
     const calc = datosCalculados(recibo)
-    const extras = numero(recibo.montoHorasExtras)
+    const extras = calc.detalleHoras.montoHorasExtras
+    const ajusteHoras = calc.detalleHoras.montoHorasAdeudadas
     const partes = [
         `<strong>$${dinero(calc.sueldoBase)}</strong> (pesos ${formatCurrencyToWords(calc.sueldoBase)}) en concepto de pago por el período laboral`,
     ]
-    if (extras !== 0) partes.push(`<strong>$${dinero(extras)}</strong> (pesos ${formatCurrencyToWords(extras)}) por <strong>${dinero(recibo.horasExtras)} horas extras</strong>`)
+    if (extras !== 0) partes.push(`<strong>$${dinero(extras)}</strong> (pesos ${formatCurrencyToWords(extras)}) por <strong>${dinero(calc.detalleHoras.horasExtras)} horas extras de la semana</strong>`)
+    if (ajusteHoras !== 0 || calc.detalleHoras.horasAdeudadas !== 0) partes.push(`<strong>$${dinero(ajusteHoras)}</strong> (pesos ${formatCurrencyToWords(Math.abs(ajusteHoras))}) por <strong>${dinero(calc.detalleHoras.horasAdeudadas)} horas de ajuste / adeudadas</strong>`)
     if (calc.adicionales !== 0) partes.push(`<strong>$${dinero(calc.adicionales)}</strong> (pesos ${formatCurrencyToWords(Math.abs(calc.adicionales))}) por adicionales y otros conceptos`)
     const descuento = calc.descuentos > 0 ? ` Luego de descuentos por <strong>$${dinero(calc.descuentos)}</strong>,` : ''
     const licencia = recibo.licenciaNombre ? ` Se contemplan días de licencia por <strong>${escaparHtml(recibo.licenciaNombre)}</strong>.` : ''
