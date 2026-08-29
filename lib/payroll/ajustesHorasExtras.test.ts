@@ -1,6 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { separarHorasExtrasYAdeudadas } from './ajustesHorasExtras'
+import { semanaAnteriorDeLiquidacion, separarHorasExtrasYAdeudadas } from './ajustesHorasExtras'
+
+test('atribuye el ajuste a la semana inmediata anterior', () => {
+    assert.deepEqual(semanaAnteriorDeLiquidacion('Semana del 24/08/2026 al 30/08/2026'), {
+        desde: '2026-08-17',
+        hasta: '2026-08-23',
+        etiqueta: 'Semana del 17/08/2026 al 23/08/2026',
+    })
+})
+
+test('calcula la semana anterior aunque cruce de mes o año', () => {
+    assert.deepEqual(semanaAnteriorDeLiquidacion('Semana del 04/01/2027 al 10/01/2027'), {
+        desde: '2026-12-28',
+        hasta: '2027-01-03',
+        etiqueta: 'Semana del 28/12/2026 al 03/01/2027',
+    })
+})
 
 test('separa las horas semanales de las horas cargadas como deuda', () => {
     assert.deepEqual(separarHorasExtrasYAdeudadas({

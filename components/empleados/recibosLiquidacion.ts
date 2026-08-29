@@ -1,6 +1,6 @@
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
-import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
+import { semanaAnteriorDeLiquidacion, separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
 
 export type ModeloRecibo = 'A' | 'B'
 
@@ -98,6 +98,7 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
         detalleHoras.montoHorasAdeudadas = numero(recibo.montoAjusteHorasExtras)
         detalleHoras.montoHorasExtras = numero(recibo.montoHorasExtras) - detalleHoras.montoHorasAdeudadas
     }
+    const semanaOrigenAjuste = semanaAnteriorDeLiquidacion(periodo, recibo.desglose)
     return {
         desglose,
         sueldoBase,
@@ -105,6 +106,7 @@ function datosCalculados(recibo: DatosReciboLiquidacion) {
         descuentos,
         totalNeto,
         detalleHoras,
+        semanaOrigenAjuste,
         rango: rangoPeriodo(periodo),
         esHorasAdeudadas: tipo === 'HORAS_EXTRAS_ADEUDADAS' || desglose.origen === 'HORAS_EXTRAS_ADEUDADAS',
         esFeriadoAdeudado: tipo === 'FERIADO_ADEUDADO' || desglose.origen === 'FERIADO_ADEUDADO',
@@ -163,7 +165,9 @@ export function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRec
     if (calc.detalleHoras.montoHorasAdeudadas !== 0 || calc.detalleHoras.horasAdeudadas !== 0) conceptos.push({
         nombre: `Horas de ajuste / adeudadas (${dinero(calc.detalleHoras.horasAdeudadas)} h)`,
         monto: calc.detalleHoras.montoHorasAdeudadas,
-        detalle: 'Horas incorporadas manualmente a esta liquidación.',
+        detalle: calc.semanaOrigenAjuste
+            ? `Semana de origen: ${calc.semanaOrigenAjuste.etiqueta}`
+            : 'Horas incorporadas manualmente a esta liquidación.',
     })
     if (recibo.conceptos?.length) conceptos.push(...recibo.conceptos)
     else if (calc.adicionales !== 0) conceptos.push({ nombre: 'Adicionales / otros', monto: calc.adicionales })
@@ -245,7 +249,12 @@ export function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
         `<strong>$${dinero(calc.sueldoBase)}</strong> (pesos ${formatCurrencyToWords(calc.sueldoBase)}) en concepto de pago por el período laboral`,
     ]
     if (extras !== 0) partes.push(`<strong>$${dinero(extras)}</strong> (pesos ${formatCurrencyToWords(extras)}) por <strong>${dinero(calc.detalleHoras.horasExtras)} horas extras de la semana</strong>`)
-    if (ajusteHoras !== 0 || calc.detalleHoras.horasAdeudadas !== 0) partes.push(`<strong>$${dinero(ajusteHoras)}</strong> (pesos ${formatCurrencyToWords(Math.abs(ajusteHoras))}) por <strong>${dinero(calc.detalleHoras.horasAdeudadas)} horas de ajuste / adeudadas</strong>`)
+    if (ajusteHoras !== 0 || calc.detalleHoras.horasAdeudadas !== 0) {
+        const origen = calc.semanaOrigenAjuste
+            ? ` correspondientes a la <strong>${escaparHtml(calc.semanaOrigenAjuste.etiqueta)}</strong>`
+            : ''
+        partes.push(`<strong>$${dinero(ajusteHoras)}</strong> (pesos ${formatCurrencyToWords(Math.abs(ajusteHoras))}) por <strong>${dinero(calc.detalleHoras.horasAdeudadas)} horas de ajuste / adeudadas</strong>${origen}`)
+    }
     if (calc.adicionales !== 0) partes.push(`<strong>$${dinero(calc.adicionales)}</strong> (pesos ${formatCurrencyToWords(Math.abs(calc.adicionales))}) por adicionales y otros conceptos`)
     const descuento = calc.descuentos > 0 ? ` Luego de descuentos por <strong>$${dinero(calc.descuentos)}</strong>,` : ''
     const licencia = recibo.licenciaNombre ? ` Se contemplan días de licencia por <strong>${escaparHtml(recibo.licenciaNombre)}</strong>.` : ''

@@ -1,8 +1,28 @@
+import { sumarDiasRRHH } from '@/lib/rrhh/fechas'
+import { rangoHistoricoLiquidacion } from './liquidaciones'
+
 interface DatosHorasExtras {
     horasExtras?: unknown
     ajusteHorasExtras?: unknown
     montoHorasExtras?: unknown
     desglose?: unknown
+}
+
+function fechaParaMostrar(valor: string): string {
+    return valor.split('-').reverse().join('/')
+}
+
+export function semanaAnteriorDeLiquidacion(periodo: string, desglose?: unknown) {
+    const rango = rangoHistoricoLiquidacion(periodo) || rangoHistoricoLiquidacion(periodo, desglose)
+    if (!rango) return null
+
+    const desde = sumarDiasRRHH(rango.desde, -7)
+    const hasta = sumarDiasRRHH(rango.hasta, -7)
+    return {
+        desde,
+        hasta,
+        etiqueta: `Semana del ${fechaParaMostrar(desde)} al ${fechaParaMostrar(hasta)}`,
+    }
 }
 
 function numero(valor: unknown): number {

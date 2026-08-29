@@ -26,7 +26,7 @@ test('el recibo detallado informa por separado las horas adeudadas', () => {
         {
             nombre: 'Horas de ajuste / adeudadas (2 h)',
             monto: 13_472,
-            detalle: 'Horas incorporadas manualmente a esta liquidación.',
+            detalle: 'Semana de origen: Semana del 17/08/2026 al 23/08/2026',
         },
     ])
 })
@@ -36,5 +36,7 @@ test('el recibo clásico menciona expresamente el ajuste de horas adeudadas', ()
 
     assert.match(contenido, /0,5 horas extras de la semana/)
     assert.match(contenido, /2 horas de ajuste \/ adeudadas/)
+    assert.match(contenido, /Semana del 17\/08\/2026 al 23\/08\/2026/)
+    assert.doesNotMatch(contenido, /adeudadas<\/strong> correspondientes a la <strong>Semana del 24\/08\/2026/)
     assert.match(contenido, /\$13\.472/)
 })
