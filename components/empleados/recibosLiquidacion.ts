@@ -169,10 +169,24 @@ export function conceptosDetallados(recibo: DatosReciboLiquidacion): ConceptoRec
             ? `Semana de origen: ${calc.semanaOrigenAjuste.etiqueta}`
             : 'Horas incorporadas manualmente a esta liquidación.',
     })
-    if (recibo.conceptos?.length) conceptos.push(...recibo.conceptos)
-    else if (calc.adicionales !== 0) conceptos.push({ nombre: 'Adicionales / otros', monto: calc.adicionales })
-    if (calc.descuentos !== 0) conceptos.push({ nombre: 'Descuentos / préstamos', monto: -calc.descuentos })
+    if (recibo.conceptos?.length) conceptos.push(...recibo.conceptos.filter(concepto => numero(concepto.monto) > 0))
+    else if (calc.adicionales > 0) conceptos.push({ nombre: 'Adicionales / otros', monto: calc.adicionales })
     return conceptos
+}
+
+export function importeMostradoEnRecibo(recibo: DatosReciboLiquidacion): number {
+    const calc = datosCalculados(recibo)
+    const esReciboSemanal = !calc.esHorasAdeudadas
+        && !calc.esFeriadoAdeudado
+        && !calc.esMixtoEfectivo
+        && !calc.esVacaciones
+        && !calc.esFinal
+    const descuentosAdicionales = recibo.conceptos?.length
+        ? recibo.conceptos.reduce((total, concepto) => total + Math.abs(Math.min(0, numero(concepto.monto))), 0)
+        : Math.abs(Math.min(0, calc.adicionales))
+    return esReciboSemanal
+        ? calc.totalNeto + calc.descuentos + descuentosAdicionales
+        : calc.totalNeto
 }
 
 export function contenidoEspecialClasico(recibo: DatosReciboLiquidacion) {
@@ -214,13 +228,26 @@ export function contenidoEspecialClasico(recibo: DatosReciboLiquidacion) {
 }
 
 function tablaConceptos(recibo: DatosReciboLiquidacion) {
-    const filas = conceptosDetallados(recibo).map(concepto => {
+    const calc = datosCalculados(recibo)
+    const conceptos = conceptosDetallados(recibo)
+    const mostrarDescuentos = calc.esHorasAdeudadas
+        || calc.esFeriadoAdeudado
+        || calc.esMixtoEfectivo
+        || calc.esVacaciones
+        || calc.esFinal
+    const filas = conceptos.map(concepto => {
         const esDescuento = concepto.monto < 0
-        return `<tr><td>${escaparHtml(concepto.nombre)}${concepto.detalle ? `<small>${escaparHtml(concepto.detalle)}</small>` : ''}</td><td>${esDescuento ? '-' : `$${dinero(concepto.monto)}`}</td><td>${esDescuento ? `-$${dinero(Math.abs(concepto.monto))}` : '-'}</td></tr>`
+        const nombre = `${escaparHtml(concepto.nombre)}${concepto.detalle ? `<small>${escaparHtml(concepto.detalle)}</small>` : ''}`
+        return mostrarDescuentos
+            ? `<tr><td>${nombre}</td><td>${esDescuento ? '-' : `$${dinero(concepto.monto)}`}</td><td>${esDescuento ? `-$${dinero(Math.abs(concepto.monto))}` : '-'}</td></tr>`
+            : `<tr><td>${nombre}</td><td>$${dinero(concepto.monto)}</td></tr>`
     }).join('')
-    const totalHaberes = conceptosDetallados(recibo).filter(c => c.monto > 0).reduce((total, c) => total + c.monto, 0)
-    const totalDescuentos = conceptosDetallados(recibo).filter(c => c.monto < 0).reduce((total, c) => total + Math.abs(c.monto), 0)
-    return `<table class="tabla-detalle"><thead><tr><th>Concepto</th><th>Haberes</th><th>Descuentos</th></tr></thead><tbody>${filas || '<tr><td colspan="3">Sin conceptos detallados</td></tr>'}</tbody><tfoot><tr><td>Totales</td><td>$${dinero(totalHaberes)}</td><td>$${dinero(totalDescuentos)}</td></tr><tr class="neto"><td colspan="2">Total neto recibido</td><td>$${dinero(recibo.totalNeto)}</td></tr></tfoot></table>`
+    const totalHaberes = conceptos.filter(c => c.monto > 0).reduce((total, c) => total + c.monto, 0)
+    const totalDescuentos = conceptos.filter(c => c.monto < 0).reduce((total, c) => total + Math.abs(c.monto), 0)
+    if (mostrarDescuentos) {
+        return `<table class="tabla-detalle"><thead><tr><th>Concepto</th><th>Haberes</th><th>Descuentos</th></tr></thead><tbody>${filas || '<tr><td colspan="3">Sin conceptos detallados</td></tr>'}</tbody><tfoot><tr><td>Totales</td><td>$${dinero(totalHaberes)}</td><td>$${dinero(totalDescuentos)}</td></tr><tr class="neto"><td colspan="2">Total neto recibido</td><td>$${dinero(recibo.totalNeto)}</td></tr></tfoot></table>`
+    }
+    return `<table class="tabla-detalle"><thead><tr><th>Concepto</th><th>Importe</th></tr></thead><tbody>${filas || '<tr><td colspan="2">Sin conceptos detallados</td></tr>'}</tbody><tfoot><tr class="neto"><td>Importe total a pagar</td><td>$${dinero(importeMostradoEnRecibo(recibo))}</td></tr></tfoot></table>`
 }
 
 export function contenidoReciboFinalRenuncia(recibo: DatosReciboLiquidacion): string | null {
@@ -246,7 +273,7 @@ export function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
     const extras = calc.detalleHoras.montoHorasExtras
     const ajusteHoras = calc.detalleHoras.montoHorasAdeudadas
     const partes = [
-        `<strong>$${dinero(calc.sueldoBase)}</strong> (pesos ${formatCurrencyToWords(calc.sueldoBase)}) en concepto de pago por el período laboral`,
+        `<strong>$${dinero(calc.sueldoBase)}</strong> (pesos ${formatCurrencyToWords(calc.sueldoBase)}) en concepto de pago por el período laboral del <strong>${escaparHtml(calc.rango.desde)}</strong> al <strong>${escaparHtml(calc.rango.hasta)}</strong>`,
     ]
     if (extras !== 0) partes.push(`<strong>$${dinero(extras)}</strong> (pesos ${formatCurrencyToWords(extras)}) por <strong>${dinero(calc.detalleHoras.horasExtras)} horas extras de la semana</strong>`)
     if (ajusteHoras !== 0 || calc.detalleHoras.horasAdeudadas !== 0) {
@@ -256,9 +283,9 @@ export function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
         partes.push(`<strong>$${dinero(ajusteHoras)}</strong> (pesos ${formatCurrencyToWords(Math.abs(ajusteHoras))}) por <strong>${dinero(calc.detalleHoras.horasAdeudadas)} horas de ajuste / adeudadas</strong>${origen}`)
     }
     if (calc.adicionales !== 0) partes.push(`<strong>$${dinero(calc.adicionales)}</strong> (pesos ${formatCurrencyToWords(Math.abs(calc.adicionales))}) por adicionales y otros conceptos`)
-    const descuento = calc.descuentos > 0 ? ` Luego de descuentos por <strong>$${dinero(calc.descuentos)}</strong>,` : ''
     const licencia = recibo.licenciaNombre ? ` Se contemplan días de licencia por <strong>${escaparHtml(recibo.licenciaNombre)}</strong>.` : ''
-    return `<p>Recibo la cantidad de ${partes.join(', más ')} del <strong>${escaparHtml(calc.rango.desde)}</strong> al <strong>${escaparHtml(calc.rango.hasta)}</strong>.${licencia}${descuento} recibo un total de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}).</p>`
+    const importe = importeMostradoEnRecibo(recibo)
+    return `<p>Recibo la cantidad de ${partes.join(', más ')}.${licencia} El importe total a pagar es de <strong>$${dinero(importe)}</strong> (pesos ${formatCurrencyToWords(importe)}).</p>`
 }
 
 function reciboHtml(recibo: DatosReciboLiquidacion, modelo: ModeloRecibo, logo: string, watermark: string, pageBreak: boolean) {
@@ -268,7 +295,7 @@ function reciboHtml(recibo: DatosReciboLiquidacion, modelo: ModeloRecibo, logo: 
         ? `<div class="texto texto-renuncia">${contenidoRenuncia}</div>`
         : modelo === 'A'
             ? `<div class="texto">${cuerpoModeloA(recibo)}</div>`
-            : `<div class="encabezado-detalle"><span>RECIBO DE PAGO</span><strong>${escaparHtml(recibo.periodo)}</strong></div>${recibo.licenciaNombre ? `<p class="aviso">Incluye licencia: ${escaparHtml(recibo.licenciaNombre)}</p>` : ''}${tablaConceptos(recibo)}<p class="en-letras">Son pesos ${formatCurrencyToWords(numero(recibo.totalNeto))}.</p>`
+            : `<div class="encabezado-detalle"><span>RECIBO DE PAGO</span><strong>${escaparHtml(recibo.periodo)}</strong></div>${recibo.licenciaNombre ? `<p class="aviso">Incluye licencia: ${escaparHtml(recibo.licenciaNombre)}</p>` : ''}${tablaConceptos(recibo)}<p class="en-letras">Son pesos ${formatCurrencyToWords(importeMostradoEnRecibo(recibo))}.</p>`
     return `<section class="recibo ${contenidoRenuncia ? 'recibo-renuncia' : ''} ${pageBreak ? 'salto' : ''}"><img src="${watermark}" class="watermark" alt=""><header><img src="${logo}" alt="Santa Catalina"><p>Berazategui, ${fechaLarga(recibo.fechaImpresion || recibo.fechaGeneracion)}</p></header><main>${contenido}</main><footer><div class="firma">Firma</div><div>Aclaración: ${escaparHtml(nombre)}</div><div>D.N.I: ${escaparHtml(recibo.empleado.dni || '')}</div></footer></section>`
 }
 
