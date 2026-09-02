@@ -86,6 +86,7 @@ export default function InsumosPage() {
     const [factorUnificacion, setFactorUnificacion] = useState('')
     const [factorSecundarioUnificacion, setFactorSecundarioUnificacion] = useState('0')
     const [unificando, setUnificando] = useState(false)
+    const [mostrarInactivos, setMostrarInactivos] = useState(false)
 
     useEffect(() => {
         fetchData()
@@ -94,7 +95,7 @@ export default function InsumosPage() {
     async function fetchData() {
         try {
             const [insRes, provRes, famRes] = await Promise.all([
-                fetch('/api/insumos'),
+                fetch('/api/insumos?incluirInactivos=true'),
                 fetch('/api/proveedores'),
                 fetch('/api/familias-insumo'),
             ])
@@ -140,26 +141,38 @@ export default function InsumosPage() {
         setShowModal(true)
     }
 
-    async function handleDelete(id: string, nombre: string) {
-        console.log('Attempting to delete insumo:', id, nombre)
-        if (!window.confirm(`¿Estás seguro de eliminar "${nombre}"? Esta acción no se puede deshacer.`)) {
-            console.log('Deletion cancelled by user')
-            return
-        }
+    async function handleDeactivate(id: string, nombre: string) {
+        if (!window.confirm(`¿Desactivar "${nombre}"?\n\nDejará de aparecer en las operaciones nuevas, pero se conservarán sus movimientos, facturas, costos y proveedores históricos.`)) return
         try {
-            console.log('Sending DELETE request to /api/insumos/' + id)
             const res = await fetch(`/api/insumos/${id}`, { method: 'DELETE' })
             if (!res.ok) {
                 const data = await res.json()
-                throw new Error(data.error || 'Error al eliminar')
+                throw new Error(data.error || 'Error al desactivar')
             }
-            console.log('Delete successful')
-            setSuccess('Insumo eliminado')
+            setSuccess('Insumo desactivado sin modificar su historial')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
-            console.error('Delete error:', err)
-            setError(err instanceof Error ? err.message : 'Error al eliminar')
+            setError(err instanceof Error ? err.message : 'Error al desactivar')
+        }
+    }
+
+    async function handleReactivate(id: string) {
+        try {
+            const res = await fetch(`/api/insumos/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activo: true }),
+            })
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al reactivar')
+            }
+            setSuccess('Insumo reactivado')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al reactivar')
         }
     }
 
@@ -300,16 +313,18 @@ export default function InsumosPage() {
 
     // ---- Filtrado ----
     const filteredInsumos = insumos.filter((ins) => {
+        const activoOk = mostrarInactivos ? !ins.activo : ins.activo
         const estadoOk = !filterEstado || getSemaforoEstado(ins.stockActual, ins.stockMinimo).clase === filterEstado
         const familiaOk = !filterFamilia || (filterFamilia === '__sin__' ? !ins.familia : ins.familia?.id === filterFamilia)
-        return estadoOk && familiaOk
+        return activoOk && estadoOk && familiaOk
     })
 
+    const insumosActivos = insumos.filter(insumo => insumo.activo)
     const stats = {
-        total: insumos.length,
-        criticos: insumos.filter((i) => getSemaforoEstado(i.stockActual, i.stockMinimo).clase === 'rojo').length,
-        precaucion: insumos.filter((i) => getSemaforoEstado(i.stockActual, i.stockMinimo).clase === 'amarillo').length,
-        ok: insumos.filter((i) => getSemaforoEstado(i.stockActual, i.stockMinimo).clase === 'verde').length,
+        total: insumosActivos.length,
+        criticos: insumosActivos.filter((i) => getSemaforoEstado(i.stockActual, i.stockMinimo).clase === 'rojo').length,
+        precaucion: insumosActivos.filter((i) => getSemaforoEstado(i.stockActual, i.stockMinimo).clase === 'amarillo').length,
+        ok: insumosActivos.filter((i) => getSemaforoEstado(i.stockActual, i.stockMinimo).clase === 'verde').length,
     }
 
     if (loading) {
@@ -326,6 +341,12 @@ export default function InsumosPage() {
             <div className="page-header">
                 <h1>📦 Insumos e Inventario</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                    <button className="btn btn-outline" onClick={() => {
+                        setMostrarInactivos(actual => !actual)
+                        setFilterEstado('')
+                    }}>
+                        {mostrarInactivos ? '← Ver activos' : `Ver inactivos (${insumos.length - insumosActivos.length})`}
+                    </button>
                     <button className="btn btn-outline" onClick={() => { setEditingFamiliaId(null); setFamiliaForm({ nombre: '', color: COLORES_FAMILIA[0] }); setShowFamiliaModal(true) }}>
                         🏷️ Gestionar Familias
                     </button>
@@ -380,7 +401,7 @@ export default function InsumosPage() {
             )}
 
             {/* Stats de semáforo */}
-            <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
+            {!mostrarInactivos ? <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
                 <button
                     className={`btn ${filterEstado === '' ? 'btn-secondary' : 'btn-ghost'} btn-sm`}
                     onClick={() => setFilterEstado('')}
@@ -407,7 +428,11 @@ export default function InsumosPage() {
                 >
                     🟢 OK ({stats.ok})
                 </button>
-            </div>
+            </div> : (
+                <div style={{ padding: 'var(--space-3)', marginBottom: 'var(--space-6)', background: '#F8F9F9', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', color: 'var(--color-gray-600)' }}>
+                    Los insumos inactivos no aparecen en compras, conteos ni configuraciones nuevas. Su historial permanece disponible desde 📊.
+                </div>
+            )}
 
             <div className="table-container">
                 <table className="table">
@@ -435,12 +460,14 @@ export default function InsumosPage() {
                             filteredInsumos.map((ins) => {
                                 const estado = getSemaforoEstado(ins.stockActual, ins.stockMinimo)
                                 return (
-                                    <tr key={ins.id}>
+                                    <tr key={ins.id} style={!ins.activo ? { opacity: 0.72, backgroundColor: '#F8F9F9' } : undefined}>
                                         <td>
-                                            <div className="semaforo">
-                                                <span className={`semaforo-dot ${estado.clase}`} />
-                                                <span style={{ fontSize: 'var(--text-xs)' }}>{estado.label}</span>
-                                            </div>
+                                            {ins.activo ? (
+                                                <div className="semaforo">
+                                                    <span className={`semaforo-dot ${estado.clase}`} />
+                                                    <span style={{ fontSize: 'var(--text-xs)' }}>{estado.label}</span>
+                                                </div>
+                                            ) : <span className="badge">Inactivo</span>}
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{ins.nombre}</td>
                                         <td>
@@ -481,15 +508,21 @@ export default function InsumosPage() {
                                                 <button className="btn btn-ghost btn-sm" onClick={() => setHistorialInsumoId(ins.id)} title="Ver historial">
                                                     📊
                                                 </button>
-                                                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(ins)}>
-                                                    Editar
-                                                </button>
-                                                <button className="btn btn-ghost btn-sm" style={{ color: '#8E44AD' }} onClick={() => openUnificar(ins)} title="Unificar este duplicado dentro de otro insumo">
-                                                    Unificar
-                                                </button>
-                                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => handleDelete(ins.id, ins.nombre)}>
-                                                    Eliminar
-                                                </button>
+                                                {ins.activo ? <>
+                                                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(ins)}>
+                                                        Editar
+                                                    </button>
+                                                    <button className="btn btn-ghost btn-sm" style={{ color: '#8E44AD' }} onClick={() => openUnificar(ins)} title="Unificar este duplicado dentro de otro insumo">
+                                                        Unificar
+                                                    </button>
+                                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-danger)' }} onClick={() => handleDeactivate(ins.id, ins.nombre)}>
+                                                        Desactivar
+                                                    </button>
+                                                </> : (
+                                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-success)' }} onClick={() => handleReactivate(ins.id)}>
+                                                        Reactivar
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

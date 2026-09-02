@@ -1,6 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
+import { motivoBloqueoDesactivacion } from '@/lib/insumos/desactivacion'
+
+class InsumoDesactivacionError extends Error {}
 
 function proveedorIdsDelBody(body: Record<string, unknown>): string[] | null {
     if (!Array.isArray(body.proveedorIds)) return null
@@ -17,9 +20,12 @@ export async function PUT(
         const body = await request.json() as Record<string, unknown>
         const proveedorIds = proveedorIdsDelBody(body)
         const proveedorPrincipalId = proveedorIds?.[0] || (body.proveedorId ? String(body.proveedorId) : null)
-        if (body.nombre !== undefined) {
+        if (body.nombre !== undefined || body.activo === true) {
+            const actual = await prisma.insumo.findUnique({ where: { id }, select: { nombre: true } })
+            if (!actual) return NextResponse.json({ error: 'Insumo no encontrado' }, { status: 404 })
+            const nombreObjetivo = body.nombre !== undefined ? String(body.nombre) : actual.nombre
             const otros = await prisma.insumo.findMany({ where: { id: { not: id }, activo: true }, select: { nombre: true } })
-            if (otros.some(item => normalizarNombreInsumo(item.nombre) === normalizarNombreInsumo(String(body.nombre)))) {
+            if (otros.some(item => normalizarNombreInsumo(item.nombre) === normalizarNombreInsumo(nombreObjetivo))) {
                 return NextResponse.json({ error: 'Ya existe otro insumo activo con ese nombre. Usá la opción Unificar.' }, { status: 400 })
             }
         }
@@ -62,7 +68,7 @@ export async function PUT(
     }
 }
 
-// DELETE /api/insumos/:id — Eliminar insumo
+// DELETE /api/insumos/:id — Desactivar sin borrar historial ni relaciones.
 export async function DELETE(
     _request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -70,15 +76,34 @@ export async function DELETE(
     try {
         const { id } = await params
 
-        // Delete related dependencies manually to mimic Cascade and avoid 500 error
-        await prisma.fichaTecnica.deleteMany({ where: { insumoId: id } })
-        await prisma.movimientoStock.deleteMany({ where: { insumoId: id } })
-        await prisma.stockInsumo.deleteMany({ where: { insumoId: id } })
+        const insumo = await prisma.$transaction(async tx => {
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'insumo:' + id}))::text AS lock_result`
+            const actual = await tx.insumo.findUnique({
+                where: { id },
+                include: {
+                    stocks: { select: { cantidad: true, cantidadSecundaria: true } },
+                    _count: { select: { fichasTecnicas: true } },
+                },
+            })
+            if (!actual) throw new InsumoDesactivacionError('Insumo no encontrado')
+            if (!actual.activo) return actual
 
-        await prisma.insumo.delete({ where: { id } })
-        return NextResponse.json({ success: true })
+            const motivoBloqueo = motivoBloqueoDesactivacion({
+                stockActual: actual.stockActual,
+                stockActualSecundario: actual.stockActualSecundario,
+                stocks: actual.stocks,
+                cantidadFichasTecnicas: actual._count.fichasTecnicas,
+            })
+            if (motivoBloqueo) throw new InsumoDesactivacionError(motivoBloqueo)
+
+            return tx.insumo.update({ where: { id }, data: { activo: false } })
+        })
+        return NextResponse.json({ success: true, insumo })
     } catch (error) {
-        console.error('Error deleting insumo:', error)
-        return NextResponse.json({ error: 'Error al eliminar: Verifica que el insumo no tenga otras dependencias' }, { status: 400 })
+        console.error('Error desactivando insumo:', error)
+        if (error instanceof InsumoDesactivacionError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        return NextResponse.json({ error: 'No se pudo desactivar el insumo' }, { status: 500 })
     }
 }

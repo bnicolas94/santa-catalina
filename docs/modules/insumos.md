@@ -77,7 +77,8 @@ Este módulo resuelve la problemática de control de inventario en una planta de
 
 *   **Unidades Secundarias**: Algunos insumos se compran en una unidad (ej: Barras) pero se consumen en otra (ej: Kg). El sistema usa un `factorConversion` para manejar estos casos. Si el peso es variable, el factor se deja vacío y se carga manualmente.
 *   **Validaciones**: Se debe normalizar el uso de comas y puntos en los campos numéricos del frontend antes de enviar a la API.
-*   **Punto de Falla**: Si se elimina un insumo que forma parte de una `FichaTecnica`, la producción de ese producto fallará si no se maneja la nulidad. (Actualmente se previene vía integridad referencial o lógica de negocio).
+*   **Baja segura**: Los insumos nunca se borran físicamente desde la interfaz. La acción `Desactivar` conserva movimientos, facturas, costos, proveedores y stock histórico. Se bloquea si todavía tiene stock o si forma parte de una `FichaTecnica`.
+*   **Visibilidad**: `GET /api/insumos` devuelve sólo activos por defecto. La administración usa `?incluirInactivos=true` para consultar el historial y reactivar una baja.
 
 ---
 

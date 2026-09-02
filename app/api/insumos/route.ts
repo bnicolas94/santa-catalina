@@ -10,9 +10,12 @@ function proveedorIdsDelBody(body: Record<string, unknown>): string[] {
 }
 
 // GET /api/insumos
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const { searchParams } = new URL(request.url)
+        const incluirInactivos = searchParams.get('incluirInactivos') === 'true'
         const insumos = await prisma.insumo.findMany({
+            where: incluirInactivos ? undefined : { activo: true },
             orderBy: { nombre: 'asc' },
             include: {
                 proveedor: true,
