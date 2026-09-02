@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { aplicarDeltaStockInsumo, STOCK_TOLERANCE } from '@/lib/services/produccion-insumos'
+import { cantidadSecundariaParaConteo } from '@/lib/insumos/conteos'
 
 interface DetalleConteoInput {
     insumoId: string
@@ -64,7 +65,8 @@ export async function POST(request: Request) {
                         id: true,
                         nombre: true,
                         unidadMedida: true,
-                        stocks: { where: { ubicacionId }, select: { cantidad: true } },
+                        factorConversion: true,
+                        stocks: { where: { ubicacionId }, select: { cantidad: true, cantidadSecundaria: true } },
                     },
                 }),
             ])
@@ -109,6 +111,33 @@ export async function POST(request: Request) {
                         })
                     }
                 }
+
+                // La cantidad principal ingresada en el conteo es la fuente de verdad.
+                // Reconciliar el valor secundario evita que saldos antiguos e invisibles
+                // bloqueen una baja aun cuando el conteo físico principal quedó en cero.
+                const cantidadSecundariaContada = cantidadSecundariaParaConteo(
+                    cantidadContada,
+                    insumo.factorConversion,
+                    insumo.stocks[0]?.cantidadSecundaria || 0,
+                )
+                await tx.stockInsumo.upsert({
+                    where: {
+                        insumoId_ubicacionId: {
+                            insumoId: item.insumoId,
+                            ubicacionId,
+                        },
+                    },
+                    create: {
+                        insumoId: item.insumoId,
+                        ubicacionId,
+                        cantidad: cantidadContada,
+                        cantidadSecundaria: cantidadSecundariaContada,
+                    },
+                    update: {
+                        cantidad: cantidadContada,
+                        cantidadSecundaria: cantidadSecundariaContada,
+                    },
+                })
 
                 // El conteo es también un punto de conciliación: el total global pasa
                 // a ser exactamente la suma de las ubicaciones conocidas.
