@@ -193,8 +193,10 @@ export async function getCostosReport(
             where: {
                 fecha: { gte: startOfCurrent, lte: endOfCurrent },
                 ...(ubicacionId ? { ubicacionId } : {}),
-                compraId: null,
-                movimientosStock: { none: {} }
+                OR: [
+                    { compraId: null, movimientosStock: { none: {} } },
+                    { tipoRegistro: 'concepto_compra' },
+                ]
             },
             include: { categoria: true }
         }),
@@ -218,8 +220,10 @@ export async function getCostosReport(
             where: {
                 fecha: { gte: startAnterior, lte: endAnterior },
                 ...(ubicacionId ? { ubicacionId } : {}),
-                compraId: null,
-                movimientosStock: { none: {} }
+                OR: [
+                    { compraId: null, movimientosStock: { none: {} } },
+                    { tipoRegistro: 'concepto_compra' },
+                ]
             },
             include: { categoria: true }
         }),
@@ -508,7 +512,14 @@ export async function getCostosReport(
                 _sum: { costoTotal: true }
             }),
             prisma.gastoOperativo.aggregate({
-                where: { fecha: { gte: s, lte: e }, ...(ubicacionId ? { ubicacionId } : {}), compraId: null, movimientosStock: { none: {} } },
+                where: {
+                    fecha: { gte: s, lte: e },
+                    ...(ubicacionId ? { ubicacionId } : {}),
+                    OR: [
+                        { compraId: null, movimientosStock: { none: {} } },
+                        { tipoRegistro: 'concepto_compra' },
+                    ],
+                },
                 _sum: { monto: true }
             }),
             prisma.liquidacionSueldo.findMany({

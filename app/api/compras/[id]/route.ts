@@ -13,9 +13,13 @@ import {
 } from '@/lib/compras/validacion'
 
 type ItemEdicion = {
+    tipoItem: 'insumo' | 'gasto'
     movimientoId: string | null
+    gastoId: string | null
     insumoId: string | null
     insumoNombre: string | null
+    descripcion: string | null
+    categoriaGastoId: string | null
     unidadMedida: string
     cantidad: number
     cantidadSecundaria: number
@@ -53,6 +57,11 @@ function incluirCompraCompleta() {
                     },
                 },
             },
+        },
+        gastos: {
+            where: { tipoRegistro: 'concepto_compra' },
+            orderBy: { createdAt: 'asc' as const },
+            include: { categoria: { select: { id: true, nombre: true, color: true } } },
         },
     }
 }
@@ -95,16 +104,30 @@ export async function PATCH(
         const items: ItemEdicion[] = body.items.map((raw, index) => {
             if (!raw || typeof raw !== 'object') throw new CompraValidationError(`Ítem ${index + 1} inválido`)
             const item = raw as Record<string, unknown>
+            const tipoItem = item.tipoItem === 'gasto' ? 'gasto' : 'insumo'
             const insumoId = String(item.insumoId || '') || null
             const insumoNombre = String(item.insumoNombre || '').trim() || null
-            if (!insumoId && !insumoNombre) throw new CompraValidationError(`Seleccione el insumo del ítem ${index + 1}`)
+            const descripcion = String(item.descripcion || '').trim() || null
+            const categoriaGastoId = String(item.categoriaGastoId || '') || null
+            if (tipoItem === 'insumo' && !insumoId && !insumoNombre) {
+                throw new CompraValidationError(`Seleccione el insumo del ítem ${index + 1}`)
+            }
+            if (tipoItem === 'gasto' && (!descripcion || !categoriaGastoId)) {
+                throw new CompraValidationError(`Complete la descripción y categoría del gasto ${index + 1}`)
+            }
             return {
+                tipoItem,
                 movimientoId: String(item.movimientoId || '') || null,
+                gastoId: String(item.gastoId || '') || null,
                 insumoId,
                 insumoNombre,
+                descripcion,
+                categoriaGastoId,
                 unidadMedida: String(item.unidadMedida || 'unidades'),
-                cantidad: numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`),
-                cantidadSecundaria: item.cantidadSecundaria
+                cantidad: tipoItem === 'insumo'
+                    ? numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`)
+                    : 0,
+                cantidadSecundaria: tipoItem === 'insumo' && item.cantidadSecundaria
                     ? numeroPositivo(item.cantidadSecundaria, `Cantidad secundaria del ítem ${index + 1}`)
                     : 0,
                 costoTotal: numeroNoNegativo(item.costoTotal, `Costo del ítem ${index + 1}`),
@@ -115,16 +138,29 @@ export async function PATCH(
             }
         })
 
-        const idsRecibidos = items.flatMap(item => item.movimientoId ? [item.movimientoId] : [])
+        const idsMovimientosRecibidos = items.flatMap(item => item.movimientoId ? [item.movimientoId] : [])
+        const idsGastosRecibidos = items.flatMap(item => item.gastoId ? [item.gastoId] : [])
 
         const resultado = await prisma.$transaction(async tx => {
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'compra:' + id}))::text AS lock_result`
             const compra = await tx.compra.findUnique({
                 where: { id },
-                include: { movimientosStock: true },
+                include: {
+                    movimientosStock: true,
+                    gastos: { where: { tipoRegistro: 'concepto_compra' } },
+                },
             })
             if (!compra) throw new CompraValidationError('Factura no encontrada')
-            validarIdsEdicionCompra(compra.movimientosStock.map(item => item.id), idsRecibidos)
+            validarIdsEdicionCompra(compra.movimientosStock.map(item => item.id), idsMovimientosRecibidos)
+            validarIdsEdicionCompra(compra.gastos.map(item => item.id), idsGastosRecibidos)
+
+            const categoriasGastoIds = [...new Set(items.flatMap(item => item.categoriaGastoId ? [item.categoriaGastoId] : []))]
+            if (categoriasGastoIds.length > 0) {
+                const categoriasEncontradas = await tx.categoriaGasto.count({ where: { id: { in: categoriasGastoIds } } })
+                if (categoriasEncontradas !== categoriasGastoIds.length) {
+                    throw new CompraValidationError('Una de las categorías de gasto no existe')
+                }
+            }
 
             const costoTotal = items.reduce((acc, item) => acc + item.costoTotal, 0)
             validarMontoPagado(costoTotal, compra.montoPagado)
@@ -159,6 +195,10 @@ export async function PATCH(
             const cacheInsumos = new Map<string, string>()
             const itemsResueltos = []
             for (const item of items) {
+                if (item.tipoItem === 'gasto') {
+                    itemsResueltos.push(item)
+                    continue
+                }
                 let insumoId = item.insumoId
                 if (!insumoId && item.insumoNombre) {
                     const clave = item.insumoNombre.toLocaleLowerCase('es-AR')
@@ -187,17 +227,33 @@ export async function PATCH(
                 itemsResueltos.push({ ...item, insumoId })
             }
 
-            const idsConservados = itemsResueltos.flatMap(item => item.movimientoId ? [item.movimientoId] : [])
+            const itemsStock = itemsResueltos
+                .filter(item => item.tipoItem === 'insumo' && item.insumoId)
+                .map(item => ({ ...item, insumoId: item.insumoId! }))
+            const itemsGasto = itemsResueltos.filter(item => item.tipoItem === 'gasto')
+            const idsConservados = itemsStock.flatMap(item => item.movimientoId ? [item.movimientoId] : [])
             await tx.movimientoStock.deleteMany({
                 where: {
                     compraId: id,
                     ...(idsConservados.length > 0 ? { id: { notIn: idsConservados } } : {}),
                 },
             })
+            const idsGastosConservados = itemsGasto.flatMap(item => item.gastoId ? [item.gastoId] : [])
+            await tx.gastoOperativo.deleteMany({
+                where: {
+                    compraId: id,
+                    tipoRegistro: 'concepto_compra',
+                    ...(idsGastosConservados.length > 0 ? { id: { notIn: idsGastosConservados } } : {}),
+                },
+            })
 
-            const montosPorItem = distribuirMontoPagadoPorCostos(itemsResueltos.map(item => item.costoTotal), compra.montoPagado)
-            for (let index = 0; index < itemsResueltos.length; index += 1) {
-                const item = itemsResueltos[index]
+            const montosPorItem = distribuirMontoPagadoPorCostos(
+                itemsStock.map(item => item.costoTotal),
+                compra.montoPagado,
+                costoTotal
+            )
+            for (let index = 0; index < itemsStock.length; index += 1) {
+                const item = itemsStock[index]
                 const montoItem = montosPorItem[index]
                 const data = {
                     insumoId: item.insumoId,
@@ -236,6 +292,23 @@ export async function PATCH(
                 }
             }
 
+            for (const item of itemsGasto) {
+                const data = {
+                    fecha: fechaFactura || fechaMovimiento,
+                    monto: item.costoTotal,
+                    descripcion: item.descripcion!,
+                    categoriaId: item.categoriaGastoId!,
+                    compraId: id,
+                    tipoRegistro: 'concepto_compra',
+                    ubicacionId,
+                }
+                if (item.gastoId) {
+                    await tx.gastoOperativo.update({ where: { id: item.gastoId }, data })
+                } else {
+                    await tx.gastoOperativo.create({ data })
+                }
+            }
+
             await tx.gastoOperativo.updateMany({
                 where: { compraId: id },
                 data: { ubicacionId },
@@ -267,5 +340,43 @@ export async function PATCH(
         }
         console.error('Error editando factura:', error)
         return NextResponse.json({ error: 'Error al editar la factura' }, { status: 500 })
+    }
+}
+
+export async function DELETE(
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+        await prisma.$transaction(async tx => {
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'compra:' + id}))::text AS lock_result`
+            const compra = await tx.compra.findUnique({
+                where: { id },
+                include: { movimientosStock: true },
+            })
+            if (!compra) throw new CompraValidationError('Factura no encontrada')
+
+            for (const movimiento of compra.movimientosStock) {
+                await ComprasService.aplicarStockEnTx(tx, {
+                    insumoId: movimiento.insumoId,
+                    ubicacionId: movimiento.ubicacionId,
+                    cantidad: movimiento.cantidad,
+                    cantidadSecundaria: movimiento.cantidadSecundaria,
+                }, -1)
+            }
+
+            await ComprasService.revertirFinanzasCompraEnTx(tx, id)
+            await tx.movimientoStock.deleteMany({ where: { compraId: id } })
+            await tx.compra.delete({ where: { id } })
+        })
+
+        return NextResponse.json({ message: 'Factura eliminada; stock, gastos y pagos fueron revertidos' })
+    } catch (error) {
+        if (error instanceof CompraValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        console.error('Error eliminando factura:', error)
+        return NextResponse.json({ error: 'Error al eliminar la factura' }, { status: 500 })
     }
 }

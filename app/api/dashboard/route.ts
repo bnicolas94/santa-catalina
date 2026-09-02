@@ -50,7 +50,13 @@ export async function GET() {
             }),
             // Gastos del mes
             prisma.gastoOperativo.aggregate({
-                where: { fecha: { gte: startOfMonth, lte: endOfMonth } },
+                where: {
+                    fecha: { gte: startOfMonth, lte: endOfMonth },
+                    OR: [
+                        { compraId: null },
+                        { tipoRegistro: 'concepto_compra' },
+                    ],
+                },
                 _sum: { monto: true },
             }),
             // Compras nuevas más facturas históricas sin cabecera, sin modificar su información.

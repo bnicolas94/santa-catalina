@@ -5,6 +5,7 @@ import { CajaService } from '@/lib/services/caja.service'
 import { ComprasService } from '@/lib/services/compras.service'
 import {
     CompraValidationError,
+    distribuirMontoPagadoPorCostos,
     estadoPagoDesdeMontos,
     numeroNoNegativo,
     numeroPositivo,
@@ -239,15 +240,29 @@ export async function PATCH(
                     where: { compraId: original.compraId },
                     select: { id: true, costoTotal: true, montoPagado: true },
                 })
+                const [gastosFactura, compraActual] = await Promise.all([
+                    tx.gastoOperativo.aggregate({
+                        where: { compraId: original.compraId, tipoRegistro: 'concepto_compra' },
+                        _sum: { monto: true },
+                    }),
+                    tx.compra.findUnique({ where: { id: original.compraId }, select: { montoPagado: true } }),
+                ])
+                if (!compraActual) throw new CompraValidationError('Compra no encontrada')
                 const nuevoTotal = itemsNuevos.reduce((acc, item) => acc + (item.costoTotal || 0), 0)
-                const pagadoActual = itemsNuevos.reduce((acc, item) => acc + (item.montoPagado || 0), 0)
+                    + (gastosFactura._sum.monto || 0)
+                const pagadoActual = compraActual.montoPagado
                 validarMontoPagado(nuevoTotal, pagadoActual)
                 const estadoPago = estadoPagoDesdeMontos(nuevoTotal, pagadoActual)
-                for (const item of itemsNuevos) {
-                    const montoItem = nuevoTotal > 0 ? pagadoActual * ((item.costoTotal || 0) / nuevoTotal) : 0
+                const montosStock = distribuirMontoPagadoPorCostos(
+                    itemsNuevos.map(item => item.costoTotal || 0),
+                    pagadoActual,
+                    nuevoTotal
+                )
+                for (let index = 0; index < itemsNuevos.length; index += 1) {
+                    const item = itemsNuevos[index]
                     await tx.movimientoStock.update({
                         where: { id: item.id },
-                        data: { montoPagado: montoItem, estadoPago },
+                        data: { montoPagado: montosStock[index], estadoPago },
                     })
                 }
                 await tx.compra.update({

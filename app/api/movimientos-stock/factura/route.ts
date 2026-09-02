@@ -12,8 +12,11 @@ import {
 } from '@/lib/compras/validacion'
 
 type ItemFactura = {
+    tipoItem: 'insumo' | 'gasto'
     insumoId: string | null
     insumoNombre: string | null
+    descripcion: string | null
+    categoriaGastoId: string | null
     unidadMedida: string
     cantidad: number
     cantidadSecundaria: number | null
@@ -44,15 +47,28 @@ export async function POST(request: Request) {
         const items: ItemFactura[] = body.items.map((raw, index) => {
             if (!raw || typeof raw !== 'object') throw new CompraValidationError(`Ítem ${index + 1} inválido`)
             const item = raw as Record<string, unknown>
+            const tipoItem = item.tipoItem === 'gasto' ? 'gasto' : 'insumo'
             const insumoId = String(item.insumoId || '') || null
             const insumoNombre = String(item.insumoNombre || '').trim() || null
-            if (!insumoId && !insumoNombre) throw new CompraValidationError(`Seleccione el insumo del ítem ${index + 1}`)
+            const descripcion = String(item.descripcion || '').trim() || null
+            const categoriaGastoId = String(item.categoriaGastoId || '') || null
+            if (tipoItem === 'insumo' && !insumoId && !insumoNombre) {
+                throw new CompraValidationError(`Seleccione el insumo del ítem ${index + 1}`)
+            }
+            if (tipoItem === 'gasto' && (!descripcion || !categoriaGastoId)) {
+                throw new CompraValidationError(`Complete la descripción y categoría del gasto ${index + 1}`)
+            }
             return {
+                tipoItem,
                 insumoId,
                 insumoNombre,
+                descripcion,
+                categoriaGastoId,
                 unidadMedida: String(item.unidadMedida || 'unidades'),
-                cantidad: numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`),
-                cantidadSecundaria: item.cantidadSecundaria
+                cantidad: tipoItem === 'insumo'
+                    ? numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`)
+                    : 0,
+                cantidadSecundaria: tipoItem === 'insumo' && item.cantidadSecundaria
                     ? numeroPositivo(item.cantidadSecundaria, `Cantidad secundaria del ítem ${index + 1}`)
                     : null,
                 costoTotal: numeroNoNegativo(item.costoTotal, `Costo del ítem ${index + 1}`),
@@ -88,6 +104,14 @@ export async function POST(request: Request) {
         const observaciones = String(body.observaciones || '').trim() || null
 
         const result = await prisma.$transaction(async tx => {
+            const categoriasGastoIds = [...new Set(items.flatMap(item => item.categoriaGastoId ? [item.categoriaGastoId] : []))]
+            if (categoriasGastoIds.length > 0) {
+                const categoriasEncontradas = await tx.categoriaGasto.count({ where: { id: { in: categoriasGastoIds } } })
+                if (categoriasEncontradas !== categoriasGastoIds.length) {
+                    throw new CompraValidationError('Una de las categorías de gasto no existe')
+                }
+            }
+
             let proveedorId = proveedorIdSolicitado
             let nombreProveedor = proveedorNombre || 'Proveedor'
             if (!proveedorId && proveedorNombre) {
@@ -139,7 +163,24 @@ export async function POST(request: Request) {
 
             const cacheInsumos = new Map<string, string>()
             const movimientos = []
+            const conceptosGasto = []
             for (const item of items) {
+                if (item.tipoItem === 'gasto') {
+                    const concepto = await tx.gastoOperativo.create({
+                        data: {
+                            fecha: fechaFactura || fechaMovimiento,
+                            monto: item.costoTotal,
+                            descripcion: item.descripcion!,
+                            categoriaId: item.categoriaGastoId!,
+                            compraId: compra.id,
+                            tipoRegistro: 'concepto_compra',
+                            ubicacionId,
+                        },
+                    })
+                    conceptosGasto.push(concepto)
+                    continue
+                }
+
                 let insumoId = item.insumoId
                 if (!insumoId && item.insumoNombre) {
                     const clave = item.insumoNombre.toLocaleLowerCase('es-AR')
@@ -194,32 +235,21 @@ export async function POST(request: Request) {
                 })
                 movimientos.push(movimiento)
 
-                await tx.insumo.update({
-                    where: { id: insumoId },
-                    data: {
-                        stockActual: { increment: item.cantidad },
-                        stockActualSecundario: { increment: item.cantidadSecundaria || 0 },
-                        ...(item.actualizarCosto && item.costoTotal > 0
-                            ? { precioUnitario: item.costoTotal / item.cantidad }
-                            : {}),
-                    },
-                })
-                await tx.stockInsumo.upsert({
-                    where: { insumoId_ubicacionId: { insumoId, ubicacionId } },
-                    update: {
-                        cantidad: { increment: item.cantidad },
-                        cantidadSecundaria: { increment: item.cantidadSecundaria || 0 },
-                    },
-                    create: {
-                        insumoId,
-                        ubicacionId,
-                        cantidad: item.cantidad,
-                        cantidadSecundaria: item.cantidadSecundaria || 0,
-                    },
-                })
+                await ComprasService.aplicarStockEnTx(tx, {
+                    insumoId,
+                    ubicacionId,
+                    cantidad: item.cantidad,
+                    cantidadSecundaria: item.cantidadSecundaria,
+                }, 1)
+                if (item.actualizarCosto && item.costoTotal > 0) {
+                    await tx.insumo.update({
+                        where: { id: insumoId },
+                        data: { precioUnitario: item.costoTotal / item.cantidad },
+                    })
+                }
             }
 
-            return { compra, count: movimientos.length }
+            return { compra, count: movimientos.length + conceptosGasto.length }
         })
 
         return NextResponse.json({

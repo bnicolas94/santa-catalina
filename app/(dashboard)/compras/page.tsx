@@ -8,11 +8,16 @@ interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual
 interface Proveedor { id: string; nombre: string }
 interface Ubicacion { id: string; nombre: string; tipo: string }
 interface CajaCompra { tipo: string }
+interface CategoriaGasto { id: string; nombre: string; color: string | null }
 interface PagoForm { cajaOrigen: string; monto: string }
 interface ItemFacturaForm {
+    tipoItem: 'insumo' | 'gasto'
     movimientoId?: string
+    gastoId?: string
     insumoId: string
     insumoNombre: string
+    descripcion: string
+    categoriaGastoId: string
     cantidad: string
     cantidadSecundaria: string
     costoTotal: string
@@ -43,6 +48,30 @@ interface CompraCompleta {
         costoTotal: number | null
         fechaVencimiento: string | null
         insumo: { id: string; nombre: string; unidadMedida: string; unidadSecundaria?: string | null }
+    }>
+    gastos: Array<{
+        id: string
+        monto: number
+        descripcion: string
+        categoria: { id: string; nombre: string; color: string | null }
+    }>
+}
+interface FacturaGastoResumen {
+    id: string
+    numeroFactura: string | null
+    fechaMovimiento: string
+    fechaFactura: string | null
+    estadoPago: string
+    costoTotal: number
+    montoPagado: number
+    proveedor: { id: string; nombre: string } | null
+    ubicacion: { id: string; nombre: string } | null
+    movimientosStock: Array<{ id: string }>
+    gastos: Array<{
+        id: string
+        monto: number
+        descripcion: string
+        categoria: CategoriaGasto
     }>
 }
 interface Movimiento {
@@ -89,6 +118,8 @@ function ComprasContent() {
     const [proveedores, setProveedores] = useState<Proveedor[]>([])
     const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
     const [cajas, setCajas] = useState<CajaCompra[]>([])
+    const [categoriasGasto, setCategoriasGasto] = useState<CategoriaGasto[]>([])
+    const [facturasGasto, setFacturasGasto] = useState<FacturaGastoResumen[]>([])
     const [cuentaCorriente, setCuentaCorriente] = useState<CuentaCorriente | null>(null)
     const [cuentasExpandidas, setCuentasExpandidas] = useState<Record<string, boolean>>({})
     const [loading, setLoading] = useState(true)
@@ -98,7 +129,7 @@ function ComprasContent() {
     const [editingFacturaItemIndex, setEditingFacturaItemIndex] = useState<number | null>(null)
     const [loadingFactura, setLoadingFactura] = useState(false)
     const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '' })
-    const [tempItem, setTempItem] = useState({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
+    const [tempItem, setTempItem] = useState({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
     const [isManualInsumo, setIsManualInsumo] = useState(false)
@@ -124,7 +155,7 @@ function ComprasContent() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
 
-    const emptyTempItem = () => ({ insumoId: '', insumoNombre: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
+    const emptyTempItem = () => ({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const fechaInput = (fecha: string | null | undefined) => fecha ? new Date(fecha).toLocaleDateString('en-CA') : ''
 
     function closeFacturaModal() {
@@ -147,13 +178,15 @@ function ComprasContent() {
 
     async function fetchData() {
         try {
-            const [movRes, insRes, provRes, ubiRes, cajasRes, cuentaRes] = await Promise.all([
+            const [movRes, insRes, provRes, ubiRes, cajasRes, cuentaRes, categoriasRes, facturasGastoRes] = await Promise.all([
                 fetch('/api/movimientos-stock?tipo=entrada&limit=500'),
                 fetch('/api/insumos'),
                 fetch('/api/proveedores?activos=true'),
                 fetch('/api/operaciones/ubicaciones'),
                 fetch('/api/compras/cajas'),
                 fetch('/api/compras/cuenta-corriente'),
+                fetch('/api/gastos/categorias'),
+                fetch('/api/compras?conGastos=true&limit=200'),
             ])
             const movData = await movRes.json()
             const insData = await insRes.json()
@@ -161,6 +194,8 @@ function ComprasContent() {
             const ubiData = await ubiRes.json()
             const cajasData: unknown = await cajasRes.json()
             const cuentaData: unknown = await cuentaRes.json()
+            const categoriasData: unknown = await categoriasRes.json()
+            const facturasGastoData: unknown = await facturasGastoRes.json()
 
             setMovimientos(Array.isArray(movData) ? movData : [])
             setInsumos(Array.isArray(insData) ? insData : [])
@@ -168,6 +203,12 @@ function ComprasContent() {
             setUbicaciones(Array.isArray(ubiData) ? ubiData : [])
             if (cuentaRes.ok && cuentaData && typeof cuentaData === 'object') {
                 setCuentaCorriente(cuentaData as CuentaCorriente)
+            }
+            if (categoriasRes.ok && Array.isArray(categoriasData)) {
+                setCategoriasGasto(categoriasData as CategoriaGasto[])
+            }
+            if (facturasGastoRes.ok && Array.isArray(facturasGastoData)) {
+                setFacturasGasto(facturasGastoData as FacturaGastoResumen[])
             }
             
             if (Array.isArray(cajasData)) {
@@ -229,25 +270,37 @@ function ComprasContent() {
     }
 
     const addItemToFactura = () => {
-        if (!isManualInsumo && !tempItem.insumoId) return setError('Seleccione un insumo')
-        if (isManualInsumo && !tempItem.insumoNombre) return setError('Ingrese el nombre del insumo')
-        
-        let finalCantidad = tempItem.cantidad;
-        if (tempItem.useBultos) {
-            if (!tempItem.bultos || !tempItem.unidadesPorBulto) return setError('Ingrese bultos y unidades')
-            finalCantidad = String(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto))
-        } else if (!tempItem.cantidad) {
-            return setError('Ingrese cantidad')
+        if (!tempItem.costoTotal || Number(tempItem.costoTotal) < 0) return setError('Ingrese el importe del ítem')
+
+        let finalCantidad = ''
+        if (tempItem.tipoItem === 'insumo') {
+            if (!isManualInsumo && !tempItem.insumoId) return setError('Seleccione un insumo')
+            if (isManualInsumo && !tempItem.insumoNombre) return setError('Ingrese el nombre del insumo')
+            finalCantidad = tempItem.cantidad
+            if (tempItem.useBultos) {
+                if (!tempItem.bultos || !tempItem.unidadesPorBulto) return setError('Ingrese bultos y unidades')
+                finalCantidad = String(parseFloat(tempItem.bultos) * parseFloat(tempItem.unidadesPorBulto))
+            } else if (!tempItem.cantidad) {
+                return setError('Ingrese cantidad')
+            }
+        } else {
+            if (!tempItem.descripcion.trim()) return setError('Ingrese la descripción del gasto o servicio')
+            if (!tempItem.categoriaGastoId) return setError('Seleccione una categoría de gasto')
         }
 
         const insData = insumos.find(i => i.id === tempItem.insumoId)
         const itemToAdd: ItemFacturaForm = {
-            ...tempItem, 
+            ...tempItem,
             movimientoId: editingFacturaItemIndex === null ? undefined : facturaForm.items[editingFacturaItemIndex].movimientoId,
+            gastoId: editingFacturaItemIndex === null ? undefined : facturaForm.items[editingFacturaItemIndex].gastoId,
             cantidad: finalCantidad,
-            insumoNombre: isManualInsumo ? tempItem.insumoNombre : (insData?.nombre || ''),
-            unidadMedida: isManualInsumo ? (tempItem.unidadMedida || 'unidades') : (insData?.unidadMedida || 'u'),
-            unidadSecundaria: insData?.unidadSecundaria
+            insumoNombre: tempItem.tipoItem === 'insumo'
+                ? (isManualInsumo ? tempItem.insumoNombre : (insData?.nombre || ''))
+                : '',
+            unidadMedida: tempItem.tipoItem === 'insumo'
+                ? (isManualInsumo ? (tempItem.unidadMedida || 'unidades') : (insData?.unidadMedida || 'u'))
+                : '',
+            unidadSecundaria: tempItem.tipoItem === 'insumo' ? insData?.unidadSecundaria : undefined,
         }
 
         const items = [...facturaForm.items]
@@ -262,10 +315,13 @@ function ComprasContent() {
     const editFacturaItem = (index: number) => {
         const item = facturaForm.items[index]
         setEditingFacturaItemIndex(index)
-        setIsManualInsumo(!item.insumoId)
+        setIsManualInsumo(item.tipoItem === 'insumo' && !item.insumoId)
         setTempItem({
+            tipoItem: item.tipoItem,
             insumoId: item.insumoId,
             insumoNombre: item.insumoNombre,
+            descripcion: item.descripcion,
+            categoriaGastoId: item.categoriaGastoId,
             cantidad: item.cantidad,
             cantidadSecundaria: item.cantidadSecundaria,
             costoTotal: item.costoTotal,
@@ -295,7 +351,7 @@ function ComprasContent() {
         setError('')
         if (!isManualProveedor && !facturaForm.proveedorId) return setError('Seleccione un proveedor')
         if (isManualProveedor && !facturaForm.proveedorNombre) return setError('Ingrese el nombre del proveedor manual')
-        if (facturaForm.items.length === 0) return setError('Debe agregar al menos un insumo a la factura')
+        if (facturaForm.items.length === 0) return setError('Debe agregar al menos un ítem a la factura')
         
         if (!editingCompraId && (facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && facturaForm.pagoDividido) {
             const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
@@ -354,10 +410,13 @@ function ComprasContent() {
                 ubicacionId: compra.ubicacion?.id || '',
                 observaciones: compra.observaciones || '',
                 montoPagado: String(compra.montoPagado || ''),
-                items: compra.movimientosStock.map(movimiento => ({
+                items: ([...compra.movimientosStock.map(movimiento => ({
+                    tipoItem: 'insumo' as const,
                     movimientoId: movimiento.id,
                     insumoId: movimiento.insumo.id,
                     insumoNombre: movimiento.insumo.nombre,
+                    descripcion: '',
+                    categoriaGastoId: '',
                     cantidad: String(movimiento.cantidad),
                     cantidadSecundaria: movimiento.cantidadSecundaria ? String(movimiento.cantidadSecundaria) : '',
                     costoTotal: String(movimiento.costoTotal || 0),
@@ -368,7 +427,24 @@ function ComprasContent() {
                     fechaVencimiento: fechaInput(movimiento.fechaVencimiento),
                     unidadMedida: movimiento.insumo.unidadMedida,
                     unidadSecundaria: movimiento.insumo.unidadSecundaria || undefined,
-                })),
+                })), ...compra.gastos.map(gasto => ({
+                    tipoItem: 'gasto' as const,
+                    gastoId: gasto.id,
+                    insumoId: '',
+                    insumoNombre: '',
+                    descripcion: gasto.descripcion,
+                    categoriaGastoId: gasto.categoria.id,
+                    cantidad: '',
+                    cantidadSecundaria: '',
+                    costoTotal: String(gasto.monto),
+                    actualizarCosto: false,
+                    useBultos: false,
+                    bultos: '',
+                    unidadesPorBulto: '',
+                    fechaVencimiento: '',
+                    unidadMedida: '',
+                    unidadSecundaria: undefined,
+                }))] as ItemFacturaForm[]),
             })
             setShowFacturaModal(true)
         } catch (err: unknown) {
@@ -378,14 +454,9 @@ function ComprasContent() {
         }
     }
 
-    async function handlePago(id: string, esParcial = false) {
+    async function procesarPago(endpoint: string, saldoPendiente: number, esParcial = false) {
         if (cajas.length === 0) return setError('No hay cajas disponibles para realizar el pago')
-        
-        const mov = movimientos.find(m => m.id === id)
-        const saldoPendiente = mov
-            ? (mov.compra?.costoTotal ?? mov.costoTotal ?? 0) - (mov.compra?.montoPagado ?? mov.montoPagado ?? 0)
-            : 0
-        
+
         let montoPago: number | null = null
         if (esParcial) {
             const montoStr = prompt(`Saldo pendiente: $${saldoPendiente.toLocaleString('es-AR')}\n\n¿Cuánto abonás ahora?`, String(saldoPendiente))
@@ -411,7 +482,7 @@ function ComprasContent() {
             const payload: Record<string, string | number> = { cajaOrigen: selectedBox.tipo }
             if (montoPago !== null) payload.monto = montoPago
             
-            const res = await fetch(`/api/movimientos-stock/${id}/pago`, {
+            const res = await fetch(endpoint, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -428,6 +499,18 @@ function ComprasContent() {
         }
     }
 
+    async function handlePago(id: string, esParcial = false) {
+        const mov = movimientos.find(m => m.id === id)
+        const saldoPendiente = mov
+            ? (mov.compra?.costoTotal ?? mov.costoTotal ?? 0) - (mov.compra?.montoPagado ?? mov.montoPagado ?? 0)
+            : 0
+        return procesarPago(`/api/movimientos-stock/${id}/pago`, saldoPendiente, esParcial)
+    }
+
+    async function handlePagoFactura(factura: Pick<FacturaGastoResumen, 'id' | 'costoTotal' | 'montoPagado'> | CuentaCorrienteFactura, esParcial = false) {
+        return procesarPago(`/api/compras/${factura.id}/pago`, factura.costoTotal - factura.montoPagado, esParcial)
+    }
+
     async function handleDelete(id: string) {
         if (!confirm('¿Seguro que querés eliminar esta compra completa? Se revertirán todos sus ítems, pagos y saldos de caja.')) return
         try {
@@ -437,6 +520,22 @@ function ComprasContent() {
                 throw new Error(data.error || 'Error al eliminar el movimiento')
             }
             setSuccess('Compra eliminada; stock y caja fueron revertidos.')
+            fetchData()
+            setTimeout(() => setSuccess(''), 3000)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error')
+        }
+    }
+
+    async function handleDeleteFactura(compraId: string) {
+        if (!confirm('¿Seguro que querés eliminar esta factura completa? Se revertirán sus gastos, pagos y cualquier entrada de stock asociada.')) return
+        try {
+            const res = await fetch(`/api/compras/${compraId}`, { method: 'DELETE' })
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.error || 'Error al eliminar la factura')
+            }
+            setSuccess('Factura eliminada; sus movimientos asociados fueron revertidos.')
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) {
@@ -645,7 +744,7 @@ function ComprasContent() {
                         setIsManualProveedor(false)
                         setIsManualInsumo(false)
                         setShowFacturaModal(true)
-                    }}>📑 Factura Múltiple</button>
+                    }}>📑 Nueva factura</button>
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
@@ -712,12 +811,21 @@ function ComprasContent() {
                                                         <td colSpan={7} style={{ padding: 'var(--space-3) var(--space-5)' }}>
                                                             <div style={{ display: 'grid', gap: '8px' }}>
                                                                 {proveedor.facturas.map(factura => (
-                                                                    <div key={`${factura.origen}-${factura.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, 1fr) minmax(90px, 0.8fr) repeat(3, minmax(110px, 1fr))', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 10px', background: '#fff', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)' }}>
+                                                                    <div key={`${factura.origen}-${factura.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, 1fr) minmax(90px, 0.8fr) repeat(3, minmax(110px, 1fr)) auto', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 10px', background: '#fff', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)' }}>
                                                                         <strong>Fac. {factura.numeroFactura || 'S/N'}</strong>
                                                                         <span>{new Date(factura.fecha).toLocaleDateString('es-AR')}</span>
                                                                         <span>Total: ${factura.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                                                                         <span>Pagado: ${factura.montoPagado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                                                                         <strong style={{ color: '#C0392B' }}>Debe: ${factura.saldoPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
+                                                                        {factura.origen === 'compra' ? (
+                                                                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                                                                                <button type="button" className="btn btn-sm btn-ghost" onClick={() => handlePagoFactura(factura)} title="Pagar saldo">💵</button>
+                                                                                <button type="button" className="btn btn-sm btn-ghost" onClick={() => handlePagoFactura(factura, true)} title="Pago a cuenta">💰</button>
+                                                                                <button type="button" className="btn btn-sm btn-ghost" onClick={() => handleEditCompra(factura.id)} title="Editar factura">✏️</button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span title="Factura histórica de solo lectura">🔒</span>
+                                                                        )}
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -740,6 +848,69 @@ function ComprasContent() {
                             </table>
                         </div>
                     )}
+                </section>
+            )}
+
+            {facturasGasto.length > 0 && (
+                <section className="card" style={{ marginBottom: 'var(--space-6)', overflow: 'hidden' }}>
+                    <div style={{ padding: 'var(--space-4)', background: '#F4ECF7', borderBottom: '1px solid #D7BDE2' }}>
+                        <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧾 Facturas con gastos o servicios</h2>
+                        <p style={{ margin: '4px 0 0', color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>
+                            Estos conceptos impactan en Costos, pero no crean insumos ni modifican stock.
+                        </p>
+                    </div>
+                    <div className="table-container" style={{ border: 0, borderRadius: 0 }}>
+                        <table className="table" style={{ margin: 0 }}>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Proveedor / Factura</th>
+                                    <th>Conceptos</th>
+                                    <th>Tipo</th>
+                                    <th>Total factura</th>
+                                    <th>Estado</th>
+                                    <th style={{ textAlign: 'right' }}>Acc.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {facturasGasto.map(factura => {
+                                    const saldo = Math.max(0, factura.costoTotal - factura.montoPagado)
+                                    const esMixta = factura.movimientosStock.length > 0
+                                    return (
+                                        <tr key={factura.id}>
+                                            <td>{new Date(factura.fechaFactura || factura.fechaMovimiento).toLocaleDateString('es-AR')}</td>
+                                            <td>
+                                                <strong>{factura.proveedor?.nombre || 'Sin proveedor'}</strong>
+                                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Fac. {factura.numeroFactura || 'S/N'} · {factura.ubicacion?.nombre || 'Sin sede'}</div>
+                                            </td>
+                                            <td>
+                                                {factura.gastos.map(gasto => (
+                                                    <div key={gasto.id} style={{ marginBottom: '3px' }}>
+                                                        {gasto.descripcion} <span style={{ color: gasto.categoria.color || '#7D3C98', fontSize: 'var(--text-xs)', fontWeight: 700 }}>({gasto.categoria.nombre})</span>
+                                                    </div>
+                                                ))}
+                                            </td>
+                                            <td><span className="badge" style={{ background: esMixta ? '#F5EEF8' : '#FEF9E7', color: esMixta ? '#7D3C98' : '#9A7D0A' }}>{esMixta ? 'Mixta' : 'Sólo gasto'}</span></td>
+                                            <td style={{ fontWeight: 700 }}>${factura.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                            <td>
+                                                <span style={{ color: saldo <= 0.01 ? 'var(--color-success)' : '#C0392B', fontWeight: 700 }}>
+                                                    {saldo <= 0.01 ? 'Pagada' : `Debe $${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                                                    {saldo > 0.01 && <button type="button" className="btn btn-icon btn-ghost" onClick={() => handlePagoFactura(factura)} title="Pagar saldo">💵</button>}
+                                                    {saldo > 0.01 && <button type="button" className="btn btn-icon btn-ghost" onClick={() => handlePagoFactura(factura, true)} title="Pago a cuenta">💰</button>}
+                                                    <button type="button" className="btn btn-icon btn-ghost" onClick={() => handleEditCompra(factura.id)} title="Editar factura">✏️</button>
+                                                    <button type="button" className="btn btn-icon btn-ghost" onClick={() => handleDeleteFactura(factura.id)} title="Eliminar factura" style={{ color: 'var(--color-danger)' }}>🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
             )}
 
@@ -1114,12 +1285,12 @@ function ComprasContent() {
                 </div>
             )}
 
-            {/* Modal Factura Multiple */}
+            {/* Modal de factura completa */}
             {showFacturaModal && (
                 <div className="modal-overlay" onClick={closeFacturaModal}>
                     <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
                         <div className="modal-header">
-                            <h2>📑 {editingCompraId ? 'Editar Factura Completa' : 'Registrar Factura Múltiple'}</h2>
+                            <h2>📑 {editingCompraId ? 'Editar factura completa' : 'Registrar factura'}</h2>
                             <button className="btn btn-ghost btn-icon" onClick={closeFacturaModal}>✕</button>
                         </div>
                         <form onSubmit={handleFacturaSubmit}>
@@ -1131,7 +1302,7 @@ function ComprasContent() {
                                 )}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
-                                        <label className="form-label">Sede de entrada</label>
+                                        <label className="form-label">Sede / ubicación</label>
                                         <select className="form-select" value={facturaForm.ubicacionId} onChange={(e) => setFacturaForm({ ...facturaForm, ubicacionId: e.target.value })} required>
                                             <option value="">Seleccionar sede...</option>
                                             {ubicaciones.map((u) => <option key={u.id} value={u.id}>{u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}</option>)}
@@ -1278,11 +1449,29 @@ function ComprasContent() {
 
                                 <hr style={{ margin: 'var(--space-4) 0' }} />
 
-                                {/* Seleccion de Insumos */}
-                                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-2)' }}>🛒 {editingFacturaItemIndex === null ? 'Agregar insumo a la factura' : 'Editar ítem de la factura'}</h3>
+                                <h3 style={{ fontSize: 'var(--text-md)', marginBottom: 'var(--space-2)' }}>🛒 {editingFacturaItemIndex === null ? 'Agregar ítem a la factura' : 'Editar ítem de la factura'}</h3>
                                 <div style={{ padding: 'var(--space-3)', backgroundColor: '#F8F9F9', borderRadius: 'var(--radius-md)', border: '1px solid #E5E7E9', marginBottom: 'var(--space-4)' }}>
+                                    <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+                                        <button type="button" className="btn btn-sm" onClick={() => {
+                                            setTempItem(emptyTempItem())
+                                            setIsManualInsumo(false)
+                                        }} style={{ flex: 1, background: tempItem.tipoItem === 'insumo' ? '#2874A6' : '#EBF5FB', color: tempItem.tipoItem === 'insumo' ? '#fff' : '#2874A6', border: '2px solid #2874A6' }}>
+                                            📦 Insumo con stock
+                                        </button>
+                                        <button type="button" className="btn btn-sm" onClick={() => {
+                                            setTempItem({ ...emptyTempItem(), tipoItem: 'gasto', actualizarCosto: false })
+                                            setIsManualInsumo(false)
+                                        }} style={{ flex: 1, background: tempItem.tipoItem === 'gasto' ? '#7D3C98' : '#F5EEF8', color: tempItem.tipoItem === 'gasto' ? '#fff' : '#7D3C98', border: '2px solid #7D3C98' }}>
+                                            🧾 Gasto / servicio sin stock
+                                        </button>
+                                    </div>
+                                    <div style={{ padding: '8px 10px', marginBottom: 'var(--space-3)', borderRadius: 'var(--radius-sm)', background: tempItem.tipoItem === 'insumo' ? '#EBF5FB' : '#F5EEF8', color: tempItem.tipoItem === 'insumo' ? '#21618C' : '#6C3483', fontSize: 'var(--text-xs)', fontWeight: 600 }}>
+                                        {tempItem.tipoItem === 'insumo'
+                                            ? 'Aumenta existencias y queda disponible para conteos, producción y consumo.'
+                                            : 'Se registra en Costos y en la cuenta corriente del proveedor. No crea insumos ni modifica existencias.'}
+                                    </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
-                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <div className="form-group" style={{ marginBottom: 0, display: tempItem.tipoItem === 'insumo' ? 'block' : 'none' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                                 <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Insumo</label>
                                                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -1328,7 +1517,14 @@ function ComprasContent() {
                                             )}
                                         </div>
 
-                                        {tempItem.useBultos ? (
+                                        {tempItem.tipoItem === 'gasto' && (
+                                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                                <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Descripción</label>
+                                                <input className="form-input" value={tempItem.descripcion} onChange={(e) => setTempItem({ ...tempItem, descripcion: e.target.value })} placeholder="Ej: Abono telefónico, pintura, repuesto" />
+                                            </div>
+                                        )}
+
+                                        {tempItem.tipoItem === 'insumo' ? (tempItem.useBultos ? (
                                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
                                                 <div className="form-group" style={{ marginBottom: 0 }}>
                                                     <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Bultos</label>
@@ -1384,6 +1580,14 @@ function ComprasContent() {
                                                     </div>
                                                 )}
                                             </div>
+                                        )) : (
+                                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                                <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Categoría de gasto</label>
+                                                <select className="form-select" value={tempItem.categoriaGastoId} onChange={(e) => setTempItem({ ...tempItem, categoriaGastoId: e.target.value })}>
+                                                    <option value="">Seleccionar categoría...</option>
+                                                    {categoriasGasto.map(categoria => <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>)}
+                                                </select>
+                                            </div>
                                         )}
 
                                         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1392,7 +1596,7 @@ function ComprasContent() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-end', marginTop: 'var(--space-3)', flexWrap: 'wrap' }}>
+                                    {tempItem.tipoItem === 'insumo' && <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-end', marginTop: 'var(--space-3)', flexWrap: 'wrap' }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Vencimiento del ítem</label>
                                             <input type="date" className="form-input" value={tempItem.fechaVencimiento} onChange={(e) => setTempItem({ ...tempItem, fechaVencimiento: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
@@ -1403,11 +1607,11 @@ function ComprasContent() {
                                                 Actualizar costo unitario del insumo al guardar
                                             </label>
                                         )}
-                                    </div>
+                                    </div>}
 
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
                                         <div style={{ display: 'flex', gap: '15px' }}>
-                                            {!isManualInsumo && (
+                                            {tempItem.tipoItem === 'insumo' && !isManualInsumo && (
                                                 <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
                                                     <input type="checkbox" checked={tempItem.useBultos} onChange={(e) => setTempItem({ ...tempItem, useBultos: e.target.checked })} />
                                                     Ingresar en bultos (Maples, Cajas, Packs)
@@ -1434,15 +1638,15 @@ function ComprasContent() {
                                     </div>
                                 </div>
 
-                                {/* Lista de Insumos agregados */}
+                                {/* Lista de ítems agregados */}
                                 {facturaForm.items.length > 0 && (
                                     <table className="table" style={{ fontSize: '0.9rem', marginBottom: 'var(--space-4)' }}>
                                         <thead>
                                             <tr>
-                                                <th>Insumo</th>
+                                                <th>Tipo / concepto</th>
                                                 <th>Cantidad</th>
-                                                <th>Costo</th>
-                                                <th>Subtotal</th>
+                                                <th>Importe</th>
+                                                <th>Detalle</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
@@ -1450,14 +1654,19 @@ function ComprasContent() {
                                             {facturaForm.items.map((it, idx) => {
                                                 const insData = insumos.find(i => i.id === it.insumoId)
                                                 return (
-                                                    <tr key={it.movimientoId || idx} style={editingFacturaItemIndex === idx ? { backgroundColor: '#EBF5FB' } : undefined}>
+                                                    <tr key={it.movimientoId || it.gastoId || idx} style={editingFacturaItemIndex === idx ? { backgroundColor: '#EBF5FB' } : undefined}>
                                                         <td>
-                                                            <div style={{ fontWeight: 600 }}>{it.insumoNombre || insData?.nombre}</div>
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)' }}>Vto: {it.fechaVencimiento || '—'}</div>
+                                                            <span className="badge" style={{ marginRight: '6px', background: it.tipoItem === 'insumo' ? '#EBF5FB' : '#F5EEF8', color: it.tipoItem === 'insumo' ? '#21618C' : '#6C3483' }}>{it.tipoItem === 'insumo' ? 'Stock' : 'Gasto'}</span>
+                                                            <strong>{it.tipoItem === 'insumo' ? (it.insumoNombre || insData?.nombre) : it.descripcion}</strong>
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)' }}>
+                                                                {it.tipoItem === 'insumo'
+                                                                    ? `Vto: ${it.fechaVencimiento || '—'}`
+                                                                    : categoriasGasto.find(categoria => categoria.id === it.categoriaGastoId)?.nombre || 'Sin categoría'}
+                                                            </div>
                                                         </td>
                                                         <td>
-                                                            <div>{it.cantidad} {it.unidadMedida}</div>
-                                                            {it.cantidadSecundaria && (
+                                                            <div>{it.tipoItem === 'insumo' ? `${it.cantidad} ${it.unidadMedida}` : 'No mueve stock'}</div>
+                                                            {it.tipoItem === 'insumo' && it.cantidadSecundaria && (
                                                                 <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
                                                                     ({it.cantidadSecundaria} {it.unidadSecundaria})
                                                                 </div>
@@ -1465,11 +1674,11 @@ function ComprasContent() {
                                                         </td>
                                                         <td>${parseFloat(it.costoTotal || '0').toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                                                         <td>
-                                                            {it.costoTotal && it.cantidad ? (
+                                                            {it.tipoItem === 'insumo' && it.costoTotal && it.cantidad ? (
                                                                 <div style={{ fontSize: '0.8rem' }}>
                                                                     ${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {it.unidadMedida}
                                                                 </div>
-                                                            ) : '—'}
+                                                            ) : it.tipoItem === 'gasto' ? 'Costo operativo' : '—'}
                                                         </td>
                                                         <td>
                                                             <div style={{ display: 'flex', gap: '4px' }}>

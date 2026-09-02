@@ -150,7 +150,13 @@ export const getRentabilidadReport = unstable_cache(
         if (ubicacionId) whereGasto.ubicacionId = ubicacionId
 
         const gastos = await prisma.gastoOperativo.findMany({
-            where: { ...whereGasto, compraId: null, movimientosStock: { none: {} } },
+            where: {
+                ...whereGasto,
+                OR: [
+                    { compraId: null, movimientosStock: { none: {} } },
+                    { tipoRegistro: 'concepto_compra' },
+                ],
+            },
             include: { categoria: true }
         })
 
@@ -332,7 +338,13 @@ export const getReporteDetalle = async (
 
         // Fetch standard gastos
         const baseGastos = await prisma.gastoOperativo.findMany({
-            where: { ...where, compraId: null, movimientosStock: { none: {} } },
+            where: {
+                ...where,
+                OR: [
+                    { compraId: null, movimientosStock: { none: {} } },
+                    { tipoRegistro: 'concepto_compra' },
+                ],
+            },
             include: { categoria: true },
             orderBy: { fecha: 'desc' }
         })

@@ -8,12 +8,21 @@ export async function GET(request: Request) {
         const mes = searchParams.get('mes')
         const anio = searchParams.get('anio')
 
-        let whereClause = {}
+        let whereClause: Record<string, unknown> = {
+            OR: [
+                { compraId: null },
+                { tipoRegistro: 'concepto_compra' },
+            ],
+        }
         if (mes && anio) {
             const startOfMonth = new Date(parseInt(anio), parseInt(mes) - 1, 1)
             const endOfMonth = new Date(parseInt(anio), parseInt(mes), 0, 23, 59, 59, 999)
             whereClause = {
-                fecha: { gte: startOfMonth, lte: endOfMonth }
+                fecha: { gte: startOfMonth, lte: endOfMonth },
+                OR: [
+                    { compraId: null },
+                    { tipoRegistro: 'concepto_compra' },
+                ],
             }
         }
 

@@ -119,8 +119,10 @@ export async function detectarDesvios(
                 where: {
                     fecha: { gte: startActual, lte: endActual },
                     ...(ubicacionId ? { ubicacionId } : {}),
-                    compraId: null,
-                    movimientosStock: { none: {} }
+                    OR: [
+                        { compraId: null, movimientosStock: { none: {} } },
+                        { tipoRegistro: 'concepto_compra' },
+                    ]
                 },
                 _sum: { monto: true }
             }),
@@ -128,8 +130,10 @@ export async function detectarDesvios(
                 where: {
                     fecha: { gte: start3Periodos, lte: end3Periodos },
                     ...(ubicacionId ? { ubicacionId } : {}),
-                    compraId: null,
-                    movimientosStock: { none: {} }
+                    OR: [
+                        { compraId: null, movimientosStock: { none: {} } },
+                        { tipoRegistro: 'concepto_compra' },
+                    ]
                 },
                 _sum: { monto: true }
             })

@@ -74,14 +74,20 @@ export function validarIdsEdicionCompra(idsOriginales: string[], idsRecibidos: s
     }
 }
 
-export function distribuirMontoPagadoPorCostos(costos: number[], montoPagado: number): number[] {
-    const total = costos.reduce((acc, costo) => acc + costo, 0)
-    validarMontoPagado(total, montoPagado)
-    let restante = montoPagado
+export function distribuirMontoPagadoPorCostos(
+    costos: number[],
+    montoPagado: number,
+    totalFactura = costos.reduce((acc, costo) => acc + costo, 0)
+): number[] {
+    validarMontoPagado(totalFactura, montoPagado)
+    const montoDistribuible = totalFactura > 0
+        ? montoPagado * (costos.reduce((acc, costo) => acc + costo, 0) / totalFactura)
+        : 0
+    let restante = montoDistribuible
     return costos.map((costo, index) => {
         const asignado = index === costos.length - 1
             ? restante
-            : (total > 0 ? montoPagado * (costo / total) : 0)
+            : (totalFactura > 0 ? montoPagado * (costo / totalFactura) : 0)
         restante -= asignado
         return asignado
     })

@@ -61,3 +61,8 @@ test('redistribuye el monto ya pagado sin alterar su total', () => {
     assert.ok(Math.abs(distribucion.reduce((acc, monto) => acc + monto, 0) - 333.33) < 0.000001)
     assert.throws(() => distribuirMontoPagadoPorCostos([100, 200], 400))
 })
+
+test('asigna al stock sólo su proporción cuando la factura también contiene gastos', () => {
+    const distribucion = distribuirMontoPagadoPorCostos([300, 200], 500, 1000)
+    assert.deepEqual(distribucion, [150, 100])
+})

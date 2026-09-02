@@ -583,6 +583,7 @@ model GastoOperativo {
   kmVehiculo       Int?              @map("km_vehiculo")
   taller           String?
   compraId         String?           @map("id_compra")
+  tipoRegistro     String?           @map("tipo_registro")
   compra           Compra?           @relation(fields: [compraId], references: [id])
   categoria        CategoriaGasto    @relation(fields: [categoriaId], references: [id])
   ubicacion        Ubicacion?        @relation(fields: [ubicacionId], references: [id])
@@ -591,6 +592,7 @@ model GastoOperativo {
   movimientosCaja  MovimientoCaja[]
 
   @@index([compraId])
+  @@index([tipoRegistro])
   @@map("gastos_operativos")
 }
 

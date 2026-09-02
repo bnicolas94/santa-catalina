@@ -1,6 +1,12 @@
 import type { Prisma } from '@prisma/client'
 import { CajaService } from '@/lib/services/caja.service'
-import { estadoPagoDesdeMontos, type PagoCajaInput } from '@/lib/compras/validacion'
+import {
+    CompraValidationError,
+    distribuirMontoPagadoPorCostos,
+    estadoPagoDesdeMontos,
+    validarMontoPagado,
+    type PagoCajaInput,
+} from '@/lib/compras/validacion'
 
 type TxClient = Prisma.TransactionClient
 
@@ -18,6 +24,13 @@ type StockCompraInput = {
     ubicacionId: string | null
     cantidad: number
     cantidadSecundaria?: number | null
+}
+
+type PagarCompraInput = {
+    compraId: string
+    monto: number
+    cajaOrigen: string
+    fecha: Date
 }
 
 export class ComprasService {
@@ -70,6 +83,7 @@ export class ComprasService {
                 descripcion: input.descripcion,
                 categoriaId: categoria.id,
                 compraId: input.compraId,
+                tipoRegistro: 'pago_proveedor',
                 ubicacionId: input.ubicacionId || null,
             },
         })
@@ -90,13 +104,73 @@ export class ComprasService {
         return gasto
     }
 
-    static async recalcularCompraEnTx(tx: TxClient, compraId: string) {
-        const movimientos = await tx.movimientoStock.findMany({
-            where: { compraId, tipo: 'entrada' },
-            select: { costoTotal: true, montoPagado: true },
+    static async pagarCompraEnTx(tx: TxClient, input: PagarCompraInput) {
+        const compra = await tx.compra.findUnique({
+            where: { id: input.compraId },
+            include: {
+                proveedor: { select: { nombre: true } },
+                movimientosStock: {
+                    where: { tipo: 'entrada' },
+                    select: { id: true, costoTotal: true },
+                },
+            },
         })
+        if (!compra) throw new CompraValidationError('Compra no encontrada')
+        if (compra.costoTotal <= 0) throw new CompraValidationError('La compra no tiene un total registrado')
+
+        const saldoPendiente = compra.costoTotal - compra.montoPagado
+        if (saldoPendiente <= 0.01) throw new CompraValidationError('La compra ya está totalmente pagada')
+        if (input.monto <= 0) throw new CompraValidationError('El monto a pagar debe ser mayor a 0')
+        validarMontoPagado(saldoPendiente, input.monto)
+
+        const nuevoMontoPagado = compra.montoPagado + input.monto
+        const nuevoEstado = estadoPagoDesdeMontos(compra.costoTotal, nuevoMontoPagado)
+
+        await this.registrarPagoEnTx(tx, {
+            compraId: compra.id,
+            monto: input.monto,
+            pagos: [{ cajaOrigen: input.cajaOrigen, monto: input.monto }],
+            fecha: input.fecha,
+            ubicacionId: compra.ubicacionId,
+            descripcion: nuevoEstado === 'pagado'
+                ? `Pago final de compra${compra.numeroFactura ? ` Fac. ${compra.numeroFactura}` : ''} - ${compra.proveedor?.nombre || 'General'}`
+                : `Pago a cuenta de compra${compra.numeroFactura ? ` Fac. ${compra.numeroFactura}` : ''} - ${compra.proveedor?.nombre || 'General'}`,
+        })
+
+        const montosStock = distribuirMontoPagadoPorCostos(
+            compra.movimientosStock.map(item => item.costoTotal || 0),
+            nuevoMontoPagado,
+            compra.costoTotal
+        )
+        for (let index = 0; index < compra.movimientosStock.length; index += 1) {
+            await tx.movimientoStock.update({
+                where: { id: compra.movimientosStock[index].id },
+                data: { montoPagado: montosStock[index], estadoPago: nuevoEstado },
+            })
+        }
+
+        return tx.compra.update({
+            where: { id: compra.id },
+            data: { montoPagado: nuevoMontoPagado, estadoPago: nuevoEstado },
+        })
+    }
+
+    static async recalcularCompraEnTx(tx: TxClient, compraId: string) {
+        const [compra, movimientos, gastosFactura] = await Promise.all([
+            tx.compra.findUnique({ where: { id: compraId }, select: { montoPagado: true } }),
+            tx.movimientoStock.findMany({
+                where: { compraId, tipo: 'entrada' },
+                select: { costoTotal: true },
+            }),
+            tx.gastoOperativo.aggregate({
+                where: { compraId, tipoRegistro: 'concepto_compra' },
+                _sum: { monto: true },
+            }),
+        ])
+        if (!compra) throw new CompraValidationError('Compra no encontrada')
         const costoTotal = movimientos.reduce((acc, mov) => acc + (mov.costoTotal || 0), 0)
-        const montoPagado = movimientos.reduce((acc, mov) => acc + (mov.montoPagado || 0), 0)
+            + (gastosFactura._sum.monto || 0)
+        const montoPagado = compra.montoPagado
         const estadoPago = estadoPagoDesdeMontos(costoTotal, montoPagado)
 
         return tx.compra.update({
