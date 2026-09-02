@@ -35,6 +35,9 @@ de stock y de los conceptos de gasto de la factura.
 - Editar el costo nunca crea, elimina ni modifica pagos existentes. Si el nuevo
   total fuese menor que lo ya pagado, la edición se rechaza.
 - Un gasto o servicio exige descripción y categoría; nunca crea un `Insumo`.
+- Los insumos inactivos pueden sugerirse como descripción de un gasto para
+  conservar nombres habituales. Elegir esa sugerencia no vincula el concepto
+  al inventario, no reactiva el insumo y no genera movimientos de stock.
 
 ## Migración
 

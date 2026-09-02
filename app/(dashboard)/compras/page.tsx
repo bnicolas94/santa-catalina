@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 interface StockInsumoResumen { ubicacionId: string; cantidad: number }
-interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
+interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; activo: boolean; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
 interface Proveedor { id: string; nombre: string }
 interface Ubicacion { id: string; nombre: string; tipo: string }
 interface CajaCompra { tipo: string }
@@ -180,7 +180,7 @@ function ComprasContent() {
         try {
             const [movRes, insRes, provRes, ubiRes, cajasRes, cuentaRes, categoriasRes, facturasGastoRes] = await Promise.all([
                 fetch('/api/movimientos-stock?tipo=entrada&limit=500'),
-                fetch('/api/insumos'),
+                fetch('/api/insumos?incluirInactivos=true'),
                 fetch('/api/proveedores?activos=true'),
                 fetch('/api/operaciones/ubicaciones'),
                 fetch('/api/compras/cajas'),
@@ -554,6 +554,10 @@ function ComprasContent() {
         ? filteredByInsumo.filter(m => estadoCompra(m) === 'pendiente' || estadoCompra(m) === 'a_cuenta')
         : (filterPago ? filteredByInsumo.filter(m => estadoCompra(m) === filterPago) : filteredByInsumo)
     const filtered = filteredByPago
+    const conceptosGastoSugeridos = [...new Set([
+        ...insumos.filter(insumo => !insumo.activo).map(insumo => insumo.nombre),
+        ...facturasGasto.flatMap(factura => factura.gastos.map(gasto => gasto.descripcion)),
+    ])].sort((a, b) => a.localeCompare(b, 'es-AR'))
 
     // Calcular stock por vencimiento para el insumo filtrado o todos
     const stockPorVto = (() => {
@@ -727,7 +731,7 @@ function ComprasContent() {
                         style={{ height: '38px', minWidth: '180px' }}
                     >
                         <option value="">Todos los Insumos</option>
-                        {insumos.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
+                        {insumos.filter(i => i.activo).map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
                     </select>
                     {filterFecha && (
                         <button className="btn btn-ghost" onClick={() => setFilterFecha('')} title="Ver todas las fechas" style={{ padding: '0 8px', fontSize: '1.2rem' }}>
@@ -1042,7 +1046,7 @@ function ComprasContent() {
                                     <label className="form-label">Insumo</label>
                                     <select className="form-select" value={form.insumoId} onChange={(e) => setForm({ ...form, insumoId: e.target.value })} required>
                                         <option value="">Seleccionar insumo...</option>
-                                        {insumos.map((ins) => {
+                                        {insumos.filter(ins => ins.activo || ins.id === form.insumoId).map((ins) => {
                                             const stockUbi = form.ubicacionId ? ins.stocks?.find((s) => s.ubicacionId === form.ubicacionId)?.cantidad || 0 : ins.stockActual;
                                             return (
                                                 <option key={ins.id} value={ins.id}>
@@ -1510,7 +1514,7 @@ function ComprasContent() {
                                                     setTempItem({ ...tempItem, insumoId: id, useBultos: false, bultos: '', unidadesPorBulto: '', cantidad: '', cantidadSecundaria: '', unidadMedida: ins?.unidadMedida || 'unidades' });
                                                 }}>
                                                     <option value="">Seleccionar insumo...</option>
-                                                    {insumos.filter(i => mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId || i.proveedores?.some(item => item.proveedor.id === facturaForm.proveedorId)).map((ins) => (
+                                                    {insumos.filter(i => (i.activo || i.id === tempItem.insumoId) && (mostrarTodosInsumos || !facturaForm.proveedorId || i.proveedor?.id === facturaForm.proveedorId || i.proveedores?.some(item => item.proveedor.id === facturaForm.proveedorId))).map((ins) => (
                                                         <option key={ins.id} value={ins.id}>{ins.nombre} ({ins.unidadMedida})</option>
                                                     ))}
                                                 </select>
@@ -1520,7 +1524,13 @@ function ComprasContent() {
                                         {tempItem.tipoItem === 'gasto' && (
                                             <div className="form-group" style={{ marginBottom: 0 }}>
                                                 <label className="form-label" style={{ fontSize: '0.8rem', margin: 0 }}>Descripción</label>
-                                                <input className="form-input" value={tempItem.descripcion} onChange={(e) => setTempItem({ ...tempItem, descripcion: e.target.value })} placeholder="Ej: Abono telefónico, pintura, repuesto" />
+                                                <input className="form-input" list="conceptos-gasto-compras" value={tempItem.descripcion} onChange={(e) => setTempItem({ ...tempItem, descripcion: e.target.value })} placeholder="Ej: Abono telefónico, pintura, repuesto" />
+                                                <datalist id="conceptos-gasto-compras">
+                                                    {conceptosGastoSugeridos.map(concepto => <option key={concepto} value={concepto} />)}
+                                                </datalist>
+                                                <div style={{ marginTop: '4px', fontSize: '0.7rem', color: 'var(--color-gray-500)' }}>
+                                                    Incluye insumos desactivados y conceptos usados anteriormente. Sólo completa el texto; no modifica stock.
+                                                </div>
                                             </div>
                                         )}
 
