@@ -21,6 +21,14 @@ export const CAJAS_COMPRA = [
 
 export class CompraValidationError extends Error {}
 
+export function cantidadGastoOpcional(value: unknown): number | null {
+    if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) return null
+    if (typeof value !== 'number' && typeof value !== 'string') {
+        throw new CompraValidationError('Cantidad del gasto debe ser un número mayor a 0')
+    }
+    return numeroPositivo(value, 'Cantidad del gasto')
+}
+
 export function validarCajaCompra(value: unknown): string {
     const caja = String(value || '').trim()
     if (!(CAJAS_COMPRA as readonly string[]).includes(caja)) {

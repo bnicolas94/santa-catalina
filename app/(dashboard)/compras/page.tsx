@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { cantidadGastoOpcional } from '@/lib/compras/validacion'
 
 interface StockInsumoResumen { ubicacionId: string; cantidad: number }
 interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; activo: boolean; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
@@ -52,6 +53,7 @@ interface CompraCompleta {
     gastos: Array<{
         id: string
         monto: number
+        cantidad: number | null
         descripcion: string
         categoria: { id: string; nombre: string; color: string | null }
     }>
@@ -70,6 +72,7 @@ interface FacturaGastoResumen {
     gastos: Array<{
         id: string
         monto: number
+        cantidad: number | null
         descripcion: string
         categoria: CategoriaGasto
     }>
@@ -286,6 +289,12 @@ function ComprasContent() {
         } else {
             if (!tempItem.descripcion.trim()) return setError('Ingrese la descripción del gasto o servicio')
             if (!tempItem.categoriaGastoId) return setError('Seleccione una categoría de gasto')
+            try {
+                const cantidad = cantidadGastoOpcional(tempItem.cantidad)
+                finalCantidad = cantidad === null ? '' : String(cantidad)
+            } catch (err) {
+                return setError(err instanceof Error ? err.message : 'Cantidad inválida')
+            }
         }
 
         const insData = insumos.find(i => i.id === tempItem.insumoId)
@@ -434,7 +443,7 @@ function ComprasContent() {
                     insumoNombre: '',
                     descripcion: gasto.descripcion,
                     categoriaGastoId: gasto.categoria.id,
-                    cantidad: '',
+                    cantidad: gasto.cantidad == null ? '' : String(gasto.cantidad),
                     cantidadSecundaria: '',
                     costoTotal: String(gasto.monto),
                     actualizarCosto: false,
@@ -891,6 +900,7 @@ function ComprasContent() {
                                                 {factura.gastos.map(gasto => (
                                                     <div key={gasto.id} style={{ marginBottom: '3px' }}>
                                                         {gasto.descripcion} <span style={{ color: gasto.categoria.color || '#7D3C98', fontSize: 'var(--text-xs)', fontWeight: 700 }}>({gasto.categoria.nombre})</span>
+                                                        {gasto.cantidad != null && <small style={{ display: 'block' }}>Cantidad: {gasto.cantidad.toLocaleString('es-AR')}</small>}
                                                     </div>
                                                 ))}
                                             </td>
@@ -1463,7 +1473,7 @@ function ComprasContent() {
                                             📦 Insumo con stock
                                         </button>
                                         <button type="button" className="btn btn-sm" onClick={() => {
-                                            setTempItem({ ...emptyTempItem(), tipoItem: 'gasto', actualizarCosto: false })
+                                            setTempItem({ ...emptyTempItem(), tipoItem: 'gasto', cantidad: '1', actualizarCosto: false })
                                             setIsManualInsumo(false)
                                         }} style={{ flex: 1, background: tempItem.tipoItem === 'gasto' ? '#7D3C98' : '#F5EEF8', color: tempItem.tipoItem === 'gasto' ? '#fff' : '#7D3C98', border: '2px solid #7D3C98' }}>
                                             🧾 Gasto / servicio sin stock
@@ -1597,12 +1607,15 @@ function ComprasContent() {
                                                     <option value="">Seleccionar categoría...</option>
                                                     {categoriasGasto.map(categoria => <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>)}
                                                 </select>
+                                                <label htmlFor="cantidad-gasto-factura" className="form-label" style={{ fontSize: '0.8rem', marginTop: '8px' }}>Cantidad (opcional)</label>
+                                                <input id="cantidad-gasto-factura" inputMode="decimal" className="form-input" value={tempItem.cantidad} onChange={(e) => setTempItem({ ...tempItem, cantidad: e.target.value })} placeholder="Ej: 2" />
                                             </div>
                                         )}
 
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label className="form-label" style={{ fontSize: '0.7rem', margin: 0 }}>Costo Total ($)</label>
                                             <input type="number" step="0.01" className="form-input" value={tempItem.costoTotal} onChange={(e) => setTempItem({ ...tempItem, costoTotal: e.target.value })} placeholder="Ej: 5000" />
+                                            {tempItem.tipoItem === 'gasto' && <small>Importe de toda la cantidad, no precio unitario.</small>}
                                         </div>
                                     </div>
 
@@ -1675,7 +1688,8 @@ function ComprasContent() {
                                                             </div>
                                                         </td>
                                                         <td>
-                                                            <div>{it.tipoItem === 'insumo' ? `${it.cantidad} ${it.unidadMedida}` : 'No mueve stock'}</div>
+                                                            <div>{it.tipoItem === 'insumo' ? `${it.cantidad} ${it.unidadMedida}` : (it.cantidad ? `Cantidad: ${it.cantidad}` : 'Sin especificar')}</div>
+                                                            {it.tipoItem === 'gasto' && <small>No mueve stock</small>}
                                                             {it.tipoItem === 'insumo' && it.cantidadSecundaria && (
                                                                 <div style={{ fontSize: '0.7rem', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
                                                                     ({it.cantidadSecundaria} {it.unidadSecundaria})

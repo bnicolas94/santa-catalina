@@ -573,6 +573,7 @@ model GastoOperativo {
   id               String            @id @default(uuid())
   fecha            DateTime
   monto            Float
+  cantidad         Float?
   descripcion      String
   recurrente       Boolean           @default(false)
   categoriaId      String            @map("id_categoria")

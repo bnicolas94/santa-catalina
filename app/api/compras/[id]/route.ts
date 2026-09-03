@@ -4,6 +4,7 @@ import { ComprasService } from '@/lib/services/compras.service'
 import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
 import {
     CompraValidationError,
+    cantidadGastoOpcional,
     distribuirMontoPagadoPorCostos,
     estadoPagoDesdeMontos,
     numeroNoNegativo,
@@ -22,6 +23,7 @@ type ItemEdicion = {
     categoriaGastoId: string | null
     unidadMedida: string
     cantidad: number
+    cantidadGasto: number | null
     cantidadSecundaria: number
     costoTotal: number
     fechaVencimiento: Date | null
@@ -124,6 +126,7 @@ export async function PATCH(
                 descripcion,
                 categoriaGastoId,
                 unidadMedida: String(item.unidadMedida || 'unidades'),
+                cantidadGasto: tipoItem === 'gasto' ? cantidadGastoOpcional(item.cantidad) : null,
                 cantidad: tipoItem === 'insumo'
                     ? numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`)
                     : 0,
@@ -296,6 +299,7 @@ export async function PATCH(
                 const data = {
                     fecha: fechaFactura || fechaMovimiento,
                     monto: item.costoTotal,
+                    cantidad: item.cantidadGasto,
                     descripcion: item.descripcion!,
                     categoriaId: item.categoriaGastoId!,
                     compraId: id,

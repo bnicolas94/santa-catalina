@@ -35,6 +35,10 @@ de stock y de los conceptos de gasto de la factura.
 - Editar el costo nunca crea, elimina ni modifica pagos existentes. Si el nuevo
   total fuese menor que lo ya pagado, la edición se rechaza.
 - Un gasto o servicio exige descripción y categoría; nunca crea un `Insumo`.
+- Los conceptos de gasto permiten cantidad opcional positiva (también decimal),
+  guardada en `GastoOperativo.cantidad`. Es informativa: no afecta stock ni multiplica
+  el costo total del renglón. Los históricos sin cantidad siguen sin especificar,
+  incluso al abrir su edición.
 - Los insumos inactivos pueden sugerirse como descripción de un gasto para
   conservar nombres habituales. Elegir esa sugerencia no vincula el concepto
   al inventario, no reactiva el insumo y no genera movimientos de stock.
@@ -53,3 +57,7 @@ backup reciente de la base de datos.
 La migración `20260902120000_clasificar_conceptos_compra` agrega únicamente la
 columna nullable `tipo_registro` y su índice. No actualiza ni elimina filas
 históricas; los registros anteriores quedan con valor nulo.
+
+La migración `20260903120000_cantidad_conceptos_compra` agrega sólo la columna
+nullable `cantidad`, sin default, backfill ni cambios de importes o pagos.
+Aplicar con respaldo antes de desplegar el código que utiliza este campo.

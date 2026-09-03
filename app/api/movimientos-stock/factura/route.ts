@@ -4,6 +4,7 @@ import { ComprasService } from '@/lib/services/compras.service'
 import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
 import {
     CompraValidationError,
+    cantidadGastoOpcional,
     estadoPagoDesdeMontos,
     numeroNoNegativo,
     numeroPositivo,
@@ -19,6 +20,7 @@ type ItemFactura = {
     categoriaGastoId: string | null
     unidadMedida: string
     cantidad: number
+    cantidadGasto: number | null
     cantidadSecundaria: number | null
     costoTotal: number
     actualizarCosto: boolean
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
                 descripcion,
                 categoriaGastoId,
                 unidadMedida: String(item.unidadMedida || 'unidades'),
+                cantidadGasto: tipoItem === 'gasto' ? cantidadGastoOpcional(item.cantidad) : null,
                 cantidad: tipoItem === 'insumo'
                     ? numeroPositivo(item.cantidad, `Cantidad del ítem ${index + 1}`)
                     : 0,
@@ -170,6 +173,7 @@ export async function POST(request: Request) {
                         data: {
                             fecha: fechaFactura || fechaMovimiento,
                             monto: item.costoTotal,
+                            cantidad: item.cantidadGasto,
                             descripcion: item.descripcion!,
                             categoriaId: item.categoriaGastoId!,
                             compraId: compra.id,
