@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calcularTotalNeto, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resumirDesglose, sumarAdicionales, toTimeInputValue } from '../../components/empleados/weeklyPayroll.utils'
+import { calcularTotalNeto, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resumirDesglose, sumarAdicionales, toTimeInputValue } from '../../components/empleados/weeklyPayroll.utils'
 import type { DiaLiquidacionUI, ResultadoLiquidacionUI } from '../../components/empleados/weeklyPayroll.types'
 
 test('interpreta horarios de 24 y 12 horas', () => {
@@ -108,4 +108,89 @@ test('bloquea marcas incompletas y advierte diferencias en horas ajustadas', () 
     const alertas = obtenerAlertasLiquidacion(base)
     assert.equal(alertas.length, 1)
     assert.equal(alertas[0].nivel, 'warning')
+})
+
+test('cambiar una situación conserva los ajustes manuales de los demás días', () => {
+    const diaAjustado = recalcularDiaPorHoras({
+        fecha: '2026-08-24', diaSemana: 'Lunes', esFeriado: false,
+        horasTrabajadas: 9, horasExtras: 0, entrada: '09:00', salida: '18:00',
+        jornalBase: 30_000, valorDiaBase: 30_000, multiplicadorJornal: 1,
+        valorExtra: 0, valorFeriado: 0, totalDia: 30_000, esJustificado: false,
+    }, 8, 9, 6_000)
+    const franco: DiaLiquidacionUI = {
+        fecha: '2026-08-25', diaSemana: 'Martes', esFeriado: false,
+        horasTrabajadas: 0, horasExtras: 0, entrada: null, salida: null,
+        jornalBase: 30_000, valorDiaBase: 0, multiplicadorJornal: 0,
+        valorExtra: 0, valorFeriado: 0, totalDia: 0, esJustificado: false,
+        tipoInasistencia: 'FRANCO', motivoInasistencia: 'Franco', esFranco: true,
+    }
+    const actual: ResultadoLiquidacionUI = {
+        empleadoId: 'e1', empleadoNombre: 'Ana', periodo: 'semana', diasTrabajados: 1,
+        horasNormales: 8, horasExtras: 0, horasFeriado: 0, sueldoBase: 26_667,
+        valorHoraExtra: 6_000, horasJornada: 9, montoHorasExtras: 12_000,
+        montoHorasFeriado: 0, descuentoPrestamos: 1_000, horasPendientes: 0,
+        montoHorasPendientes: 0, totalNeto: 38_167, ajusteHorasExtras: 2,
+        adicionales: [{ conceptoSalarialId: 'premio', montoCalculado: 500 }],
+        desglosePorDia: [diaAjustado, franco], borradorId: 'b1',
+    }
+    const recalculado = {
+        ...actual,
+        ajusteHorasExtras: 0,
+        borradorId: undefined,
+        desglosePorDia: [
+            {
+                ...diaAjustado,
+                horasTrabajadas: 9,
+                valorDiaBase: 30_000,
+                multiplicadorJornal: 1,
+                totalDia: 30_000,
+                ajusteManual: false,
+            },
+            {
+                ...franco,
+                tipoInasistencia: 'INJUSTIFICADA',
+                motivoInasistencia: 'Ausencia sin aviso',
+                esFranco: false,
+            },
+        ],
+    }
+    const fusionado = fusionarRecalculoEmpleado(actual, recalculado, '2026-08-25')
+
+    assert.deepEqual(fusionado.desglosePorDia[0], diaAjustado)
+    assert.equal(fusionado.desglosePorDia[1].tipoInasistencia, 'INJUSTIFICADA')
+    assert.equal(fusionado.desglosePorDia[1].horasExtras, 0)
+    assert.equal(fusionado.ajusteHorasExtras, 2)
+    assert.deepEqual(fusionado.adicionales, actual.adicionales)
+    assert.equal(fusionado.borradorId, 'b1')
+    assert.equal(fusionado.totalNeto, 38_167)
+})
+
+test('el día cuya situación cambia adopta el cálculo nuevo aunque estuviera ajustado', () => {
+    const trabajado = recalcularDiaPorHoras({
+        fecha: '2026-08-24', diaSemana: 'Lunes', esFeriado: false,
+        horasTrabajadas: 10, horasExtras: 1, entrada: '08:00', salida: '18:00',
+        jornalBase: 30_000, valorDiaBase: 30_000, multiplicadorJornal: 1,
+        valorExtra: 6_000, valorFeriado: 0, totalDia: 36_000, esJustificado: false,
+    }, 10, 9, 6_000)
+    const sinAviso: DiaLiquidacionUI = {
+        ...trabajado,
+        horasTrabajadas: 0, horasExtras: 0, entrada: null, salida: null,
+        valorDiaBase: 0, multiplicadorJornal: 0, valorExtra: 0, totalDia: 0,
+        ajusteManual: false, tipoInasistencia: 'INJUSTIFICADA',
+        motivoInasistencia: 'Ausencia sin aviso', esInasistencia: true,
+    }
+    const actual: ResultadoLiquidacionUI = {
+        empleadoId: 'e1', empleadoNombre: 'Ana', periodo: 'semana', diasTrabajados: 1,
+        horasNormales: 9, horasExtras: 1, horasFeriado: 0, sueldoBase: 30_000,
+        valorHoraExtra: 6_000, horasJornada: 9, montoHorasExtras: 6_000,
+        montoHorasFeriado: 0, descuentoPrestamos: 0, horasPendientes: 0,
+        montoHorasPendientes: 0, totalNeto: 36_000, adicionales: [],
+        desglosePorDia: [trabajado],
+    }
+    const recalculado = { ...actual, desglosePorDia: [sinAviso] }
+
+    const fusionado = fusionarRecalculoEmpleado(actual, recalculado, '2026-08-24')
+
+    assert.deepEqual(fusionado.desglosePorDia[0], sinAviso)
+    assert.equal(fusionado.totalNeto, 0)
 })

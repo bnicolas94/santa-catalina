@@ -62,6 +62,33 @@ export function recalcularResultado(resultado: ResultadoLiquidacionUI): Resultad
     }
 }
 
+export function fusionarRecalculoEmpleado(
+    actual: ResultadoLiquidacionUI,
+    recalculado: Omit<ResultadoLiquidacionUI, 'adicionales'>,
+    fechaActualizada?: string,
+): ResultadoLiquidacionUI {
+    const desglosePorDia = recalculado.desglosePorDia.map(diaRecalculado => {
+        const diaActual = actual.desglosePorDia.find(dia => dia.fecha === diaRecalculado.fecha)
+        if (!diaActual) return diaRecalculado
+
+        const esDiaActualizado = fechaActualizada === diaRecalculado.fecha
+        if (diaActual.ajusteManual && !esDiaActualizado) return diaActual
+        return diaRecalculado
+    })
+
+    return recalcularResultado({
+        ...recalculado,
+        desglosePorDia,
+        ajusteHorasExtras: actual.ajusteHorasExtras,
+        adicionales: actual.adicionales || [],
+        borradorId: actual.borradorId,
+        esSeguimientoMensualMixto: actual.esSeguimientoMensualMixto,
+        seguimientoGuardado: actual.esSeguimientoMensualMixto
+            ? false
+            : actual.seguimientoGuardado,
+    })
+}
+
 export function obtenerAlertasLiquidacion(resultado: ResultadoLiquidacionUI): AlertaLiquidacionUI[] {
     const alertas: AlertaLiquidacionUI[] = []
     if (!Number.isFinite(resultado.totalNeto) || resultado.totalNeto < 0) {

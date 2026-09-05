@@ -9,7 +9,7 @@ import type {
     LiquidacionPagadaUI,
     ResultadoLiquidacionUI,
 } from './weeklyPayroll.types'
-import { minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado } from './weeklyPayroll.utils'
+import { fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado } from './weeklyPayroll.utils'
 import { WeeklyPayrollControls } from './WeeklyPayrollControls'
 import { WeeklyPayrollHeader } from './WeeklyPayrollHeader'
 import { WeeklyPayrollFooter } from './WeeklyPayrollFooter'
@@ -298,7 +298,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         }
     }
 
-    const handleRecalcularEmpleado = async (empleadoId: string) => {
+    const handleRecalcularEmpleado = async (empleadoId: string, fechaActualizada?: string) => {
         try {
             const res = await fetch('/api/liquidaciones/preview', {
                 method: 'POST',
@@ -311,77 +311,13 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             })
             if (!res.ok) return;
             const [newData]: Omit<ResultadoLiquidacionUI, 'adicionales'>[] = await res.json()
+            if (!newData) throw new Error('El servidor no devolvió el recálculo del empleado.')
             
             setResultados(prev => prev.map(r => {
-                if (r.empleadoId === empleadoId) {
-                    const adj = r.ajusteHorasExtras || 0;
-                    
-                    const nuevoDesglose = newData.desglosePorDia.map(newDia => {
-                        const oldDia = r.desglosePorDia.find(d => d.fecha === newDia.fecha);
-                        if (oldDia) {
-                            const hasStateChanged = (
-                                oldDia.horasTrabajadas !== newDia.horasTrabajadas ||
-                                oldDia.esJustificado !== newDia.esJustificado ||
-                                oldDia.esInasistencia !== newDia.esInasistencia ||
-                                oldDia.inasistenciaTipo !== newDia.inasistenciaTipo ||
-                                oldDia.esFranco !== newDia.esFranco
-                            );
-                            
-                            const mult = hasStateChanged 
-                                ? (newDia.multiplicadorJornal !== undefined ? newDia.multiplicadorJornal : 1)
-                                : (oldDia.multiplicadorJornal !== undefined ? oldDia.multiplicadorJornal : 1);
-                                
-                            const manualExtras = oldDia.horasExtras || 0;
-                            
-                            const valorDiaBaseAjustado = Math.round(newDia.jornalBase * mult);
-                            const valorExtraAjustado = Math.round(manualExtras * newData.valorHoraExtra);
-                            
-                            let nuevoValorFeriado = newDia.valorFeriado;
-                            if (newDia.esFeriado) {
-                                nuevoValorFeriado = Math.round((newDia.jornalBase * mult) * 0.5);
-                            }
-                            
-                            return {
-                                ...newDia,
-                                multiplicadorJornal: mult,
-                                horasExtras: manualExtras,
-                                valorDiaBase: valorDiaBaseAjustado,
-                                valorExtra: valorExtraAjustado,
-                                valorFeriado: nuevoValorFeriado,
-                                totalDia: Math.round(valorDiaBaseAjustado + valorExtraAjustado + nuevoValorFeriado)
-                            }
-                        }
-                        return newDia;
-                    });
-
-                    const currentHsExtrasBase = nuevoDesglose.reduce((acc, d) => acc + (d.horasExtras || 0), 0);
-                    const currentMontoExtrasBase = nuevoDesglose.reduce((acc, d) => acc + (d.valorExtra || 0), 0);
-                    const currentMontoFeriado = nuevoDesglose.reduce((acc, d) => acc + (d.valorFeriado || 0), 0);
-                    const currentSueldoBase = nuevoDesglose.reduce((acc, d) => acc + (d.valorDiaBase || 0), 0);
-                    
-                    const adjMoney = Math.round(adj * newData.valorHoraExtra);
-                    const totalMontoExtras = currentMontoExtrasBase + adjMoney;
-                    const adicionalesOriginales = r.adicionales || [];
-                    const montoExtrasItems = adicionalesOriginales.reduce((acc, item) => acc + item.montoCalculado, 0);
-                    const diasTrabajados = nuevoDesglose.filter(d => d.multiplicadorJornal > 0).length;
-
-                    return {
-                        ...newData,
-                        esSeguimientoMensualMixto: r.esSeguimientoMensualMixto,
-                        seguimientoGuardado: r.esSeguimientoMensualMixto ? false : r.seguimientoGuardado,
-                        desglosePorDia: nuevoDesglose,
-                        sueldoBase: currentSueldoBase,
-                        horasExtras: currentHsExtrasBase,
-                        ajusteHorasExtras: adj,
-                        montoHorasExtras: totalMontoExtras,
-                        montoHorasFeriado: currentMontoFeriado,
-                        adicionales: adicionalesOriginales,
-                        diasTrabajados: diasTrabajados,
-                        totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems - (newData.descuentoPrestamos || 0)
-                    }
-                }
-                return r;
+                if (r.empleadoId !== empleadoId) return r
+                return fusionarRecalculoEmpleado(r, newData, fechaActualizada)
             }))
+            setBorradorCargado(false)
         } catch (e) { console.error(e) }
     }
 
@@ -392,7 +328,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ empleadoId, fecha })
             })
-            if (res.ok) await handleRecalcularEmpleado(empleadoId)
+            if (res.ok) await handleRecalcularEmpleado(empleadoId, fecha)
             else alert('Error al justificar')
         } catch (error) { console.error(error) }
     }
@@ -402,7 +338,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             const res = await fetch(`/api/fichadas/justificar?empleadoId=${empleadoId}&fecha=${fecha}`, {
                 method: 'DELETE'
             })
-            if (res.ok) await handleRecalcularEmpleado(empleadoId)
+            if (res.ok) await handleRecalcularEmpleado(empleadoId, fecha)
             else alert('Error al quitar justificación')
         } catch (error) { console.error(error) }
     }
@@ -428,7 +364,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             }
 
             // Recalcular el sueldo del empleado en tiempo real en la pantalla
-            await handleRecalcularEmpleado(empleadoId)
+            await handleRecalcularEmpleado(empleadoId, fecha)
         } catch (error: unknown) {
             alert('Error: ' + (error instanceof Error ? error.message : 'No se pudo actualizar el estado'))
         } finally {
