@@ -150,33 +150,15 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                             if (r.esSeguimientoMensualMixto) return { ...r, adicionales: [] }
                             const b = borradores.find(borrador => borrador.empleadoId === r.empleadoId)
                             const extraItems = b?.items || []
-                            const montoExtrasItems = extraItems.reduce((acc, item) => acc + item.montoCalculado, 0)
                             
                             if (b) {
-                                const currentDesglose = b.desglose || r.desglosePorDia;
-                                const currentHsExtrasBase = currentDesglose.reduce((acc, d) => acc + (d.horasExtras || 0), 0);
-                                const currentMontoExtrasBase = currentDesglose.reduce((acc, d) => acc + (d.valorExtra || 0), 0);
-                                const currentMontoFeriado = currentDesglose.reduce((acc, d) => acc + (d.valorFeriado || 0), 0);
-                                const currentSueldoBase = currentDesglose.reduce((acc, d) => acc + (d.valorDiaBase || 0), 0);
-                                
-                                const adjustmentHs = b.ajusteHorasExtras || 0;
-                                const adjustmentMoney = Math.round(adjustmentHs * r.valorHoraExtra);
-                                const totalMontoExtras = currentMontoExtrasBase + adjustmentMoney;
-                                const diasTrabajados = currentDesglose.filter(d => d.multiplicadorJornal > 0).length;
-
-                                return {
+                                return fusionarRecalculoEmpleado({
                                     ...r,
-                                    desglosePorDia: currentDesglose,
-                                    sueldoBase: currentSueldoBase,
-                                    horasExtras: currentHsExtrasBase,
-                                    ajusteHorasExtras: adjustmentHs,
-                                    montoHorasExtras: totalMontoExtras,
-                                    montoHorasFeriado: currentMontoFeriado,
+                                    desglosePorDia: b.desglose || r.desglosePorDia,
+                                    ajusteHorasExtras: b.ajusteHorasExtras || 0,
                                     adicionales: extraItems,
-                                    diasTrabajados: diasTrabajados,
-                                    totalNeto: currentSueldoBase + totalMontoExtras + currentMontoFeriado + montoExtrasItems - (r.descuentoPrestamos || 0),
-                                    borradorId: b.id
-                                }
+                                    borradorId: b.id,
+                                }, r)
                             }
                             return { ...r, adicionales: [] };
                         })
@@ -482,7 +464,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     ...dia,
                     entrada: updatedEntrada,
                     salida: updatedSalida,
-                }, newHorasTrabajadas, r.horasJornada || 8, r.valorHoraExtra)
+                }, newHorasTrabajadas, dia.horasJornada || r.horasJornada || 8, r.valorHoraExtra)
             })
 
             return recalcularResultado({
@@ -500,7 +482,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setResultados(prev => prev.map(resultado => {
             if (resultado.empleadoId !== empleadoId) return resultado
             const desglosePorDia = resultado.desglosePorDia.map(dia => dia.fecha === fecha
-                ? recalcularDiaPorHoras(dia, horas, resultado.horasJornada || 8, resultado.valorHoraExtra)
+                ? recalcularDiaPorHoras(dia, horas, dia.horasJornada || resultado.horasJornada || 8, resultado.valorHoraExtra)
                 : dia)
             return recalcularResultado({
                 ...resultado,

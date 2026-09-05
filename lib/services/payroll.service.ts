@@ -9,6 +9,7 @@ import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
 import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorFechas, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
 import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
 import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
+import { horasJornadaParaFecha } from '@/lib/payroll/jornadaSemanal'
 import {
     normalizarRangoLiquidacion,
     rangoHistoricoLiquidacion,
@@ -25,6 +26,7 @@ export interface DiaTrabajado {
     esFeriado: boolean
     nombreFeriado?: string
     horasTrabajadas: number
+    horasJornada: number
     horasExtras: number
     entrada: string | null
     salida: string | null
@@ -287,8 +289,14 @@ export class PayrollService {
 
             const marcas = marcasRaw
 
-            const resumen = calcularResumenDia(marcas, hsJornada, {
-                horarioEntrada: empleado.turno?.horaInicio || empleado.horarioEntrada,
+            const horasJornadaDia = horasJornadaParaFecha(fechaStr, hsJornada, empleado.horasTrabajoSabado)
+            const valorHoraDia = empleado.valorHoraNormal && empleado.valorHoraNormal > 0
+                ? empleado.valorHoraNormal
+                : (horasJornadaDia > 0 ? jornalBase / horasJornadaDia : 0)
+            const resumen = calcularResumenDia(marcas, horasJornadaDia, {
+                horarioEntrada: current.getDay() === 0
+                    ? null
+                    : empleado.turno?.horaInicio || empleado.horarioEntrada,
             })
 
             const esFeriado = !!feriadosMap[fechaStr]
@@ -301,9 +309,9 @@ export class PayrollService {
             const calculoDia = calcularDiaSemanal({
                 horasTrabajadas: resumen.horasTrabajadas,
                 horasExtras: resumen.horasExtras,
-                horasJornada: hsJornada,
+                horasJornada: horasJornadaDia,
                 jornalBase,
-                valorHora,
+                valorHora: valorHoraDia,
                 valorHoraExtra,
                 tieneMarcas: marcas.length > 0,
                 esFeriado,
@@ -319,6 +327,7 @@ export class PayrollService {
                 esFeriado,
                 nombreFeriado: feriadosMap[fechaStr],
                 horasTrabajadas: resumen.horasTrabajadas,
+                horasJornada: horasJornadaDia,
                 horasExtras: calculoDia.horasExtras,
                 entrada: primerEntrada ? new Date(primerEntrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 salida: ultimaSalida ? new Date(ultimaSalida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,

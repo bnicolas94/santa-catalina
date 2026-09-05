@@ -30,6 +30,7 @@ model Empleado {
   valorHoraExtra            Float                     @default(0) @map("valor_hora_extra")
   porcentajeFeriado         Float                     @default(100) @map("porcentaje_feriado")
   horasTrabajoDiarias       Float                     @default(8) @map("horas_trabajo_diarias")
+  horasTrabajoSabado        Float?                    @map("horas_trabajo_sabado")
   diasTrabajoSemana         String                    @default("Lunes a Viernes") @map("dias_trabajo_semana")
   horarioEntrada            String?                   @map("horario_entrada")
   horarioSalida             String?                   @map("horario_salida")

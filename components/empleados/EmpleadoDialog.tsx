@@ -45,6 +45,7 @@ interface EmployeeDialogEmployee {
     porcentajeHoraExtra?: number | null
     porcentajeFeriado?: number | null
     horasTrabajoDiarias?: number | null
+    horasTrabajoSabado?: number | null
     diasTrabajoSemana?: string | null
     horarioEntrada?: string | null
     horarioSalida?: string | null
@@ -73,6 +74,7 @@ interface EmployeeFormData {
     porcentajeHoraExtra: string
     porcentajeFeriado: string
     horasTrabajoDiarias: string
+    horasTrabajoSabado: string
     diasTrabajoSemana: string
     horarioEntrada: string
     horarioSalida: string
@@ -141,6 +143,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         porcentajeHoraExtra: empleado?.porcentajeHoraExtra?.toString() || '50',
         porcentajeFeriado: empleado?.porcentajeFeriado?.toString() || '100',
         horasTrabajoDiarias: empleado?.horasTrabajoDiarias?.toString() || '8',
+        horasTrabajoSabado: empleado?.horasTrabajoSabado?.toString() || '',
         diasTrabajoSemana: empleado?.diasTrabajoSemana || 'Lunes a Viernes',
         horarioEntrada: empleado?.horarioEntrada || '',
         horarioSalida: empleado?.horarioSalida || '',
@@ -522,6 +525,13 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                 <div className="form-group">
                                     <label className="form-label">Horas Diarias Esperadas</label>
                                     <input type="number" step="0.5" name="horasTrabajoDiarias" value={formData.horasTrabajoDiarias} onChange={handleChange} className="form-input" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Horas esperadas los sábados</label>
+                                    <input type="number" min="0.5" max="24" step="0.5" name="horasTrabajoSabado" value={formData.horasTrabajoSabado} onChange={handleChange} placeholder="Usar jornada habitual" className="form-input" />
+                                    <small style={{ color: 'var(--color-gray-500)', fontSize: '10px' }}>
+                                        Opcional. Los domingos usan una jornada general de 4 horas.
+                                    </small>
                                 </div>
 
                                 {selectedRole && (

@@ -42,6 +42,19 @@ test('redondea las horas extra al medio punto más cercano', () => {
     assert.equal(calcularDiaSemanal({ ...base, horasExtras: 0.76 }).horasExtras, 1)
 })
 
+test('cuatro horas de domingo completan un jornal normal', () => {
+    const resultado = calcularDiaSemanal({
+        ...base,
+        horasTrabajadas: 4,
+        horasExtras: 0,
+        horasJornada: 4,
+    })
+
+    assert.equal(resultado.multiplicadorJornal, 1)
+    assert.equal(resultado.valorDiaBase, 10_000)
+    assert.equal(resultado.valorExtra, 0)
+})
+
 test('paga una ausencia justificada paga aunque no existan fichadas', () => {
     const resultado = calcularDiaSemanal({
         ...base,

@@ -22,6 +22,7 @@ export interface CreateEmpleadoInput {
     valorHoraExtra?: number
     porcentajeFeriado?: number
     horasTrabajoDiarias?: number
+    horasTrabajoSabado?: number | null
     diasTrabajoSemana?: string
     horarioEntrada?: string | null
     horarioSalida?: string | null
@@ -50,6 +51,7 @@ export interface UpdateEmpleadoInput {
     valorHoraExtra?: number
     porcentajeFeriado?: number
     horasTrabajoDiarias?: number
+    horasTrabajoSabado?: number | null
     diasTrabajoSemana?: string
     horarioEntrada?: string | null
     horarioSalida?: string | null
@@ -90,6 +92,7 @@ const EMPLEADO_SELECT = {
     valorHoraExtra: true,
     porcentajeFeriado: true,
     horasTrabajoDiarias: true,
+    horasTrabajoSabado: true,
     diasTrabajoSemana: true,
     horarioEntrada: true,
     horarioSalida: true,
@@ -246,6 +249,9 @@ export class EmpleadoService {
                 valorHoraExtra: input.valorHoraExtra ? parseFloat(String(input.valorHoraExtra)) : 0,
                 porcentajeFeriado: input.porcentajeFeriado ? parseFloat(String(input.porcentajeFeriado)) : 100,
                 horasTrabajoDiarias: input.horasTrabajoDiarias ? parseFloat(String(input.horasTrabajoDiarias)) : 8,
+                horasTrabajoSabado: input.horasTrabajoSabado && input.horasTrabajoSabado > 0
+                    ? parseFloat(String(input.horasTrabajoSabado))
+                    : null,
                 diasTrabajoSemana: input.diasTrabajoSemana || 'Lunes a Viernes',
                 horarioEntrada: input.horarioEntrada || null,
                 horarioSalida: input.horarioSalida || null,
@@ -310,6 +316,9 @@ export class EmpleadoService {
             valorHoraExtra: !isNaN(parseFloat(String(input.valorHoraExtra))) ? parseFloat(String(input.valorHoraExtra)) : undefined,
             porcentajeFeriado: !isNaN(parseFloat(String(input.porcentajeFeriado))) ? parseFloat(String(input.porcentajeFeriado)) : undefined,
             horasTrabajoDiarias: !isNaN(parseFloat(String(input.horasTrabajoDiarias))) ? parseFloat(String(input.horasTrabajoDiarias)) : undefined,
+            horasTrabajoSabado: input.horasTrabajoSabado !== undefined
+                ? (input.horasTrabajoSabado && Number(input.horasTrabajoSabado) > 0 ? Number(input.horasTrabajoSabado) : null)
+                : undefined,
             diasTrabajoSemana: input.diasTrabajoSemana || undefined,
             horarioEntrada: (input.horarioEntrada !== undefined) ? (input.horarioEntrada || null) : undefined,
             horarioSalida: (input.horarioSalida !== undefined) ? (input.horarioSalida || null) : undefined,

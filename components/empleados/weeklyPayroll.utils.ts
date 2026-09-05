@@ -72,7 +72,26 @@ export function fusionarRecalculoEmpleado(
         if (!diaActual) return diaRecalculado
 
         const esDiaActualizado = fechaActualizada === diaRecalculado.fecha
-        if (diaActual.ajusteManual && !esDiaActualizado) return diaActual
+        if (diaActual.ajusteManual && !esDiaActualizado) {
+            const horasJornada = diaRecalculado.horasJornada || recalculado.horasJornada || 8
+            const diaConValoresVigentes: DiaLiquidacionUI = {
+                ...diaActual,
+                horasJornada,
+                jornalBase: diaRecalculado.jornalBase,
+                esFeriado: diaRecalculado.esFeriado,
+            }
+            if (diaRecalculado.nombreFeriado !== undefined) {
+                diaConValoresVigentes.nombreFeriado = diaRecalculado.nombreFeriado
+            } else {
+                delete diaConValoresVigentes.nombreFeriado
+            }
+            return recalcularDiaPorHoras(
+                diaConValoresVigentes,
+                diaActual.horasTrabajadas,
+                horasJornada,
+                recalculado.valorHoraExtra,
+            )
+        }
         return diaRecalculado
     })
 

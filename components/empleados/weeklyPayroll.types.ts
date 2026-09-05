@@ -25,6 +25,7 @@ export interface DiaLiquidacionUI {
     esFeriado: boolean
     nombreFeriado?: string
     horasTrabajadas: number
+    horasJornada?: number
     horasExtras: number
     entrada: string | null
     salida: string | null

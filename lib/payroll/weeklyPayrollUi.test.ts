@@ -156,7 +156,7 @@ test('cambiar una situación conserva los ajustes manuales de los demás días',
     }
     const fusionado = fusionarRecalculoEmpleado(actual, recalculado, '2026-08-25')
 
-    assert.deepEqual(fusionado.desglosePorDia[0], diaAjustado)
+    assert.deepEqual(fusionado.desglosePorDia[0], { ...diaAjustado, horasJornada: 9 })
     assert.equal(fusionado.desglosePorDia[1].tipoInasistencia, 'INJUSTIFICADA')
     assert.equal(fusionado.desglosePorDia[1].horasExtras, 0)
     assert.equal(fusionado.ajusteHorasExtras, 2)
@@ -193,4 +193,47 @@ test('el día cuya situación cambia adopta el cálculo nuevo aunque estuviera a
 
     assert.deepEqual(fusionado.desglosePorDia[0], sinAviso)
     assert.equal(fusionado.totalNeto, 0)
+})
+
+test('un ajuste manual conserva sus horas pero adopta los valores salariales vigentes', () => {
+    const diaViejo: DiaLiquidacionUI = {
+        fecha: '2026-09-05', diaSemana: 'Sábado', esFeriado: false,
+        horasTrabajadas: 11, horasJornada: 8, horasExtras: 3,
+        entrada: '09:00', salida: '20:00', jornalBase: 40_976,
+        valorDiaBase: 40_976, multiplicadorJornal: 1, valorExtra: 28_455,
+        valorFeriado: 0, totalDia: 69_431, esJustificado: false,
+        ajusteManual: true,
+    }
+    const diaVigente: DiaLiquidacionUI = {
+        ...diaViejo,
+        jornalBase: 43_400,
+        valorDiaBase: 0,
+        valorExtra: 0,
+        totalDia: 0,
+        ajusteManual: false,
+    }
+    const actual: ResultadoLiquidacionUI = {
+        empleadoId: 'german', empleadoNombre: 'Germán', periodo: 'semana', diasTrabajados: 1,
+        horasNormales: 8, horasExtras: 3, horasFeriado: 0, sueldoBase: 40_976,
+        valorHoraExtra: 9_485, horasJornada: 8, montoHorasExtras: 28_455,
+        montoHorasFeriado: 0, descuentoPrestamos: 0, horasPendientes: 0,
+        montoHorasPendientes: 0, totalNeto: 69_431, adicionales: [],
+        desglosePorDia: [diaViejo],
+    }
+    const vigente = {
+        ...actual,
+        sueldoBase: 0,
+        valorHoraExtra: 9_650,
+        montoHorasExtras: 0,
+        totalNeto: 0,
+        desglosePorDia: [diaVigente],
+    }
+
+    const fusionado = fusionarRecalculoEmpleado(actual, vigente)
+
+    assert.equal(fusionado.desglosePorDia[0].horasTrabajadas, 11)
+    assert.equal(fusionado.desglosePorDia[0].jornalBase, 43_400)
+    assert.equal(fusionado.desglosePorDia[0].valorDiaBase, 43_400)
+    assert.equal(fusionado.desglosePorDia[0].valorExtra, 28_950)
+    assert.equal(fusionado.totalNeto, 72_350)
 })
