@@ -44,6 +44,26 @@
 .success { border: 1px solid #b8decf; color: #276d55; background: #eaf7f1; }
 .error { border: 1px solid #e9b8b8; color: #8b2831; background: #fff0f0; }
 .success button, .error button { margin-left: auto; border: 0; color: inherit; background: transparent; cursor: pointer; }
+.coexistenceCard { max-width: 1260px; margin: 0 auto 18px; padding: 18px 20px; display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 16px; border: 1px solid #b9decf; border-radius: 18px; background: linear-gradient(120deg, #f1fbf6, #fffdf8); box-shadow: 0 16px 45px rgba(26,112,80,.07); }
+.coexistenceIcon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 15px; color: white; background: #18865d; font-size: 17px; font-weight: 900; box-shadow: 0 8px 22px rgba(24,134,93,.2); }
+.coexistenceCopy { min-width: 0; }
+.coexistenceCopy .eyebrow { color: #18865d; }
+.coexistenceCopy h3 { margin: 4px 0; color: #173d31; font-size: 16px; }
+.coexistenceCopy p { max-width: 720px; margin: 0; color: #61756d; font-size: 9px; line-height: 1.5; }
+.coexistenceCopy small { display: block; margin-top: 8px; color: #9a6522; font-size: 8px; }
+.safetyChecks { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 7px; }
+.safetyChecks span { padding: 4px 7px; border-radius: 7px; color: #26765b; background: #e3f4ec; font-size: 7px; font-weight: 800; }
+.coexistenceCard > button { min-width: 184px; height: 41px; padding: 0 16px; border: 0; border-radius: 11px; color: white; background: #18865d; cursor: pointer; font-size: 9px; font-weight: 850; box-shadow: 0 8px 20px rgba(24,134,93,.16); }
+.coexistenceCard > button:hover { background: #106f4c; }
+.coexistenceCard > button:disabled { color: #979b96; background: #e4e7e3; box-shadow: none; cursor: not-allowed; }
+.continuityGate { grid-column: 2 / -1; padding-top: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; border-top: 1px solid #d8ebe2; }
+.continuityGate > div { margin-right: auto; display: flex; flex-direction: column; }
+.continuityGate strong { color: #245f4b; font-size: 9px; }
+.continuityGate small { margin-top: 3px; color: #708079; font-size: 7px; }
+.continuityGate label { display: flex; align-items: center; gap: 5px; color: #50645c; font-size: 8px; cursor: pointer; }
+.continuityGate input { accent-color: #18865d; }
+.continuityGate > button { height: 31px; padding: 0 10px; border: 0; border-radius: 8px; color: white; background: #315f4f; cursor: pointer; font-size: 8px; font-weight: 800; }
+.continuityGate > button:disabled { color: #9b9e99; background: #e4e7e3; cursor: not-allowed; }
 .grid { max-width: 1260px; margin: 0 auto; display: grid; grid-template-columns: minmax(520px, 1fr) minmax(280px, 350px); gap: 18px; align-items: start; }
 .formCard, .webhookCard, .progressCard { border: 1px solid #e7e0d4; border-radius: 18px; background: rgba(255,255,255,.9); box-shadow: 0 16px 45px rgba(71,28,25,.055); }
 .formCard { padding: 20px; }
@@ -130,6 +150,10 @@
   .content { padding: 22px 14px 35px; }
   .header { align-items: flex-start; flex-direction: column; gap: 14px; }
   .headerStatus { width: 100%; }
+  .coexistenceCard { grid-template-columns: 40px 1fr; padding: 15px; }
+  .coexistenceIcon { width: 40px; height: 40px; }
+  .coexistenceCard > button { width: 100%; grid-column: 1 / -1; }
+  .continuityGate { grid-column: 1 / -1; align-items: flex-start; flex-direction: column; }
   .grid { display: block; }
   .fieldsGrid { grid-template-columns: 1fr; }
   .formCard { padding: 16px; }

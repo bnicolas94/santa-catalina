@@ -51,6 +51,7 @@ POST /api/conversations/{id}/claim
 POST /api/conversations/{id}/heartbeat
 POST /api/conversations/{id}/release
 POST /api/conversations/{id}/messages
+PUT  /api/conversations/{id}/order-draft
 POST /api/conversations/{id}/unassign  # sólo supervisión
 
 GET  /api/admin/channels
@@ -58,6 +59,9 @@ POST /api/admin/channels
 PUT  /api/admin/channels/{id}
 POST /api/admin/channels/{id}/validate
 GET  /api/admin/configuration
+GET  /api/admin/embedded-signup
+POST /api/admin/embedded-signup
+POST /api/admin/channels/{id}/continuity
 
 GET  /api/webhooks/whatsapp
 POST /api/webhooks/whatsapp
@@ -75,6 +79,13 @@ queda registrada en asignaciones y eventos.
 La UI ejecuta `claim` automáticamente al abrir una conversación sin asignar. Si
 dos agentes la abren al mismo tiempo, la operación atómica asigna a uno solo y
 el otro actualiza su bandeja sin obtener permiso de respuesta.
+
+Cada conversación tiene una ficha rápida de pedido con fecha calendario,
+dirección, modalidad `DELIVERY`/`PICKUP` y turno
+`MORNING`/`SIESTA`/`AFTERNOON`. La UI la guarda automáticamente, ofrece accesos
+rápidos para fechas y sólo permite editarla al agente que conserva el lease. Un
+retiro no exige dirección; un envío sí la exige para considerar completa la
+ficha. Cada actualización deja un evento de auditoría.
 
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en
@@ -97,6 +108,33 @@ Orden de configuración:
 
 Modificar el WABA, Phone Number ID, versión Graph API o cualquier secreto vuelve
 el canal a `PENDING`, lo desactiva y exige una nueva validación.
+
+### Coexistence con WhatsApp Business
+
+El número que ya opera en WhatsApp Business sólo debe conectarse mediante el
+botón **Conectar con Coexistence**. El flujo usa Embedded Signup con
+`featureType=whatsapp_business_app_onboarding`; nunca se debe registrar o migrar
+manualmente ese número. Requiere estas variables adicionales en el servicio CRM:
+
+```text
+META_APP_ID
+META_APP_SECRET
+META_EMBEDDED_SIGNUP_CONFIG_ID
+META_GRAPH_API_VERSION
+META_WEBHOOK_VERIFY_TOKEN
+```
+
+El backend intercambia el código de autorización, descubre el número, exige que
+Meta responda `is_on_biz_app=true` y `platform_type=CLOUD_API`, suscribe el
+webhook y guarda las credenciales cifradas. El canal siempre queda inactivo al
+terminar. Para habilitarlo, un administrador debe confirmar en la UI que la app
+móvil, todos los dispositivos vinculados y los mensajes bidireccionales siguen
+funcionando.
+
+El webhook procesa mensajes normales y los eventos de Coexistence `history`,
+`smb_app_state_sync`, `smb_message_echoes` y `account_update`. Una baja o
+reconexión reportada por Meta desactiva el canal y obliga a repetir la
+verificación de continuidad.
 
 ## Límites del módulo
 

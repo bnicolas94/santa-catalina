@@ -27,12 +27,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           tag: channel.accessTokenTag,
         }),
       })
+      if (channel.connectionMode === 'COEXISTENCE' && (!validation.isOnBizApp || validation.platformType !== 'CLOUD_API')) {
+        throw new CrmApiError(409, 'COEXISTENCE_NOT_CONFIRMED', 'Meta no confirmó que el número siga activo simultáneamente en WhatsApp Business y Cloud API.')
+      }
       const updated = await crmPrisma.whatsAppChannel.update({
         where: { id },
         data: {
           connectionStatus: 'CONNECTED',
           lastValidatedAt: new Date(),
           displayPhoneNumber: validation.displayPhoneNumber || channel.displayPhoneNumber,
+          isOnBizApp: validation.isOnBizApp,
+          platformType: validation.platformType,
+          coexistenceVerifiedAt: validation.isOnBizApp ? new Date() : channel.coexistenceVerifiedAt,
           updatedById: user.id,
         },
       })

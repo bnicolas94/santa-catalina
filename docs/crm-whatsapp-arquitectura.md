@@ -150,6 +150,11 @@ NEXTAUTH_SECRET
 ERP_BASE_URL
 CRM_BASE_URL
 WHATSAPP_CONFIG_ENCRYPTION_KEY
+META_APP_ID
+META_APP_SECRET
+META_EMBEDDED_SIGNUP_CONFIG_ID
+META_GRAPH_API_VERSION
+META_WEBHOOK_VERIFY_TOKEN
 ```
 
 La pantalla administrativa guardará cifrados el access token y el App Secret.
@@ -179,6 +184,8 @@ Implementado:
 - Interfaz operativa conectada a las APIs y a PostgreSQL, con polling de bandeja,
   heartbeat cada 25 segundos y envío idempotente.
 - Representación amigable de asignación y sólo lectura.
+- Ficha rápida de pedido persistida por conversación, con fecha, dirección,
+  envío/retiro y turno, guardado automático y edición protegida por lease.
 - Esquema CRM inicial y migración SQL.
 - Contratos TypeScript compartidos.
 - Permisos de Atención en los roles del ERP.
@@ -194,6 +201,12 @@ Implementado:
   entorno, URL de webhook y bloqueo de activación incompleta.
 - Validación de solo lectura contra Meta que confirma token, WABA y Phone Number
   ID antes de permitir activar un canal.
+- Embedded Signup exclusivo para Coexistence, con validación de
+  `is_on_biz_app`, suscripción del webhook y credenciales cifradas.
+- Ingesta de `history`, `smb_app_state_sync`, `smb_message_echoes` y eventos de
+  desconexión de la aplicación WhatsApp Business.
+- Puerta de activación administrativa que exige confirmar la app móvil, los
+  dispositivos vinculados y el flujo bidireccional.
 - APIs internas de sólo lectura para resolver clientes por teléfono y consultar
   su resumen comercial y pedidos recientes.
 - Vinculación automática conservadora con el ERP, selección asistida ante
@@ -207,5 +220,5 @@ Siguiente incremento:
 1. Incorporar realtime distribuido y trabajos en segundo plano.
 2. Implementar las APIs internas del ERP para contexto de clientes y pedidos.
 3. Agregar pruebas de integración contra PostgreSQL para carreras simultáneas.
-4. Incorporar suscripción controlada del webhook al WABA una vez configuradas
-   las credenciales reales.
+4. Ejecutar una prueba controlada de Coexistence con el número real manteniendo
+   `CRM_MOCK_WHATSAPP=true` hasta aprobar la continuidad de todas las sesiones.

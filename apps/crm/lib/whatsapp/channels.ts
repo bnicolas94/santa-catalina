@@ -16,6 +16,11 @@ export function isChannelReady(channel: ChannelSecretState, updates?: {
   )
 }
 
+export function isCoexistenceReady(channel: Pick<WhatsAppChannel, 'connectionMode' | 'isOnBizApp' | 'platformType' | 'continuityVerifiedAt'>) {
+  return channel.connectionMode !== 'COEXISTENCE'
+    || (channel.isOnBizApp && channel.platformType === 'CLOUD_API' && Boolean(channel.continuityVerifiedAt))
+}
+
 export function encryptionConfigurationStatus(value = process.env.WHATSAPP_CONFIG_ENCRYPTION_KEY) {
   if (!value) return 'MISSING' as const
   return Buffer.from(value, 'base64').length === 32 ? 'READY' as const : 'INVALID' as const
@@ -31,7 +36,13 @@ export function publicChannel(channel: WhatsAppChannel) {
     wabaId: channel.wabaId,
     businessPortfolioId: channel.businessPortfolioId,
     graphApiVersion: channel.graphApiVersion,
+    connectionMode: channel.connectionMode,
     connectionStatus: channel.connectionStatus,
+    isOnBizApp: channel.isOnBizApp,
+    platformType: channel.platformType,
+    coexistenceVerifiedAt: channel.coexistenceVerifiedAt,
+    continuityVerifiedAt: channel.continuityVerifiedAt,
+    onboardingCompletedAt: channel.onboardingCompletedAt,
     lastValidatedAt: channel.lastValidatedAt,
     hasAccessToken: Boolean(channel.accessTokenCiphertext),
     hasAppSecret: Boolean(channel.appSecretCiphertext),

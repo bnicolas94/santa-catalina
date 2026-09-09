@@ -3,7 +3,7 @@ import { CrmApiError, apiErrorResponse, requireText } from '@/lib/api'
 import { crmPrisma } from '@/lib/prisma'
 import { encryptSecret, hashVerifyToken } from '@/lib/secrets'
 import { requireCrmUser } from '@/lib/session'
-import { isChannelReady, publicChannel } from '@/lib/whatsapp/channels'
+import { isChannelReady, isCoexistenceReady, publicChannel } from '@/lib/whatsapp/channels'
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -12,12 +12,15 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const body = await request.json()
     const existing = await crmPrisma.whatsAppChannel.findUnique({ where: { id } })
     if (!existing) throw new CrmApiError(404, 'CHANNEL_NOT_FOUND', 'El canal no existe.')
-    const changesValidatedIdentity = body.phoneNumberId !== undefined
-      || body.wabaId !== undefined
-      || body.graphApiVersion !== undefined
+    const changesValidatedIdentity = (body.phoneNumberId !== undefined && String(body.phoneNumberId).trim() !== existing.phoneNumberId)
+      || (body.wabaId !== undefined && String(body.wabaId).trim() !== existing.wabaId)
+      || (body.graphApiVersion !== undefined && String(body.graphApiVersion).trim() !== existing.graphApiVersion)
     const changesCredentials = Boolean(body.accessToken || body.appSecret || body.webhookVerifyToken)
     if (body.active === true && !isChannelReady(existing, body)) {
       throw new CrmApiError(409, 'CHANNEL_INCOMPLETE', 'Completá Access Token, App Secret y Verify Token antes de activar el canal.')
+    }
+    if (body.active === true && !isCoexistenceReady(existing)) {
+      throw new CrmApiError(409, 'COEXISTENCE_NOT_CONFIRMED', 'Meta debe confirmar Coexistence y un administrador debe validar todas las sesiones antes de habilitar el canal.')
     }
     if (body.active === true && (existing.connectionStatus !== 'CONNECTED' || changesValidatedIdentity || changesCredentials)) {
       throw new CrmApiError(409, 'CHANNEL_NOT_VALIDATED', 'Validá la conexión con Meta antes de activar el canal.')
@@ -47,6 +50,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         }),
         ...((changesValidatedIdentity || changesCredentials) && {
           active: false, connectionStatus: 'PENDING', lastValidatedAt: null,
+          ...(existing.connectionMode === 'COEXISTENCE' && {
+            isOnBizApp: false, coexistenceVerifiedAt: null, continuityVerifiedAt: null,
+          }),
         }),
         updatedById: user.id,
       },

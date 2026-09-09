@@ -7,16 +7,22 @@ const input = { graphApiVersion: 'v23.0', wabaId: 'waba-1', phoneNumberId: 'phon
 
 test('valida que el número pertenezca al WABA sin exponer el token', async () => {
   const fetcher: typeof fetch = async (request, init) => {
-    assert.match(String(request), /v23\.0\/waba-1\/phone_numbers/)
     assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer secret-token')
+    if (String(request).includes('/waba-1/phone_numbers')) {
+      return Response.json({ data: [
+        { id: 'phone-1' },
+        { id: 'phone-2', display_phone_number: '+54 11 5555 5555', verified_name: 'Santa Catalina', quality_rating: 'GREEN', platform_type: 'CLOUD_API' },
+      ] })
+    }
+    assert.match(String(request), /v23\.0\/phone-2/)
+    assert.match(String(request), /is_on_biz_app/)
     return Response.json({ data: [
-      { id: 'phone-1' },
-      { id: 'phone-2', display_phone_number: '+54 11 5555 5555', verified_name: 'Santa Catalina', quality_rating: 'GREEN', platform_type: 'CLOUD_API' },
-    ] })
+    ], id: 'phone-2', display_phone_number: '+54 11 5555 5555', verified_name: 'Santa Catalina', quality_rating: 'GREEN', platform_type: 'CLOUD_API', is_on_biz_app: true })
   }
   const result = await validateMetaChannel(input, fetcher)
   assert.equal(result.verifiedName, 'Santa Catalina')
   assert.equal(result.qualityRating, 'GREEN')
+  assert.equal(result.isOnBizApp, true)
 })
 
 test('rechaza un Phone Number ID ajeno al WABA', async () => {

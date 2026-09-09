@@ -215,6 +215,48 @@ button { color: inherit; }
 .customerTags { margin-top: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 .customerTags span { padding: 4px 7px; background: #f3efe6; border-radius: 7px; font-size: 7px; color: #65645f; }
 .customerTags .erpTag { background: #e2f5eb; color: #24785c; font-weight: 800; }
+.orderPlanner { margin: 10px; padding: 14px; border: 1px solid #cfe4dc; border-radius: 14px; background: linear-gradient(155deg, #fbfffd 0%, #f3faf7 100%); box-shadow: 0 7px 24px rgba(0, 92, 75, .07); }
+.plannerHeading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+.plannerHeading > div { display: flex; flex-direction: column; gap: 2px; }
+.plannerHeading span { color: var(--wa-green-dark); font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .11em; }
+.plannerHeading h4 { margin: 0; color: #213b34; font-size: 14px; }
+.plannerHeading > b { width: 34px; height: 25px; display: grid; place-items: center; border-radius: 9px; color: #7b847f; background: #e7ece9; font-size: 8px; }
+.plannerHeading > b.plannerComplete { color: #086f58; background: #ccefe4; }
+.plannerField { margin-top: 11px; }
+.plannerField > label, .plannerLabelRow label { margin-bottom: 6px; display: flex; align-items: center; gap: 5px; color: #53665f; font-size: 8px; font-weight: 850; text-transform: uppercase; letter-spacing: .055em; }
+.plannerDate, .plannerField textarea { width: 100%; border: 1px solid #cfdad6; border-radius: 9px; outline: 0; background: white; color: #273c36; font: inherit; font-size: 10px; }
+.plannerDate { height: 36px; padding: 0 10px; color-scheme: light; }
+.plannerField textarea { min-height: 49px; padding: 9px 10px; resize: vertical; line-height: 1.4; }
+.plannerDate:focus, .plannerField textarea:focus { border-color: var(--wa-green); box-shadow: 0 0 0 3px rgba(0,168,132,.1); }
+.plannerDate:disabled, .plannerField textarea:disabled { color: #8c9792; background: #eef1ef; cursor: not-allowed; }
+.quickDateButtons { margin-top: 6px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.quickDateButtons button { height: 29px; border: 1px solid #d4ded9; border-radius: 8px; color: #52635d; background: white; cursor: pointer; font-size: 8px; font-weight: 800; }
+.quickDateButtons button.selected { border-color: var(--wa-green-dark); color: white; background: var(--wa-green-dark); box-shadow: 0 4px 10px rgba(0,92,75,.16); }
+.quickDateButtons button:disabled { opacity: .55; cursor: not-allowed; }
+.fulfillmentButtons { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.fulfillmentButtons button { min-height: 52px; padding: 8px 9px; display: flex; align-items: center; gap: 8px; border: 1px solid #d4ded9; border-radius: 10px; color: #52635d; background: white; text-align: left; cursor: pointer; }
+.fulfillmentButtons button > span { display: flex; flex-direction: column; gap: 2px; }
+.fulfillmentButtons strong { font-size: 10px; }
+.fulfillmentButtons small { color: #829089; font-size: 7px; }
+.fulfillmentButtons button.selected { border-width: 2px; padding: 7px 8px; box-shadow: 0 5px 14px rgba(20,61,48,.11); }
+.fulfillmentButtons button.deliverySelected { border-color: #16856b; color: #08725a; background: #e5f7f1; }
+.fulfillmentButtons button.pickupSelected { border-color: #d39635; color: #8b5b0b; background: #fff4dc; }
+.fulfillmentButtons button:disabled { opacity: .55; cursor: not-allowed; }
+.plannerLabelRow { min-height: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.plannerLabelRow button { border: 0; padding: 0; color: var(--wa-green-dark); background: transparent; cursor: pointer; font-size: 7px; font-weight: 800; }
+.plannerLabelRow button:disabled { color: #9da5a1; cursor: not-allowed; }
+.shiftButtons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.shiftButtons button { min-width: 0; min-height: 52px; padding: 6px 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid #d4ded9; border-radius: 9px; color: #52635d; background: white; cursor: pointer; }
+.shiftButtons button i { color: #d99a31; font-size: 15px; font-style: normal; line-height: 1; }
+.shiftButtons button strong { font-size: 8px; }
+.shiftButtons button.selected { border-color: #5d778b; color: white; background: #5d778b; box-shadow: 0 5px 13px rgba(55,79,97,.18); }
+.shiftButtons button.selected i { color: white; }
+.shiftButtons button:disabled { opacity: .55; cursor: not-allowed; }
+.plannerSaveState { min-height: 25px; margin: 12px -14px -14px; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 0 0 13px 13px; color: #75817c; background: #e9f0ed; font-size: 7px; }
+.plannerSaveState b { color: #08725a; font-size: 7px; }
+.plannerSaveState.state-saving { color: #8a681e; background: #fff4da; }
+.plannerSaveState.state-error { color: #9a2636; background: #ffeaed; }
+.plannerSaveState.state-saved { color: #08725a; background: #daf2e9; }
 .detailSection { padding: 14px; border-bottom: 1px solid var(--line); }
 .sectionLabel { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .sectionLabel span { color: #99968f; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }

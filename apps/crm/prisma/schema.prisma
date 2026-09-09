@@ -61,6 +61,21 @@ enum AssignmentAction {
   @@schema("crm")
 }
 
+enum OrderFulfillment {
+  DELIVERY
+  PICKUP
+
+  @@schema("crm")
+}
+
+enum OrderShift {
+  MORNING
+  SIESTA
+  AFTERNOON
+
+  @@schema("crm")
+}
+
 model WhatsAppChannel {
   id                     String         @id @default(uuid())
   name                   String
@@ -77,7 +92,13 @@ model WhatsAppChannel {
   appSecretIv            String?        @map("app_secret_iv")
   appSecretTag           String?        @map("app_secret_tag")
   webhookVerifyTokenHash String?        @map("webhook_verify_token_hash")
+  connectionMode         String         @default("MANUAL") @map("connection_mode")
   connectionStatus       String         @default("PENDING") @map("connection_status")
+  isOnBizApp             Boolean        @default(false) @map("is_on_biz_app")
+  platformType           String?        @map("platform_type")
+  coexistenceVerifiedAt  DateTime?      @map("coexistence_verified_at")
+  continuityVerifiedAt   DateTime?      @map("continuity_verified_at")
+  onboardingCompletedAt  DateTime?      @map("onboarding_completed_at")
   lastValidatedAt        DateTime?      @map("last_validated_at")
   createdById            String         @map("created_by_id")
   updatedById            String         @map("updated_by_id")
@@ -124,6 +145,12 @@ model Conversation {
   lastOutboundAt         DateTime?                @map("last_outbound_at")
   serviceWindowExpiresAt DateTime?                @map("service_window_expires_at")
   resolvedAt             DateTime?                @map("resolved_at")
+  orderDate               String?                  @map("order_date") @db.VarChar(10)
+  orderAddress            String?                  @map("order_address") @db.VarChar(300)
+  orderFulfillment        OrderFulfillment?        @map("order_fulfillment")
+  orderShift              OrderShift?              @map("order_shift")
+  orderDraftUpdatedById   String?                  @map("order_draft_updated_by_id")
+  orderDraftUpdatedAt     DateTime?                @map("order_draft_updated_at")
   createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @updatedAt @map("updated_at")
   channel                WhatsAppChannel          @relation(fields: [channelId], references: [id])

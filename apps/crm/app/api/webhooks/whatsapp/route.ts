@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
       where: { active: true, webhookVerifyTokenHash: hashVerifyToken(token) },
       select: { id: true },
     })
-    if (!channel) throw new CrmApiError(403, 'INVALID_VERIFY_TOKEN', 'El verify token no coincide.')
+    const environmentToken = process.env.META_WEBHOOK_VERIFY_TOKEN
+    const environmentMatches = Boolean(environmentToken && hashVerifyToken(environmentToken) === hashVerifyToken(token))
+    if (!channel && !environmentMatches) throw new CrmApiError(403, 'INVALID_VERIFY_TOKEN', 'El verify token no coincide.')
     return new NextResponse(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } })
   } catch (error) {
     return apiErrorResponse(error)
@@ -33,8 +35,18 @@ export async function POST(request: NextRequest) {
       throw new CrmApiError(400, 'INVALID_JSON', 'El webhook no contiene JSON válido.')
     }
     const event = parseWhatsAppWebhook(unknownPayload)
-    const channel = await crmPrisma.whatsAppChannel.findUnique({ where: { phoneNumberId: event.phoneNumberId } })
-    if (!channel || !channel.active) throw new CrmApiError(404, 'CHANNEL_NOT_FOUND', 'El canal no está activo.')
+    const wabaChannels = !event.phoneNumberId && event.wabaId
+      ? await crmPrisma.whatsAppChannel.findMany({ where: { wabaId: event.wabaId }, take: 2 })
+      : []
+    if (!event.phoneNumberId && wabaChannels.length > 1) {
+      throw new CrmApiError(409, 'CHANNEL_AMBIGUOUS', 'El evento no identifica el número y el WABA tiene más de un canal.')
+    }
+    const channel = event.phoneNumberId
+      ? await crmPrisma.whatsAppChannel.findUnique({ where: { phoneNumberId: event.phoneNumberId } })
+      : wabaChannels[0] || null
+    if (!channel || (!channel.active && channel.connectionMode !== 'COEXISTENCE')) {
+      throw new CrmApiError(404, 'CHANNEL_NOT_FOUND', 'El canal no está disponible para recibir eventos.')
+    }
     if (!channel.appSecretCiphertext || !channel.appSecretIv || !channel.appSecretTag) {
       throw new CrmApiError(503, 'CHANNEL_NOT_CONFIGURED', 'El canal no tiene App Secret configurado.')
     }

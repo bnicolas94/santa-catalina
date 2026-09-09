@@ -6,6 +6,7 @@ type MetaPhoneNumber = {
   verified_name?: string
   quality_rating?: string
   platform_type?: string
+  is_on_biz_app?: boolean
 }
 type MetaPhoneNumbersResponse = {
   data?: MetaPhoneNumber[]
@@ -18,6 +19,7 @@ export type ValidatedWhatsAppChannel = {
   verifiedName: string | null
   qualityRating: string | null
   platformType: string | null
+  isOnBizApp: boolean
 }
 
 export async function validateMetaChannel(input: {
@@ -63,11 +65,37 @@ export async function validateMetaChannel(input: {
     throw new CrmApiError(409, 'PHONE_NOT_IN_WABA', 'El Phone Number ID no pertenece al WABA configurado o el token no puede verlo.')
   }
 
+  const detailUrl = new URL(
+    `${input.graphApiVersion}/${encodeURIComponent(input.phoneNumberId)}`,
+    'https://graph.facebook.com/',
+  )
+  detailUrl.searchParams.set('fields', 'id,display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app')
+  let detailResponse: Response
+  try {
+    detailResponse = await fetcher(detailUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${input.accessToken}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(12_000),
+    })
+  } catch {
+    throw new CrmApiError(502, 'META_UNAVAILABLE', 'Meta no respondió a tiempo. Intentá validar nuevamente.')
+  }
+  const detail = await detailResponse.json().catch(() => ({})) as MetaPhoneNumber & MetaPhoneNumbersResponse
+  if (!detailResponse.ok) {
+    const message = String(detail.error?.message || '').replace(/\s+/g, ' ').slice(0, 240)
+    throw new CrmApiError(
+      502,
+      'META_VALIDATION_FAILED',
+      message ? `Meta rechazó la validación: ${message}` : `Meta rechazó la validación (HTTP ${detailResponse.status}).`,
+    )
+  }
+
   return {
     phoneNumberId: phone.id,
-    displayPhoneNumber: phone.display_phone_number || null,
-    verifiedName: phone.verified_name || null,
-    qualityRating: phone.quality_rating || null,
-    platformType: phone.platform_type || null,
+    displayPhoneNumber: detail.display_phone_number || phone.display_phone_number || null,
+    verifiedName: detail.verified_name || phone.verified_name || null,
+    qualityRating: detail.quality_rating || phone.quality_rating || null,
+    platformType: detail.platform_type || phone.platform_type || null,
+    isOnBizApp: detail.is_on_biz_app === true,
   }
 }

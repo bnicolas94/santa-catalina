@@ -1,7 +1,8 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import Script from 'next/script'
 import styles from './settings.module.css'
 
 type Channel = {
@@ -14,6 +15,12 @@ type Channel = {
   businessPortfolioId: string | null
   graphApiVersion: string
   connectionStatus: string
+  connectionMode: string
+  isOnBizApp: boolean
+  platformType: string | null
+  coexistenceVerifiedAt: string | null
+  continuityVerifiedAt: string | null
+  onboardingCompletedAt: string | null
   lastValidatedAt: string | null
   hasAccessToken: boolean
   hasAppSecret: boolean
@@ -24,10 +31,28 @@ type Configuration = {
   encryptionStatus: 'READY' | 'MISSING' | 'INVALID'
   mockMode: boolean
   webhookUrl: string
+  embeddedSignup: {
+    available: boolean
+    missing: string[]
+    appId: string | null
+    configId: string | null
+    graphApiVersion: string | null
+  }
 }
 type ValidationResult = {
   channel: Channel
-  validation: { verifiedName: string | null; qualityRating: string | null; platformType: string | null }
+  validation: { verifiedName: string | null; qualityRating: string | null; platformType: string | null; isOnBizApp: boolean }
+}
+type EmbeddedSignupSession = { wabaId: string; phoneNumberId?: string; businessId?: string }
+type FacebookLoginResponse = { authResponse?: { code?: string }; status?: string }
+
+declare global {
+  interface Window {
+    FB?: {
+      init(options: { appId: string; cookie: boolean; xfbml: boolean; version: string }): void
+      login(callback: (response: FacebookLoginResponse) => void, options: Record<string, unknown>): void
+    }
+  }
 }
 type Draft = {
   name: string
@@ -90,6 +115,14 @@ export default function ChannelSettingsPage() {
   const [validating, setValidating] = useState(false)
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [sdkLoaded, setSdkLoaded] = useState(false)
+  const [sdkReady, setSdkReady] = useState(false)
+  const [connectingCoexistence, setConnectingCoexistence] = useState(false)
+  const [signupCode, setSignupCode] = useState<string | null>(null)
+  const [signupSession, setSignupSession] = useState<EmbeddedSignupSession | null>(null)
+  const [confirmingContinuity, setConfirmingContinuity] = useState(false)
+  const [continuityChecks, setContinuityChecks] = useState({ mobileApp: false, linkedDevices: false, bidirectionalMessages: false })
+  const completionStarted = useRef(false)
 
   const selected = channels.find(channel => channel.id === selectedId) || null
   const secretsReady = Boolean(
@@ -105,7 +138,8 @@ export default function ChannelSettingsPage() {
     || draft.accessToken || draft.appSecret || draft.webhookVerifyToken
   ))
   const metaValidated = Boolean(selected?.connectionStatus === 'CONNECTED' && !hasUnsavedValidationChanges)
-  const canActivate = Boolean(selected && secretsReady && metaValidated)
+  const continuityReady = Boolean(selected?.connectionMode !== 'COEXISTENCE' || selected.continuityVerifiedAt)
+  const canActivate = Boolean(selected && secretsReady && metaValidated && continuityReady)
   const completed = useMemo(() => [
     Boolean(draft.phoneNumberId && draft.wabaId),
     secretsReady,
@@ -133,15 +167,72 @@ export default function ChannelSettingsPage() {
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const signup = configuration?.embeddedSignup
+    if (!sdkLoaded || !signup?.available || !signup.appId || !signup.graphApiVersion || !window.FB) return
+    window.FB.init({ appId: signup.appId, cookie: true, xfbml: false, version: signup.graphApiVersion })
+    setSdkReady(true)
+  }, [configuration, sdkLoaded])
+
+  useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (!['https://www.facebook.com', 'https://web.facebook.com'].includes(event.origin)) return
+      let payload: unknown = event.data
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload) } catch { return }
+      }
+      if (!payload || typeof payload !== 'object') return
+      const message = payload as { type?: string; event?: string; data?: { waba_id?: string; phone_number_id?: string; business_id?: string } }
+      if (message.type !== 'WA_EMBEDDED_SIGNUP') return
+      if (message.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' && message.data?.waba_id) {
+        setSignupSession({
+          wabaId: message.data.waba_id,
+          phoneNumberId: message.data.phone_number_id,
+          businessId: message.data.business_id,
+        })
+      } else if (message.event === 'CANCEL' || message.event === 'ERROR') {
+        setConnectingCoexistence(false)
+        setMessage({ type: 'error', text: 'Meta no completó la conexión. El número no fue modificado por el CRM.' })
+      }
+    }
+    window.addEventListener('message', listener)
+    return () => window.removeEventListener('message', listener)
+  }, [])
+
+  useEffect(() => {
+    if (!signupCode || !signupSession || completionStarted.current) return
+    completionStarted.current = true
+    adminApi<ValidationResult>('/api/admin/embedded-signup', {
+      method: 'POST',
+      body: JSON.stringify({ code: signupCode, ...signupSession }),
+    }).then(result => {
+      setChannels(current => {
+        const exists = current.some(item => item.id === result.channel.id)
+        return exists ? current.map(item => item.id === result.channel.id ? result.channel : item) : [...current, result.channel]
+      })
+      setSelectedId(result.channel.id)
+      setDraft(draftFromChannel(result.channel))
+      setMessage({ type: 'ok', text: 'Meta confirmó Coexistence. El canal quedó inactivo hasta completar las pruebas de continuidad.' })
+    }).catch(cause => {
+      setMessage({ type: 'error', text: cause instanceof Error ? cause.message : 'No se pudo completar el onboarding de Coexistence.' })
+    }).finally(() => {
+      setConnectingCoexistence(false)
+      setSignupCode(null)
+      setSignupSession(null)
+    })
+  }, [signupCode, signupSession])
+
   const selectChannel = (channel: Channel) => {
     setSelectedId(channel.id)
     setDraft(draftFromChannel(channel))
     setMessage(null)
+    setContinuityChecks({ mobileApp: false, linkedDevices: false, bidirectionalMessages: false })
   }
   const newChannel = () => {
     setSelectedId(null)
     setDraft(EMPTY_DRAFT)
     setMessage(null)
+    setContinuityChecks({ mobileApp: false, linkedDevices: false, bidirectionalMessages: false })
   }
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(current => ({ ...current, [key]: value }))
 
@@ -197,9 +288,55 @@ export default function ChannelSettingsPage() {
     }
   }
 
+  const startCoexistence = () => {
+    const signup = configuration?.embeddedSignup
+    if (!sdkReady || !window.FB || !signup?.configId) return
+    completionStarted.current = false
+    setSignupCode(null)
+    setSignupSession(null)
+    setMessage(null)
+    setConnectingCoexistence(true)
+    window.FB.login(response => {
+      const code = response.authResponse?.code
+      if (code) setSignupCode(code)
+      else {
+        setConnectingCoexistence(false)
+        setMessage({ type: 'error', text: 'Se canceló la autorización en Meta. No se modificó el número.' })
+      }
+    }, {
+      config_id: signup.configId,
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        featureType: 'whatsapp_business_app_onboarding',
+        sessionInfoVersion: '3',
+      },
+    })
+  }
+
+  const confirmContinuity = async () => {
+    if (!selected) return
+    setConfirmingContinuity(true)
+    setMessage(null)
+    try {
+      const channel = await adminApi<Channel>(`/api/admin/channels/${selected.id}/continuity`, {
+        method: 'POST', body: JSON.stringify(continuityChecks),
+      })
+      setChannels(current => current.map(item => item.id === channel.id ? channel : item))
+      setDraft(draftFromChannel(channel))
+      setMessage({ type: 'ok', text: 'Pruebas de continuidad registradas. Ya podés activar el canal cuando decidas pasar a producción.' })
+    } catch (cause) {
+      setMessage({ type: 'error', text: cause instanceof Error ? cause.message : 'No se pudieron registrar las pruebas.' })
+    } finally {
+      setConfirmingContinuity(false)
+    }
+  }
+
   if (loading) return <main className={styles.loading}><span>SC</span><strong>Preparando configuración segura…</strong></main>
 
   return <main className={styles.page}>
+    <Script src="https://connect.facebook.net/es_LA/sdk.js" strategy="afterInteractive" onLoad={() => setSdkLoaded(true)} />
     <aside className={styles.sidebar}>
       <Link className={styles.brand} href="/" aria-label="Volver a conversaciones">SC</Link>
       <div className={styles.sideHeading}><span>Administración</span><h1>Canales</h1></div>
@@ -218,6 +355,29 @@ export default function ChannelSettingsPage() {
 
       {configuration?.encryptionStatus !== 'READY' && <div className={styles.warning}><span>!</span><div><strong>{configuration?.encryptionStatus === 'INVALID' ? 'La clave maestra no es válida' : 'Falta configurar la clave maestra'}</strong><p>Definí `WHATSAPP_CONFIG_ENCRYPTION_KEY` con 32 bytes en base64 antes de guardar Access Token, App Secret o Verify Token.</p></div></div>}
       {message && <div className={message.type === 'ok' ? styles.success : styles.error} role="status"><span>{message.type === 'ok' ? '✓' : '!'}</span>{message.text}<button onClick={() => setMessage(null)}>×</button></div>}
+
+      <section className={styles.coexistenceCard}>
+        <div className={styles.coexistenceIcon}>W</div>
+        <div className={styles.coexistenceCopy}>
+          <span className={styles.eyebrow}>Conexión recomendada</span>
+          <h3>Conservar WhatsApp Business y sus sesiones</h3>
+          <p>Abre el flujo oficial de Meta preparado exclusivamente para Coexistence. El CRM rechazará el alta si Meta no confirma que la aplicación continúa activa.</p>
+          <div className={styles.safetyChecks}><span>✓ Mismo número</span><span>✓ Sin migración manual</span><span>✓ Canal inactivo al finalizar</span></div>
+          {!configuration?.embeddedSignup.available && <small>Falta configurar: {configuration?.embeddedSignup.missing.join(', ') || 'cargando configuración…'}</small>}
+        </div>
+        <button type="button" disabled={!sdkReady || connectingCoexistence || configuration?.encryptionStatus !== 'READY'} onClick={startCoexistence}>
+          {connectingCoexistence ? 'Esperando a Meta…' : 'Conectar con Coexistence'}
+        </button>
+        {selected?.connectionMode === 'COEXISTENCE' && <div className={styles.continuityGate}>
+          <div><strong>{selected.continuityVerifiedAt ? '✓ Continuidad verificada' : 'Prueba obligatoria antes de activar'}</strong><small>Probá con un contacto interno; todavía no habilita envíos del CRM.</small></div>
+          {!selected.continuityVerifiedAt && <>
+            <label><input type="checkbox" checked={continuityChecks.mobileApp} onChange={event => setContinuityChecks(current => ({ ...current, mobileApp: event.target.checked }))} /> La app móvil sigue enviando y recibiendo</label>
+            <label><input type="checkbox" checked={continuityChecks.linkedDevices} onChange={event => setContinuityChecks(current => ({ ...current, linkedDevices: event.target.checked }))} /> Todos los dispositivos vinculados siguen conectados</label>
+            <label><input type="checkbox" checked={continuityChecks.bidirectionalMessages} onChange={event => setContinuityChecks(current => ({ ...current, bidirectionalMessages: event.target.checked }))} /> Los mensajes aparecen en la app y en el CRM</label>
+            <button type="button" disabled={confirmingContinuity || !Object.values(continuityChecks).every(Boolean)} onClick={confirmContinuity}>{confirmingContinuity ? 'Registrando…' : 'Confirmar las tres pruebas'}</button>
+          </>}
+        </div>}
+      </section>
 
       <div className={styles.grid}>
         <form className={styles.formCard} onSubmit={save}>

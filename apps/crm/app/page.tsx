@@ -7,7 +7,8 @@ type ApiTag = { id: string; name: string; color: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
-type ConversationDetail = ConversationSummary & { messages: ApiMessage[] }
+type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderDraftUpdatedAt?: string | null }
+type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
 
@@ -17,6 +18,7 @@ const FILTERS: Array<{ id: FilterId; label: string; short: string }> = [
   { id: 'unassigned', label: 'Sin asignar', short: 'Nuevas' }, { id: 'waiting', label: 'En espera', short: 'Espera' },
   { id: 'resolved', label: 'Resueltas', short: 'Cerradas' },
 ]
+const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderShift: null, orderDraftUpdatedAt: null }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
@@ -27,6 +29,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     back: <path d="m15 18-6-6 6-6"/>, attach: <path d="m21 12-9 9a6 6 0 0 1-9-9l9-9a4 4 0 0 1 6 6l-9 9a2 2 0 1 1-3-3l8-8"/>, smile: <><circle cx="12" cy="12" r="9"/><path d="M8 14s2 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></>,
     send: <><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>, lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, bag: <><path d="M6 8h12l1 13H5z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></>,
     phone: <path d="M22 17v3a2 2 0 0 1-2 2 20 20 0 0 1-9-3 20 20 0 0 1-6-6A20 20 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2l1 3-2 3a16 16 0 0 0 6 6l3-2 3 1a2 2 0 0 1 2 2z"/>, note: <><path d="M4 3h16v18H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>, map: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></>, truck: <><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>, store: <><path d="M4 10v11h16V10M3 10l2-6h14l2 6"/><path d="M3 10a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2M9 21v-6h6v6"/></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -48,6 +51,20 @@ function serviceWindow(value: string | null) {
   const remaining = new Date(value).getTime() - Date.now()
   if (remaining <= 0) return { expired: true, text: 'Ventana de servicio vencida · usá una plantilla aprobada' }
   return { expired: false, text: `Ventana de respuesta abierta · ${Math.floor(remaining / 3_600_000)} h ${Math.floor((remaining % 3_600_000) / 60_000)} min restantes` }
+}
+function localDateOffset(days: number) {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+function orderDraftFromConversation(conversation: ConversationDetail): OrderDraft {
+  return {
+    orderDate: conversation.orderDate || '',
+    orderAddress: conversation.orderAddress || '',
+    orderFulfillment: conversation.orderFulfillment,
+    orderShift: conversation.orderShift,
+    orderDraftUpdatedAt: conversation.orderDraftUpdatedAt,
+  }
 }
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: 'no-store', ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } })
@@ -72,6 +89,9 @@ export default function AttentionWorkspace() {
   const [customerContext, setCustomerContext] = useState<CustomerContextResponse | null>(null)
   const [contextLoading, setContextLoading] = useState(false)
   const [contextBusy, setContextBusy] = useState(false)
+  const [orderDraft, setOrderDraft] = useState<OrderDraft>(EMPTY_ORDER_DRAFT)
+  const [orderDraftDirty, setOrderDraftDirty] = useState(false)
+  const [orderSaveState, setOrderSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [mobileChat, setMobileChat] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -79,6 +99,7 @@ export default function AttentionWorkspace() {
   const [error, setError] = useState<string | null>(null)
   const lockRef = useRef<Lock | null>(null)
   const activeIdRef = useRef<string | null>(null)
+  const orderDraftVersionRef = useRef(0)
 
   const refreshList = useCallback(async () => {
     const items = await api<ConversationSummary[]>('/api/conversations')
@@ -113,10 +134,13 @@ export default function AttentionWorkspace() {
   useEffect(() => {
     if (!activeId || !user) return
     let cancelled = false
-    setError(null); setDetail(null); setLock(null); lockRef.current = null; activeIdRef.current = activeId
+    orderDraftVersionRef.current += 1
+    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
+      orderDraftVersionRef.current += 1
+      setOrderDraft(orderDraftFromConversation(conversation))
       const canAcquire = conversation.status !== 'RESOLVED'
         && conversation.status !== 'ARCHIVED'
         && (!conversation.assignedToId || conversation.assignedToId === user.id)
@@ -204,6 +228,47 @@ export default function AttentionWorkspace() {
     }
   }
 
+  const canEditOrderDraft = Boolean(detail && lock && detail.assignedToId === user?.id && detail.status !== 'RESOLVED' && detail.status !== 'ARCHIVED')
+  const changeOrderDraft = (patch: Partial<OrderDraft>) => {
+    if (!canEditOrderDraft) return
+    orderDraftVersionRef.current += 1
+    setOrderDraft(current => ({ ...current, ...patch }))
+    setOrderDraftDirty(true)
+    setOrderSaveState('idle')
+  }
+  useEffect(() => {
+    if (!orderDraftDirty || !canEditOrderDraft || !detail) return
+    const version = orderDraftVersionRef.current
+    const timer = window.setTimeout(async () => {
+      const currentLock = lockRef.current
+      if (!currentLock || activeIdRef.current !== detail.id) return
+      setOrderSaveState('saving')
+      try {
+        const result = await api<{ draft: OrderDraft }>(`/api/conversations/${detail.id}/order-draft`, {
+          method: 'PUT',
+          body: JSON.stringify({ ...orderDraft, lockToken: currentLock.token }),
+        })
+        if (orderDraftVersionRef.current !== version) return
+        setOrderDraft(current => ({ ...current, orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt }))
+        setOrderDraftDirty(false)
+        setOrderSaveState('saved')
+        setDetail(current => current && current.id === detail.id ? {
+          ...current,
+          orderDate: result.draft.orderDate || null,
+          orderAddress: result.draft.orderAddress || null,
+          orderFulfillment: result.draft.orderFulfillment,
+          orderShift: result.draft.orderShift,
+          orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt || null,
+        } : current)
+      } catch (cause) {
+        if (orderDraftVersionRef.current !== version) return
+        setOrderSaveState('error')
+        setError(cause instanceof Error ? cause.message : 'No se pudo guardar la ficha del pedido.')
+      }
+    }, 450)
+    return () => window.clearTimeout(timer)
+  }, [orderDraft, orderDraftDirty, canEditOrderDraft, detail])
+
   const counts = useMemo(() => ({ all: conversations.filter(c => c.status !== 'RESOLVED').length, mine: conversations.filter(c => c.assignedToId === user?.id && c.status !== 'RESOLVED').length, unassigned: conversations.filter(c => c.status === 'UNASSIGNED').length, waiting: conversations.filter(c => c.status === 'WAITING_CUSTOMER').length, resolved: conversations.filter(c => c.status === 'RESOLVED').length }), [conversations, user])
   const visible = useMemo(() => conversations.filter(c => {
     const matchesFilter = filter === 'all' ? c.status !== 'RESOLVED' : filter === 'mine' ? c.assignedToId === user?.id && c.status !== 'RESOLVED' : filter === 'unassigned' ? c.status === 'UNASSIGNED' : filter === 'waiting' ? c.status === 'WAITING_CUSTOMER' : c.status === 'RESOLVED'
@@ -216,6 +281,12 @@ export default function AttentionWorkspace() {
   const service = serviceWindow(active?.serviceWindowExpiresAt || null)
   const currentName = user?.name || 'Agente de Atención'
   const isSupervisor = user?.rol === 'ADMIN' || user?.permisos.permisoAtencionAdmin === true
+  const orderCompleted = [
+    Boolean(orderDraft.orderDate),
+    Boolean(orderDraft.orderFulfillment),
+    Boolean(orderDraft.orderShift),
+    orderDraft.orderFulfillment === 'PICKUP' || Boolean(orderDraft.orderAddress.trim()),
+  ].filter(Boolean).length
 
   if (loading) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>Preparando tu bandeja…</strong></main>
   if (!active) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>{error || 'Todavía no hay conversaciones.'}</strong></main>
@@ -255,6 +326,34 @@ export default function AttentionWorkspace() {
           {active.tags.map(tag => <span key={tag.id}>{tag.name}</span>)}
         </div>
       </div>
+      <section className="orderPlanner">
+        <div className="plannerHeading"><div><span>Ficha rápida</span><h4>Datos del pedido</h4></div><b className={orderCompleted === 4 ? 'plannerComplete' : ''}>{orderCompleted}/4</b></div>
+        <div className="plannerField">
+          <label><Icon name="calendar" size={15} /> Fecha</label>
+          <input className="plannerDate" type="date" min={localDateOffset(0)} value={orderDraft.orderDate} disabled={!canEditOrderDraft} onChange={event => changeOrderDraft({ orderDate: event.target.value })} />
+          <div className="quickDateButtons">
+            {[{ label: 'Hoy', days: 0 }, { label: 'Mañana', days: 1 }, { label: '+2 días', days: 2 }].map(option => { const value = localDateOffset(option.days); return <button type="button" key={option.label} className={orderDraft.orderDate === value ? 'selected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderDate: value })}>{option.label}</button> })}
+          </div>
+        </div>
+        <div className="plannerField">
+          <label>Modalidad</label>
+          <div className="fulfillmentButtons">
+            <button type="button" className={orderDraft.orderFulfillment === 'DELIVERY' ? 'selected deliverySelected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderFulfillment: 'DELIVERY' })}><Icon name="truck" size={20} /><span><strong>Envío</strong><small>Lo entregamos</small></span></button>
+            <button type="button" className={orderDraft.orderFulfillment === 'PICKUP' ? 'selected pickupSelected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderFulfillment: 'PICKUP' })}><Icon name="store" size={20} /><span><strong>Retiro</strong><small>Busca el cliente</small></span></button>
+          </div>
+        </div>
+        <div className="plannerField">
+          <div className="plannerLabelRow"><label><Icon name="map" size={15} /> Dirección</label>{customerContext?.status === 'LINKED' && customerContext.customer.address && orderDraft.orderFulfillment !== 'PICKUP' && <button type="button" disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderAddress: customerContext.customer.address || '' })}>Usar la del cliente</button>}</div>
+          <textarea rows={2} maxLength={300} value={orderDraft.orderAddress} disabled={!canEditOrderDraft || orderDraft.orderFulfillment === 'PICKUP'} onChange={event => changeOrderDraft({ orderAddress: event.target.value })} placeholder={orderDraft.orderFulfillment === 'PICKUP' ? 'No se requiere para retiro' : 'Calle, número y referencia'} />
+        </div>
+        <div className="plannerField">
+          <label>Turno</label>
+          <div className="shiftButtons">
+            {[{ value: 'MORNING', label: 'Mañana', icon: '☀' }, { value: 'SIESTA', label: 'Siesta', icon: '◐' }, { value: 'AFTERNOON', label: 'Tarde', icon: '◒' }].map(option => <button type="button" key={option.value} className={orderDraft.orderShift === option.value ? 'selected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderShift: option.value as OrderDraft['orderShift'] })}><i>{option.icon}</i><strong>{option.label}</strong></button>)}
+          </div>
+        </div>
+        <div className={`plannerSaveState state-${orderSaveState}`}><span>{orderSaveState === 'saving' ? '● Guardando…' : orderSaveState === 'error' ? '! No se pudo guardar' : orderSaveState === 'saved' ? '✓ Guardado automáticamente' : canEditOrderDraft ? 'Los cambios se guardan solos' : 'Sólo puede editar el agente que atiende'}</span>{orderCompleted === 4 && <b>Lista para agendar</b>}</div>
+      </section>
       <section className="detailSection">
         <div className="sectionLabel"><span>Contacto</span><button onClick={() => refreshCustomerContext(active.id)} disabled={contextLoading}>{contextLoading ? 'Buscando…' : 'Actualizar'}</button></div>
         {contextLoading && !customerContext ? <div className="contextSkeleton"><i /><i /><i /></div> : customerContext?.status === 'LINKED' ? <dl>
@@ -276,7 +375,6 @@ export default function AttentionWorkspace() {
         <div className="sectionLabel"><span>Pedidos recientes</span>{customerContext?.status === 'LINKED' && <b>{customerContext.customer.orderCount} históricos</b>}</div>
         {customerContext?.status === 'LINKED' && customerContext.customer.recentOrders.length > 0 ? <div className="orderList">{customerContext.customer.recentOrders.map(order => <div className="orderCard" key={order.id}><span className="orderIcon"><Icon name="bag" size={16} /></span><div><strong>{formatDate(order.deliveryAt)} · {orderStatus(order.status)}</strong><span>{order.totalPacks} packs · {order.totalUnits} unidades</span></div><div className="orderAmount"><strong>{formatMoney(order.totalAmount)}</strong><span>{order.paid ? 'Abonado' : 'Pendiente'}</span></div></div>)}</div> : <div className="noOrder"><Icon name="bag" /><span>{customerContext?.status === 'LINKED' ? 'Todavía no tiene pedidos' : 'Vinculá el cliente para ver pedidos'}</span></div>}
       </section>
-      <section className="detailSection notesSection"><div className="sectionLabel"><span>Seguridad operativa</span></div><div className="internalNote"><Icon name="note" size={16} /><p>El editor se habilita solamente mientras este agente conserva el lease activo.</p><span>Renovación automática cada 25 segundos</span></div></section>
       <footer className="contextFooter"><button className={isSupervisor ? 'adminReleaseButton' : ''} onClick={isSupervisor ? unassignConversation : undefined} disabled={!isSupervisor || !active.assignedToId || busy}>{isSupervisor ? busy ? 'Liberando…' : 'Liberar chat' : 'Transferir'}</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer>
     </aside>}
   </main>

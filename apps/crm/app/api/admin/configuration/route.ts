@@ -3,6 +3,7 @@ import { apiErrorResponse } from '@/lib/api'
 import { requireCrmUser } from '@/lib/session'
 import { encryptionConfigurationStatus } from '@/lib/whatsapp/channels'
 import { isWhatsAppMockEnabled } from '@/lib/whatsapp/provider'
+import { embeddedSignupConfigurationStatus } from '@/lib/whatsapp/embedded-signup'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
       encryptionStatus: encryptionConfigurationStatus(),
       mockMode: isWhatsAppMockEnabled(),
       webhookUrl: new URL('/api/webhooks/whatsapp', baseUrl).toString(),
+      embeddedSignup: embeddedSignupConfigurationStatus(),
     })
   } catch (error) {
     return apiErrorResponse(error)
