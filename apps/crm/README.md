@@ -51,6 +51,7 @@ POST /api/conversations/{id}/claim
 POST /api/conversations/{id}/heartbeat
 POST /api/conversations/{id}/release
 POST /api/conversations/{id}/messages
+POST /api/conversations/{id}/unassign  # sólo supervisión
 
 GET  /api/admin/channels
 POST /api/admin/channels
@@ -65,6 +66,11 @@ POST /api/webhooks/whatsapp
 `claim` entrega un `lockToken`. `heartbeat`, `release` y `messages` requieren ese
 token; el lease dura 75 segundos. Cada envío debe incluir un
 `clientMessageId` único para que un reintento no duplique el mensaje.
+
+Un operador sólo puede listar y abrir conversaciones sin asignar o asignadas a
+su propio usuario. `ADMIN` y quienes tengan `permisoAtencionAdmin` pueden ver la
+bandeja completa y liberar una asignación; la liberación invalida el lease y
+queda registrada en asignaciones y eventos.
 
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en

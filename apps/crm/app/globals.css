@@ -259,6 +259,9 @@ button { color: inherit; }
 .internalNote span { display: block; color: #9a8769; font-size: 7px; margin-top: 5px; }
 .contextFooter { position: sticky; bottom: 0; margin-top: auto; display: flex; gap: 7px; padding: 10px 12px; border-top: 1px solid var(--line); background: rgba(255,255,255,.94); }
 .contextFooter button { flex: 1; min-height: 34px; border: 1px solid var(--line); background: white; border-radius: 9px; font-size: 8px; font-weight: 700; cursor: pointer; }
+.contextFooter button:disabled { cursor: default; opacity: .55; }
+.contextFooter .adminReleaseButton { border-color: #e4a83c; color: #8a5b0b; background: #fff8e9; }
+.contextFooter .adminReleaseButton:hover:not(:disabled) { background: #ffefc7; }
 .contextFooter .resolveButton { background: var(--wine); color: white; border-color: var(--wine); display: flex; align-items: center; justify-content: center; gap: 5px; }
 
 @media (max-width: 1340px) {
@@ -392,6 +395,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .channelDot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-green); }
 .chatActions { gap: 7px; }
 .chatActions .iconButton { width: 36px; height: 36px; }
+.chatActions .adminHeaderAction { color: #9a670d; }
+.chatActions .adminHeaderAction:hover { background: #fff0c9; color: #704900; }
 .mobileBack { color: #54656f; }
 .lockBanner, .claimBanner, .errorBanner { margin: 8px 12px 0; border-radius: 8px; box-shadow: 0 1px 2px rgba(11, 20, 26, .08); }
 .lockBanner { background: #fff5c8; border-color: #f0d875; }

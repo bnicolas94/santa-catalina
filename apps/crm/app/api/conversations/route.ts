@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { crmPrisma } from '@/lib/prisma'
 import { apiErrorResponse } from '@/lib/api'
 import { requireCrmUser } from '@/lib/session'
+import { conversationVisibilityWhere } from '@/lib/conversations/access'
 import type { ConversationStatus, Prisma } from '@/generated/prisma'
 
 const ALLOWED_STATUSES = new Set<ConversationStatus>(['UNASSIGNED', 'OPEN', 'WAITING_CUSTOMER', 'RESOLVED', 'ARCHIVED'])
@@ -13,6 +14,7 @@ export async function GET(request: NextRequest) {
     const assigned = request.nextUrl.searchParams.get('assigned')
     const search = request.nextUrl.searchParams.get('q')?.trim()
     const where: Prisma.ConversationWhereInput = {}
+    const constraints: Prisma.ConversationWhereInput[] = [conversationVisibilityWhere(user)]
 
     if (statusParam && ALLOWED_STATUSES.has(statusParam as ConversationStatus)) {
       where.status = statusParam as ConversationStatus
@@ -20,11 +22,14 @@ export async function GET(request: NextRequest) {
     if (assigned === 'me') where.assignedToId = user.id
     if (assigned === 'unassigned') where.assignedToId = null
     if (search) {
-      where.OR = [
-        { contact: { displayName: { contains: search, mode: 'insensitive' } } },
-        { contact: { phoneE164: { contains: search } } },
-      ]
+      constraints.push({
+        OR: [
+          { contact: { displayName: { contains: search, mode: 'insensitive' } } },
+          { contact: { phoneE164: { contains: search } } },
+        ],
+      })
     }
+    where.AND = constraints
 
     const conversations = await crmPrisma.conversation.findMany({
       where,

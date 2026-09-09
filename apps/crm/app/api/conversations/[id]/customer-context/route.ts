@@ -1,9 +1,10 @@
-import type { CustomerContextResponse, ErpCustomerDetails } from '@santa-catalina/contracts'
+import type { CrmSessionUser, CustomerContextResponse, ErpCustomerDetails } from '@santa-catalina/contracts'
 import { NextRequest, NextResponse } from 'next/server'
 import { CrmApiError, apiErrorResponse, requireText } from '@/lib/api'
 import { getErpCustomerSummary, resolveErpCustomer } from '@/lib/erp/client'
 import { crmPrisma } from '@/lib/prisma'
 import { requireCrmUser } from '@/lib/session'
+import { conversationVisibilityWhere } from '@/lib/conversations/access'
 
 function demoCustomer(contact: { displayName: string; phoneE164: string }): ErpCustomerDetails {
   return {
@@ -42,9 +43,9 @@ function demoCustomer(contact: { displayName: string; phoneE164: string }): ErpC
   }
 }
 
-async function conversationContact(id: string) {
-  const conversation = await crmPrisma.conversation.findUnique({
-    where: { id },
+async function conversationContact(id: string, user: CrmSessionUser) {
+  const conversation = await crmPrisma.conversation.findFirst({
+    where: { id, ...conversationVisibilityWhere(user) },
     select: {
       id: true,
       contact: {
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   try {
     const user = await requireCrmUser(request)
     const { id } = await context.params
-    const conversation = await conversationContact(id)
+    const conversation = await conversationContact(id, user)
 
     if (process.env.NODE_ENV !== 'production') {
       return NextResponse.json({
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   try {
     const user = await requireCrmUser(request)
     const { id } = await context.params
-    const conversation = await conversationContact(id)
+    const conversation = await conversationContact(id, user)
     const body = await request.json()
     const erpClientId = requireText(body.erpClientId, 'erpClientId', 80)
     const customer = process.env.NODE_ENV !== 'production'

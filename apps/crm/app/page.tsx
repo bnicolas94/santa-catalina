@@ -82,7 +82,7 @@ export default function AttentionWorkspace() {
   const refreshList = useCallback(async () => {
     const items = await api<ConversationSummary[]>('/api/conversations')
     setConversations(items)
-    setActiveId(current => current || items[0]?.id || null)
+    setActiveId(current => current && items.some(item => item.id === current) ? current : items[0]?.id || null)
   }, [])
   useEffect(() => {
     Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
@@ -170,6 +170,20 @@ export default function AttentionWorkspace() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo enviar el mensaje.') }
     finally { setBusy(false) }
   }
+  const unassignConversation = async () => {
+    if (!detail || !window.confirm(`¿Liberar la conversación de ${detail.contact.displayName}? Volverá a la bandeja de consultas nuevas.`)) return
+    setBusy(true); setError(null)
+    try {
+      await api(`/api/conversations/${detail.id}/unassign`, { method: 'POST', body: '{}' })
+      lockRef.current = null; setLock(null)
+      setDetail({ ...detail, status: 'UNASSIGNED', assignedToId: null, activeById: null, lockExpiresAt: null })
+      await refreshList()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo liberar la conversación.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const counts = useMemo(() => ({ all: conversations.filter(c => c.status !== 'RESOLVED').length, mine: conversations.filter(c => c.assignedToId === user?.id && c.status !== 'RESOLVED').length, unassigned: conversations.filter(c => c.status === 'UNASSIGNED').length, waiting: conversations.filter(c => c.status === 'WAITING_CUSTOMER').length, resolved: conversations.filter(c => c.status === 'RESOLVED').length }), [conversations, user])
   const visible = useMemo(() => conversations.filter(c => {
@@ -182,6 +196,7 @@ export default function AttentionWorkspace() {
   const canReply = Boolean(active && lock && active.assignedToId === user?.id && active.status !== 'RESOLVED' && active.status !== 'ARCHIVED')
   const service = serviceWindow(active?.serviceWindowExpiresAt || null)
   const currentName = user?.name || 'Agente de Atención'
+  const isSupervisor = user?.rol === 'ADMIN' || user?.permisos.permisoAtencionAdmin === true
 
   if (loading) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>Preparando tu bandeja…</strong></main>
   if (!active) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>{error || 'Todavía no hay conversaciones.'}</strong></main>
@@ -203,7 +218,7 @@ export default function AttentionWorkspace() {
       </header>
       <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${active.id === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
     </section>
-    <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}><header className="chatHeader"><button className="mobileBack" onClick={() => setMobileChat(false)} aria-label="Volver a los chats"><Icon name="back" /></button><button className="avatarButton" onClick={() => setShowContext(true)} aria-label="Ver información del cliente"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#687782'} /></button><div className="chatIdentity"><div><h2>{active.contact.displayName}</h2>{active.priority > 0 && <span className="priorityPill">Prioridad</span>}</div><span><i className="channelDot" />{assignedToOther ? `Atiende ${agentName(active.assignedToId)}` : active.assignedToId ? 'Conversación asignada a vos' : 'WhatsApp Business · sin asignar'}</span></div><div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button><button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div></header>
+    <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}><header className="chatHeader"><button className="mobileBack" onClick={() => setMobileChat(false)} aria-label="Volver a los chats"><Icon name="back" /></button><button className="avatarButton" onClick={() => setShowContext(true)} aria-label="Ver información del cliente"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#687782'} /></button><div className="chatIdentity"><div><h2>{active.contact.displayName}</h2>{active.priority > 0 && <span className="priorityPill">Prioridad</span>}</div><span><i className="channelDot" />{assignedToOther ? `Atiende ${agentName(active.assignedToId)}` : active.assignedToId ? 'Conversación asignada a vos' : 'WhatsApp Business · sin asignar'}</span></div><div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button>{isSupervisor && active.assignedToId && <button className="iconButton adminHeaderAction" onClick={unassignConversation} aria-label="Liberar chat" title="Liberar chat"><Icon name="lock" size={17} /></button>}<button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div></header>
       {error && <div className="errorBanner" role="alert">{error}<button onClick={() => setError(null)}>×</button></div>}
       {assignedToOther && <div className="lockBanner"><span className="lockIcon"><Icon name="lock" size={18} /></span><div><strong>{agentName(active.assignedToId)} tiene asignada esta conversación</strong><span>Podés seguirla en tiempo real. La respuesta está bloqueada para evitar mensajes cruzados.</span></div><span className="watchingBadge">Sólo lectura</span></div>}
       {!active.assignedToId && <div className="claimBanner"><div><span className="spark">+</span><div><strong>Esta consulta espera un agente</strong><span>Al tomarla quedará asignada a vos.</span></div></div><button onClick={claimConversation} disabled={busy}>{busy ? 'Tomando…' : 'Tomar conversación'}</button></div>}
@@ -243,7 +258,7 @@ export default function AttentionWorkspace() {
         {customerContext?.status === 'LINKED' && customerContext.customer.recentOrders.length > 0 ? <div className="orderList">{customerContext.customer.recentOrders.map(order => <div className="orderCard" key={order.id}><span className="orderIcon"><Icon name="bag" size={16} /></span><div><strong>{formatDate(order.deliveryAt)} · {orderStatus(order.status)}</strong><span>{order.totalPacks} packs · {order.totalUnits} unidades</span></div><div className="orderAmount"><strong>{formatMoney(order.totalAmount)}</strong><span>{order.paid ? 'Abonado' : 'Pendiente'}</span></div></div>)}</div> : <div className="noOrder"><Icon name="bag" /><span>{customerContext?.status === 'LINKED' ? 'Todavía no tiene pedidos' : 'Vinculá el cliente para ver pedidos'}</span></div>}
       </section>
       <section className="detailSection notesSection"><div className="sectionLabel"><span>Seguridad operativa</span></div><div className="internalNote"><Icon name="note" size={16} /><p>El editor se habilita solamente mientras este agente conserva el lease activo.</p><span>Renovación automática cada 25 segundos</span></div></section>
-      <footer className="contextFooter"><button disabled>Transferir</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer>
+      <footer className="contextFooter"><button className={isSupervisor ? 'adminReleaseButton' : ''} onClick={isSupervisor ? unassignConversation : undefined} disabled={!isSupervisor || !active.assignedToId || busy}>{isSupervisor ? busy ? 'Liberando…' : 'Liberar chat' : 'Transferir'}</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer>
     </aside>}
   </main>
 }

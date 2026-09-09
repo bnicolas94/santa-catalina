@@ -58,6 +58,12 @@ La sesión debe incluir:
 reasignaciones forzadas, configuración y métricas requieren
 `permisoAtencionAdmin`.
 
+La visibilidad también se aplica en las APIs: un agente recibe únicamente las
+conversaciones sin asignar y las asignadas a su propio ID. El detalle y el
+contexto ERP usan el mismo alcance para impedir accesos por URL. Los supervisores
+pueden consultar todas las conversaciones y devolver una asignada a la bandeja
+general mediante una liberación forzada auditada.
+
 Compartir temporalmente el secreto de sesión es compatible con la arquitectura
 actual. Si se agregan más aplicaciones, debe reemplazarse por un proveedor de
 identidad central para reducir el alcance del secreto.

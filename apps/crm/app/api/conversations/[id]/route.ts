@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CrmApiError, apiErrorResponse } from '@/lib/api'
 import { crmPrisma } from '@/lib/prisma'
 import { requireCrmUser } from '@/lib/session'
+import { conversationVisibilityWhere } from '@/lib/conversations/access'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireCrmUser(request)
+    const user = await requireCrmUser(request)
     const { id } = await context.params
-    const conversation = await crmPrisma.conversation.findUnique({
-      where: { id },
+    const conversation = await crmPrisma.conversation.findFirst({
+      where: { id, ...conversationVisibilityWhere(user) },
       include: {
         contact: true,
         channel: { select: { id: true, name: true, displayPhoneNumber: true, connectionStatus: true } },
