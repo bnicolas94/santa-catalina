@@ -2,6 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath, getAccessRule } from './access-control'
 
+test('la administración de sedes está reservada a ADMIN', () => {
+    for (const path of ['/sedes', '/api/sedes']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { rol: 'ADMIN_OPS', permisos: { permisoStock: true, permisoPersonal: true, permisoProduccion: true } }), false)
+        assert.equal(canAccessPath(path, { rol: 'OPERARIO', ubicacionTipo: 'LOCAL' }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
+
 test('ADMIN puede acceder a cualquier ruta protegida', () => {
     assert.equal(canAccessPath('/api/empleados/roles', { rol: 'ADMIN' }), true)
 })

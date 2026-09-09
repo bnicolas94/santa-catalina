@@ -194,8 +194,6 @@ export default function ProduccionPage() {
     const [movExtraForm, setMovExtraForm] = useState({ ubicacionId: '', destinoUbicacionId: '' })
     const [showMinStockModal, setShowMinStockModal] = useState(false)
     const [minStockForm, setMinStockForm] = useState({ presentacionId: '', stockMinimo: '' })
-    const [showUbiModal, setShowUbiModal] = useState(false)
-    const [ubiForm, setUbiForm] = useState({ nombre: '', tipo: 'FABRICA' })
     const [showMermaModal, setShowMermaModal] = useState(false)
     const [mermaForm, setMermaForm] = useState({ productoId: '', presentacionId: '', planchas: '', motivo: '', ubicacionId: '' })
     const [stockSource, setStockSource] = useState<'fabrica' | 'local' | 'ambos'>('fabrica')
@@ -1211,7 +1209,7 @@ export default function ProduccionPage() {
                             <div className="pulse-live" title="Actualizando en tiempo real cada 5s" />
                         </div>
                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                            <button className="btn btn-sm btn-ghost" onClick={() => setShowUbiModal(true)} title="Configurar Fábricas y Locales">⚙️ Sedes</button>
+                            {sessionUser?.rol === 'ADMIN' && <a className="btn btn-sm btn-ghost" href="/sedes">⚙️ Sedes</a>}
                             <button className="btn btn-sm btn-secondary" onClick={() => setShowMovModal(true)}>Mover Stock</button>
                             <button className="btn btn-sm" style={{ backgroundColor: '#E74C3C', color: '#fff', fontWeight: 600 }} onClick={() => {
                                 const fab = ubicaciones.find(u => u.tipo === 'FABRICA')
@@ -1961,80 +1959,6 @@ export default function ProduccionPage() {
                     </table>
                 </div>
             </div>
-            {/* Modal Gestión de Ubicaciones */}
-            {showUbiModal && (
-                <div className="modal-overlay" onClick={() => setShowUbiModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-                        <div className="modal-header">
-                            <h2 style={{ margin: 0 }}>📍 Gestionar Sedes (Fábricas/Locales)</h2>
-                            <button className="btn btn-ghost" onClick={() => setShowUbiModal(false)}>✕</button>
-                        </div>
-                        <div className="modal-body">
-                            <form onSubmit={async (e) => {
-                                e.preventDefault()
-                                try {
-                                    const res = await fetch('/api/ubicaciones', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify(ubiForm)
-                                    })
-                                    if (!res.ok) throw new Error('Error al guardar')
-                                    setUbiForm({ nombre: '', tipo: 'FABRICA' })
-                                    fetchData()
-                                } catch (err: any) { setError(err.message) }
-                            }} style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'flex-end', background: '#f8f9fa', padding: '15px', borderRadius: '8px' }}>
-                                <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
-                                    <label className="form-label" style={{ fontSize: '11px' }}>Nombre (ej: Villa Elisa)</label>
-                                    <input className="form-input" value={ubiForm.nombre} onChange={e => setUbiForm({ ...ubiForm, nombre: e.target.value })} required placeholder="Ej: Villa Elisa" />
-                                </div>
-                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                    <label className="form-label" style={{ fontSize: '11px' }}>Tipo</label>
-                                    <select className="form-input" value={ubiForm.tipo} onChange={e => setUbiForm({ ...ubiForm, tipo: e.target.value })}>
-                                        <option value="FABRICA">🏭 Fábrica</option>
-                                        <option value="LOCAL">🏪 Local / Venta</option>
-                                    </select>
-                                </div>
-                                <button type="submit" className="btn btn-primary" style={{ height: '38px' }}>Añadir</button>
-                            </form>
-
-                            <div className="table-container" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Nombre</th>
-                                            <th>Tipo</th>
-                                            <th style={{ textAlign: 'right' }}>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {ubicaciones.map(u => (
-                                            <tr key={u.id}>
-                                                <td style={{ fontWeight: 600 }}>{u.nombre}</td>
-                                                <td>
-                                                    <span className="badge" style={{ background: u.tipo === 'FABRICA' ? '#E8F5E9' : '#E3F2FD', color: u.tipo === 'FABRICA' ? '#2E7D32' : '#1565C0', border: 'none' }}>
-                                                        {u.tipo === 'FABRICA' ? '🏭 Fábrica' : '🏪 Local'}
-                                                    </span>
-                                                </td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    <button className="btn btn-icon btn-ghost" style={{ color: '#E74C3C' }} onClick={async () => {
-                                                        if (!confirm('¿Eliminar esta sede? Se perderán las asociaciones de stock.')) return
-                                                        await fetch(`/api/ubicaciones?id=${u.id}`, { method: 'DELETE' })
-                                                        fetchData()
-                                                    }}>🗑️</button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {ubicaciones.length === 0 && (
-                                            <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999', padding: '20px' }}>No hay sedes configuradas. Configurá al menos una para operar.</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Modal Registrar Merma por Planchas */}
             {showMermaModal && (
                 <div className="modal-overlay" onClick={() => setShowMermaModal(false)}>

@@ -17,6 +17,7 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
+    { label: 'Sedes', href: '/sedes', icon: '📍', roles: ['ADMIN'] },
     {
         label: 'Dashboard',
         href: '/',

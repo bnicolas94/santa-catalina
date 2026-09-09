@@ -55,6 +55,7 @@ Alias TypeScript: `@/*` apunta a la raíz. El `tsconfig.json` raíz excluye `app
 | Área | UI principal | Backend y lógica | Modelos o documentación clave |
 |---|---|---|---|
 | Acceso y permisos | `app/(auth)/login`, layouts, `components/layout` | `lib/auth.ts`, `middleware.ts`, `lib/access-control.ts`, `lib/auth/` | `Empleado`, `RolEmpleado`, `Ubicacion` |
+| Sedes | `app/(dashboard)/sedes` | `app/api/sedes`, `lib/sedes.ts` | `Ubicacion`; administración exclusiva de ADMIN, baja lógica y reactivación. No se cambia el tipo con registros asociados. |
 | Producción | `app/(dashboard)/produccion*`, `components/produccion` | `app/api/produccion`, `app/api/lotes`, `lib/produccion`, `lib/services/produccion-insumos.ts`, `planificacion.service.ts` | `Producto`, `Presentacion`, `FichaTecnica`, `Lote`, `RequerimientoProduccion`, `docs/modules/produccion.md` |
 | Stock e insumos | `insumos`, `conteos-insumos`, `productos` | APIs homónimas, `lib/insumos`, `lib/pedidos/stockPedido.ts` | `Insumo`, `InsumoProveedor`, `StockInsumo`, `MovimientoStock`, `StockProducto`, `MovimientoProducto`, `docs/modules/insumos.md` |
 | Compras | `app/(dashboard)/compras` | `app/api/compras`, `lib/services/compras.service.ts`, `lib/compras` | `Compra`, `MovimientoStock`, `docs/modules/compras.md` |
@@ -77,6 +78,10 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - `ADMIN` conserva acceso total. Los demás accesos combinan permisos configurables, roles heredados y reglas operativas por ubicación.
 - Los permisos de `RolEmpleado` son la fuente de verdad por módulo (incluidos Compras, Clientes, Pedidos, Logística, Flota y Reportes). El nombre histórico del rol sólo actúa como respaldo para cuentas aún no vinculadas a un registro de rol.
 - Toda ruta sensible nueva debe evaluarse en `lib/access-control.ts` y cubrirse con sus pruebas.
+
+### Sedes
+
+- `/sedes` y `/api/sedes` administran fábricas y locales, exclusivamente para ADMIN. `/api/ubicaciones` conserva la consulta operativa de activas; sus escrituras requieren ADMIN y DELETE desactiva sin borrar relaciones. La desactivación conserva historial y asignaciones existentes; no cancela operaciones pendientes. El tipo no puede cambiar cuando existen registros asociados.
 
 ### Datos y migraciones
 

@@ -28,6 +28,8 @@ type AccessRule = {
 
 // Las reglas más específicas deben declararse primero.
 const accessRules: AccessRule[] = [
+    { path: '/sedes', legacyRoles: ['ADMIN'] },
+    { path: '/api/sedes', legacyRoles: ['ADMIN'] },
     // La administración de roles puede escalar privilegios y queda reservada a ADMIN.
     { path: '/api/empleados/roles', legacyRoles: ['ADMIN'] },
     { path: '/api/admin', legacyRoles: ['ADMIN'] },
