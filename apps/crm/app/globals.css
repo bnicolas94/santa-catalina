@@ -291,3 +291,182 @@ button { color: inherit; }
   .claimBanner { margin-left: 8px; margin-right: 8px; }
   .composerArea { padding-left: 8px; padding-right: 8px; }
 }
+
+/* Bandeja de atención inspirada en los patrones de WhatsApp Business. */
+:root {
+  --wa-green: #00a884;
+  --wa-green-dark: #008069;
+  --wa-green-soft: #d9fdd3;
+  --wa-app: #f0f2f5;
+  --wa-chat: #efeae2;
+  --wa-panel: #ffffff;
+  --wa-line: #e9edef;
+  --wa-ink: #111b21;
+  --wa-muted: #667781;
+}
+
+body { background: var(--wa-app); color: var(--wa-ink); }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(0, 168, 132, .24); outline-offset: 1px; }
+
+.workspaceShell {
+  grid-template-columns: 64px minmax(320px, 390px) minmax(440px, 1fr);
+  min-height: 560px;
+  background: var(--wa-panel);
+}
+.workspaceShell.contextOpen { grid-template-columns: 64px minmax(310px, 360px) minmax(440px, 1fr) 320px; }
+
+.navigationRail {
+  padding: 10px 0 12px;
+  background: #f0f2f5;
+  color: #54656f;
+  border-right: 1px solid #d8dcdf;
+}
+.brandMark {
+  width: 42px; height: 42px; border: 0; border-radius: 50%;
+  background: var(--wine); color: white; box-shadow: none;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; font-weight: 800;
+}
+.railNav { width: 100%; margin-top: 20px; gap: 4px; align-items: center; }
+.railButton { position: relative; width: 42px; height: 42px; border-radius: 50%; color: #54656f; }
+.railButton:hover { background: #e4e7e9; color: #111b21; }
+.railButtonActive { background: #d9fdd3; color: var(--wa-green-dark); box-shadow: none; }
+.railButton > span { position: absolute; right: -2px; top: -2px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border: 2px solid #f0f2f5; border-radius: 10px; background: var(--wa-green); color: white; font-size: 8px; font-weight: 800; }
+.railSettings { margin-top: auto; text-decoration: none; }
+.railAgent { margin-top: 10px; }
+.onlineDot { background: #25d366; border-color: #f0f2f5; }
+
+.avatar { width: 46px; height: 46px; border-radius: 50%; font-size: 13px; box-shadow: none; }
+.avatarSmall { width: 36px; height: 36px; border-radius: 50%; font-size: 10px; }
+.avatarButton { border: 0; background: transparent; padding: 0; display: grid; cursor: pointer; border-radius: 50%; }
+
+.conversationList { background: white; border-right-color: #d8dcdf; }
+.listHeader { padding: 0 12px 10px; background: white; border-bottom-color: var(--wa-line); backdrop-filter: none; }
+.listToolbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; padding: 7px 4px 5px; }
+.listToolbar > div:first-child { display: flex; flex-direction: column; }
+.brandEyebrow { color: var(--wine-soft); font-size: 8px; letter-spacing: .13em; }
+.listToolbar h1 { margin: 1px 0 0; color: var(--wa-ink); font-size: 22px; line-height: 1.1; letter-spacing: -.02em; }
+.listActions { display: flex; align-items: center; gap: 5px; }
+.listActions a { text-decoration: none; }
+.iconButton { border-radius: 50%; color: #54656f; }
+.iconButton:hover, .iconButtonActive { background: #e4e7e9; color: #111b21; }
+.liveBadge { padding: 5px 8px; background: #e7f8f3; color: var(--wa-green-dark) !important; font-size: 8px; text-transform: none !important; letter-spacing: 0 !important; }
+.liveBadge i { background: var(--wa-green); box-shadow: none; }
+.searchBox { min-height: 36px; border: 0; border-radius: 8px; background: var(--wa-app); padding: 0 12px; color: #54656f; }
+.searchBox:focus-within { background: white; border: 0; box-shadow: inset 0 0 0 2px rgba(0, 168, 132, .32); }
+.searchBox input { font-size: 12px; color: var(--wa-ink); }
+.searchBox kbd { background: transparent; border-color: #d5dadd; color: #8696a0; }
+.filterChips { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 2px; scrollbar-width: none; }
+.filterChips::-webkit-scrollbar { display: none; }
+.filterChips button { flex: 0 0 auto; min-height: 30px; padding: 0 10px; border: 0; border-radius: 16px; background: var(--wa-app); color: #54656f; font-size: 10px; cursor: pointer; }
+.filterChips button:hover { background: #e6e9eb; }
+.filterChips button span { margin-left: 5px; color: #8696a0; font-size: 9px; }
+.filterChips .filterActive { background: #e7fce3; color: var(--wa-green-dark); font-weight: 700; }
+.filterChips .filterActive span { color: var(--wa-green-dark); }
+.listMeta { margin: 8px 2px 0; color: #8696a0; font-size: 8px; }
+.conversationCards { padding: 0; scrollbar-color: #c8ced1 transparent; }
+.conversationCard { min-height: 78px; padding: 10px 12px; gap: 11px; border: 0; border-bottom: 1px solid var(--wa-line); border-radius: 0; }
+.conversationCard:hover { background: #f5f6f6; }
+.conversationCardActive { background: #f0f2f5 !important; border-color: var(--wa-line); box-shadow: none; }
+.conversationCardActive::before { display: none; }
+.unreadCount { right: -3px; top: auto; bottom: -2px; min-width: 18px; height: 18px; border-color: white; background: #25d366; font-size: 9px; }
+.conversationCardActive .unreadCount { border-color: #f0f2f5; }
+.cardTop { align-items: baseline; }
+.cardTop strong { color: var(--wa-ink); font-size: 13px; font-weight: 650; }
+.cardTop time { color: #667781; font-size: 9px; }
+.cardTop .timeUnread { color: var(--wa-green-dark); font-weight: 700; }
+.cardContent p { margin: 5px 0 7px; color: #667781; font-size: 11px; }
+.cardContent .previewUnread { color: #3b4a54; font-weight: 600; }
+.previewChecks { margin-right: 4px; color: #53bdeb; letter-spacing: -2px; }
+.cardBottom { min-width: 0; gap: 5px; }
+.companyName { flex: 1; min-width: 0; margin: 0; color: #8696a0; font-size: 8px; }
+.statusPill, .priorityPill { border-radius: 10px; padding: 3px 6px; font-size: 6px; }
+.status-open { background: #e7f8f3; color: var(--wa-green-dark); }
+.emptyList > span { border-radius: 50%; color: var(--wa-green-dark); box-shadow: none; background: #e7f8f3; }
+
+.chatPanel { background: var(--wa-chat); }
+.chatPanel::before { opacity: .38; background-image: radial-gradient(circle at 12px 12px, rgba(17, 27, 33, .055) 1px, transparent 1.5px), radial-gradient(circle at 25px 28px, rgba(17, 27, 33, .035) 1px, transparent 1.5px), linear-gradient(45deg, transparent 48%, rgba(17, 27, 33, .018) 49%, rgba(17, 27, 33, .018) 51%, transparent 52%); background-size: 38px 38px, 47px 47px, 72px 72px; }
+.chatHeader { min-height: 60px; padding: 7px 12px; gap: 10px; background: #f0f2f5; border-bottom-color: #d8dcdf; backdrop-filter: none; }
+.chatHeader .avatar { width: 40px; height: 40px; font-size: 11px; }
+.chatIdentity h2 { color: var(--wa-ink); font-size: 13px; font-weight: 650; }
+.chatIdentity > span { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: #667781; font-size: 9px; }
+.channelDot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-green); }
+.chatActions { gap: 7px; }
+.chatActions .iconButton { width: 36px; height: 36px; }
+.mobileBack { color: #54656f; }
+.lockBanner, .claimBanner, .errorBanner { margin: 8px 12px 0; border-radius: 8px; box-shadow: 0 1px 2px rgba(11, 20, 26, .08); }
+.lockBanner { background: #fff5c8; border-color: #f0d875; }
+.lockIcon { background: #ffe9a0; border-radius: 50%; }
+.claimBanner { background: #e7f8f3; border-color: #a9dfd2; }
+.claimBanner button { background: var(--wa-green-dark); border-radius: 18px; }
+.spark { border-radius: 50%; color: var(--wa-green-dark); }
+.watchingBadge { color: #8b630c; border-radius: 12px; }
+.messageCanvas { padding: 16px clamp(18px, 5vw, 64px); scrollbar-color: #b8b8b2 transparent; }
+.dateDivider span { padding: 6px 11px; border: 0; border-radius: 7px; background: #fff; box-shadow: 0 1px 1px rgba(11, 20, 26, .12); color: #54656f; font-size: 8px; }
+.messageRow { margin: 3px 0; }
+.messageBubble { position: relative; max-width: min(76%, 520px); border-radius: 8px; padding: 7px 9px 5px; box-shadow: 0 1px 1px rgba(11, 20, 26, .13); }
+.messageIn { background: white; border: 0; border-top-left-radius: 2px; }
+.messageOut { background: var(--wa-green-soft); color: var(--wa-ink); border-bottom-right-radius: 8px; border-top-right-radius: 2px; }
+.messageIn::before, .messageOut::before { content: ''; position: absolute; top: 0; width: 0; height: 0; border-style: solid; }
+.messageIn::before { left: -7px; border-width: 0 8px 8px 0; border-color: transparent white transparent transparent; }
+.messageOut::before { right: -7px; border-width: 8px 8px 0 0; border-color: var(--wa-green-soft) transparent transparent transparent; }
+.messageSender { color: var(--wa-green-dark); font-size: 8px; }
+.messageBubble p { color: var(--wa-ink); font-size: 11px; line-height: 1.42; }
+.messageTime, .messageOut .messageTime { color: #667781; font-size: 7px; }
+.messageTime b { color: #8696a0; }
+.messageTime .readChecks { color: #53bdeb; }
+.systemNote { background: #ffeecd; color: #667781; border-radius: 7px; box-shadow: 0 1px 1px rgba(11, 20, 26, .1); }
+.composerArea { padding: 0; background: transparent; }
+.serviceWindow { margin: 0 auto 5px; padding: 4px 8px; border-radius: 10px; background: rgba(255,255,255,.86); color: var(--wa-green-dark); }
+.composer { min-height: 58px; padding: 8px 10px; border: 0; border-radius: 0; background: #f0f2f5; box-shadow: none; align-items: center; gap: 2px; }
+.composer:focus-within { border: 0; box-shadow: none; }
+.composer textarea { min-height: 40px; padding: 11px 13px; border-radius: 9px; background: white; color: var(--wa-ink); font-size: 12px; }
+.composer > button { color: #54656f; }
+.composer .sendButton { background: var(--wa-green); border-radius: 50%; color: white; }
+.composer .sendButton:disabled { background: transparent; color: #8696a0; }
+.composerDisabled { background: #f0f2f5; }
+.composerDisabled textarea { background: #e8ebed; }
+.composerHints { padding: 4px 12px 6px; background: #f0f2f5; color: #8696a0; }
+.composerHints button { color: var(--wa-green-dark); }
+
+.contextPanel { background: white; border-left-color: #d8dcdf; }
+.contextPanel > header { min-height: 60px; padding: 8px 14px; background: #f0f2f5; border-bottom-color: #d8dcdf; color: #54656f; }
+.customerHero { padding: 24px 15px 18px; border-bottom-color: var(--wa-line); }
+.customerHero .avatar { width: 64px; height: 64px; border-radius: 50%; }
+.customerHero h3 { color: var(--wa-ink); font-size: 15px; }
+.customerHero p, .detailSection dt { color: #667781; }
+.customerTags span { border-radius: 12px; background: #f0f2f5; }
+.customerTags .erpTag { background: #e7f8f3; color: var(--wa-green-dark); }
+.detailSection { border-bottom-color: var(--wa-line); }
+.sectionLabel button { color: var(--wa-green-dark); }
+.orderCard { border-color: var(--wa-line); border-radius: 8px; background: white; }
+.orderIcon { border-radius: 50%; color: var(--wa-green-dark); background: #e7f8f3; }
+.orderAmount span { color: var(--wa-green-dark); }
+.contextFooter .resolveButton { background: var(--wa-green-dark); border-color: var(--wa-green-dark); }
+
+@media (max-width: 1260px) {
+  .workspaceShell, .workspaceShell.contextOpen { grid-template-columns: 64px minmax(310px, 360px) minmax(420px, 1fr); }
+  .contextPanel { display: none; }
+}
+
+@media (max-width: 900px) {
+  .workspaceShell, .workspaceShell.contextOpen { grid-template-columns: 56px minmax(290px, 330px) minmax(380px, 1fr); }
+  .navigationRail { padding-left: 0; padding-right: 0; }
+}
+
+@media (max-width: 720px) {
+  .workspaceShell, .workspaceShell.contextOpen { display: block; min-height: 100dvh; }
+  .navigationRail, .contextPanel { display: none; }
+  .conversationList, .chatPanel { height: 100dvh; }
+  .listToolbar { min-height: 62px; }
+  .listToolbar h1 { font-size: 21px; }
+  .listHeader { padding-left: 10px; padding-right: 10px; }
+  .conversationCard { padding-left: 10px; padding-right: 10px; }
+  .chatHeader { min-height: 58px; padding: 6px 8px; }
+  .chatActions { gap: 1px; }
+  .chatActions .iconButton:first-child { display: none; }
+  .messageCanvas { padding: 14px 14px; }
+  .messageBubble { max-width: 86%; }
+  .composer { padding-left: 6px; padding-right: 6px; }
+  .composerHints { display: none; }
+  .serviceWindow { max-width: calc(100% - 20px); text-align: center; }
+}
