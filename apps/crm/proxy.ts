@@ -1,5 +1,6 @@
 import { getToken } from 'next-auth/jwt'
 import { NextRequest, NextResponse } from 'next/server'
+import { getCrmCallbackUrl } from '@/lib/auth-redirects'
 
 const PRODUCTION_SESSION_COOKIE = '__Secure-next-auth.session-token'
 
@@ -22,7 +23,7 @@ export async function proxy(request: NextRequest) {
   if (!token) {
     const erpBaseUrl = process.env.ERP_BASE_URL || 'https://app.santacatalina.online'
     const loginUrl = new URL('/login', erpBaseUrl)
-    loginUrl.searchParams.set('callbackUrl', request.url)
+    loginUrl.searchParams.set('callbackUrl', getCrmCallbackUrl(request.url, process.env.CRM_BASE_URL))
     return NextResponse.redirect(loginUrl)
   }
 
