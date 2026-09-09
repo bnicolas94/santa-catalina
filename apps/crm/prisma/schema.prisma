@@ -148,6 +148,8 @@ model Conversation {
   orderDate               String?                  @map("order_date") @db.VarChar(10)
   orderAddress            String?                  @map("order_address") @db.VarChar(300)
   orderFulfillment        OrderFulfillment?        @map("order_fulfillment")
+  orderPickupLocationId   String?                  @map("order_pickup_location_id") @db.VarChar(80)
+  orderPickupLocationName String?                  @map("order_pickup_location_name") @db.VarChar(160)
   orderShift              OrderShift?              @map("order_shift")
   orderDraftUpdatedById   String?                  @map("order_draft_updated_by_id")
   orderDraftUpdatedAt     DateTime?                @map("order_draft_updated_at")
@@ -164,6 +166,7 @@ model Conversation {
   @@index([status, assignedToId, lastMessageAt])
   @@index([activeById, lockExpiresAt])
   @@index([contactId, lastMessageAt])
+  @@index([orderPickupLocationId])
   @@map("conversations")
   @@schema("crm")
 }

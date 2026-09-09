@@ -242,6 +242,21 @@ button { color: inherit; }
 .fulfillmentButtons button.deliverySelected { border-color: #16856b; color: #08725a; background: #e5f7f1; }
 .fulfillmentButtons button.pickupSelected { border-color: #d39635; color: #8b5b0b; background: #fff4dc; }
 .fulfillmentButtons button:disabled { opacity: .55; cursor: not-allowed; }
+.pickupLocationButtons { display: flex; flex-direction: column; gap: 6px; }
+.pickupLocationButtons > button { position: relative; width: 100%; min-height: 48px; padding: 8px 34px 8px 8px; display: flex; align-items: center; gap: 9px; border: 1px solid #d9dfdb; border-radius: 10px; color: #53635d; background: white; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.pickupLocationButtons > button:hover:not(:disabled) { border-color: #d39635; background: #fffaf0; transform: translateY(-1px); }
+.pickupLocationButtons > button.selected { border: 2px solid #d39635; padding: 7px 33px 7px 7px; color: #7a500a; background: #fff3d8; box-shadow: 0 5px 14px rgba(139, 91, 11, .12); }
+.pickupLocationButtons > button:disabled { cursor: not-allowed; opacity: .62; }
+.pickupLocationButtons > button > span:not(.pickupLocationIcon) { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pickupLocationButtons > button strong { overflow: hidden; color: inherit; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.pickupLocationButtons > button small { color: #89938e; font-size: 7px; }
+.pickupLocationButtons > button > b { position: absolute; right: 10px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; color: white; background: #bd7c15; }
+.pickupLocationIcon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; color: #996511; background: #fff0cf; }
+.pickupLocationButtons > button.selected .pickupLocationIcon { color: white; background: #bd7c15; }
+.pickupLocationNotice { padding: 10px; border: 1px dashed #d5ddd9; border-radius: 9px; color: #738079; background: rgba(255,255,255,.7); font-size: 8px; line-height: 1.4; }
+.pickupLocationWarning { border-color: #ebcf9f; color: #865e19; background: #fff8e9; }
+.pickupLocationWarning { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pickupLocationWarning button { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 6px 8px; color: #7a500a; background: #ffe9b8; cursor: pointer; font-size: 7px; font-weight: 800; }
 .plannerLabelRow { min-height: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .plannerLabelRow button { border: 0; padding: 0; color: var(--wa-green-dark); background: transparent; cursor: pointer; font-size: 7px; font-weight: 800; }
 .plannerLabelRow button:disabled { color: #9da5a1; cursor: not-allowed; }

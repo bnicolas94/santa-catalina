@@ -30,7 +30,8 @@ acceso irrestricto a tablas.
 
 ### ERP
 
-- Fuente de verdad de empleados, roles, clientes, pedidos, productos y precios.
+- Fuente de verdad de empleados, roles, clientes, pedidos, productos, precios y
+  ubicaciones habilitadas como puntos de retiro.
 - Inicio de sesión y emisión de la cookie compartida.
 - API interna de lectura de contexto comercial y creación controlada de
   borradores de pedido.
@@ -185,7 +186,9 @@ Implementado:
   heartbeat cada 25 segundos y envío idempotente.
 - Representación amigable de asignación y sólo lectura.
 - Ficha rápida de pedido persistida por conversación, con fecha, dirección,
-  envío/retiro y turno, guardado automático y edición protegida por lease.
+  envío/retiro, local real del ERP y turno, guardado automático y edición
+  protegida por lease. El vínculo al local conserva el ID externo y una
+  instantánea de su nombre, sin crear una clave foránea entre esquemas.
 - Esquema CRM inicial y migración SQL.
 - Contratos TypeScript compartidos.
 - Permisos de Atención en los roles del ERP.
@@ -207,8 +210,9 @@ Implementado:
   desconexión de la aplicación WhatsApp Business.
 - Puerta de activación administrativa que exige confirmar la app móvil, los
   dispositivos vinculados y el flujo bidireccional.
-- APIs internas de sólo lectura para resolver clientes por teléfono y consultar
-  su resumen comercial y pedidos recientes.
+- APIs internas de sólo lectura para resolver clientes por teléfono, consultar
+  su resumen comercial y pedidos recientes, y listar ubicaciones activas de tipo
+  `LOCAL` para retiro.
 - Vinculación automática conservadora con el ERP, selección asistida ante
   teléfonos duplicados y auditoría de cada asociación.
 - Pruebas unitarias de leases, cifrado, firmas y parsing de eventos.

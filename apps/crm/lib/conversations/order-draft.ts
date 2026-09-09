@@ -15,6 +15,8 @@ export function normalizeOrderDraft(input: {
   orderDate?: unknown
   orderAddress?: unknown
   orderFulfillment?: unknown
+  orderPickupLocationId?: unknown
+  orderPickupLocationName?: unknown
   orderShift?: unknown
 }) {
   const orderDate = optionalText(input.orderDate, 'Fecha', 10)
@@ -27,6 +29,8 @@ export function normalizeOrderDraft(input: {
   }
   const orderAddress = optionalText(input.orderAddress, 'Dirección', 300)
   const fulfillmentValue = optionalText(input.orderFulfillment, 'Modalidad', 20)
+  const pickupLocationId = optionalText(input.orderPickupLocationId, 'Local de retiro', 80)
+  const pickupLocationName = optionalText(input.orderPickupLocationName, 'Nombre del local de retiro', 160)
   const shiftValue = optionalText(input.orderShift, 'Turno', 20)
   if (fulfillmentValue && !FULFILLMENT.has(fulfillmentValue as OrderFulfillment)) {
     throw new CrmApiError(400, 'INVALID_FULFILLMENT', 'Elegí Envío o Retiro.')
@@ -36,8 +40,10 @@ export function normalizeOrderDraft(input: {
   }
   return {
     orderDate,
-    orderAddress,
+    orderAddress: fulfillmentValue === 'PICKUP' ? null : orderAddress,
     orderFulfillment: fulfillmentValue as OrderFulfillment | null,
+    orderPickupLocationId: fulfillmentValue === 'PICKUP' ? pickupLocationId : null,
+    orderPickupLocationName: fulfillmentValue === 'PICKUP' ? pickupLocationName : null,
     orderShift: shiftValue as OrderShift | null,
   }
 }
@@ -47,7 +53,9 @@ export function isOrderDraftComplete(draft: ReturnType<typeof normalizeOrderDraf
     draft.orderDate
     && draft.orderFulfillment
     && draft.orderShift
-    && (draft.orderFulfillment === 'PICKUP' || draft.orderAddress),
+    && (draft.orderFulfillment === 'PICKUP'
+      ? draft.orderPickupLocationId && draft.orderPickupLocationName
+      : draft.orderAddress),
   )
 }
 
@@ -58,6 +66,8 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
   orderDate?: unknown
   orderAddress?: unknown
   orderFulfillment?: unknown
+  orderPickupLocationId?: unknown
+  orderPickupLocationName?: unknown
   orderShift?: unknown
 }) {
   const draft = normalizeOrderDraft(input)
@@ -83,6 +93,8 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
         orderDate: true,
         orderAddress: true,
         orderFulfillment: true,
+        orderPickupLocationId: true,
+        orderPickupLocationName: true,
         orderShift: true,
         orderDraftUpdatedById: true,
         orderDraftUpdatedAt: true,
@@ -93,7 +105,11 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
         conversationId: conversation.id,
         type: 'ORDER_DRAFT_UPDATED',
         actorId: input.agentId,
-        metadata: { complete: isOrderDraftComplete(draft) },
+        metadata: {
+          complete: isOrderDraftComplete(draft),
+          fulfillment: draft.orderFulfillment,
+          pickupLocationId: draft.orderPickupLocationId,
+        },
       },
     })
     return updated

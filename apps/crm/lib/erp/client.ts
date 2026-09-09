@@ -1,7 +1,12 @@
-import type { ErpCustomerCandidate, ErpCustomerDetails } from '@santa-catalina/contracts'
+import type { ErpCustomerCandidate, ErpCustomerDetails, ErpPickupLocation } from '@santa-catalina/contracts'
 import { CrmApiError } from '@/lib/api'
 
 type ResolutionResponse = { candidates: ErpCustomerCandidate[] }
+
+export const DEMO_PICKUP_LOCATIONS: ErpPickupLocation[] = [
+  { id: 'demo-local-centro', name: 'Local Centro' },
+  { id: 'demo-local-fabrica', name: 'Local Fábrica' },
+]
 
 function erpBaseUrl() {
   const configured = process.env.ERP_BASE_URL?.trim()
@@ -48,4 +53,14 @@ export function getErpCustomerSummary(erpClientId: string, cookie: string) {
     `api/internal/crm/customers/${encodeURIComponent(erpClientId)}/summary`,
     cookie,
   )
+}
+
+export function getErpPickupLocations(cookie: string) {
+  return getFromErp<ErpPickupLocation[]>('api/internal/crm/pickup-locations', cookie)
+}
+
+export function getAvailablePickupLocations(cookie: string) {
+  return process.env.NODE_ENV === 'production'
+    ? getErpPickupLocations(cookie)
+    : Promise.resolve(DEMO_PICKUP_LOCATIONS)
 }

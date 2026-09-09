@@ -11,9 +11,33 @@ test('normaliza una ficha de envío completa', () => {
   assert.equal(isOrderDraftComplete(draft), true)
 })
 
-test('retiro no exige dirección y envío sí', () => {
-  assert.equal(isOrderDraftComplete(normalizeOrderDraft({ orderDate: '2026-09-12', orderFulfillment: 'PICKUP', orderShift: 'SIESTA' })), true)
+test('retiro exige un local real y no exige dirección', () => {
+  assert.equal(isOrderDraftComplete(normalizeOrderDraft({ orderDate: '2026-09-12', orderFulfillment: 'PICKUP', orderShift: 'SIESTA' })), false)
+  const pickup = normalizeOrderDraft({
+    orderDate: '2026-09-12',
+    orderAddress: 'Esta dirección debe limpiarse',
+    orderFulfillment: 'PICKUP',
+    orderPickupLocationId: 'local-1',
+    orderPickupLocationName: 'Local Centro',
+    orderShift: 'SIESTA',
+  })
+  assert.equal(isOrderDraftComplete(pickup), true)
+  assert.equal(pickup.orderAddress, null)
+})
+
+test('envío exige dirección y limpia cualquier local de retiro anterior', () => {
   assert.equal(isOrderDraftComplete(normalizeOrderDraft({ orderDate: '2026-09-12', orderFulfillment: 'DELIVERY', orderShift: 'SIESTA' })), false)
+  const delivery = normalizeOrderDraft({
+    orderDate: '2026-09-12',
+    orderAddress: 'Calle 10',
+    orderFulfillment: 'DELIVERY',
+    orderPickupLocationId: 'local-1',
+    orderPickupLocationName: 'Local Centro',
+    orderShift: 'AFTERNOON',
+  })
+  assert.equal(isOrderDraftComplete(delivery), true)
+  assert.equal(delivery.orderPickupLocationId, null)
+  assert.equal(delivery.orderPickupLocationName, null)
 })
 
 test('rechaza fechas imposibles y valores desconocidos', () => {

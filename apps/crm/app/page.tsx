@@ -1,14 +1,14 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationStatus, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate } from '@santa-catalina/contracts'
+import type { ConversationStatus, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate, ErpPickupLocation } from '@santa-catalina/contracts'
 
 type ApiTag = { id: string; name: string; color: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
-type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderDraftUpdatedAt?: string | null }
-type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
+type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderDraftUpdatedAt?: string | null }
+type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
 
@@ -18,7 +18,7 @@ const FILTERS: Array<{ id: FilterId; label: string; short: string }> = [
   { id: 'unassigned', label: 'Sin asignar', short: 'Nuevas' }, { id: 'waiting', label: 'En espera', short: 'Espera' },
   { id: 'resolved', label: 'Resueltas', short: 'Cerradas' },
 ]
-const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderShift: null, orderDraftUpdatedAt: null }
+const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderPickupLocationId: null, orderPickupLocationName: '', orderShift: null, orderDraftUpdatedAt: null }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
@@ -62,6 +62,8 @@ function orderDraftFromConversation(conversation: ConversationDetail): OrderDraf
     orderDate: conversation.orderDate || '',
     orderAddress: conversation.orderAddress || '',
     orderFulfillment: conversation.orderFulfillment,
+    orderPickupLocationId: conversation.orderPickupLocationId,
+    orderPickupLocationName: conversation.orderPickupLocationName || '',
     orderShift: conversation.orderShift,
     orderDraftUpdatedAt: conversation.orderDraftUpdatedAt,
   }
@@ -90,6 +92,9 @@ export default function AttentionWorkspace() {
   const [contextLoading, setContextLoading] = useState(false)
   const [contextBusy, setContextBusy] = useState(false)
   const [orderDraft, setOrderDraft] = useState<OrderDraft>(EMPTY_ORDER_DRAFT)
+  const [pickupLocations, setPickupLocations] = useState<ErpPickupLocation[]>([])
+  const [pickupLocationsLoading, setPickupLocationsLoading] = useState(true)
+  const [pickupLocationsError, setPickupLocationsError] = useState(false)
   const [orderDraftDirty, setOrderDraftDirty] = useState(false)
   const [orderSaveState, setOrderSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [mobileChat, setMobileChat] = useState(false)
@@ -109,6 +114,18 @@ export default function AttentionWorkspace() {
   useEffect(() => {
     Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
   }, [refreshList])
+  const refreshPickupLocations = useCallback(async () => {
+    setPickupLocationsLoading(true)
+    try {
+      setPickupLocations(await api<ErpPickupLocation[]>('/api/pickup-locations'))
+      setPickupLocationsError(false)
+    } catch {
+      setPickupLocationsError(true)
+    } finally {
+      setPickupLocationsLoading(false)
+    }
+  }, [])
+  useEffect(() => { void refreshPickupLocations() }, [refreshPickupLocations])
   useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 10_000); return () => window.clearInterval(timer) }, [refreshList])
 
   const refreshCustomerContext = useCallback(async (conversationId: string) => {
@@ -257,6 +274,8 @@ export default function AttentionWorkspace() {
           orderDate: result.draft.orderDate || null,
           orderAddress: result.draft.orderAddress || null,
           orderFulfillment: result.draft.orderFulfillment,
+          orderPickupLocationId: result.draft.orderPickupLocationId,
+          orderPickupLocationName: result.draft.orderPickupLocationName || null,
           orderShift: result.draft.orderShift,
           orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt || null,
         } : current)
@@ -285,7 +304,9 @@ export default function AttentionWorkspace() {
     Boolean(orderDraft.orderDate),
     Boolean(orderDraft.orderFulfillment),
     Boolean(orderDraft.orderShift),
-    orderDraft.orderFulfillment === 'PICKUP' || Boolean(orderDraft.orderAddress.trim()),
+    orderDraft.orderFulfillment === 'PICKUP'
+      ? Boolean(orderDraft.orderPickupLocationId)
+      : orderDraft.orderFulfillment === 'DELIVERY' && Boolean(orderDraft.orderAddress.trim()),
   ].filter(Boolean).length
 
   if (loading) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>Preparando tu bandeja…</strong></main>
@@ -338,14 +359,22 @@ export default function AttentionWorkspace() {
         <div className="plannerField">
           <label>Modalidad</label>
           <div className="fulfillmentButtons">
-            <button type="button" className={orderDraft.orderFulfillment === 'DELIVERY' ? 'selected deliverySelected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderFulfillment: 'DELIVERY' })}><Icon name="truck" size={20} /><span><strong>Envío</strong><small>Lo entregamos</small></span></button>
-            <button type="button" className={orderDraft.orderFulfillment === 'PICKUP' ? 'selected pickupSelected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderFulfillment: 'PICKUP' })}><Icon name="store" size={20} /><span><strong>Retiro</strong><small>Busca el cliente</small></span></button>
+            <button type="button" className={orderDraft.orderFulfillment === 'DELIVERY' ? 'selected deliverySelected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderFulfillment: 'DELIVERY', orderPickupLocationId: null, orderPickupLocationName: '' })}><Icon name="truck" size={20} /><span><strong>Envío</strong><small>Lo entregamos</small></span></button>
+            <button type="button" className={orderDraft.orderFulfillment === 'PICKUP' ? 'selected pickupSelected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderFulfillment: 'PICKUP', orderAddress: '' })}><Icon name="store" size={20} /><span><strong>Retiro</strong><small>Elige un local</small></span></button>
           </div>
         </div>
-        <div className="plannerField">
-          <div className="plannerLabelRow"><label><Icon name="map" size={15} /> Dirección</label>{customerContext?.status === 'LINKED' && customerContext.customer.address && orderDraft.orderFulfillment !== 'PICKUP' && <button type="button" disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderAddress: customerContext.customer.address || '' })}>Usar la del cliente</button>}</div>
-          <textarea rows={2} maxLength={300} value={orderDraft.orderAddress} disabled={!canEditOrderDraft || orderDraft.orderFulfillment === 'PICKUP'} onChange={event => changeOrderDraft({ orderAddress: event.target.value })} placeholder={orderDraft.orderFulfillment === 'PICKUP' ? 'No se requiere para retiro' : 'Calle, número y referencia'} />
-        </div>
+        {orderDraft.orderFulfillment === 'PICKUP' ? <div className="plannerField pickupLocationField">
+          <label><Icon name="store" size={15} /> Local de retiro</label>
+          <div className="pickupLocationButtons">
+            {pickupLocationsLoading && <div className="pickupLocationNotice">Consultando locales del ERP…</div>}
+            {!pickupLocationsLoading && pickupLocations.map(location => <button type="button" key={location.id} className={orderDraft.orderPickupLocationId === location.id ? 'selected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderPickupLocationId: location.id, orderPickupLocationName: location.name })}><span className="pickupLocationIcon"><Icon name="store" size={17} /></span><span><strong>{location.name}</strong><small>Punto de retiro habilitado</small></span>{orderDraft.orderPickupLocationId === location.id && <b><Icon name="check" size={13} /></b>}</button>)}
+            {!pickupLocationsLoading && orderDraft.orderPickupLocationId && !pickupLocations.some(location => location.id === orderDraft.orderPickupLocationId) && <button type="button" className="selected" disabled><span className="pickupLocationIcon"><Icon name="store" size={17} /></span><span><strong>{orderDraft.orderPickupLocationName || 'Local guardado'}</strong><small>Selección guardada anteriormente</small></span><b><Icon name="check" size={13} /></b></button>}
+            {!pickupLocationsLoading && pickupLocations.length === 0 && <div className="pickupLocationNotice pickupLocationWarning"><span>{pickupLocationsError ? 'No pudimos consultar los locales del ERP.' : 'No hay ubicaciones activas de tipo LOCAL en el ERP.'}</span>{pickupLocationsError && <button type="button" onClick={() => void refreshPickupLocations()}>Reintentar</button>}</div>}
+          </div>
+        </div> : <div className="plannerField">
+          <div className="plannerLabelRow"><label><Icon name="map" size={15} /> Dirección</label>{customerContext?.status === 'LINKED' && customerContext.customer.address && <button type="button" disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderAddress: customerContext.customer.address || '' })}>Usar la del cliente</button>}</div>
+          <textarea rows={2} maxLength={300} value={orderDraft.orderAddress} disabled={!canEditOrderDraft} onChange={event => changeOrderDraft({ orderAddress: event.target.value })} placeholder="Calle, número y referencia" />
+        </div>}
         <div className="plannerField">
           <label>Turno</label>
           <div className="shiftButtons">

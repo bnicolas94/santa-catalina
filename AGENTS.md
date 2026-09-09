@@ -111,7 +111,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - Un número existente de WhatsApp Business sólo puede incorporarse mediante Embedded Signup en modo Coexistence; la activación exige `is_on_biz_app=true`, plataforma `CLOUD_API` y confirmación administrativa de continuidad de la app y dispositivos vinculados.
 - El webhook de Coexistence procesa `history`, `smb_app_state_sync`, `smb_message_echoes` y `account_update`; una baja o reconexión invalida la confirmación de continuidad y desactiva el canal.
 - La toma de conversación usa un `lockToken`, heartbeat y lease; los envíos requieren `clientMessageId` idempotente.
-- La ficha rápida del pedido vive en `Conversation` dentro de `crm`: fecha como `YYYY-MM-DD` local, dirección, modalidad y turno. Sólo el agente dueño del lease puede editarla; todavía no crea por sí sola un `Pedido` en el ERP.
+- La ficha rápida del pedido vive en `Conversation` dentro de `crm`: fecha como `YYYY-MM-DD` local, dirección, modalidad, turno y el ID externo/nombre instantáneo del local de retiro. Los puntos de retiro se consultan por API interna desde ubicaciones activas de tipo `LOCAL` del ERP. Sólo el agente dueño del lease puede editarla; todavía no crea por sí sola un `Pedido` en el ERP.
 - Los operadores sólo pueden listar y abrir conversaciones sin asignar o asignadas a sí mismos. Abrir una conversación sin asignar intenta tomarla automáticamente mediante la operación atómica de claim. Los supervisores con `permisoAtencionAdmin` y `ADMIN` pueden ver todas y liberar una asignación, dejando siempre trazas de auditoría.
 
 ## Forma de trabajo recomendada

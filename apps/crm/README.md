@@ -81,11 +81,13 @@ dos agentes la abren al mismo tiempo, la operación atómica asigna a uno solo y
 el otro actualiza su bandeja sin obtener permiso de respuesta.
 
 Cada conversación tiene una ficha rápida de pedido con fecha calendario,
-dirección, modalidad `DELIVERY`/`PICKUP` y turno
+dirección, modalidad `DELIVERY`/`PICKUP`, local de retiro y turno
 `MORNING`/`SIESTA`/`AFTERNOON`. La UI la guarda automáticamente, ofrece accesos
 rápidos para fechas y sólo permite editarla al agente que conserva el lease. Un
-retiro no exige dirección; un envío sí la exige para considerar completa la
-ficha. Cada actualización deja un evento de auditoría.
+retiro exige seleccionar una ubicación activa de tipo `LOCAL` obtenida mediante
+la API interna del ERP; se guarda su ID externo y el nombre como instantánea. Un
+envío exige dirección para considerar completa la ficha. Cada actualización deja
+un evento de auditoría.
 
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en

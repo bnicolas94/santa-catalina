@@ -102,6 +102,11 @@ export interface ErpOrderSummary {
   paid: boolean
 }
 
+export interface ErpPickupLocation {
+  id: string
+  name: string
+}
+
 export interface ErpCustomerDetails extends Omit<ErpCustomerCandidate, 'matchQuality'> {
   segment?: string | null
   active: boolean

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { CrmApiError } from '@/lib/api'
-import { getErpCustomerSummary, resolveErpCustomer } from './client'
+import { getErpCustomerSummary, getErpPickupLocations, resolveErpCustomer } from './client'
 
 const originalFetch = globalThis.fetch
 const originalBaseUrl = process.env.ERP_BASE_URL
@@ -36,4 +36,18 @@ test('no sigue una redirección de autenticación del ERP', async () => {
     () => getErpCustomerSummary('cliente-1', 'session=incorrecta'),
     (error: unknown) => error instanceof CrmApiError && error.code === 'ERP_AUTH_FAILED',
   )
+})
+
+test('consulta solamente los locales de retiro expuestos por el ERP', async () => {
+  process.env.ERP_BASE_URL = 'https://app.example.test'
+  let receivedUrl = ''
+  globalThis.fetch = async input => {
+    receivedUrl = String(input)
+    return Response.json([{ id: 'local-1', name: 'Local Centro' }])
+  }
+
+  const locations = await getErpPickupLocations('session=segura')
+
+  assert.deepEqual(locations, [{ id: 'local-1', name: 'Local Centro' }])
+  assert.equal(receivedUrl, 'https://app.example.test/api/internal/crm/pickup-locations')
 })
