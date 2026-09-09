@@ -72,6 +72,10 @@ su propio usuario. `ADMIN` y quienes tengan `permisoAtencionAdmin` pueden ver la
 bandeja completa y liberar una asignación; la liberación invalida el lease y
 queda registrada en asignaciones y eventos.
 
+La UI ejecuta `claim` automáticamente al abrir una conversación sin asignar. Si
+dos agentes la abren al mismo tiempo, la operación atómica asigna a uno solo y
+el otro actualiza su bandeja sin obtener permiso de respuesta.
+
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en
 `Contact.erpClientId`; si existen duplicados, devuelve candidatos para que el

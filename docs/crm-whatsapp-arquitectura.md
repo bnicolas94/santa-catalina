@@ -92,6 +92,8 @@ La asignación y el bloqueo activo son conceptos distintos:
 - `assignedToId` permanece hasta resolver, liberar o transferir.
 - `activeById`, `lockToken`, `lockExpiresAt` y `lockVersion` forman un lease corto
   para la ventana abierta.
+- Abrir un chat sin asignar dispara automáticamente la toma atómica; no requiere
+  una confirmación adicional del operador.
 
 La toma debe ejecutarse con una operación atómica equivalente a:
 

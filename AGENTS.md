@@ -109,7 +109,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - Webhooks quedan fuera de la sesión de usuario, pero deben validar challenge/firma y deduplicar eventos.
 - Los secretos de Meta se cifran y nunca se devuelven al navegador. `CRM_MOCK_WHATSAPP=true` debe impedir contactos reales durante pruebas.
 - La toma de conversación usa un `lockToken`, heartbeat y lease; los envíos requieren `clientMessageId` idempotente.
-- Los operadores sólo pueden listar y abrir conversaciones sin asignar o asignadas a sí mismos. Los supervisores con `permisoAtencionAdmin` y `ADMIN` pueden ver todas y liberar una asignación, dejando siempre trazas de auditoría.
+- Los operadores sólo pueden listar y abrir conversaciones sin asignar o asignadas a sí mismos. Abrir una conversación sin asignar intenta tomarla automáticamente mediante la operación atómica de claim. Los supervisores con `permisoAtencionAdmin` y `ADMIN` pueden ver todas y liberar una asignación, dejando siempre trazas de auditoría.
 
 ## Forma de trabajo recomendada
 

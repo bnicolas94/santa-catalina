@@ -75,6 +75,7 @@ export default function AttentionWorkspace() {
   const [mobileChat, setMobileChat] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [claiming, setClaiming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const lockRef = useRef<Lock | null>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -107,7 +108,7 @@ export default function AttentionWorkspace() {
 
   const acquire = useCallback(async (conversationId: string) => {
     const result = await api<{ lock: Lock }>(`/api/conversations/${conversationId}/claim`, { method: 'POST', body: '{}' })
-    setLock(result.lock); lockRef.current = result.lock; return result.lock
+    return result.lock
   }, [])
   useEffect(() => {
     if (!activeId || !user) return
@@ -116,10 +117,35 @@ export default function AttentionWorkspace() {
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
-      if (conversation.assignedToId === user.id && conversation.status !== 'RESOLVED' && conversation.status !== 'ARCHIVED') await acquire(conversation.id)
+      const canAcquire = conversation.status !== 'RESOLVED'
+        && conversation.status !== 'ARCHIVED'
+        && (!conversation.assignedToId || conversation.assignedToId === user.id)
+      if (!canAcquire) return
+
+      const wasUnassigned = !conversation.assignedToId
+      if (wasUnassigned) setClaiming(true)
+      try {
+        const acquired = await acquire(conversation.id)
+        if (cancelled) {
+          await api(`/api/conversations/${conversation.id}/release`, { method: 'POST', body: JSON.stringify({ lockToken: acquired.token }), keepalive: true }).catch(() => undefined)
+          return
+        }
+        lockRef.current = acquired; setLock(acquired)
+        if (wasUnassigned) {
+          setDetail({ ...conversation, status: 'OPEN', assignedToId: user.id, activeById: user.id, lockExpiresAt: acquired.expiresAt })
+          await refreshList()
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : 'Otro operador tomó esta conversación.')
+          if (wasUnassigned) await refreshList()
+        }
+      } finally {
+        if (!cancelled) setClaiming(false)
+      }
     }).catch(cause => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'No se pudo abrir la conversación.') })
     return () => { cancelled = true }
-  }, [activeId, user, acquire])
+  }, [activeId, user, acquire, refreshList])
   useEffect(() => {
     if (!lock || !activeId) return
     const timer = window.setInterval(async () => {
@@ -139,13 +165,6 @@ export default function AttentionWorkspace() {
     await api(`/api/conversations/${currentId}/release`, { method: 'POST', body: JSON.stringify({ lockToken: currentLock.token }), keepalive: true }).catch(() => undefined)
   }, [])
   const selectConversation = async (id: string) => { if (id !== activeId) await releaseCurrent(); setActiveId(id); setMobileChat(true) }
-  const claimConversation = async () => {
-    if (!detail) return
-    setBusy(true); setError(null)
-    try { await acquire(detail.id); setDetail({ ...detail, status: 'OPEN', assignedToId: user?.id || null }); await refreshList() }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo tomar la conversación.'); await refreshList() }
-    finally { setBusy(false) }
-  }
   const linkCustomer = async (candidate: ErpCustomerCandidate) => {
     if (!active) return
     setContextBusy(true)
@@ -221,7 +240,7 @@ export default function AttentionWorkspace() {
     <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}><header className="chatHeader"><button className="mobileBack" onClick={() => setMobileChat(false)} aria-label="Volver a los chats"><Icon name="back" /></button><button className="avatarButton" onClick={() => setShowContext(true)} aria-label="Ver información del cliente"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#687782'} /></button><div className="chatIdentity"><div><h2>{active.contact.displayName}</h2>{active.priority > 0 && <span className="priorityPill">Prioridad</span>}</div><span><i className="channelDot" />{assignedToOther ? `Atiende ${agentName(active.assignedToId)}` : active.assignedToId ? 'Conversación asignada a vos' : 'WhatsApp Business · sin asignar'}</span></div><div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button>{isSupervisor && active.assignedToId && <button className="iconButton adminHeaderAction" onClick={unassignConversation} aria-label="Liberar chat" title="Liberar chat"><Icon name="lock" size={17} /></button>}<button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div></header>
       {error && <div className="errorBanner" role="alert">{error}<button onClick={() => setError(null)}>×</button></div>}
       {assignedToOther && <div className="lockBanner"><span className="lockIcon"><Icon name="lock" size={18} /></span><div><strong>{agentName(active.assignedToId)} tiene asignada esta conversación</strong><span>Podés seguirla en tiempo real. La respuesta está bloqueada para evitar mensajes cruzados.</span></div><span className="watchingBadge">Sólo lectura</span></div>}
-      {!active.assignedToId && <div className="claimBanner"><div><span className="spark">+</span><div><strong>Esta consulta espera un agente</strong><span>Al tomarla quedará asignada a vos.</span></div></div><button onClick={claimConversation} disabled={busy}>{busy ? 'Tomando…' : 'Tomar conversación'}</button></div>}
+      {!active.assignedToId && <div className="claimBanner"><div><span className="claimSpinner" /><div><strong>{claiming ? 'Asignando conversación…' : 'Preparando la conversación…'}</strong><span>Quedará reservada automáticamente para vos.</span></div></div></div>}
       <div className="messageCanvas"><div className="dateDivider"><span>Hoy</span></div>{detail?.messages.map(m => m.direction === 'INTERNAL' ? <div className="systemNote" key={m.id}><span><Icon name="check" size={14} /></span>{m.body} · {formatTime(m.createdAt)}</div> : <div className={`messageRow ${m.direction === 'OUTBOUND' ? 'messageRowOut' : ''}`} key={m.id}><div className={`messageBubble ${m.direction === 'OUTBOUND' ? 'messageOut' : 'messageIn'}`}>{m.direction === 'OUTBOUND' && <span className="messageSender">{agentName(m.sentById) || 'Atención'}</span>}<p>{m.body || 'Mensaje sin texto'}</p><span className="messageTime">{formatTime(m.providerTimestamp || m.createdAt)}{m.direction === 'OUTBOUND' && <b className={m.status === 'READ' ? 'readChecks' : ''}>✓✓</b>}</span></div></div>)}</div>
       <div className="composerArea"><div className={`serviceWindow ${service.expired ? 'serviceWindowExpired' : ''}`}><Icon name="clock" size={14} /><span>{service.text}</span></div><form className={`composer ${!canReply ? 'composerDisabled' : ''}`} onSubmit={sendMessage}><button type="button" aria-label="Agregar emoji" disabled={!canReply}><Icon name="smile" /></button><button type="button" aria-label="Adjuntar archivo" disabled={!canReply}><Icon name="attach" /></button><textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={assignedToOther ? `Respuesta bloqueada por ${agentName(active.assignedToId)}` : !active.assignedToId ? 'Tomá la conversación para responder' : active.status === 'RESOLVED' ? 'Conversación resuelta' : !lock ? 'Obteniendo control seguro…' : 'Escribe un mensaje'} rows={1} disabled={!canReply || busy} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} /><button className="sendButton" type="submit" aria-label="Enviar mensaje" disabled={!canReply || !draft.trim() || busy}><Icon name="send" size={18} /></button></form><div className="composerHints"><button disabled={!canReply}>/ respuestas rápidas</button><span>Enter para enviar · Shift + Enter para salto</span></div></div>
     </section>

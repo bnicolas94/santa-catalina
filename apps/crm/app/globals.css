@@ -172,6 +172,8 @@ button { color: inherit; }
 .claimBanner > div { display: flex; align-items: center; gap: 9px; }
 .claimBanner > div > div { display: flex; flex-direction: column; }
 .spark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: white; color: var(--green); font-weight: 800; }
+.claimSpinner { width: 24px; height: 24px; border: 3px solid rgba(0,128,105,.2); border-top-color: var(--wa-green-dark, #008069); border-radius: 50%; animation: claimSpin .8s linear infinite; }
+@keyframes claimSpin { to { transform: rotate(360deg); } }
 .claimBanner button { border: 0; border-radius: 9px; background: var(--green); color: white; font-weight: 750; font-size: 9px; padding: 9px 11px; cursor: pointer; }
 .messageCanvas { position: relative; z-index: 1; flex: 1; overflow: auto; padding: 18px clamp(15px, 4vw, 42px); }
 .dateDivider { display: flex; align-items: center; justify-content: center; margin: 5px 0 16px; }
