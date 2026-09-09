@@ -8,7 +8,8 @@ type ApiContact = { id: string; displayName: string; profileName: string | null;
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
 type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderDraftUpdatedAt?: string | null }
-type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
+type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; scheduledById: string; scheduledAt: string }
+type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
 
@@ -38,7 +39,9 @@ function initials(name: string) { return name.split(/\s+/).slice(0, 2).map(part 
 function agentName(id?: string | null) { return id ? DEMO_AGENT_NAMES[id] || 'Otro agente' : '' }
 function formatTime(value: string) { return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function formatDate(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(value)) }
+function formatOrderDate(value: string) { const [year, month, day] = value.split('-').map(Number); return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(year, month - 1, day)) }
 function formatMoney(value: number) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) }
+function shiftName(value: ScheduledOrder['orderShift']) { return value === 'MORNING' ? 'Mañana' : value === 'SIESTA' ? 'Siesta' : 'Tarde' }
 function orderStatus(value: string) {
   const normalized = value.toLowerCase()
   if (normalized === 'entregado') return 'Entregado'
@@ -97,6 +100,8 @@ export default function AttentionWorkspace() {
   const [pickupLocationsError, setPickupLocationsError] = useState(false)
   const [orderDraftDirty, setOrderDraftDirty] = useState(false)
   const [orderSaveState, setOrderSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [schedulingOrder, setSchedulingOrder] = useState(false)
+  const [scheduleFeedback, setScheduleFeedback] = useState<string | null>(null)
   const [mobileChat, setMobileChat] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -105,6 +110,7 @@ export default function AttentionWorkspace() {
   const lockRef = useRef<Lock | null>(null)
   const activeIdRef = useRef<string | null>(null)
   const orderDraftVersionRef = useRef(0)
+  const scheduleActionIdRef = useRef<string | null>(null)
 
   const refreshList = useCallback(async () => {
     const items = await api<ConversationSummary[]>('/api/conversations')
@@ -152,7 +158,7 @@ export default function AttentionWorkspace() {
     if (!activeId || !user) return
     let cancelled = false
     orderDraftVersionRef.current += 1
-    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); lockRef.current = null; activeIdRef.current = activeId
+    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
@@ -245,13 +251,14 @@ export default function AttentionWorkspace() {
     }
   }
 
-  const canEditOrderDraft = Boolean(detail && lock && detail.assignedToId === user?.id && detail.status !== 'RESOLVED' && detail.status !== 'ARCHIVED')
+  const canEditOrderDraft = Boolean(detail && lock && !schedulingOrder && detail.assignedToId === user?.id && detail.status !== 'RESOLVED' && detail.status !== 'ARCHIVED')
   const changeOrderDraft = (patch: Partial<OrderDraft>) => {
     if (!canEditOrderDraft) return
     orderDraftVersionRef.current += 1
     setOrderDraft(current => ({ ...current, ...patch }))
     setOrderDraftDirty(true)
     setOrderSaveState('idle')
+    setScheduleFeedback(null)
   }
   useEffect(() => {
     if (!orderDraftDirty || !canEditOrderDraft || !detail) return
@@ -308,6 +315,42 @@ export default function AttentionWorkspace() {
       ? Boolean(orderDraft.orderPickupLocationId)
       : orderDraft.orderFulfillment === 'DELIVERY' && Boolean(orderDraft.orderAddress.trim()),
   ].filter(Boolean).length
+  const scheduleOrder = async () => {
+    const currentLock = lockRef.current
+    if (!detail || !currentLock || orderCompleted !== 4 || orderDraftDirty || orderSaveState === 'saving') return
+    const clientActionId = scheduleActionIdRef.current || crypto.randomUUID()
+    scheduleActionIdRef.current = clientActionId
+    setSchedulingOrder(true)
+    setScheduleFeedback(null)
+    setError(null)
+    try {
+      const result = await api<{ scheduledOrder: ScheduledOrder; draft: { orderDraftUpdatedAt: string | null } }>(`/api/conversations/${detail.id}/schedule-order`, {
+        method: 'POST',
+        body: JSON.stringify({ lockToken: currentLock.token, clientActionId }),
+      })
+      scheduleActionIdRef.current = null
+      orderDraftVersionRef.current += 1
+      setOrderDraft({ ...EMPTY_ORDER_DRAFT, orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt })
+      setOrderDraftDirty(false)
+      setOrderSaveState('idle')
+      setDetail(current => current && current.id === detail.id ? {
+        ...current,
+        orderDate: null,
+        orderAddress: null,
+        orderFulfillment: null,
+        orderPickupLocationId: null,
+        orderPickupLocationName: null,
+        orderShift: null,
+        orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt,
+        scheduledOrders: [result.scheduledOrder, ...current.scheduledOrders.filter(item => item.id !== result.scheduledOrder.id)],
+      } : current)
+      setScheduleFeedback('Pedido guardado en el historial. La ficha está lista para el próximo.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo marcar el pedido como agendado.')
+    } finally {
+      setSchedulingOrder(false)
+    }
+  }
 
   if (loading) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>Preparando tu bandeja…</strong></main>
   if (!active) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>{error || 'Todavía no hay conversaciones.'}</strong></main>
@@ -381,8 +424,14 @@ export default function AttentionWorkspace() {
             {[{ value: 'MORNING', label: 'Mañana', icon: '☀' }, { value: 'SIESTA', label: 'Siesta', icon: '◐' }, { value: 'AFTERNOON', label: 'Tarde', icon: '◒' }].map(option => <button type="button" key={option.value} className={orderDraft.orderShift === option.value ? 'selected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderShift: option.value as OrderDraft['orderShift'] })}><i>{option.icon}</i><strong>{option.label}</strong></button>)}
           </div>
         </div>
+        <button type="button" className="scheduleOrderButton" disabled={!canEditOrderDraft || orderCompleted !== 4 || orderDraftDirty || orderSaveState === 'saving' || schedulingOrder} onClick={() => void scheduleOrder()}><span><Icon name="check" size={18} /></span><span><strong>{schedulingOrder ? 'Agendando…' : 'Agendado'}</strong><small>{orderCompleted !== 4 ? 'Completá los 4 datos primero' : orderDraftDirty || orderSaveState === 'saving' ? 'Esperando el guardado automático…' : 'Marcar después de pasarlo al Excel'}</small></span></button>
+        {scheduleFeedback && <div className="scheduleFeedback"><Icon name="check" size={14} /><span>{scheduleFeedback}</span></div>}
         <div className={`plannerSaveState state-${orderSaveState}`}><span>{orderSaveState === 'saving' ? '● Guardando…' : orderSaveState === 'error' ? '! No se pudo guardar' : orderSaveState === 'saved' ? '✓ Guardado automáticamente' : canEditOrderDraft ? 'Los cambios se guardan solos' : 'Sólo puede editar el agente que atiende'}</span>{orderCompleted === 4 && <b>Lista para agendar</b>}</div>
       </section>
+      {detail && detail.scheduledOrders.length > 0 && <section className="scheduledHistory">
+        <div className="sectionLabel"><span>Historial agendado</span><b>{detail.scheduledOrders.length}</b></div>
+        <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard" key={item.id}><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><strong>{formatOrderDate(item.orderDate)} · {shiftName(item.orderShift)}</strong><span>{item.orderFulfillment === 'PICKUP' ? `Retiro · ${item.orderPickupLocationName || 'Local'}` : `Envío · ${item.orderAddress || 'Sin dirección'}`}</span><small>Agendado {item.scheduledById === user?.id ? 'por vos' : 'por otro agente'} · {formatTime(item.scheduledAt)}</small></div></article>)}</div>
+      </section>}
       <section className="detailSection">
         <div className="sectionLabel"><span>Contacto</span><button onClick={() => refreshCustomerContext(active.id)} disabled={contextLoading}>{contextLoading ? 'Buscando…' : 'Actualizar'}</button></div>
         {contextLoading && !customerContext ? <div className="contextSkeleton"><i /><i /><i /></div> : customerContext?.status === 'LINKED' ? <dl>

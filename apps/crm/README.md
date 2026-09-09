@@ -89,6 +89,13 @@ la API interna del ERP; se guarda su ID externo y el nombre como instantánea. U
 envío exige dirección para considerar completa la ficha. Cada actualización deja
 un evento de auditoría.
 
+El botón `Agendado` no crea todavía un `Pedido` en el ERP. En una única
+transacción fotografía la ficha completa en `ScheduledOrder`, registra agente y
+horario, deja el evento `ORDER_SCHEDULED_EXTERNALLY` y limpia la ficha activa.
+El historial permanece asociado a la conversación para que un cliente recurrente
+pueda iniciar otro pedido sin sobrescribir los anteriores. La acción usa un
+`clientActionId` único para evitar duplicados ante reintentos.
+
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en
 `Contact.erpClientId`; si existen duplicados, devuelve candidatos para que el

@@ -189,6 +189,9 @@ Implementado:
   envío/retiro, local real del ERP y turno, guardado automático y edición
   protegida por lease. El vínculo al local conserva el ID externo y una
   instantánea de su nombre, sin crear una clave foránea entre esquemas.
+- Acción `Agendado` transaccional e idempotente: conserva una fotografía histórica
+  en `ScheduledOrder`, registra el agente y limpia la ficha activa sólo después de
+  guardar. Es una marca operativa de carga en Excel y no crea un `Pedido` ERP.
 - Esquema CRM inicial y migración SQL.
 - Contratos TypeScript compartidos.
 - Permisos de Atención en los roles del ERP.

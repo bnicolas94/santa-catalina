@@ -14,6 +14,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         contact: true,
         channel: { select: { id: true, name: true, displayPhoneNumber: true, connectionStatus: true } },
         messages: { orderBy: [{ providerTimestamp: 'asc' }, { createdAt: 'asc' }], take: 300 },
+        scheduledOrders: { orderBy: { scheduledAt: 'desc' }, take: 20 },
         tags: { include: { tag: true } },
         assignments: { orderBy: { createdAt: 'desc' }, take: 20 },
       },

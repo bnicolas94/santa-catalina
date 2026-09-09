@@ -267,11 +267,32 @@ button { color: inherit; }
 .shiftButtons button.selected { border-color: #5d778b; color: white; background: #5d778b; box-shadow: 0 5px 13px rgba(55,79,97,.18); }
 .shiftButtons button.selected i { color: white; }
 .shiftButtons button:disabled { opacity: .55; cursor: not-allowed; }
+.scheduleOrderButton { width: 100%; min-height: 50px; margin-top: 13px; padding: 8px 10px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: 11px; color: white; background: linear-gradient(135deg, #008069, #00a884); box-shadow: 0 7px 16px rgba(0,128,105,.2); cursor: pointer; text-align: left; }
+.scheduleOrderButton > span:first-child { width: 29px; height: 29px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: #08725a; background: white; }
+.scheduleOrderButton > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.scheduleOrderButton strong { font-size: 10px; letter-spacing: .01em; }
+.scheduleOrderButton small { color: rgba(255,255,255,.82); font-size: 7px; }
+.scheduleOrderButton:hover:not(:disabled) { filter: brightness(.97); transform: translateY(-1px); }
+.scheduleOrderButton:disabled { color: #7f8b86; background: #e5eae7; box-shadow: none; cursor: not-allowed; }
+.scheduleOrderButton:disabled > span:first-child { color: #87928d; background: #f6f8f7; }
+.scheduleOrderButton:disabled small { color: #969f9b; }
+.scheduleFeedback { margin-top: 8px; padding: 8px 9px; display: flex; align-items: flex-start; gap: 6px; border: 1px solid #b8dfd2; border-radius: 9px; color: #08725a; background: #e8f8f2; font-size: 8px; line-height: 1.4; }
+.scheduleFeedback svg { flex: 0 0 auto; margin-top: 1px; }
 .plannerSaveState { min-height: 25px; margin: 12px -14px -14px; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 0 0 13px 13px; color: #75817c; background: #e9f0ed; font-size: 7px; }
 .plannerSaveState b { color: #08725a; font-size: 7px; }
 .plannerSaveState.state-saving { color: #8a681e; background: #fff4da; }
 .plannerSaveState.state-error { color: #9a2636; background: #ffeaed; }
 .plannerSaveState.state-saved { color: #08725a; background: #daf2e9; }
+.scheduledHistory { padding: 13px 14px; border-bottom: 1px solid var(--line); background: #fff; }
+.scheduledHistory .sectionLabel { margin-bottom: 8px; }
+.scheduledHistory .sectionLabel b { min-width: 22px; height: 20px; display: grid; place-items: center; border-radius: 8px; color: #08725a; background: #dff5ed; font-size: 8px; }
+.scheduledOrderList { display: flex; flex-direction: column; gap: 6px; }
+.scheduledOrderCard { padding: 9px; display: flex; align-items: flex-start; gap: 8px; border: 1px solid #dce5e1; border-radius: 10px; background: #fbfdfc; }
+.scheduledOrderCheck { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: white; background: #00a884; }
+.scheduledOrderCard > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.scheduledOrderCard strong { color: #273c36; font-size: 9px; }
+.scheduledOrderCard span { overflow: hidden; color: #64736d; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.scheduledOrderCard small { color: #929d98; font-size: 7px; }
 .detailSection { padding: 14px; border-bottom: 1px solid var(--line); }
 .sectionLabel { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .sectionLabel span { color: #99968f; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }

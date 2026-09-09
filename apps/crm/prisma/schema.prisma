@@ -160,6 +160,7 @@ model Conversation {
   messages               Message[]
   assignments            ConversationAssignment[]
   events                 ConversationEvent[]
+  scheduledOrders        ScheduledOrder[]
   tags                   ConversationTag[]
 
   @@unique([channelId, contactId])
@@ -168,6 +169,26 @@ model Conversation {
   @@index([contactId, lastMessageAt])
   @@index([orderPickupLocationId])
   @@map("conversations")
+  @@schema("crm")
+}
+
+model ScheduledOrder {
+  id                      String           @id @default(uuid())
+  conversationId          String           @map("conversation_id")
+  clientActionId          String           @unique @map("client_action_id") @db.VarChar(80)
+  orderDate               String           @map("order_date") @db.VarChar(10)
+  orderAddress            String?          @map("order_address") @db.VarChar(300)
+  orderFulfillment        OrderFulfillment @map("order_fulfillment")
+  orderPickupLocationId   String?          @map("order_pickup_location_id") @db.VarChar(80)
+  orderPickupLocationName String?          @map("order_pickup_location_name") @db.VarChar(160)
+  orderShift              OrderShift       @map("order_shift")
+  scheduledById           String           @map("scheduled_by_id")
+  scheduledAt             DateTime         @default(now()) @map("scheduled_at")
+  conversation            Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, scheduledAt])
+  @@index([orderDate, orderShift])
+  @@map("scheduled_orders")
   @@schema("crm")
 }
 
