@@ -3,6 +3,7 @@ import { crmPrisma } from '@/lib/prisma'
 import { apiErrorResponse } from '@/lib/api'
 import { requireCrmUser } from '@/lib/session'
 import { conversationVisibilityWhere } from '@/lib/conversations/access'
+import { effectiveUnreadCount } from '@/lib/conversations/unread'
 import type { ConversationStatus, Prisma } from '@/generated/prisma'
 
 const ALLOWED_STATUSES = new Set<ConversationStatus>(['UNASSIGNED', 'OPEN', 'WAITING_CUSTOMER', 'RESOLVED', 'ARCHIVED'])
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       assignedToId: conversation.assignedToId,
       activeById: conversation.activeById,
       lockExpiresAt: conversation.lockExpiresAt,
-      unreadCount: conversation.unreadCount,
+      unreadCount: effectiveUnreadCount(conversation),
       lastMessageAt: conversation.lastMessageAt,
       serviceWindowExpiresAt: conversation.serviceWindowExpiresAt,
       contact: conversation.contact,

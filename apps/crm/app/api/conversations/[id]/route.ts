@@ -5,6 +5,7 @@ import { crmPrisma } from '@/lib/prisma'
 import { requireCrmUser } from '@/lib/session'
 import { conversationVisibilityWhere } from '@/lib/conversations/access'
 import { sortMessagesChronologically } from '@/lib/conversations/message-order'
+import { effectiveUnreadCount } from '@/lib/conversations/unread'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json({
       ...conversation,
+      unreadCount: effectiveUnreadCount(conversation),
       messages: sortMessagesChronologically(conversation.messages),
       scheduledOrders: conversation.scheduledOrders.map(item => ({
         ...item,

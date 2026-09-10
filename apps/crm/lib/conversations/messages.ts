@@ -51,7 +51,7 @@ export async function sendConversationText(prisma: PrismaClient, input: SendText
     })
     await transaction.conversation.update({
       where: { id: conversation.id },
-      data: { status: 'OPEN', lastMessageAt: new Date(), lastOutboundAt: new Date() },
+      data: { status: 'OPEN', lastMessageAt: new Date(), lastOutboundAt: new Date(), unreadCount: 0 },
     })
     return { message, duplicate: false, channel: conversation.channel, recipientWaId: conversation.contact.waId }
   })

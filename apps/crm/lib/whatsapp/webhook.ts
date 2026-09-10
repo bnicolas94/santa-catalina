@@ -206,6 +206,13 @@ async function persistLiveMessage(
     })
   } else {
     await transaction.conversation.updateMany({
+      where: {
+        id: conversation.id,
+        OR: [{ lastInboundAt: null }, { lastInboundAt: { lte: occurredAt } }],
+      },
+      data: { unreadCount: 0 },
+    })
+    await transaction.conversation.updateMany({
       where: { id: conversation.id, lastMessageAt: { lt: occurredAt } },
       data: { lastMessageAt: occurredAt, status: 'WAITING_CUSTOMER' },
     })

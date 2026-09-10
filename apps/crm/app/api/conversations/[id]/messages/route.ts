@@ -3,6 +3,7 @@ import { CrmApiError, apiErrorResponse, requireText } from '@/lib/api'
 import { conversationVisibilityWhere } from '@/lib/conversations/access'
 import { sendConversationText } from '@/lib/conversations/messages'
 import { sortMessagesChronologically } from '@/lib/conversations/message-order'
+import { effectiveUnreadCount } from '@/lib/conversations/unread'
 import { crmPrisma } from '@/lib/prisma'
 import { requireCrmUser } from '@/lib/session'
 
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json({
       ...conversation,
+      unreadCount: effectiveUnreadCount(conversation),
       messages: sortMessagesChronologically(conversation.messages),
     })
   } catch (error) {
