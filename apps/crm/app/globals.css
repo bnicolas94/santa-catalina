@@ -491,7 +491,7 @@ button { color: inherit; }
 
 /* Bandeja de atención inspirada en los patrones de WhatsApp Business. */
 :root {
-  --wa-green: #00a884;
+  --wa-green: #25d366;
   --wa-green-dark: #008069;
   --wa-green-soft: #d9fdd3;
   --wa-app: #f0f2f5;
@@ -500,6 +500,9 @@ button { color: inherit; }
   --wa-line: #e9edef;
   --wa-ink: #111b21;
   --wa-muted: #667781;
+  --wa-yellow: #ffd53d;
+  --wa-yellow-soft: #fff5c7;
+  --wa-blue: #53bdeb;
 }
 
 body { background: var(--wa-app); color: var(--wa-ink); }
@@ -514,9 +517,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 .navigationRail {
   padding: 10px 0 12px;
-  background: #f0f2f5;
+  background: #fff;
   color: #54656f;
-  border-right: 1px solid #d8dcdf;
+  border-right: 1px solid var(--wa-line);
 }
 .brandMark {
   width: 42px; height: 42px; border: 0; border-radius: 50%;
@@ -527,10 +530,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .railButton { position: relative; width: 42px; height: 42px; border-radius: 50%; color: #54656f; }
 .railButton:hover { background: #e4e7e9; color: #111b21; }
 .railButtonActive { background: #d9fdd3; color: var(--wa-green-dark); box-shadow: none; }
-.railButton > span { position: absolute; right: -2px; top: -2px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border: 2px solid #f0f2f5; border-radius: 10px; background: var(--wa-green); color: white; font-size: 8px; font-weight: 800; }
+.railButton > span { position: absolute; right: -2px; top: -2px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border: 2px solid #fff; border-radius: 10px; background: var(--wa-green-dark); color: white; font-size: 8px; font-weight: 800; }
 .railSettings { margin-top: auto; text-decoration: none; }
 .railAgent { margin-top: 10px; }
-.onlineDot { background: #25d366; border-color: #f0f2f5; }
+.onlineDot { background: var(--wa-green); border-color: #fff; }
 
 .avatar { width: 46px; height: 46px; border-radius: 50%; font-size: 13px; box-shadow: none; }
 .avatarSmall { width: 36px; height: 36px; border-radius: 50%; font-size: 10px; }
@@ -565,7 +568,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .conversationCard:hover { background: #f5f6f6; }
 .conversationCardActive { background: #f0f2f5 !important; border-color: var(--wa-line); box-shadow: none; }
 .conversationCardActive::before { display: none; }
-.unreadCount { right: -3px; top: auto; bottom: -2px; min-width: 18px; height: 18px; border-color: white; background: #25d366; font-size: 9px; }
+.unreadCount { right: -3px; top: auto; bottom: -2px; min-width: 18px; height: 18px; border-color: white; background: var(--wa-green-dark); font-size: 9px; }
 .conversationCardActive .unreadCount { border-color: #f0f2f5; }
 .cardTop { align-items: baseline; }
 .cardTop strong { color: var(--wa-ink); font-size: 13px; font-weight: 650; }
@@ -577,12 +580,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .cardBottom { min-width: 0; gap: 5px; }
 .companyName { flex: 1; min-width: 0; margin: 0; color: #8696a0; font-size: 8px; }
 .statusPill, .priorityPill { border-radius: 10px; padding: 3px 6px; font-size: 6px; }
+.priorityPill { color: #725600; background: var(--wa-yellow-soft); }
 .status-open { background: #e7f8f3; color: var(--wa-green-dark); }
 .emptyList > span { border-radius: 50%; color: var(--wa-green-dark); box-shadow: none; background: #e7f8f3; }
 
 .chatPanel { background: var(--wa-chat); }
 .chatPanel::before { opacity: .38; background-image: radial-gradient(circle at 12px 12px, rgba(17, 27, 33, .055) 1px, transparent 1.5px), radial-gradient(circle at 25px 28px, rgba(17, 27, 33, .035) 1px, transparent 1.5px), linear-gradient(45deg, transparent 48%, rgba(17, 27, 33, .018) 49%, rgba(17, 27, 33, .018) 51%, transparent 52%); background-size: 38px 38px, 47px 47px, 72px 72px; }
-.chatHeader { min-height: 60px; padding: 7px 12px; gap: 10px; background: #f0f2f5; border-bottom-color: #d8dcdf; backdrop-filter: none; }
+.chatHeader { min-height: 60px; padding: 7px 12px; gap: 10px; background: #fff; border-bottom-color: var(--wa-line); backdrop-filter: none; }
 .chatHeader .avatar { width: 40px; height: 40px; font-size: 11px; }
 .chatIdentity h2 { color: var(--wa-ink); font-size: 13px; font-weight: 650; }
 .chatIdentity > span { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: #667781; font-size: 9px; }
@@ -593,14 +597,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .chatActions .adminHeaderAction:hover { background: #fff0c9; color: #704900; }
 .mobileBack { color: #54656f; }
 .lockBanner, .claimBanner, .errorBanner { margin: 8px 12px 0; border-radius: 8px; box-shadow: 0 1px 2px rgba(11, 20, 26, .08); }
-.lockBanner { background: #fff5c8; border-color: #f0d875; }
-.lockIcon { background: #ffe9a0; border-radius: 50%; }
+.lockBanner { background: var(--wa-yellow-soft); border-color: #efd56c; }
+.lockIcon { background: #ffeaa0; border-radius: 50%; }
 .claimBanner { background: #e7f8f3; border-color: #a9dfd2; }
 .claimBanner button { background: var(--wa-green-dark); border-radius: 18px; }
 .spark { border-radius: 50%; color: var(--wa-green-dark); }
 .watchingBadge { color: #8b630c; border-radius: 12px; }
 .messageCanvas { padding: 16px clamp(18px, 5vw, 64px); scrollbar-color: #b8b8b2 transparent; }
-.dateDivider span { padding: 6px 11px; border: 0; border-radius: 7px; background: #fff; box-shadow: 0 1px 1px rgba(11, 20, 26, .12); color: #54656f; font-size: 8px; }
+.dateDivider span { padding: 6px 11px; border: 0; border-radius: 7px; background: #f8fafb; box-shadow: 0 1px 1px rgba(11, 20, 26, .12); color: #54656f; font-size: 8px; }
 .messageRow { margin: 3px 0; }
 .messageBubble { position: relative; max-width: min(76%, 520px); border-radius: 8px; padding: 7px 9px 5px; box-shadow: 0 1px 1px rgba(11, 20, 26, .13); }
 .messageIn { background: white; border: 0; border-top-left-radius: 2px; }
@@ -613,22 +617,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .messageTime, .messageOut .messageTime { color: #667781; font-size: 7px; }
 .messageTime b { color: #8696a0; }
 .messageTime .readChecks { color: #53bdeb; }
-.systemNote { background: #ffeecd; color: #667781; border-radius: 7px; box-shadow: 0 1px 1px rgba(11, 20, 26, .1); }
-.composerArea { padding: 0; background: transparent; }
+.systemNote { background: var(--wa-yellow-soft); color: #667781; border-radius: 7px; box-shadow: 0 1px 1px rgba(11, 20, 26, .1); }
+.composerArea { padding: 7px 12px 9px; background: var(--wa-chat); }
 .serviceWindow { margin: 0 auto 5px; padding: 4px 8px; border-radius: 10px; background: rgba(255,255,255,.86); color: var(--wa-green-dark); }
-.composer { min-height: 58px; padding: 8px 10px; border: 0; border-radius: 0; background: #f0f2f5; box-shadow: none; align-items: center; gap: 2px; }
-.composer:focus-within { border: 0; box-shadow: none; }
-.composer textarea { min-height: 40px; padding: 11px 13px; border-radius: 9px; background: white; color: var(--wa-ink); font-size: 12px; }
+.composer { min-height: 52px; padding: 6px 8px; border: 1px solid rgba(134,150,160,.16); border-radius: 27px; background: #fff; box-shadow: 0 1px 3px rgba(11,20,26,.13); align-items: center; gap: 2px; }
+.composer:focus-within { border-color: rgba(0,128,105,.3); box-shadow: 0 1px 3px rgba(11,20,26,.13), 0 0 0 2px rgba(0,128,105,.08); }
+.composer textarea { min-height: 38px; padding: 10px 9px; border-radius: 0; background: transparent; color: var(--wa-ink); font-size: 12px; }
 .composer > button { color: #54656f; }
 .composer .sendButton { background: var(--wa-green); border-radius: 50%; color: white; }
 .composer .sendButton:disabled { background: transparent; color: #8696a0; }
-.composerDisabled { background: #f0f2f5; }
-.composerDisabled textarea { background: #e8ebed; }
-.composerHints { padding: 4px 12px 6px; background: #f0f2f5; color: #8696a0; }
+.composerDisabled { background: #f4f5f6; }
+.composerDisabled textarea { background: transparent; }
+.composerHints { display: none; }
 .composerHints button { color: var(--wa-green-dark); }
 
 .contextPanel { background: white; border-left-color: #d8dcdf; }
-.contextPanel > header { min-height: 60px; padding: 8px 14px; background: #f0f2f5; border-bottom-color: #d8dcdf; color: #54656f; }
+.contextPanel > header { min-height: 60px; padding: 8px 14px; background: #fff; border-bottom-color: var(--wa-line); color: #54656f; }
 .customerHero { padding: 24px 15px 18px; border-bottom-color: var(--wa-line); }
 .customerHero .avatar { width: 64px; height: 64px; border-radius: 50%; }
 .customerHero h3 { color: var(--wa-ink); font-size: 15px; }
