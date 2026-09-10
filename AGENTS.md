@@ -112,6 +112,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - El CRM consulta el contexto del cliente mediante las APIs internas del ERP; no debe obtener acceso directo al esquema principal.
 - En producción valida la sesión compartida y los permisos `permisoAtencion` / `permisoAtencionAdmin`.
 - Webhooks quedan fuera de la sesión de usuario, pero deben validar challenge/firma y deduplicar eventos.
+- Los canales pueden usar Meta directo o YCloud. YCloud conserva su API Key y Webhook Signing Secret cifrados, valida `YCloud-Signature`, deduplica por ID de evento y usa el número E.164 para identificar el canal; nunca reutilizar su payload o autenticación como si fueran de Meta.
 - Los secretos de Meta se cifran y nunca se devuelven al navegador. `CRM_MOCK_WHATSAPP=true` debe impedir contactos reales durante pruebas.
 - Un número existente de WhatsApp Business sólo puede incorporarse mediante Embedded Signup en modo Coexistence; la activación exige `is_on_biz_app=true`, plataforma `CLOUD_API` y confirmación administrativa de continuidad de la app y dispositivos vinculados.
 - El webhook de Coexistence procesa `history`, `smb_app_state_sync`, `smb_message_echoes` y `account_update`; una baja o reconexión invalida la confirmación de continuidad y desactiva el canal.
@@ -154,6 +155,11 @@ npm run crm:lint
 npm run crm:db:validate
 npm run crm:build
 ```
+
+Los comandos `crm:db:*` de la raíz fuerzan `schema=crm` aunque `DATABASE_URL`
+apunte por defecto a `public`; no reemplazarlos por una ejecución directa del
+Prisma del CRM contra la URL raíz. `crm:db:deploy` continúa requiriendo un
+`npm run db:backup` verificado inmediatamente antes.
 
 Variables esperadas, sin registrar valores: ERP usa `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, Google Maps, Mercado Pago y `CRON_SECRET`. El CRM usa su propio `DATABASE_URL`, URLs ERP/CRM, `NEXTAUTH_SECRET`, `CRM_MOCK_WHATSAPP` y `WHATSAPP_CONFIG_ENCRYPTION_KEY`. Consultar los `.env.example`; nunca leer ni exponer secretos salvo que la tarea lo requiera explícitamente.
 

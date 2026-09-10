@@ -8,8 +8,9 @@ import styles from './settings.module.css'
 type Channel = {
   id: string
   name: string
+  provider: 'META' | 'YCLOUD'
   active: boolean
-  phoneNumberId: string
+  phoneNumberId: string | null
   displayPhoneNumber: string | null
   wabaId: string
   businessPortfolioId: string | null
@@ -31,6 +32,7 @@ type Configuration = {
   encryptionStatus: 'READY' | 'MISSING' | 'INVALID'
   mockMode: boolean
   webhookUrl: string
+  ycloudWebhookUrl: string
   embeddedSignup: {
     available: boolean
     missing: string[]
@@ -55,6 +57,7 @@ declare global {
   }
 }
 type Draft = {
+  provider: 'META' | 'YCLOUD'
   name: string
   phoneNumberId: string
   displayPhoneNumber: string
@@ -68,7 +71,7 @@ type Draft = {
 }
 
 const EMPTY_DRAFT: Draft = {
-  name: 'WhatsApp Santa Catalina', phoneNumberId: '', displayPhoneNumber: '', wabaId: '',
+  provider: 'YCLOUD', name: 'WhatsApp Santa Catalina', phoneNumberId: '', displayPhoneNumber: '', wabaId: '',
   businessPortfolioId: '', graphApiVersion: 'v23.0', accessToken: '', appSecret: '',
   webhookVerifyToken: '', active: false,
 }
@@ -85,7 +88,7 @@ async function adminApi<T>(url: string, init?: RequestInit): Promise<T> {
 
 function draftFromChannel(channel: Channel): Draft {
   return {
-    name: channel.name, phoneNumberId: channel.phoneNumberId,
+    provider: channel.provider, name: channel.name, phoneNumberId: channel.phoneNumberId || '',
     displayPhoneNumber: channel.displayPhoneNumber || '', wabaId: channel.wabaId,
     businessPortfolioId: channel.businessPortfolioId || '', graphApiVersion: channel.graphApiVersion,
     accessToken: '', appSecret: '', webhookVerifyToken: '', active: channel.active,
@@ -125,27 +128,31 @@ export default function ChannelSettingsPage() {
   const completionStarted = useRef(false)
 
   const selected = channels.find(channel => channel.id === selectedId) || null
+  const isYCloud = draft.provider === 'YCLOUD'
   const secretsReady = Boolean(
     (selected?.hasAccessToken || draft.accessToken)
     && (selected?.hasAppSecret || draft.appSecret)
-    && (selected?.hasVerifyToken || draft.webhookVerifyToken),
+    && (isYCloud || selected?.hasVerifyToken || draft.webhookVerifyToken),
   )
   const encryptionReady = configuration?.encryptionStatus === 'READY'
   const hasUnsavedValidationChanges = Boolean(selected && (
-    draft.phoneNumberId !== selected.phoneNumberId
+    draft.provider !== selected.provider
+    || draft.phoneNumberId !== (selected.phoneNumberId || '')
+    || draft.displayPhoneNumber !== (selected.displayPhoneNumber || '')
     || draft.wabaId !== selected.wabaId
     || draft.graphApiVersion !== selected.graphApiVersion
     || draft.accessToken || draft.appSecret || draft.webhookVerifyToken
   ))
-  const metaValidated = Boolean(selected?.connectionStatus === 'CONNECTED' && !hasUnsavedValidationChanges)
-  const continuityReady = Boolean(selected?.connectionMode !== 'COEXISTENCE' || selected.continuityVerifiedAt)
-  const canActivate = Boolean(selected && secretsReady && metaValidated && continuityReady)
+  const providerValidated = Boolean(selected?.connectionStatus === 'CONNECTED' && !hasUnsavedValidationChanges)
+  const coexistenceMode = selected?.connectionMode === 'COEXISTENCE' || selected?.connectionMode === 'YCLOUD_COEXISTENCE'
+  const continuityReady = Boolean(!coexistenceMode || selected?.continuityVerifiedAt)
+  const canActivate = Boolean(selected && secretsReady && providerValidated && continuityReady)
   const completed = useMemo(() => [
-    Boolean(draft.phoneNumberId && draft.wabaId),
+    Boolean(draft.wabaId && (isYCloud ? draft.displayPhoneNumber : draft.phoneNumberId)),
     secretsReady,
-    metaValidated,
+    providerValidated,
     Boolean(selected?.active),
-  ], [draft.phoneNumberId, draft.wabaId, secretsReady, metaValidated, selected?.active])
+  ], [draft.phoneNumberId, draft.displayPhoneNumber, draft.wabaId, isYCloud, secretsReady, providerValidated, selected?.active])
 
   const load = async () => {
     try {
@@ -242,7 +249,7 @@ export default function ChannelSettingsPage() {
     setMessage(null)
     try {
       const payload = {
-        name: draft.name, phoneNumberId: draft.phoneNumberId, displayPhoneNumber: draft.displayPhoneNumber,
+        provider: draft.provider, name: draft.name, phoneNumberId: draft.phoneNumberId, displayPhoneNumber: draft.displayPhoneNumber,
         wabaId: draft.wabaId, businessPortfolioId: draft.businessPortfolioId,
         graphApiVersion: draft.graphApiVersion, active: draft.active,
         ...(draft.accessToken && { accessToken: draft.accessToken }),
@@ -264,8 +271,9 @@ export default function ChannelSettingsPage() {
   }
 
   const copyWebhook = async () => {
-    if (!configuration?.webhookUrl) return
-    await navigator.clipboard.writeText(configuration.webhookUrl)
+    const webhookUrl = isYCloud ? configuration?.ycloudWebhookUrl : configuration?.webhookUrl
+    if (!webhookUrl) return
+    await navigator.clipboard.writeText(webhookUrl)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
   }
@@ -279,9 +287,9 @@ export default function ChannelSettingsPage() {
       setChannels(current => current.map(item => item.id === result.channel.id ? result.channel : item))
       setDraft(draftFromChannel(result.channel))
       const detail = [result.validation.verifiedName, result.validation.qualityRating].filter(Boolean).join(' · ')
-      setMessage({ type: 'ok', text: `Meta validó el token, el WABA y el número${detail ? `: ${detail}` : '.'}` })
+      setMessage({ type: 'ok', text: `${isYCloud ? 'YCloud' : 'Meta'} validó las credenciales, el WABA y el número${detail ? `: ${detail}` : '.'}` })
     } catch (cause) {
-      setMessage({ type: 'error', text: cause instanceof Error ? cause.message : 'No se pudo validar la conexión con Meta.' })
+      setMessage({ type: 'error', text: cause instanceof Error ? cause.message : `No se pudo validar la conexión con ${isYCloud ? 'YCloud' : 'Meta'}.` })
       await load()
     } finally {
       setValidating(false)
@@ -351,24 +359,24 @@ export default function ChannelSettingsPage() {
     </aside>
 
     <section className={styles.content}>
-      <header className={styles.header}><div><span>Centro de conexiones</span><h2>WhatsApp Business</h2><p>Configurá Meta Cloud API sin exponer credenciales al equipo de atención.</p></div><div className={styles.headerStatus}><i className={configuration?.mockMode ? styles.dotPending : styles.dotOnline} /><span><b>{configuration?.mockMode ? 'Modo simulado' : 'Proveedor real'}</b><small>{configuration?.mockMode ? 'No se enviarán mensajes a Meta' : 'Los mensajes se enviarán a Meta'}</small></span></div></header>
+      <header className={styles.header}><div><span>Centro de conexiones</span><h2>WhatsApp Business</h2><p>Configurá YCloud o Meta sin exponer credenciales al equipo de atención.</p></div><div className={styles.headerStatus}><i className={configuration?.mockMode ? styles.dotPending : styles.dotOnline} /><span><b>{configuration?.mockMode ? 'Modo simulado' : 'Proveedor real'}</b><small>{configuration?.mockMode ? 'No se enviarán mensajes reales' : `Los mensajes se enviarán por ${isYCloud ? 'YCloud' : 'Meta'}`}</small></span></div></header>
 
-      {configuration?.encryptionStatus !== 'READY' && <div className={styles.warning}><span>!</span><div><strong>{configuration?.encryptionStatus === 'INVALID' ? 'La clave maestra no es válida' : 'Falta configurar la clave maestra'}</strong><p>Definí `WHATSAPP_CONFIG_ENCRYPTION_KEY` con 32 bytes en base64 antes de guardar Access Token, App Secret o Verify Token.</p></div></div>}
+      {configuration?.encryptionStatus !== 'READY' && <div className={styles.warning}><span>!</span><div><strong>{configuration?.encryptionStatus === 'INVALID' ? 'La clave maestra no es válida' : 'Falta configurar la clave maestra'}</strong><p>Definí `WHATSAPP_CONFIG_ENCRYPTION_KEY` con 32 bytes en base64 antes de guardar credenciales del proveedor.</p></div></div>}
       {message && <div className={message.type === 'ok' ? styles.success : styles.error} role="status"><span>{message.type === 'ok' ? '✓' : '!'}</span>{message.text}<button onClick={() => setMessage(null)}>×</button></div>}
 
       <section className={styles.coexistenceCard}>
         <div className={styles.coexistenceIcon}>W</div>
         <div className={styles.coexistenceCopy}>
           <span className={styles.eyebrow}>Conexión recomendada</span>
-          <h3>Conservar WhatsApp Business y sus sesiones</h3>
-          <p>Abre el flujo oficial de Meta preparado exclusivamente para Coexistence. El CRM rechazará el alta si Meta no confirma que la aplicación continúa activa.</p>
+          <h3>{isYCloud ? 'Usar la conexión de Coexistencia de YCloud' : 'Conservar WhatsApp Business y sus sesiones'}</h3>
+          <p>{isYCloud ? 'El número permanece conectado a WhatsApp Business. Cargá la API Key y el secreto del webhook de YCloud para integrarlo con este CRM.' : 'Abre el flujo oficial de Meta preparado exclusivamente para Coexistence. El CRM rechazará el alta si Meta no confirma que la aplicación continúa activa.'}</p>
           <div className={styles.safetyChecks}><span>✓ Mismo número</span><span>✓ Sin migración manual</span><span>✓ Canal inactivo al finalizar</span></div>
-          {!configuration?.embeddedSignup.available && <small>Falta configurar: {configuration?.embeddedSignup.missing.join(', ') || 'cargando configuración…'}</small>}
+          {!isYCloud && !configuration?.embeddedSignup.available && <small>Falta configurar: {configuration?.embeddedSignup.missing.join(', ') || 'cargando configuración…'}</small>}
         </div>
-        <button type="button" disabled={!sdkReady || connectingCoexistence || configuration?.encryptionStatus !== 'READY'} onClick={startCoexistence}>
+        {isYCloud ? <button type="button" disabled>Conexión gestionada en YCloud</button> : <button type="button" disabled={!sdkReady || connectingCoexistence || configuration?.encryptionStatus !== 'READY'} onClick={startCoexistence}>
           {connectingCoexistence ? 'Esperando a Meta…' : 'Conectar con Coexistence'}
-        </button>
-        {selected?.connectionMode === 'COEXISTENCE' && <div className={styles.continuityGate}>
+        </button>}
+        {coexistenceMode && <div className={styles.continuityGate}>
           <div><strong>{selected.continuityVerifiedAt ? '✓ Continuidad verificada' : 'Prueba obligatoria antes de activar'}</strong><small>Probá con un contacto interno; todavía no habilita envíos del CRM.</small></div>
           {!selected.continuityVerifiedAt && <>
             <label><input type="checkbox" checked={continuityChecks.mobileApp} onChange={event => setContinuityChecks(current => ({ ...current, mobileApp: event.target.checked }))} /> La app móvil sigue enviando y recibiendo</label>
@@ -381,30 +389,31 @@ export default function ChannelSettingsPage() {
 
       <div className={styles.grid}>
         <form className={styles.formCard} onSubmit={save}>
-          <div className={styles.cardHeader}><div><span className={styles.step}>01</span><div><h3>Identidad del canal</h3><p>Datos visibles e identificadores entregados por Meta.</p></div></div><label className={styles.switch}><input type="checkbox" checked={draft.active} disabled={!selected?.active && !canActivate} onChange={event => update('active', event.target.checked)} /><span /><b>{draft.active ? 'Activo' : 'Inactivo'}</b></label></div>
+          <div className={styles.providerSwitch}><span>Proveedor</span><button type="button" disabled={Boolean(selected)} className={isYCloud ? styles.providerActive : ''} onClick={() => update('provider', 'YCLOUD')}><b>YCloud</b><small>Coexistencia ya conectada</small></button><button type="button" disabled={Boolean(selected)} className={!isYCloud ? styles.providerActive : ''} onClick={() => update('provider', 'META')}><b>Meta directo</b><small>Embedded Signup propio</small></button></div>
+          <div className={styles.cardHeader}><div><span className={styles.step}>01</span><div><h3>Identidad del canal</h3><p>Datos visibles e identificadores entregados por {isYCloud ? 'YCloud' : 'Meta'}.</p></div></div><label className={styles.switch}><input type="checkbox" checked={draft.active} disabled={!selected?.active && !canActivate} onChange={event => update('active', event.target.checked)} /><span /><b>{draft.active ? 'Activo' : 'Inactivo'}</b></label></div>
           <div className={styles.fieldsGrid}>
             <label className={styles.field}><span>Nombre interno</span><input required maxLength={100} value={draft.name} onChange={event => update('name', event.target.value)} placeholder="WhatsApp Santa Catalina" /></label>
-            <label className={styles.field}><span>Número visible</span><input maxLength={50} value={draft.displayPhoneNumber} onChange={event => update('displayPhoneNumber', event.target.value)} placeholder="+54 9 11…" /></label>
-            <label className={styles.field}><span>Phone Number ID</span><input required maxLength={100} value={draft.phoneNumberId} onChange={event => update('phoneNumberId', event.target.value)} placeholder="Ej. 1029384756" /></label>
+            <label className={styles.field}><span>Número visible</span><input required={isYCloud} maxLength={50} value={draft.displayPhoneNumber} onChange={event => update('displayPhoneNumber', event.target.value)} placeholder="+54 9 11…" /></label>
+            {!isYCloud && <label className={styles.field}><span>Phone Number ID</span><input required maxLength={100} value={draft.phoneNumberId} onChange={event => update('phoneNumberId', event.target.value)} placeholder="Ej. 1029384756" /></label>}
             <label className={styles.field}><span>WhatsApp Business Account ID</span><input required maxLength={100} value={draft.wabaId} onChange={event => update('wabaId', event.target.value)} placeholder="WABA ID" /></label>
-            <label className={styles.field}><span>Business Portfolio ID <em>Opcional</em></span><input maxLength={100} value={draft.businessPortfolioId} onChange={event => update('businessPortfolioId', event.target.value)} placeholder="Portfolio ID" /></label>
-            <label className={styles.field}><span>Versión Graph API</span><input required maxLength={30} value={draft.graphApiVersion} onChange={event => update('graphApiVersion', event.target.value)} placeholder="v23.0" /></label>
+            {!isYCloud && <label className={styles.field}><span>Business Portfolio ID <em>Opcional</em></span><input maxLength={100} value={draft.businessPortfolioId} onChange={event => update('businessPortfolioId', event.target.value)} placeholder="Portfolio ID" /></label>}
+            {!isYCloud && <label className={styles.field}><span>Versión Graph API</span><input required maxLength={30} value={draft.graphApiVersion} onChange={event => update('graphApiVersion', event.target.value)} placeholder="v25.0" /></label>}
           </div>
 
           <div className={styles.divider} />
           <div className={styles.cardHeader}><div><span className={styles.step}>02</span><div><h3>Credenciales cifradas</h3><p>Dejá un campo vacío para conservar el valor guardado.</p></div></div></div>
           <div className={styles.secretGrid}>
-            <SecretField label="Access Token permanente" value={draft.accessToken} configured={Boolean(selected?.hasAccessToken)} disabled={!encryptionReady} placeholder="EAAB…" onChange={value => update('accessToken', value)} />
-            <SecretField label="App Secret" value={draft.appSecret} configured={Boolean(selected?.hasAppSecret)} disabled={!encryptionReady} placeholder="App Secret de Meta" onChange={value => update('appSecret', value)} />
-            <SecretField label="Webhook Verify Token" value={draft.webhookVerifyToken} configured={Boolean(selected?.hasVerifyToken)} disabled={!encryptionReady} placeholder="Token elegido por Santa Catalina" onChange={value => update('webhookVerifyToken', value)} />
+            <SecretField label={isYCloud ? 'API Key de YCloud' : 'Access Token permanente'} value={draft.accessToken} configured={Boolean(selected?.hasAccessToken)} disabled={!encryptionReady} placeholder={isYCloud ? 'API Key generada en YCloud' : 'EAAB…'} onChange={value => update('accessToken', value)} />
+            <SecretField label={isYCloud ? 'Webhook Signing Secret' : 'App Secret'} value={draft.appSecret} configured={Boolean(selected?.hasAppSecret)} disabled={!encryptionReady} placeholder={isYCloud ? 'whsec_…' : 'App Secret de Meta'} onChange={value => update('appSecret', value)} />
+            {!isYCloud && <SecretField label="Webhook Verify Token" value={draft.webhookVerifyToken} configured={Boolean(selected?.hasVerifyToken)} disabled={!encryptionReady} placeholder="Token elegido por Santa Catalina" onChange={value => update('webhookVerifyToken', value)} />}
           </div>
           <footer className={styles.formFooter}><div><span>●</span><p>{selected ? `Última actualización: ${new Date(selected.updatedAt).toLocaleString('es-AR')}` : 'El canal se creará inicialmente inactivo.'}</p></div><button type="submit" disabled={saving}>{saving ? 'Guardando…' : selected ? 'Guardar cambios' : 'Crear canal'}</button></footer>
         </form>
 
         <aside className={styles.helpColumn}>
-          <section className={styles.webhookCard}><div className={styles.cardHeader}><div><span className={styles.step}>03</span><div><h3>Webhook de Meta</h3><p>Usá esta URL en WhatsApp → Configuración.</p></div></div></div><label><span>Callback URL</span><div><code>{configuration?.webhookUrl}</code><button onClick={copyWebhook}>{copied ? 'Copiado' : 'Copiar'}</button></div></label><p className={styles.webhookHint}>Meta validará esta URL usando el Verify Token guardado. Los eventos entrantes también requieren una firma válida del App Secret.</p><button className={styles.validateButton} type="button" disabled={!selected || !selected.hasAccessToken || !selected.hasAppSecret || !selected.hasVerifyToken || hasUnsavedValidationChanges || validating} onClick={validateConnection}>{validating ? 'Consultando Meta…' : metaValidated ? '✓ Conexión validada' : 'Validar conexión con Meta'}</button>{selected?.lastValidatedAt && <p className={styles.validationMeta}>Último intento: {new Date(selected.lastValidatedAt).toLocaleString('es-AR')}</p>}</section>
-          <section className={styles.progressCard}><span className={styles.eyebrow}>Preparación</span><h3>{completed.filter(Boolean).length} de 4 pasos listos</h3><div className={styles.progress}><i style={{ width: `${completed.filter(Boolean).length / 4 * 100}%` }} /></div><ol><li className={completed[0] ? styles.done : ''}><span>{completed[0] ? '✓' : '1'}</span><div><strong>Identidad del canal</strong><small>Phone Number ID y WABA ID</small></div></li><li className={completed[1] ? styles.done : ''}><span>{completed[1] ? '✓' : '2'}</span><div><strong>Credenciales seguras</strong><small>Los tres secretos cifrados</small></div></li><li className={completed[2] ? styles.done : ''}><span>{completed[2] ? '✓' : '3'}</span><div><strong>Validación con Meta</strong><small>Token y número confirmados</small></div></li><li className={completed[3] ? styles.done : ''}><span>{completed[3] ? '✓' : '4'}</span><div><strong>Canal activo</strong><small>Listo para recibir eventos</small></div></li></ol></section>
-          <section className={styles.tipCard}><span>✦</span><div><strong>Activación segura</strong><p>El servidor no permite activar un canal hasta que los tres secretos estén configurados.</p></div></section>
+          <section className={styles.webhookCard}><div className={styles.cardHeader}><div><span className={styles.step}>03</span><div><h3>Webhook de {isYCloud ? 'YCloud' : 'Meta'}</h3><p>{isYCloud ? 'Usá esta URL en Developers → Webhooks.' : 'Usá esta URL en WhatsApp → Configuración.'}</p></div></div></div><label><span>Callback URL</span><div><code>{isYCloud ? configuration?.ycloudWebhookUrl : configuration?.webhookUrl}</code><button onClick={copyWebhook}>{copied ? 'Copiado' : 'Copiar'}</button></div></label><p className={styles.webhookHint}>{isYCloud ? 'Suscribí inbound_message.received, message.updated, smb.message.echoes y smb.history. El Signing Secret valida cada evento.' : 'Meta validará esta URL usando el Verify Token guardado. Los eventos entrantes también requieren una firma válida del App Secret.'}</p><button className={styles.validateButton} type="button" disabled={!selected || !selected.hasAccessToken || !selected.hasAppSecret || (!isYCloud && !selected.hasVerifyToken) || hasUnsavedValidationChanges || validating} onClick={validateConnection}>{validating ? `Consultando ${isYCloud ? 'YCloud' : 'Meta'}…` : providerValidated ? '✓ Conexión validada' : `Validar conexión con ${isYCloud ? 'YCloud' : 'Meta'}`}</button>{selected?.lastValidatedAt && <p className={styles.validationMeta}>Último intento: {new Date(selected.lastValidatedAt).toLocaleString('es-AR')}</p>}</section>
+          <section className={styles.progressCard}><span className={styles.eyebrow}>Preparación</span><h3>{completed.filter(Boolean).length} de 4 pasos listos</h3><div className={styles.progress}><i style={{ width: `${completed.filter(Boolean).length / 4 * 100}%` }} /></div><ol><li className={completed[0] ? styles.done : ''}><span>{completed[0] ? '✓' : '1'}</span><div><strong>Identidad del canal</strong><small>{isYCloud ? 'Número internacional y WABA ID' : 'Phone Number ID y WABA ID'}</small></div></li><li className={completed[1] ? styles.done : ''}><span>{completed[1] ? '✓' : '2'}</span><div><strong>Credenciales seguras</strong><small>{isYCloud ? 'API Key y secreto cifrados' : 'Los tres secretos cifrados'}</small></div></li><li className={completed[2] ? styles.done : ''}><span>{completed[2] ? '✓' : '3'}</span><div><strong>Validación con {isYCloud ? 'YCloud' : 'Meta'}</strong><small>Credencial y número confirmados</small></div></li><li className={completed[3] ? styles.done : ''}><span>{completed[3] ? '✓' : '4'}</span><div><strong>Canal activo</strong><small>Listo para recibir eventos</small></div></li></ol></section>
+          <section className={styles.tipCard}><span>✦</span><div><strong>Activación segura</strong><p>El servidor no permite activar el canal hasta validar el proveedor y confirmar la continuidad de WhatsApp Business.</p></div></section>
         </aside>
       </div>
     </section>

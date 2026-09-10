@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import type { MessageStatus, Prisma } from '@/generated/prisma'
 import { CrmApiError } from '../api'
 
-type WhatsAppMessage = {
+export type WhatsAppMessage = {
   id?: string
+  externalId?: string
   from?: string
   to?: string
   timestamp?: string
@@ -13,14 +14,17 @@ type WhatsAppMessage = {
   audio?: { id?: string; mime_type?: string }
   video?: { id?: string; mime_type?: string; caption?: string }
   document?: { id?: string; mime_type?: string; filename?: string; caption?: string }
+  context?: { id?: string; message_id?: string }
   history_context?: { status?: string }
 }
 
-type WhatsAppStatus = {
+export type WhatsAppStatus = {
   id?: string
+  alternateId?: string
+  externalId?: string
   status?: string
   timestamp?: string
-  errors?: Array<{ code?: number; title?: string; message?: string }>
+  errors?: Array<{ code?: number | string; title?: string; message?: string }>
 }
 
 type SyncedContact = {
@@ -29,7 +33,7 @@ type SyncedContact = {
   contact?: { full_name?: string; first_name?: string; phone_number?: string }
 }
 
-type HistoryThread = { id?: string; messages?: WhatsAppMessage[] }
+export type HistoryThread = { id?: string; messages?: WhatsAppMessage[] }
 type AccountUpdate = { event?: string; phone_number?: string; disconnection_info?: Record<string, unknown> }
 
 export type ParsedWebhook = {
@@ -96,7 +100,9 @@ export function webhookPayloadHash(rawBody: string) {
 
 function providerDate(timestamp?: string) {
   const seconds = Number(timestamp)
-  return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : new Date()
+  if (Number.isFinite(seconds) && seconds > 0) return new Date(seconds * 1000)
+  const parsed = timestamp ? new Date(timestamp) : null
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date()
 }
 
 function normalizedWaId(value?: string) {
@@ -114,6 +120,7 @@ function messageContent(message: WhatsAppMessage) {
     mimeType: media?.mime_type || null,
     fileName: message.document?.filename || null,
     caption: message.image?.caption || message.video?.caption || message.document?.caption || null,
+    replyToWaMessageId: message.context?.id || message.context?.message_id || null,
   }
 }
 
@@ -148,8 +155,22 @@ async function persistLiveMessage(
 ) {
   const contactWaId = direction === 'INBOUND' ? message.from : message.to
   if (!message.id || !contactWaId) return
-  const existing = await transaction.message.findUnique({ where: { waMessageId: message.id }, select: { id: true } })
-  if (existing) return
+  const existing = await transaction.message.findFirst({
+    where: { OR: [
+      { waMessageId: message.id },
+      ...(message.externalId ? [{ clientMessageId: message.externalId }] : []),
+    ] },
+    select: { id: true, waMessageId: true },
+  })
+  if (existing) {
+    if (direction === 'OUTBOUND' && existing.waMessageId !== message.id) {
+      await transaction.message.update({
+        where: { id: existing.id },
+        data: { waMessageId: message.id, status: 'SENT', providerTimestamp: providerDate(message.timestamp) },
+      })
+    }
+    return
+  }
   const contact = await upsertContact(transaction, contactWaId, direction === 'INBOUND' ? profileName : null)
   if (!contact) return
   const occurredAt = providerDate(message.timestamp)
@@ -255,7 +276,11 @@ export async function persistWhatsAppWebhook(
     if (!statusEvent.id) continue
     const nextStatus = STATUS_MAP[statusEvent.status || '']
     if (!nextStatus) continue
-    const message = await transaction.message.findUnique({ where: { waMessageId: statusEvent.id } })
+    const message = await transaction.message.findFirst({ where: { OR: [
+      { waMessageId: statusEvent.id },
+      ...(statusEvent.alternateId ? [{ waMessageId: statusEvent.alternateId }] : []),
+      ...(statusEvent.externalId ? [{ clientMessageId: statusEvent.externalId }] : []),
+    ] } })
     if (!message || STATUS_RANK[nextStatus] <= STATUS_RANK[message.status]) continue
     const providerError = statusEvent.errors?.[0]
     await transaction.message.update({

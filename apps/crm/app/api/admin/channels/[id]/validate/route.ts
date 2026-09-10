@@ -5,6 +5,7 @@ import { decryptSecret } from '@/lib/secrets'
 import { requireCrmUser } from '@/lib/session'
 import { isChannelReady, publicChannel } from '@/lib/whatsapp/channels'
 import { validateMetaChannel } from '@/lib/whatsapp/validation'
+import { validateYCloudChannel } from '@/lib/whatsapp/ycloud'
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -13,20 +14,32 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const channel = await crmPrisma.whatsAppChannel.findUnique({ where: { id } })
     if (!channel) throw new CrmApiError(404, 'CHANNEL_NOT_FOUND', 'El canal no existe.')
     if (!isChannelReady(channel) || !channel.accessTokenCiphertext || !channel.accessTokenIv || !channel.accessTokenTag) {
-      throw new CrmApiError(409, 'CHANNEL_INCOMPLETE', 'Guardá los tres secretos antes de validar la conexión.')
+      throw new CrmApiError(409, 'CHANNEL_INCOMPLETE', channel.provider === 'YCLOUD'
+        ? 'Guardá la API Key y el Webhook Signing Secret antes de validar la conexión.'
+        : 'Guardá los tres secretos antes de validar la conexión.')
     }
 
     try {
-      const validation = await validateMetaChannel({
-        graphApiVersion: channel.graphApiVersion,
-        wabaId: channel.wabaId,
-        phoneNumberId: channel.phoneNumberId,
-        accessToken: decryptSecret({
+      const accessToken = decryptSecret({
           ciphertext: channel.accessTokenCiphertext,
           iv: channel.accessTokenIv,
           tag: channel.accessTokenTag,
-        }),
       })
+      if (channel.provider === 'META' && !channel.phoneNumberId) {
+        throw new CrmApiError(409, 'META_PHONE_ID_MISSING', 'El canal de Meta no tiene Phone Number ID.')
+      }
+      const validation = channel.provider === 'YCLOUD'
+        ? await validateYCloudChannel({
+          wabaId: channel.wabaId,
+          phoneNumber: channel.displayPhoneNumber || '',
+          apiKey: accessToken,
+        })
+        : await validateMetaChannel({
+          graphApiVersion: channel.graphApiVersion,
+          wabaId: channel.wabaId,
+          phoneNumberId: channel.phoneNumberId!,
+          accessToken,
+        })
       if (channel.connectionMode === 'COEXISTENCE' && (!validation.isOnBizApp || validation.platformType !== 'CLOUD_API')) {
         throw new CrmApiError(409, 'COEXISTENCE_NOT_CONFIRMED', 'Meta no confirmó que el número siga activo simultáneamente en WhatsApp Business y Cloud API.')
       }

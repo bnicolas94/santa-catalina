@@ -215,6 +215,8 @@ Implementado:
 - Lease atómico de 75 segundos con validación dentro de la transacción de envío.
 - Idempotencia de salida mediante `clientMessageId`.
 - Adaptador de WhatsApp Cloud API con modo local simulado.
+- Adaptador de YCloud para números conectados en Coexistencia, con envío directo,
+  validación de número y webhooks propios firmados.
 - Webhook con challenge, verificación HMAC, deduplicación y actualización
   monotónica de estados de entrega.
 - APIs administrativas de canales con secretos cifrados mediante AES-256-GCM.
@@ -244,3 +246,7 @@ Siguiente incremento:
 3. Agregar pruebas de integración contra PostgreSQL para carreras simultáneas.
 4. Ejecutar una prueba controlada de Coexistence con el número real manteniendo
    `CRM_MOCK_WHATSAPP=true` hasta aprobar la continuidad de todas las sesiones.
+8. Para YCloud, registrar `/api/webhooks/ycloud`, suscribir mensajes entrantes,
+   estados, ecos e historial, y cargar la API Key y el Signing Secret desde la
+   administración del CRM. Ambos quedan cifrados; sólo la clave maestra vive en
+   variables de entorno.

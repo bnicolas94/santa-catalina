@@ -164,6 +164,32 @@ El webhook procesa mensajes normales y los eventos de Coexistence `history`,
 reconexión reportada por Meta desactiva el canal y obliga a repetir la
 verificación de continuidad.
 
+### Coexistence mediante YCloud
+
+El administrador puede crear un canal con proveedor **YCloud** sin repetir el
+onboarding del número. Para este proveedor se cargan en `/settings` el número
+E.164, el WABA ID, la API Key y el Webhook Signing Secret; los dos secretos se
+cifran con `WHATSAPP_CONFIG_ENCRYPTION_KEY` y nunca vuelven al navegador.
+
+El callback que debe registrarse en YCloud es:
+
+```text
+https://atencion.santacatalina.online/api/webhooks/ycloud
+```
+
+Debe suscribirse a `whatsapp.inbound_message.received`,
+`whatsapp.message.updated`, `whatsapp.smb.message.echoes` y
+`whatsapp.smb.history`. El endpoint valida `YCloud-Signature` con HMAC-SHA256,
+acepta sólo eventos con una antigüedad máxima de cinco minutos y deduplica por
+el ID estable del evento. Los envíos usan `sendDirectly`, `X-API-Key` y el
+`clientMessageId` del CRM como `externalId`.
+
+La validación del canal consulta el número registrado en YCloud sin enviar
+mensajes. Luego exige la misma confirmación administrativa de continuidad de la
+app móvil, dispositivos vinculados y mensajes bidireccionales antes de activar
+el canal. `CRM_MOCK_WHATSAPP=true` continúa bloqueando todo envío real aunque el
+canal esté configurado.
+
 ## Límites del módulo
 
 - El esquema Prisma de esta app sólo administra tablas del esquema PostgreSQL
@@ -174,7 +200,7 @@ verificación de continuidad.
   `permisoAtencion` / `permisoAtencionAdmin`.
 - La ruta `/api/webhooks/*` queda deliberadamente fuera de la sesión de usuario;
   el webhook valida el challenge, la firma de Meta y deduplica el cuerpo recibido.
-- Los tokens de Meta y el App Secret se cifran con AES-256-GCM. Las APIs de
+- Los tokens de Meta, la API Key de YCloud y los secretos de firma se cifran con AES-256-GCM. Las APIs de
   administración nunca devuelven los secretos al navegador.
 
 La arquitectura y los contratos previstos se documentan en

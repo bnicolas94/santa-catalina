@@ -80,7 +80,8 @@ model WhatsAppChannel {
   id                     String         @id @default(uuid())
   name                   String
   active                 Boolean        @default(false)
-  phoneNumberId          String         @unique @map("phone_number_id")
+  provider               String         @default("META")
+  phoneNumberId          String?        @unique @map("phone_number_id")
   displayPhoneNumber     String?        @map("display_phone_number")
   wabaId                 String         @map("waba_id")
   businessPortfolioId    String?        @map("business_portfolio_id")
@@ -107,6 +108,7 @@ model WhatsAppChannel {
   conversations          Conversation[]
 
   @@index([active])
+  @@index([provider, wabaId])
   @@map("whatsapp_channels")
   @@schema("crm")
 }

@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
       encryptionStatus: encryptionConfigurationStatus(),
       mockMode: isWhatsAppMockEnabled(),
       webhookUrl: new URL('/api/webhooks/whatsapp', baseUrl).toString(),
+      ycloudWebhookUrl: new URL('/api/webhooks/ycloud', baseUrl).toString(),
       embeddedSignup: embeddedSignupConfigurationStatus(),
     })
   } catch (error) {

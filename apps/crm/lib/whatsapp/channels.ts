@@ -1,22 +1,30 @@
 import type { WhatsAppChannel } from '@/generated/prisma'
 
-type ChannelSecretState = Pick<WhatsAppChannel, 'accessTokenCiphertext' | 'appSecretCiphertext' | 'webhookVerifyTokenHash'>
+type ChannelSecretState = Pick<WhatsAppChannel, 'provider' | 'accessTokenCiphertext' | 'appSecretCiphertext' | 'webhookVerifyTokenHash'>
 
 export function isChannelReady(channel: ChannelSecretState, updates?: {
   accessToken?: string | null
   appSecret?: string | null
   webhookVerifyToken?: string | null
 }) {
-  return Boolean(
+  const providerCredentialReady = Boolean(
     updates?.accessToken || channel.accessTokenCiphertext,
   ) && Boolean(
     updates?.appSecret || channel.appSecretCiphertext,
-  ) && Boolean(
+  )
+  if (channel.provider === 'YCLOUD') return providerCredentialReady
+  return providerCredentialReady && Boolean(
     updates?.webhookVerifyToken || channel.webhookVerifyTokenHash,
   )
 }
 
-export function isCoexistenceReady(channel: Pick<WhatsAppChannel, 'connectionMode' | 'isOnBizApp' | 'platformType' | 'continuityVerifiedAt'>) {
+export function isCoexistenceReady(channel: Pick<WhatsAppChannel, 'provider' | 'connectionMode' | 'isOnBizApp' | 'platformType' | 'continuityVerifiedAt'>) {
+  if (channel.connectionMode === 'YCLOUD_COEXISTENCE') {
+    return channel.provider === 'YCLOUD'
+      && channel.isOnBizApp
+      && channel.platformType === 'CLOUD_API'
+      && Boolean(channel.continuityVerifiedAt)
+  }
   return channel.connectionMode !== 'COEXISTENCE'
     || (channel.isOnBizApp && channel.platformType === 'CLOUD_API' && Boolean(channel.continuityVerifiedAt))
 }
@@ -30,6 +38,7 @@ export function publicChannel(channel: WhatsAppChannel) {
   return {
     id: channel.id,
     name: channel.name,
+    provider: channel.provider,
     active: channel.active,
     phoneNumberId: channel.phoneNumberId,
     displayPhoneNumber: channel.displayPhoneNumber,

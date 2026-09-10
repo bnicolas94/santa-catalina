@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHmac, randomBytes } from 'node:crypto'
-import { decryptSecret, encryptSecret, hashVerifyToken, verifyMetaSignature } from './secrets'
+import { decryptSecret, encryptSecret, hashVerifyToken, verifyMetaSignature, verifyYCloudSignature } from './secrets'
 
 test('cifra secretos con AES-GCM y detecta alteraciones', () => {
   process.env.WHATSAPP_CONFIG_ENCRYPTION_KEY = randomBytes(32).toString('base64')
@@ -26,4 +26,15 @@ test('valida la firma de Meta sobre el cuerpo crudo', () => {
   assert.equal(verifyMetaSignature(body, signature, secret), true)
   assert.equal(verifyMetaSignature(`${body} `, signature, secret), false)
   assert.equal(verifyMetaSignature(body, null, secret), false)
+})
+
+test('valida la firma de YCloud y rechaza eventos vencidos', () => {
+  const body = JSON.stringify({ id: 'evt_1', type: 'whatsapp.message.updated' })
+  const timestamp = 1_700_000_000
+  const secret = 'whsec_prueba'
+  const signature = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')
+  const header = `t=${timestamp},s=${signature}`
+  assert.equal(verifyYCloudSignature(body, header, secret, timestamp + 30), true)
+  assert.equal(verifyYCloudSignature(body, header, secret, timestamp + 301), false)
+  assert.equal(verifyYCloudSignature(`${body} `, header, secret, timestamp), false)
 })

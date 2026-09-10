@@ -27,6 +27,9 @@ export async function sendConversationText(prisma: PrismaClient, input: SendText
       include: { channel: true, contact: true },
     })
     if (!conversation) throw new CrmApiError(404, 'CONVERSATION_NOT_FOUND', 'La conversación no existe.')
+    if (!conversation.channel.active) {
+      throw new CrmApiError(409, 'CHANNEL_INACTIVE', 'El canal está en pruebas o inactivo. Un administrador debe habilitarlo antes de enviar mensajes reales.')
+    }
     if (conversation.status === 'RESOLVED' || conversation.status === 'ARCHIVED') {
       throw new CrmApiError(409, 'CONVERSATION_CLOSED', 'La conversación está cerrada.')
     }
@@ -56,7 +59,7 @@ export async function sendConversationText(prisma: PrismaClient, input: SendText
   if (prepared.duplicate || !prepared.channel || !prepared.recipientWaId) return prepared.message
 
   try {
-    const sent = await sendWhatsAppText(prepared.channel, prepared.recipientWaId, input.text, input.replyToWaMessageId)
+    const sent = await sendWhatsAppText(prepared.channel, prepared.recipientWaId, input.text, input.replyToWaMessageId, input.clientMessageId)
     return await prisma.message.update({
       where: { id: prepared.message.id },
       data: { waMessageId: sent.providerMessageId, status: 'SENT' },

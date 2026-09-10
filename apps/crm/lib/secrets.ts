@@ -49,3 +49,24 @@ export function verifyMetaSignature(rawBody: string, signatureHeader: string | n
   const received = Buffer.from(receivedHex, 'hex')
   return received.length === expected.length && timingSafeEqual(received, expected)
 }
+
+export function verifyYCloudSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  signingSecret: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+  toleranceSeconds = 300,
+) {
+  if (!signatureHeader) return false
+  const values = Object.fromEntries(signatureHeader.split(',').map(part => {
+    const separator = part.indexOf('=')
+    return separator > 0 ? [part.slice(0, separator).trim(), part.slice(separator + 1).trim()] : ['', '']
+  }))
+  const timestamp = Number(values.t)
+  const receivedHex = values.s
+  if (!Number.isInteger(timestamp) || !/^[0-9a-f]{64}$/i.test(receivedHex || '')) return false
+  if (Math.abs(nowSeconds - timestamp) > toleranceSeconds) return false
+  const expected = createHmac('sha256', signingSecret).update(`${timestamp}.${rawBody}`, 'utf8').digest()
+  const received = Buffer.from(receivedHex, 'hex')
+  return received.length === expected.length && timingSafeEqual(received, expected)
+}
