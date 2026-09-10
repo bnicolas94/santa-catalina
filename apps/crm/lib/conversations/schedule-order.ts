@@ -10,6 +10,7 @@ const draftSelect = {
   orderPickupLocationId: true,
   orderPickupLocationName: true,
   orderShift: true,
+  orderPaid: true,
   orderDraftUpdatedById: true,
   orderDraftUpdatedAt: true,
 } as const
@@ -26,6 +27,7 @@ export function scheduledOrderSnapshot(input: Parameters<typeof normalizeOrderDr
     orderPickupLocationId: draft.orderPickupLocationId,
     orderPickupLocationName: draft.orderPickupLocationName,
     orderShift: draft.orderShift!,
+    orderPaid: draft.orderPaid,
   }
 }
 
@@ -82,6 +84,7 @@ export async function scheduleConversationOrder(prisma: PrismaClient, input: {
         orderPickupLocationId: null,
         orderPickupLocationName: null,
         orderShift: null,
+        orderPaid: false,
         orderDraftUpdatedById: input.agentId,
         orderDraftUpdatedAt: updatedAt,
       },
@@ -97,6 +100,7 @@ export async function scheduleConversationOrder(prisma: PrismaClient, input: {
           orderDate: scheduledOrder.orderDate,
           fulfillment: scheduledOrder.orderFulfillment,
           pickupLocationId: scheduledOrder.orderPickupLocationId,
+          paid: scheduledOrder.orderPaid,
         },
       },
     })

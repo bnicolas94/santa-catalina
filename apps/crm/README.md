@@ -90,7 +90,8 @@ envío exige dirección para considerar completa la ficha. Cada actualización d
 un evento de auditoría.
 
 El botón `Agendado` no crea todavía un `Pedido` en el ERP. En una única
-transacción fotografía la ficha completa en `ScheduledOrder`, registra agente y
+transacción fotografía la ficha completa en `ScheduledOrder`, incluido si el pago
+por transferencia fue confirmado, registra agente y
 horario, deja el evento `ORDER_SCHEDULED_EXTERNALLY` y limpia la ficha activa.
 El historial permanece asociado a la conversación para que un cliente recurrente
 pueda iniciar otro pedido sin sobrescribir los anteriores. La acción usa un

@@ -8,6 +8,7 @@ test('normaliza una ficha de envío completa', () => {
     orderDate: '2026-09-12', orderAddress: '  Av. Siempre Viva 123  ', orderFulfillment: 'DELIVERY', orderShift: 'MORNING',
   })
   assert.equal(draft.orderAddress, 'Av. Siempre Viva 123')
+  assert.equal(draft.orderPaid, false)
   assert.equal(isOrderDraftComplete(draft), true)
 })
 
@@ -20,9 +21,11 @@ test('retiro exige un local real y no exige dirección', () => {
     orderPickupLocationId: 'local-1',
     orderPickupLocationName: 'Local Centro',
     orderShift: 'SIESTA',
+    orderPaid: true,
   })
   assert.equal(isOrderDraftComplete(pickup), true)
   assert.equal(pickup.orderAddress, null)
+  assert.equal(pickup.orderPaid, true)
 })
 
 test('envío exige dirección y limpia cualquier local de retiro anterior', () => {
@@ -43,4 +46,5 @@ test('envío exige dirección y limpia cualquier local de retiro anterior', () =
 test('rechaza fechas imposibles y valores desconocidos', () => {
   assert.throws(() => normalizeOrderDraft({ orderDate: '2026-02-30' }), (error: unknown) => error instanceof CrmApiError && error.code === 'INVALID_ORDER_DATE')
   assert.throws(() => normalizeOrderDraft({ orderFulfillment: 'DRONE' }), (error: unknown) => error instanceof CrmApiError && error.code === 'INVALID_FULFILLMENT')
+  assert.throws(() => normalizeOrderDraft({ orderPaid: 'sí' }), (error: unknown) => error instanceof CrmApiError && error.code === 'INVALID_PAYMENT_STATUS')
 })

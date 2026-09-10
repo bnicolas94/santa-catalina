@@ -31,6 +31,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       orderPickupLocationId: pickupLocationId,
       orderPickupLocationName: pickupLocationName,
       orderShift: body.orderShift,
+      orderPaid: body.orderPaid,
     })
     return NextResponse.json({ draft })
   } catch (error) {

@@ -267,6 +267,17 @@ button { color: inherit; }
 .shiftButtons button.selected { border-color: #5d778b; color: white; background: #5d778b; box-shadow: 0 5px 13px rgba(55,79,97,.18); }
 .shiftButtons button.selected i { color: white; }
 .shiftButtons button:disabled { opacity: .55; cursor: not-allowed; }
+.paymentStatusButton { width: 100%; min-height: 52px; padding: 8px; display: flex; align-items: center; gap: 9px; border: 1px solid #d9dfdb; border-radius: 10px; color: #596761; background: #fff; cursor: pointer; text-align: left; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.paymentStatusButton:hover:not(:disabled) { border-color: #00a884; background: #f0faf7; transform: translateY(-1px); }
+.paymentStatusButton > span:nth-child(2) { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 2px; }
+.paymentStatusButton strong { font-size: 9px; }
+.paymentStatusButton small { color: #89938e; font-size: 7px; }
+.paymentStatusButton > b { padding: 4px 6px; border-radius: 7px; color: #8a7163; background: #f4eee9; font-size: 7px; white-space: nowrap; }
+.paymentStatusButton.selected { border: 2px solid #00a884; padding: 7px; color: #08725a; background: #e5f7f1; box-shadow: 0 5px 14px rgba(0,128,105,.13); }
+.paymentStatusButton.selected > b { color: #fff; background: #00a884; }
+.paymentStatusButton:disabled { opacity: .55; cursor: not-allowed; }
+.paymentStatusIcon { width: 31px; height: 31px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; color: #776b64; background: #f4eee9; }
+.paymentStatusButton.selected .paymentStatusIcon { color: white; background: #00a884; }
 .scheduleOrderButton { width: 100%; min-height: 50px; margin-top: 13px; padding: 8px 10px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: 11px; color: white; background: linear-gradient(135deg, #008069, #00a884); box-shadow: 0 7px 16px rgba(0,128,105,.2); cursor: pointer; text-align: left; }
 .scheduleOrderButton > span:first-child { width: 29px; height: 29px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: #08725a; background: white; }
 .scheduleOrderButton > span:last-child { display: flex; flex-direction: column; gap: 2px; }
@@ -293,12 +304,16 @@ button { color: inherit; }
 .scheduledOrderHeader > div { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .scheduledOrderHeader small { color: #929d98; font-size: 7px; }
 .scheduledOrderHeader strong { color: #273c36; font-size: 9px; text-transform: capitalize; }
-.scheduledOrderHeader > b { margin-left: auto; padding: 4px 7px; border-radius: 7px; color: #08725a; background: #dff5ed; font-size: 7px; }
-.scheduledOrderHeader > b.pickupHistoryBadge { color: #83560c; background: #fff0cf; }
+.scheduledOrderBadges { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.scheduledOrderBadges b { padding: 4px 7px; border-radius: 7px; color: #08725a; background: #dff5ed; font-size: 7px; white-space: nowrap; }
+.scheduledOrderBadges b.pickupHistoryBadge { color: #83560c; background: #fff0cf; }
+.scheduledOrderBadges b.paidHistoryBadge { color: white; background: #00a884; }
+.scheduledOrderBadges b.unpaidHistoryBadge { color: #8a7163; background: #f4eee9; }
 .scheduledOrderCard dl { margin: 9px 0; padding: 7px 0; border-top: 1px solid #edf1ef; border-bottom: 1px solid #edf1ef; }
 .scheduledOrderCard dl div { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 7px; padding: 2px 0; font-size: 8px; }
 .scheduledOrderCard dt { color: #929d98; }
 .scheduledOrderCard dd { overflow: hidden; margin: 0; color: #4d5e57; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.scheduledOrderCard dd.paidOrderText { color: #08725a; }
 .scheduledOrderCard footer { display: flex; align-items: center; gap: 7px; }
 .scheduledOrderCard footer > div { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .scheduledOrderCard footer span { color: #929d98; font-size: 7px; }

@@ -7,9 +7,9 @@ type ApiTag = { id: string; name: string; color: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
-type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderDraftUpdatedAt?: string | null }
-type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; scheduledById: string; scheduledByName: string; scheduledAt: string }
-type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
+type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderPaid: boolean; orderDraftUpdatedAt?: string | null }
+type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; orderPaid: boolean; scheduledById: string; scheduledByName: string; scheduledAt: string }
+type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderPaid: boolean; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
 
@@ -19,7 +19,7 @@ const FILTERS: Array<{ id: FilterId; label: string; short: string }> = [
   { id: 'unassigned', label: 'Sin asignar', short: 'Nuevas' }, { id: 'waiting', label: 'En espera', short: 'Espera' },
   { id: 'resolved', label: 'Resueltas', short: 'Cerradas' },
 ]
-const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderPickupLocationId: null, orderPickupLocationName: '', orderShift: null, orderDraftUpdatedAt: null }
+const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderPickupLocationId: null, orderPickupLocationName: '', orderShift: null, orderPaid: false, orderDraftUpdatedAt: null }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
@@ -30,7 +30,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     back: <path d="m15 18-6-6 6-6"/>, attach: <path d="m21 12-9 9a6 6 0 0 1-9-9l9-9a4 4 0 0 1 6 6l-9 9a2 2 0 1 1-3-3l8-8"/>, smile: <><circle cx="12" cy="12" r="9"/><path d="M8 14s2 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></>,
     send: <><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>, lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, bag: <><path d="M6 8h12l1 13H5z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></>,
     phone: <path d="M22 17v3a2 2 0 0 1-2 2 20 20 0 0 1-9-3 20 20 0 0 1-6-6A20 20 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2l1 3-2 3a16 16 0 0 0 6 6l3-2 3 1a2 2 0 0 1 2 2z"/>, note: <><path d="M4 3h16v18H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
-    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>, map: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></>, truck: <><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>, store: <><path d="M4 10v11h16V10M3 10l2-6h14l2 6"/><path d="M3 10a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2M9 21v-6h6v6"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>, map: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></>, truck: <><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>, store: <><path d="M4 10v11h16V10M3 10l2-6h14l2 6"/><path d="M3 10a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2M9 21v-6h6v6"/></>, money: <><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.5-1.7-.8-2.8-.8-1.5 0-2.7.7-2.7 1.9 0 3.2 5.5 1.3 5.5 4.5 0 1.2-1.2 2.1-3 2.1-1.2 0-2.4-.4-3.2-1.1M12 6v12"/></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
@@ -69,6 +69,7 @@ function orderDraftFromConversation(conversation: ConversationDetail): OrderDraf
     orderPickupLocationId: conversation.orderPickupLocationId,
     orderPickupLocationName: conversation.orderPickupLocationName || '',
     orderShift: conversation.orderShift,
+    orderPaid: conversation.orderPaid,
     orderDraftUpdatedAt: conversation.orderDraftUpdatedAt,
   }
 }
@@ -285,6 +286,7 @@ export default function AttentionWorkspace() {
           orderPickupLocationId: result.draft.orderPickupLocationId,
           orderPickupLocationName: result.draft.orderPickupLocationName || null,
           orderShift: result.draft.orderShift,
+          orderPaid: result.draft.orderPaid,
           orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt || null,
         } : current)
       } catch (cause) {
@@ -342,6 +344,7 @@ export default function AttentionWorkspace() {
         orderPickupLocationId: null,
         orderPickupLocationName: null,
         orderShift: null,
+        orderPaid: false,
         orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt,
         scheduledOrders: [result.scheduledOrder, ...current.scheduledOrders.filter(item => item.id !== result.scheduledOrder.id)],
       } : current)
@@ -425,6 +428,10 @@ export default function AttentionWorkspace() {
             {[{ value: 'MORNING', label: 'Mañana', icon: '☀' }, { value: 'SIESTA', label: 'Siesta', icon: '◐' }, { value: 'AFTERNOON', label: 'Tarde', icon: '◒' }].map(option => <button type="button" key={option.value} className={orderDraft.orderShift === option.value ? 'selected' : ''} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderShift: option.value as OrderDraft['orderShift'] })}><i>{option.icon}</i><strong>{option.label}</strong></button>)}
           </div>
         </div>
+        <div className="plannerField">
+          <label><Icon name="money" size={15} /> Estado del pago</label>
+          <button type="button" className={`paymentStatusButton ${orderDraft.orderPaid ? 'selected' : ''}`} aria-pressed={orderDraft.orderPaid} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderPaid: !orderDraft.orderPaid })}><span className="paymentStatusIcon"><Icon name={orderDraft.orderPaid ? 'check' : 'money'} size={18} /></span><span><strong>{orderDraft.orderPaid ? 'Pedido pagado' : 'Marcar como pagado'}</strong><small>{orderDraft.orderPaid ? 'Transferencia confirmada' : 'Activá esta opción al recibir el pago'}</small></span><b>{orderDraft.orderPaid ? 'PAGADO' : 'SIN MARCAR'}</b></button>
+        </div>
         <button type="button" className="scheduleOrderButton" disabled={!canEditOrderDraft || orderCompleted !== 4 || orderDraftDirty || orderSaveState === 'saving' || schedulingOrder} onClick={() => void scheduleOrder()}><span><Icon name="check" size={18} /></span><span><strong>{schedulingOrder ? 'Agendando…' : 'Agendado'}</strong><small>{orderCompleted !== 4 ? 'Completá los 4 datos primero' : orderDraftDirty || orderSaveState === 'saving' ? 'Esperando el guardado automático…' : 'Marcar después de pasarlo al Excel'}</small></span></button>
         {scheduleFeedback && <div className="scheduleFeedback"><Icon name="check" size={14} /><span>{scheduleFeedback}</span></div>}
         <div className={`plannerSaveState state-${orderSaveState}`}><span>{orderSaveState === 'saving' ? '● Guardando…' : orderSaveState === 'error' ? '! No se pudo guardar' : orderSaveState === 'saved' ? '✓ Guardado automáticamente' : canEditOrderDraft ? 'Los cambios se guardan solos' : 'Sólo puede editar el agente que atiende'}</span>{orderCompleted === 4 && <b>Lista para agendar</b>}</div>
@@ -432,8 +439,8 @@ export default function AttentionWorkspace() {
       {detail && detail.scheduledOrders.length > 0 && <section className="scheduledHistory">
         <div className="sectionLabel"><span>Historial agendado</span><b>{detail.scheduledOrders.length}</b></div>
         <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard" key={item.id}>
-          <div className="scheduledOrderHeader"><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><small>Pedido para</small><strong>{formatOrderDate(item.orderDate)}</strong></div><b className={item.orderFulfillment === 'PICKUP' ? 'pickupHistoryBadge' : ''}>{item.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</b></div>
-          <dl><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div></dl>
+          <div className="scheduledOrderHeader"><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><small>Pedido para</small><strong>{formatOrderDate(item.orderDate)}</strong></div><div className="scheduledOrderBadges"><b className={item.orderFulfillment === 'PICKUP' ? 'pickupHistoryBadge' : ''}>{item.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</b><b className={item.orderPaid ? 'paidHistoryBadge' : 'unpaidHistoryBadge'}>{item.orderPaid ? 'Pagado' : 'Sin marcar'}</b></div></div>
+          <dl><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div><div><dt>Pago</dt><dd className={item.orderPaid ? 'paidOrderText' : ''}>{item.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div></dl>
           <footer><Avatar name={item.scheduledByName} small /><div><span>Agendado por</span><strong>{item.scheduledByName}{item.scheduledById === user?.id ? ' (vos)' : ''}</strong></div><time>{formatScheduledAt(item.scheduledAt)}</time></footer>
         </article>)}</div>
       </section>}

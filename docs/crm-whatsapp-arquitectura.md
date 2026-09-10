@@ -190,7 +190,8 @@ Implementado:
   protegida por lease. El vínculo al local conserva el ID externo y una
   instantánea de su nombre, sin crear una clave foránea entre esquemas.
 - Acción `Agendado` transaccional e idempotente: conserva una fotografía histórica
-  en `ScheduledOrder`, registra el agente y limpia la ficha activa sólo después de
+  en `ScheduledOrder`, incluido el estado de pago confirmado por el operador,
+  registra el agente y limpia la ficha activa sólo después de
   guardar. Es una marca operativa de carga en Excel y no crea un `Pedido` ERP. El
   historial resuelve el nombre del agente por API interna usando el ID externo;
   si el ERP no responde conserva visible la ficha con un nombre de respaldo.

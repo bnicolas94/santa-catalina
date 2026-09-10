@@ -9,6 +9,7 @@ test('genera una fotografía completa para un pedido agendado con envío', () =>
     orderAddress: 'Calle 12 345',
     orderFulfillment: 'DELIVERY',
     orderShift: 'MORNING',
+    orderPaid: true,
   })
 
   assert.deepEqual(snapshot, {
@@ -18,6 +19,7 @@ test('genera una fotografía completa para un pedido agendado con envío', () =>
     orderPickupLocationId: null,
     orderPickupLocationName: null,
     orderShift: 'MORNING',
+    orderPaid: true,
   })
 })
 

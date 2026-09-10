@@ -18,6 +18,7 @@ export function normalizeOrderDraft(input: {
   orderPickupLocationId?: unknown
   orderPickupLocationName?: unknown
   orderShift?: unknown
+  orderPaid?: unknown
 }) {
   const orderDate = optionalText(input.orderDate, 'Fecha', 10)
   if (orderDate) {
@@ -32,6 +33,9 @@ export function normalizeOrderDraft(input: {
   const pickupLocationId = optionalText(input.orderPickupLocationId, 'Local de retiro', 80)
   const pickupLocationName = optionalText(input.orderPickupLocationName, 'Nombre del local de retiro', 160)
   const shiftValue = optionalText(input.orderShift, 'Turno', 20)
+  if (input.orderPaid !== undefined && typeof input.orderPaid !== 'boolean') {
+    throw new CrmApiError(400, 'INVALID_PAYMENT_STATUS', 'El estado de pago debe ser válido.')
+  }
   if (fulfillmentValue && !FULFILLMENT.has(fulfillmentValue as OrderFulfillment)) {
     throw new CrmApiError(400, 'INVALID_FULFILLMENT', 'Elegí Envío o Retiro.')
   }
@@ -45,6 +49,7 @@ export function normalizeOrderDraft(input: {
     orderPickupLocationId: fulfillmentValue === 'PICKUP' ? pickupLocationId : null,
     orderPickupLocationName: fulfillmentValue === 'PICKUP' ? pickupLocationName : null,
     orderShift: shiftValue as OrderShift | null,
+    orderPaid: input.orderPaid === true,
   }
 }
 
@@ -69,6 +74,7 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
   orderPickupLocationId?: unknown
   orderPickupLocationName?: unknown
   orderShift?: unknown
+  orderPaid?: unknown
 }) {
   const draft = normalizeOrderDraft(input)
   return prisma.$transaction(async transaction => {
@@ -96,6 +102,7 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
         orderPickupLocationId: true,
         orderPickupLocationName: true,
         orderShift: true,
+        orderPaid: true,
         orderDraftUpdatedById: true,
         orderDraftUpdatedAt: true,
       },
@@ -109,6 +116,7 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
           complete: isOrderDraftComplete(draft),
           fulfillment: draft.orderFulfillment,
           pickupLocationId: draft.orderPickupLocationId,
+          paid: draft.orderPaid,
         },
       },
     })
