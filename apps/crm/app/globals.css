@@ -591,6 +591,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .chatIdentity h2 { color: var(--wa-ink); font-size: 13px; font-weight: 650; }
 .chatIdentity > span { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: #667781; font-size: 9px; }
 .channelDot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-green); }
+.chatTagPicker { position: relative; min-width: 0; flex: 0 1 220px; z-index: 8; }
+.chatTagButton { width: 100%; min-height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border: 1px solid #dce1e3; border-radius: 18px; background: #fff; color: #3b4a54; cursor: pointer; }
+.chatTagButton:hover, .chatTagButton[aria-expanded="true"] { border-color: #a8cfc6; background: #f4fbf9; }
+.chatTagButtonText { min-width: 0; overflow: hidden; flex: 1; text-align: left; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 650; }
+.chatTagButton > b { flex: 0 0 auto; padding: 2px 5px; border-radius: 9px; color: var(--wa-green-dark); background: #e7f8f3; font-size: 8px; }
+.tagChevron { flex: 0 0 auto; color: #8696a0; font-size: 13px; transform: translateY(-1px); }
+.tagDot { width: 10px; height: 10px; flex: 0 0 auto; display: inline-block; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(17,27,33,.08); }
+.tagMenu { position: absolute; top: calc(100% + 8px); right: 0; width: min(300px, calc(100vw - 24px)); overflow: hidden; border: 1px solid var(--wa-line); border-radius: 12px; background: #fff; box-shadow: 0 12px 34px rgba(11,20,26,.2); }
+.tagMenu > header { min-height: 49px; padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--wa-line); }
+.tagMenu > header div { display: flex; align-items: center; gap: 7px; color: var(--wa-ink); }
+.tagMenu > header strong { font-size: 11px; }
+.tagMenu > header > span { color: #8696a0; font-size: 8px; }
+.tagMenuList { max-height: 310px; padding: 5px; overflow-y: auto; }
+.tagMenuList > p { margin: 18px; color: #8696a0; text-align: center; font-size: 9px; }
+.tagMenuList button { width: 100%; min-height: 40px; padding: 7px 9px; display: grid; grid-template-columns: 12px 1fr 23px; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; color: #3b4a54; text-align: left; cursor: pointer; }
+.tagMenuList button:hover { background: #f0f2f5; }
+.tagMenuList button:disabled { cursor: wait; }
+.tagMenuList button strong { min-width: 0; overflow: hidden; font-size: 10px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.tagMenuList button i { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #c9d0d4; border-radius: 5px; color: white; font-size: 11px; font-style: normal; }
+.tagMenuList button[aria-selected="true"] i { border-color: var(--wa-green-dark); background: var(--wa-green-dark); }
+.tagMenu > footer { padding: 8px 12px; border-top: 1px solid var(--wa-line); color: #8696a0; background: #fafbfb; font-size: 8px; }
 .chatActions { gap: 7px; }
 .chatActions .iconButton { width: 36px; height: 36px; }
 .chatActions .adminHeaderAction { color: #9a670d; }
@@ -619,11 +640,28 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .messageTime .readChecks { color: #53bdeb; }
 .systemNote { background: var(--wa-yellow-soft); color: #667781; border-radius: 7px; box-shadow: 0 1px 1px rgba(11, 20, 26, .1); }
 .composerArea { padding: 7px 12px 9px; background: var(--wa-chat); }
+.quickReplyMenu { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 2px); max-height: min(410px, 56dvh); overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--wa-line); border-radius: 12px; background: white; box-shadow: 0 14px 38px rgba(11,20,26,.22); z-index: 9; }
+.quickReplyMenu > header { min-height: 52px; padding: 9px 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--wa-line); }
+.quickReplyMenu > header div { display: flex; align-items: center; gap: 8px; }
+.quickReplyMenu > header b { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 7px; color: white; background: var(--wa-green-dark); font-size: 14px; }
+.quickReplyMenu > header strong { color: var(--wa-ink); font-size: 11px; }
+.quickReplyMenu > header span, .quickReplyMenu > footer { color: #8696a0; font-size: 8px; }
+.quickReplyMenu > div { min-height: 0; padding: 5px; overflow-y: auto; }
+.quickReplyMenu > div > p { margin: 22px 12px; color: #667781; text-align: center; font-size: 10px; }
+.quickReplyMenu > div > button { width: 100%; padding: 9px 10px; display: grid; grid-template-columns: minmax(120px, 34%) 1fr; align-items: center; gap: 12px; border: 0; border-radius: 8px; color: #3b4a54; background: transparent; text-align: left; cursor: pointer; }
+.quickReplyMenu > div > button:hover, .quickReplyMenu > div > .quickReplyActive { background: #edf7f4; }
+.quickReplyMenu button > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.quickReplyMenu button > span b { color: var(--wa-green-dark); font-size: 10px; }
+.quickReplyMenu button > span strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.quickReplyMenu button > p { overflow: hidden; margin: 0; color: #667781; font-size: 9px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.quickReplyMenu > footer { padding: 7px 13px; border-top: 1px solid var(--wa-line); background: #fafbfb; }
 .serviceWindow { margin: 0 auto 5px; padding: 4px 8px; border-radius: 10px; background: rgba(255,255,255,.86); color: var(--wa-green-dark); }
 .composer { min-height: 52px; padding: 6px 8px; border: 1px solid rgba(134,150,160,.16); border-radius: 27px; background: #fff; box-shadow: 0 1px 3px rgba(11,20,26,.13); align-items: center; gap: 2px; }
 .composer:focus-within { border-color: rgba(0,128,105,.3); box-shadow: 0 1px 3px rgba(11,20,26,.13), 0 0 0 2px rgba(0,128,105,.08); }
 .composer textarea { min-height: 38px; padding: 10px 9px; border-radius: 0; background: transparent; color: var(--wa-ink); font-size: 12px; }
 .composer > button { color: #54656f; }
+.composer > .quickReplyTrigger { width: 28px; height: 28px; margin: 5px 2px; border: 1px solid #d5dadd; border-radius: 8px; color: var(--wa-green-dark); background: #f5faf8; font-size: 14px; font-weight: 800; }
+.composer > .quickReplyTrigger:hover:not(:disabled) { border-color: #9bc9bd; background: #e7f8f3; }
 .composer .sendButton { background: var(--wa-green); border-radius: 50%; color: white; }
 .composer .sendButton:disabled { background: transparent; color: #8696a0; }
 .composerDisabled { background: #f4f5f6; }
@@ -654,6 +692,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 900px) {
   .workspaceShell, .workspaceShell.contextOpen { grid-template-columns: 56px minmax(290px, 330px) minmax(380px, 1fr); }
   .navigationRail { padding-left: 0; padding-right: 0; }
+  .chatTagPicker { flex-basis: 40px; }
+  .chatTagButton { width: 36px; padding: 0; justify-content: center; }
+  .chatTagButtonText, .chatTagButton > b, .tagChevron { display: none; }
 }
 
 @media (max-width: 720px) {
@@ -670,6 +711,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .messageCanvas { padding: 14px 14px; }
   .messageBubble { max-width: 86%; }
   .composer { padding-left: 6px; padding-right: 6px; }
+  .tagMenu { position: fixed; top: 62px; right: 8px; left: 8px; width: auto; }
+  .quickReplyMenu { left: 8px; right: 8px; }
+  .quickReplyMenu > div > button { grid-template-columns: 1fr; gap: 4px; }
   .composerHints { display: none; }
   .serviceWindow { max-width: calc(100% - 20px); text-align: center; }
   .orderModalBackdrop { padding: 0; }

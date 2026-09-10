@@ -1,9 +1,10 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationStatus, CrmOrderItem, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate, ErpOrderDetails, ErpPickupLocation, ErpProductCatalogItem } from '@santa-catalina/contracts'
 
 type ApiTag = { id: string; name: string; color: string }
+type ApiQuickReply = { id: string; shortcut: string; title: string; body: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
@@ -32,6 +33,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     back: <path d="m15 18-6-6 6-6"/>, attach: <path d="m21 12-9 9a6 6 0 0 1-9-9l9-9a4 4 0 0 1 6 6l-9 9a2 2 0 1 1-3-3l8-8"/>, smile: <><circle cx="12" cy="12" r="9"/><path d="M8 14s2 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></>,
     send: <><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>, lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, bag: <><path d="M6 8h12l1 13H5z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></>,
     phone: <path d="M22 17v3a2 2 0 0 1-2 2 20 20 0 0 1-9-3 20 20 0 0 1-6-6A20 20 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2l1 3-2 3a16 16 0 0 0 6 6l3-2 3 1a2 2 0 0 1 2 2z"/>, note: <><path d="M4 3h16v18H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    tag: <><path d="M20 13 13 20l-9-9V4h7z"/><circle cx="8.5" cy="8.5" r="1"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>, map: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></>, truck: <><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>, store: <><path d="M4 10v11h16V10M3 10l2-6h14l2 6"/><path d="M3 10a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2M9 21v-6h6v6"/></>, money: <><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.5-1.7-.8-2.8-.8-1.5 0-2.7.7-2.7 1.9 0 3.2 5.5 1.3 5.5 4.5 0 1.2-1.2 2.1-3 2.1-1.2 0-2.4-.4-3.2-1.1M12 6v12"/></>,
   }
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
@@ -107,6 +109,12 @@ export default function AttentionWorkspace() {
   const [filter, setFilter] = useState<FilterId>('all')
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState('')
+  const [allTags, setAllTags] = useState<ApiTag[]>([])
+  const [quickReplies, setQuickReplies] = useState<ApiQuickReply[]>([])
+  const [showTagMenu, setShowTagMenu] = useState(false)
+  const [tagBusyId, setTagBusyId] = useState<string | null>(null)
+  const [showQuickReplies, setShowQuickReplies] = useState(false)
+  const [quickReplyIndex, setQuickReplyIndex] = useState(0)
   const [showContext, setShowContext] = useState(true)
   const [customerContext, setCustomerContext] = useState<CustomerContextResponse | null>(null)
   const [contextLoading, setContextLoading] = useState(false)
@@ -134,6 +142,8 @@ export default function AttentionWorkspace() {
   const lockRef = useRef<Lock | null>(null)
   const activeIdRef = useRef<string | null>(null)
   const messageCanvasRef = useRef<HTMLDivElement | null>(null)
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const tagMenuRef = useRef<HTMLDivElement | null>(null)
   const messageSyncBusyRef = useRef(false)
   const shouldScrollMessagesRef = useRef(true)
   const orderDraftVersionRef = useRef(0)
@@ -147,6 +157,25 @@ export default function AttentionWorkspace() {
   useEffect(() => {
     Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
   }, [refreshList])
+  useEffect(() => {
+    api<ApiTag[]>('/api/tags').then(setAllTags).catch(() => setAllTags([]))
+    api<ApiQuickReply[]>('/api/quick-replies').then(setQuickReplies).catch(() => setQuickReplies([]))
+  }, [])
+  useEffect(() => {
+    if (!showTagMenu) return
+    const close = (event: PointerEvent) => {
+      if (!tagMenuRef.current?.contains(event.target as Node)) setShowTagMenu(false)
+    }
+    const closeWithEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setShowTagMenu(false)
+    }
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', closeWithEscape)
+    return () => {
+      document.removeEventListener('pointerdown', close)
+      document.removeEventListener('keydown', closeWithEscape)
+    }
+  }, [showTagMenu])
   const refreshPickupLocations = useCallback(async () => {
     setPickupLocationsLoading(true)
     try {
@@ -269,7 +298,7 @@ export default function AttentionWorkspace() {
     let cancelled = false
     orderDraftVersionRef.current += 1
     shouldScrollMessagesRef.current = true
-    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setVariantPicker(null); setOrderModal(null); setScheduledOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
+    setError(null); setDetail(null); setLock(null); setShowTagMenu(false); setShowQuickReplies(false); setQuickReplyIndex(0); setDraft(''); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setVariantPicker(null); setOrderModal(null); setScheduledOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
@@ -347,9 +376,26 @@ export default function AttentionWorkspace() {
     setBusy(true); setError(null)
     try {
       await api(`/api/conversations/${detail.id}/messages`, { method: 'POST', body: JSON.stringify({ text, lockToken: lock.token, clientMessageId: crypto.randomUUID() }) })
-      setDraft(''); setDetail(await api<ConversationDetail>(`/api/conversations/${detail.id}`)); await refreshList()
+      setDraft(''); setShowQuickReplies(false); setQuickReplyIndex(0); setDetail(await api<ConversationDetail>(`/api/conversations/${detail.id}`)); await refreshList()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo enviar el mensaje.') }
     finally { setBusy(false) }
+  }
+  const toggleConversationTag = async (tag: ApiTag) => {
+    if (!detail || tagBusyId) return
+    const selected = detail.tags.some(item => item.id === tag.id)
+    setTagBusyId(tag.id)
+    setError(null)
+    try {
+      const result = await api<{ tags: ApiTag[] }>(`/api/conversations/${detail.id}/tags`, {
+        method: 'PUT', body: JSON.stringify({ tagId: tag.id, selected: !selected }),
+      })
+      setDetail(current => current && current.id === detail.id ? { ...current, tags: result.tags } : current)
+      setConversations(current => current.map(item => item.id === detail.id ? { ...item, tags: result.tags } : item))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo actualizar la etiqueta.')
+    } finally {
+      setTagBusyId(null)
+    }
   }
   const unassignConversation = async () => {
     if (!detail || !window.confirm(`¿Liberar la conversación de ${detail.contact.displayName}? Volverá a la bandeja de consultas nuevas.`)) return
@@ -470,12 +516,55 @@ export default function AttentionWorkspace() {
     const term = search.trim().toLowerCase(); const haystack = `${c.contact.displayName} ${c.contact.profileName || ''} ${c.contact.phoneE164} ${c.lastMessage?.body || ''}`.toLowerCase()
     return matchesFilter && (!term || haystack.includes(term))
   }), [conversations, filter, search, user])
+  const matchingQuickReplies = useMemo(() => {
+    if (!draft.startsWith('/')) return quickReplies.slice(0, 8)
+    const query = draft.slice(1).trim().toLowerCase()
+    if (!query) return quickReplies.slice(0, 8)
+    return quickReplies.filter(reply => `${reply.shortcut} ${reply.title} ${reply.body}`.toLowerCase().includes(query)).slice(0, 8)
+  }, [draft, quickReplies])
   const active = detail || conversations.find(item => item.id === activeId) || null
   const variantPickerProduct = variantPicker ? orderCatalog.find(item => item.id === variantPicker.productId) || null : null
   const variantPickerPresentation = variantPickerProduct?.presentations.find(item => item.id === variantPicker?.presentationId) || null
   const scheduledOrderUnits = scheduledOrderModal?.orderItems.reduce((total, item) => total + (item.quantity * item.unitsPerPackage), 0) || 0
   const assignedToOther = Boolean(active?.assignedToId && active.assignedToId !== user?.id)
   const canReply = Boolean(active && lock && active.assignedToId === user?.id && active.status !== 'RESOLVED' && active.status !== 'ARCHIVED')
+  const chooseQuickReply = (reply: ApiQuickReply) => {
+    setDraft(reply.body)
+    setShowQuickReplies(false)
+    setQuickReplyIndex(0)
+    window.requestAnimationFrame(() => composerInputRef.current?.focus())
+  }
+  const openQuickReplies = () => {
+    if (!canReply) return
+    setDraft('/')
+    setQuickReplyIndex(0)
+    setShowQuickReplies(true)
+    window.requestAnimationFrame(() => composerInputRef.current?.focus())
+  }
+  const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (showQuickReplies) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setShowQuickReplies(false)
+        return
+      }
+      if (matchingQuickReplies.length > 0 && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault()
+        const direction = event.key === 'ArrowDown' ? 1 : -1
+        setQuickReplyIndex(current => (current + direction + matchingQuickReplies.length) % matchingQuickReplies.length)
+        return
+      }
+      if (matchingQuickReplies.length > 0 && (event.key === 'Enter' && !event.shiftKey || event.key === 'Tab')) {
+        event.preventDefault()
+        chooseQuickReply(matchingQuickReplies[Math.min(quickReplyIndex, matchingQuickReplies.length - 1)])
+        return
+      }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      event.currentTarget.form?.requestSubmit()
+    }
+  }
   const service = serviceWindow(active?.serviceWindowExpiresAt || null)
   const currentName = user?.name || 'Agente de Atención'
   const isSupervisor = user?.rol === 'ADMIN' || user?.permisos.permisoAtencionAdmin === true
@@ -548,12 +637,58 @@ export default function AttentionWorkspace() {
       </header>
       <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${active.id === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
     </section>
-    <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}><header className="chatHeader"><button className="mobileBack" onClick={() => setMobileChat(false)} aria-label="Volver a los chats"><Icon name="back" /></button><button className="avatarButton" onClick={() => setShowContext(true)} aria-label="Ver información del cliente"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#687782'} /></button><div className="chatIdentity"><div><h2>{active.contact.displayName}</h2>{active.priority > 0 && <span className="priorityPill">Prioridad</span>}</div><span><i className="channelDot" />{assignedToOther ? `Atiende ${agentName(active.assignedToId)}` : active.assignedToId ? 'Conversación asignada a vos' : 'WhatsApp Business · sin asignar'}</span></div><div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button>{isSupervisor && active.assignedToId && <button className="iconButton adminHeaderAction" onClick={unassignConversation} aria-label="Liberar chat" title="Liberar chat"><Icon name="lock" size={17} /></button>}<button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div></header>
+    <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}>
+      <header className="chatHeader">
+        <button className="mobileBack" onClick={() => setMobileChat(false)} aria-label="Volver a los chats"><Icon name="back" /></button>
+        <button className="avatarButton" onClick={() => setShowContext(true)} aria-label="Ver información del cliente"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#687782'} /></button>
+        <div className="chatIdentity"><div><h2>{active.contact.displayName}</h2>{active.priority > 0 && <span className="priorityPill">Prioridad</span>}</div><span><i className="channelDot" />{assignedToOther ? `Atiende ${agentName(active.assignedToId)}` : active.assignedToId ? 'Conversación asignada a vos' : 'WhatsApp Business · sin asignar'}</span></div>
+        <div className="chatTagPicker" ref={tagMenuRef}>
+          <button type="button" className="chatTagButton" aria-haspopup="listbox" aria-expanded={showTagMenu} onClick={() => setShowTagMenu(current => !current)}>
+            {active.tags[0] ? <span className="tagDot" style={{ background: active.tags[0].color }} /> : <Icon name="tag" size={16} />}
+            <span className="chatTagButtonText">{active.tags[0]?.name || 'Etiquetar'}</span>
+            {active.tags.length > 1 && <b>+{active.tags.length - 1}</b>}
+            <span className="tagChevron">⌄</span>
+          </button>
+          {showTagMenu && <div className="tagMenu" role="listbox" aria-label="Etiquetas de la conversación">
+            <header><div><Icon name="tag" size={17} /><strong>Etiquetas</strong></div><span>{active.tags.length} seleccionada{active.tags.length === 1 ? '' : 's'}</span></header>
+            <div className="tagMenuList">
+              {allTags.length === 0 && <p>No hay etiquetas disponibles.</p>}
+              {allTags.map(tag => {
+                const selected = active.tags.some(item => item.id === tag.id)
+                return <button type="button" role="option" key={tag.id} aria-selected={selected} disabled={Boolean(tagBusyId)} onClick={() => toggleConversationTag(tag)}>
+                  <span className="tagDot" style={{ background: tag.color }} /><strong>{tag.name}</strong><i>{tagBusyId === tag.id ? '…' : selected ? '✓' : ''}</i>
+                </button>
+              })}
+            </div>
+            <footer>Los cambios se guardan para todo el equipo.</footer>
+          </div>}
+        </div>
+        <div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button>{isSupervisor && active.assignedToId && <button className="iconButton adminHeaderAction" onClick={unassignConversation} aria-label="Liberar chat" title="Liberar chat"><Icon name="lock" size={17} /></button>}<button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div>
+      </header>
       {error && <div className="errorBanner" role="alert">{error}<button onClick={() => setError(null)}>×</button></div>}
       {assignedToOther && <div className="lockBanner"><span className="lockIcon"><Icon name="lock" size={18} /></span><div><strong>{agentName(active.assignedToId)} tiene asignada esta conversación</strong><span>Podés seguirla en tiempo real. La respuesta está bloqueada para evitar mensajes cruzados.</span></div><span className="watchingBadge">Sólo lectura</span></div>}
       {!active.assignedToId && <div className="claimBanner"><div><span className="claimSpinner" /><div><strong>{claiming ? 'Asignando conversación…' : 'Preparando la conversación…'}</strong><span>Quedará reservada automáticamente para vos.</span></div></div></div>}
       <div className="messageCanvas" ref={messageCanvasRef}>{detail?.messages.map((m, index, messages) => { const occurredAt = m.providerTimestamp || m.createdAt; const previousOccurredAt = index > 0 ? messages[index - 1].providerTimestamp || messages[index - 1].createdAt : null; const showDay = !previousOccurredAt || localDayKey(previousOccurredAt) !== localDayKey(occurredAt); return <div key={m.id}>{showDay && <div className="dateDivider"><span>{formatMessageDay(occurredAt)}</span></div>}{m.direction === 'INTERNAL' ? <div className="systemNote"><span><Icon name="check" size={14} /></span>{m.body} · {formatTime(m.createdAt)}</div> : <div className={`messageRow ${m.direction === 'OUTBOUND' ? 'messageRowOut' : ''}`}><div className={`messageBubble ${m.direction === 'OUTBOUND' ? 'messageOut' : 'messageIn'}`}>{m.direction === 'OUTBOUND' && <span className="messageSender">{agentName(m.sentById) || 'Atención'}</span>}<p>{m.body || 'Mensaje sin texto'}</p><span className="messageTime">{formatTime(occurredAt)}{m.direction === 'OUTBOUND' && <b className={m.status === 'READ' ? 'readChecks' : ''}>✓✓</b>}</span></div></div>}</div> })}</div>
-      <div className="composerArea"><div className={`serviceWindow ${service.expired ? 'serviceWindowExpired' : ''}`}><Icon name="clock" size={14} /><span>{service.text}</span></div><form className={`composer ${!canReply ? 'composerDisabled' : ''}`} onSubmit={sendMessage}><button type="button" aria-label="Agregar emoji" disabled={!canReply}><Icon name="smile" /></button><button type="button" aria-label="Adjuntar archivo" disabled={!canReply}><Icon name="attach" /></button><textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={assignedToOther ? `Respuesta bloqueada por ${agentName(active.assignedToId)}` : !active.assignedToId ? 'Tomá la conversación para responder' : active.status === 'RESOLVED' ? 'Conversación resuelta' : !lock ? 'Obteniendo control seguro…' : 'Escribe un mensaje'} rows={1} disabled={!canReply || busy} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} /><button className="sendButton" type="submit" aria-label="Enviar mensaje" disabled={!canReply || !draft.trim() || busy}><Icon name="send" size={18} /></button></form><div className="composerHints"><button disabled={!canReply}>/ respuestas rápidas</button><span>Enter para enviar · Shift + Enter para salto</span></div></div>
+      <div className="composerArea">
+        <div className={`serviceWindow ${service.expired ? 'serviceWindowExpired' : ''}`}><Icon name="clock" size={14} /><span>{service.text}</span></div>
+        {showQuickReplies && canReply && <div className="quickReplyMenu" role="listbox" aria-label="Respuestas rápidas">
+          <header><div><b>/</b><strong>Respuestas rápidas</strong></div><span>Elegí una para insertarla</span></header>
+          <div>
+            {matchingQuickReplies.length === 0 && <p>No encontramos una respuesta para “{draft}”.</p>}
+            {matchingQuickReplies.map((reply, index) => <button type="button" key={reply.id} role="option" aria-selected={index === quickReplyIndex} className={index === quickReplyIndex ? 'quickReplyActive' : ''} onMouseEnter={() => setQuickReplyIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseQuickReply(reply)}>
+              <span><b>/{reply.shortcut}</b><strong>{reply.title}</strong></span><p>{reply.body}</p>
+            </button>)}
+          </div>
+          <footer><span>↑↓ para elegir · Enter para insertar · Esc para cerrar</span></footer>
+        </div>}
+        <form className={`composer ${!canReply ? 'composerDisabled' : ''}`} onSubmit={sendMessage}>
+          <button type="button" aria-label="Agregar emoji" disabled={!canReply}><Icon name="smile" /></button>
+          <button type="button" aria-label="Adjuntar archivo" disabled={!canReply}><Icon name="attach" /></button>
+          <button type="button" className="quickReplyTrigger" aria-label="Abrir respuestas rápidas" title="Respuestas rápidas (/)" disabled={!canReply} onClick={openQuickReplies}>/</button>
+          <textarea ref={composerInputRef} value={draft} onChange={event => { const value = event.target.value; setDraft(value); setQuickReplyIndex(0); setShowQuickReplies(value.startsWith('/')) }} placeholder={assignedToOther ? `Respuesta bloqueada por ${agentName(active.assignedToId)}` : !active.assignedToId ? 'Tomá la conversación para responder' : active.status === 'RESOLVED' ? 'Conversación resuelta' : !lock ? 'Obteniendo control seguro…' : 'Escribe un mensaje o / para respuestas rápidas'} rows={1} disabled={!canReply || busy} onKeyDown={handleComposerKeyDown} />
+          <button className="sendButton" type="submit" aria-label="Enviar mensaje" disabled={!canReply || !draft.trim() || busy}><Icon name="send" size={18} /></button>
+        </form>
+      </div>
     </section>
     {showContext && <aside className="contextPanel">
       <header><span>Información del cliente</span><button className="iconButton" onClick={() => setShowContext(false)}>×</button></header>
