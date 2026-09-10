@@ -188,7 +188,7 @@ async function main() {
         data: {
             nombre: 'Elegidos',
             codigoInterno: 'ELE',
-            alias: 'tom, lechu, zyh, zyq, hue, ace, jyq, cho',
+            alias: 'tom, lechu, zyh, zyq, hue, ace, jyq, cho, jq',
             planchasPorPaquete: 6,
             paquetesPorRonda: 14,
             vidaUtilHoras: 48,
@@ -205,7 +205,15 @@ async function main() {
             { productoId: ele.id, cantidad: 8, precioVenta: 4700 },
         ],
     })
-    console.log('✅ Producto "Elegidos" con 6 presentaciones y 8 alias configurados')
+    await prisma.varianteProducto.createMany({
+        data: ['tom', 'lechu', 'zyh', 'zyq', 'hue', 'ace', 'jyq', 'cho', 'jq'].map((codigo, orden) => ({
+            productoId: ele.id,
+            codigo,
+            nombre: codigo.toUpperCase(),
+            orden,
+        })),
+    })
+    console.log('✅ Producto "Elegidos" con 6 presentaciones y 9 variedades configuradas')
 
     console.log('\n🎉 Seed completado!')
     console.log('📧 Login: admin@santacatalina.com / admin123')

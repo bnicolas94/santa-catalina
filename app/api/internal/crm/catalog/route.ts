@@ -11,6 +11,11 @@ export async function GET() {
         id: true,
         nombre: true,
         codigoInterno: true,
+        variantes: {
+          where: { activo: true },
+          orderBy: [{ orden: 'asc' }, { nombre: 'asc' }],
+          select: { id: true, codigo: true, nombre: true },
+        },
         presentaciones: {
           where: { activo: true },
           orderBy: { cantidad: 'desc' },
@@ -23,6 +28,11 @@ export async function GET() {
       id: product.id,
       name: product.nombre,
       code: product.codigoInterno,
+      variants: product.variantes.map(variant => ({
+        id: variant.id,
+        code: variant.codigo,
+        name: variant.nombre,
+      })),
       presentations: product.presentaciones.map(presentation => ({
         id: presentation.id,
         unitsPerPackage: presentation.cantidad,

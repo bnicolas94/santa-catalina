@@ -9,9 +9,9 @@ export const DEMO_PICKUP_LOCATIONS: ErpPickupLocation[] = [
 ]
 
 export const DEMO_PRODUCT_CATALOG: ErpProductCatalogItem[] = [
-  { id: 'demo-product-classic', name: 'Triple clásico', code: 'CLA', presentations: [{ id: 'demo-classic-48', unitsPerPackage: 48, basePrice: 42000 }, { id: 'demo-classic-24', unitsPerPackage: 24, basePrice: 22000 }] },
-  { id: 'demo-product-ham-cheese', name: 'Jamón y queso', code: 'JYQ', presentations: [{ id: 'demo-ham-cheese-48', unitsPerPackage: 48, basePrice: 44500 }, { id: 'demo-ham-cheese-24', unitsPerPackage: 24, basePrice: 23500 }] },
-  { id: 'demo-product-selected', name: 'Surtido elegido', code: 'ELE', presentations: [{ id: 'demo-selected-48', unitsPerPackage: 48, basePrice: 48000 }] },
+  { id: 'demo-product-classic', name: 'Triple clásico', code: 'CLA', variants: [], presentations: [{ id: 'demo-classic-48', unitsPerPackage: 48, basePrice: 42000 }, { id: 'demo-classic-24', unitsPerPackage: 24, basePrice: 22000 }] },
+  { id: 'demo-product-ham-cheese', name: 'Jamón y queso', code: 'JYQ', variants: [], presentations: [{ id: 'demo-ham-cheese-48', unitsPerPackage: 48, basePrice: 44500 }, { id: 'demo-ham-cheese-24', unitsPerPackage: 24, basePrice: 23500 }] },
+  { id: 'demo-product-selected', name: 'Surtido elegido', code: 'ELE', variants: ['tom', 'lechu', 'zyh', 'zyq', 'hue', 'ace', 'jyq', 'cho', 'jq'].map(code => ({ id: `demo-variant-${code}`, code, name: code.toUpperCase() })), presentations: [{ id: 'demo-selected-48', unitsPerPackage: 48, basePrice: 48000 }, { id: 'demo-selected-8', unitsPerPackage: 8, basePrice: 9000 }] },
 ]
 
 function erpBaseUrl() {

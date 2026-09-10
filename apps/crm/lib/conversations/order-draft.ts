@@ -21,18 +21,20 @@ function orderItemSelections(value: unknown) {
     if (!raw || typeof raw !== 'object') throw new CrmApiError(400, 'INVALID_ORDER_ITEM', `El producto ${index + 1} no es válido.`)
     const item = raw as Record<string, unknown>
     const presentationId = optionalText(item.presentationId, 'Presentación', 80)
+    const variantId = optionalText(item.variantId, 'Variedad', 80)
     const quantity = Number(item.quantity)
     if (!presentationId || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
       throw new CrmApiError(400, 'INVALID_ORDER_ITEM', `Revisá la presentación y cantidad del producto ${index + 1}.`)
     }
-    if (seen.has(presentationId)) throw new CrmApiError(400, 'DUPLICATE_ORDER_ITEM', 'Una presentación no puede repetirse en la ficha.')
-    seen.add(presentationId)
-    return { presentationId, quantity }
+    const selectionKey = `${presentationId}:${variantId || ''}`
+    if (seen.has(selectionKey)) throw new CrmApiError(400, 'DUPLICATE_ORDER_ITEM', 'Una presentación y variedad no puede repetirse en la ficha.')
+    seen.add(selectionKey)
+    return { presentationId, variantId, quantity }
   })
 }
 
 export function orderItemSelectionKey(value: unknown) {
-  return JSON.stringify(orderItemSelections(value).sort((a, b) => a.presentationId.localeCompare(b.presentationId)))
+  return JSON.stringify(orderItemSelections(value).sort((a, b) => `${a.presentationId}:${a.variantId || ''}`.localeCompare(`${b.presentationId}:${b.variantId || ''}`)))
 }
 
 export function canonicalizeOrderItems(value: unknown, catalog: ErpProductCatalogItem[]): CrmOrderItem[] {
@@ -40,6 +42,13 @@ export function canonicalizeOrderItems(value: unknown, catalog: ErpProductCatalo
   return orderItemSelections(value).map(selection => {
     const match = presentations.get(selection.presentationId)
     if (!match) throw new CrmApiError(400, 'ORDER_PRESENTATION_UNAVAILABLE', 'Uno de los productos ya no está disponible en el ERP.')
+    const variant = selection.variantId ? match.product.variants.find(item => item.id === selection.variantId) : null
+    if (match.product.variants.length > 0 && !variant) {
+      throw new CrmApiError(400, 'ORDER_VARIANT_REQUIRED', `Elegí una variedad válida para ${match.product.name}.`)
+    }
+    if (match.product.variants.length === 0 && selection.variantId) {
+      throw new CrmApiError(400, 'ORDER_VARIANT_UNAVAILABLE', `${match.product.name} no admite variedades.`)
+    }
     return {
       productId: match.product.id,
       presentationId: match.presentation.id,
@@ -47,6 +56,7 @@ export function canonicalizeOrderItems(value: unknown, catalog: ErpProductCatalo
       productCode: match.product.code,
       unitsPerPackage: match.presentation.unitsPerPackage,
       quantity: selection.quantity,
+      ...(variant ? { variantId: variant.id, variantCode: variant.code, variantName: variant.name } : {}),
     }
   })
 }
@@ -60,10 +70,16 @@ export function normalizeStoredOrderItems(value: unknown): CrmOrderItem[] {
     const productName = optionalText(raw.productName, 'Nombre del producto', 160)
     const productCode = optionalText(raw.productCode, 'Código del producto', 80)
     const unitsPerPackage = Number(raw.unitsPerPackage)
+    const variantId = optionalText(raw.variantId, 'Variedad', 80)
+    const variantCode = optionalText(raw.variantCode, 'Código de variedad', 80)
+    const variantName = optionalText(raw.variantName, 'Nombre de variedad', 160)
     if (!productId || !productName || !productCode || !Number.isInteger(unitsPerPackage) || unitsPerPackage < 1 || unitsPerPackage > 10000) {
       throw new CrmApiError(400, 'INVALID_ORDER_ITEM', `El producto ${index + 1} no tiene una referencia válida.`)
     }
-    return { productId, productName, productCode, unitsPerPackage, ...selection }
+    if (variantId && (!variantCode || !variantName)) {
+      throw new CrmApiError(400, 'INVALID_ORDER_VARIANT', `La variedad del producto ${index + 1} no tiene una referencia válida.`)
+    }
+    return { productId, productName, productCode, unitsPerPackage, presentationId: selection.presentationId, quantity: selection.quantity, ...(variantId ? { variantId, variantCode, variantName } : {}) }
   })
 }
 

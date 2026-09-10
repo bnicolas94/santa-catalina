@@ -107,6 +107,7 @@ export default function AttentionWorkspace() {
   const [orderCatalogLoading, setOrderCatalogLoading] = useState(true)
   const [orderCatalogError, setOrderCatalogError] = useState(false)
   const [productSearch, setProductSearch] = useState('')
+  const [variantPicker, setVariantPicker] = useState<{ productId: string; presentationId: string } | null>(null)
   const [orderModal, setOrderModal] = useState<{ loading: boolean; detail: ErpOrderDetails | null; error: string | null } | null>(null)
   const [scheduledOrderModal, setScheduledOrderModal] = useState<ScheduledOrder | null>(null)
   const [orderDraftDirty, setOrderDraftDirty] = useState(false)
@@ -191,7 +192,7 @@ export default function AttentionWorkspace() {
     if (!activeId || !user) return
     let cancelled = false
     orderDraftVersionRef.current += 1
-    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setOrderModal(null); setScheduledOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
+    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setVariantPicker(null); setOrderModal(null); setScheduledOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
@@ -358,19 +359,26 @@ export default function AttentionWorkspace() {
     if (!term) return []
     return orderCatalog.filter(product => `${product.name} ${product.code}`.toLowerCase().includes(term)).slice(0, 6)
   }, [orderCatalog, productSearch])
-  const addOrderItem = (product: ErpProductCatalogItem, presentationId: string) => {
+  const addOrderItem = (product: ErpProductCatalogItem, presentationId: string, variantId?: string) => {
     const presentation = product.presentations.find(item => item.id === presentationId)
     if (!presentation) return
-    const existing = orderDraft.orderItems.find(item => item.presentationId === presentationId)
+    if (product.variants.length > 0 && !variantId) {
+      setVariantPicker({ productId: product.id, presentationId })
+      setProductSearch('')
+      return
+    }
+    const variant = variantId ? product.variants.find(item => item.id === variantId) : null
+    if (product.variants.length > 0 && !variant) return
+    const existing = orderDraft.orderItems.find(item => item.presentationId === presentationId && (item.variantId || null) === (variant?.id || null))
     const items = existing
-      ? orderDraft.orderItems.map(item => item.presentationId === presentationId ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item)
-      : [...orderDraft.orderItems, { productId: product.id, presentationId, productName: product.name, productCode: product.code, unitsPerPackage: presentation.unitsPerPackage, quantity: 1 }]
+      ? orderDraft.orderItems.map(item => item.presentationId === presentationId && (item.variantId || null) === (variant?.id || null) ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item)
+      : [...orderDraft.orderItems, { productId: product.id, presentationId, productName: product.name, productCode: product.code, unitsPerPackage: presentation.unitsPerPackage, quantity: 1, variantId: variant?.id || null, variantCode: variant?.code || null, variantName: variant?.name || null }]
     changeOrderDraft({ orderItems: items })
     setProductSearch('')
   }
-  const changeOrderItemQuantity = (presentationId: string, change: number) => {
+  const changeOrderItemQuantity = (presentationId: string, variantId: string | null | undefined, change: number) => {
     const items = orderDraft.orderItems
-      .map(item => item.presentationId === presentationId ? { ...item, quantity: Math.min(999, item.quantity + change) } : item)
+      .map(item => item.presentationId === presentationId && (item.variantId || null) === (variantId || null) ? { ...item, quantity: Math.min(999, item.quantity + change) } : item)
       .filter(item => item.quantity > 0)
     changeOrderDraft({ orderItems: items })
   }
@@ -381,7 +389,9 @@ export default function AttentionWorkspace() {
     return matchesFilter && (!term || haystack.includes(term))
   }), [conversations, filter, search, user])
   const active = detail || conversations.find(item => item.id === activeId) || null
-  const scheduledOrderTotals = scheduledOrderModal?.orderItems.reduce((totals, item) => ({ packs: totals.packs + item.quantity, units: totals.units + (item.quantity * item.unitsPerPackage) }), { packs: 0, units: 0 }) || null
+  const variantPickerProduct = variantPicker ? orderCatalog.find(item => item.id === variantPicker.productId) || null : null
+  const variantPickerPresentation = variantPickerProduct?.presentations.find(item => item.id === variantPicker?.presentationId) || null
+  const scheduledOrderUnits = scheduledOrderModal?.orderItems.reduce((total, item) => total + (item.quantity * item.unitsPerPackage), 0) || 0
   const assignedToOther = Boolean(active?.assignedToId && active.assignedToId !== user?.id)
   const canReply = Boolean(active && lock && active.assignedToId === user?.id && active.status !== 'RESOLVED' && active.status !== 'ARCHIVED')
   const service = serviceWindow(active?.serviceWindowExpiresAt || null)
@@ -481,10 +491,11 @@ export default function AttentionWorkspace() {
           <label className="orderProductSearch"><Icon name="search" size={15} /><input value={productSearch} disabled={!canEditOrderDraft || orderCatalogLoading} onChange={event => setProductSearch(event.target.value)} placeholder={orderCatalogLoading ? 'Cargando productos del ERP…' : 'Buscar producto o código'} /></label>
           {orderCatalogError && <div className="orderCatalogNotice orderCatalogWarning"><span>No pudimos consultar el catálogo del ERP.</span><button type="button" onClick={() => void refreshOrderCatalog()}>Reintentar</button></div>}
           {productSearch.trim() && !orderCatalogError && <div className="orderCatalogResults">
-            {catalogResults.map(product => <article key={product.id}><div><strong>{product.name}</strong><small>{product.code}</small></div><div>{product.presentations.map(presentation => <button type="button" key={presentation.id} disabled={!canEditOrderDraft} onClick={() => addOrderItem(product, presentation.id)}>+ x{presentation.unitsPerPackage}</button>)}</div></article>)}
+            {catalogResults.map(product => <article key={product.id}><div><strong>{product.name}</strong><small>{product.code}{product.variants.length > 0 ? ` · ${product.variants.length} variedades` : ''}</small></div><div>{product.presentations.map(presentation => <button type="button" key={presentation.id} disabled={!canEditOrderDraft} onClick={() => addOrderItem(product, presentation.id)}>+ x{presentation.unitsPerPackage}</button>)}</div></article>)}
             {!orderCatalogLoading && catalogResults.length === 0 && <div className="orderCatalogNotice">No encontramos productos activos con ese nombre o código.</div>}
           </div>}
-          {orderDraft.orderItems.length > 0 ? <div className="selectedOrderItems">{orderDraft.orderItems.map(item => <article key={item.presentationId}><div><strong>{item.productName}</strong><small>{item.productCode} · presentación x{item.unitsPerPackage}</small></div><div className="itemQuantity"><button type="button" disabled={!canEditOrderDraft} aria-label={`Quitar una presentación de ${item.productName}`} onClick={() => changeOrderItemQuantity(item.presentationId, -1)}>−</button><b>{item.quantity}</b><button type="button" disabled={!canEditOrderDraft || item.quantity >= 999} aria-label={`Agregar una presentación de ${item.productName}`} onClick={() => changeOrderItemQuantity(item.presentationId, 1)}>+</button></div></article>)}</div> : <div className="emptyOrderItems"><Icon name="bag" size={16} /><span>Agregá al menos un producto del catálogo.</span></div>}
+          {variantPicker && variantPickerProduct && variantPickerPresentation && <div className="variantPicker"><header><div><span>Elegí la variedad</span><strong>{variantPickerProduct.name} · x{variantPickerPresentation.unitsPerPackage}</strong></div><button type="button" aria-label="Cerrar variedades" onClick={() => setVariantPicker(null)}>×</button></header><div>{variantPickerProduct.variants.map(variant => <button type="button" key={variant.id} disabled={!canEditOrderDraft} onClick={() => addOrderItem(variantPickerProduct, variantPickerPresentation.id, variant.id)}><b>{variant.code.toUpperCase()}</b>{variant.name.toUpperCase() !== variant.code.toUpperCase() && <span>{variant.name}</span>}</button>)}</div><small>Selección cerrada: sólo se admiten variedades configuradas en el ERP.</small></div>}
+          {orderDraft.orderItems.length > 0 ? <div className="selectedOrderItems">{orderDraft.orderItems.map(item => <article key={`${item.presentationId}:${item.variantId || ''}`}><div><strong>{item.productName}{item.variantCode ? <span className="selectedVariantBadge">{item.variantCode.toUpperCase()}</span> : null}</strong><small>{item.productCode} · presentación x{item.unitsPerPackage}{item.variantName && item.variantName.toUpperCase() !== item.variantCode?.toUpperCase() ? ` · ${item.variantName}` : ''}</small></div><div className="itemQuantity"><button type="button" disabled={!canEditOrderDraft} aria-label={`Quitar una presentación de ${item.productName}`} onClick={() => changeOrderItemQuantity(item.presentationId, item.variantId, -1)}>−</button><b>{item.quantity}</b><button type="button" disabled={!canEditOrderDraft || item.quantity >= 999} aria-label={`Agregar una presentación de ${item.productName}`} onClick={() => changeOrderItemQuantity(item.presentationId, item.variantId, 1)}>+</button></div></article>)}</div> : <div className="emptyOrderItems"><Icon name="bag" size={16} /><span>Agregá al menos un producto del catálogo.</span></div>}
           <textarea className="orderNotes" rows={2} maxLength={500} value={orderDraft.orderNotes} disabled={!canEditOrderDraft} onChange={event => changeOrderDraft({ orderNotes: event.target.value })} placeholder="Aclaraciones del pedido (opcional)" />
         </div>
         <div className="plannerField">
@@ -531,7 +542,7 @@ export default function AttentionWorkspace() {
         <div className="sectionLabel"><span>Historial agendado</span><b>{detail.scheduledOrders.length}</b></div>
         <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard scheduledOrderCardInteractive" key={item.id} role="button" tabIndex={0} aria-label={`Ver pedido agendado para el ${formatOrderDate(item.orderDate)}`} onClick={() => openScheduledOrder(item)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openScheduledOrder(item) } }}>
           <div className="scheduledOrderHeader"><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><small>Pedido para</small><strong>{formatOrderDate(item.orderDate)}</strong></div><div className="scheduledOrderBadges"><b className={item.orderFulfillment === 'PICKUP' ? 'pickupHistoryBadge' : ''}>{item.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</b><b className={item.orderPaid ? 'paidHistoryBadge' : 'unpaidHistoryBadge'}>{item.orderPaid ? 'Pagado' : 'Sin marcar'}</b></div></div>
-          <dl><div><dt>Pedido</dt><dd className="scheduledProducts">{item.orderItems.length > 0 ? item.orderItems.map(orderItem => `${orderItem.quantity}× ${orderItem.productName} x${orderItem.unitsPerPackage}`).join(' · ') : 'Sin detalle registrado'}</dd></div><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div><div><dt>Pago</dt><dd className={item.orderPaid ? 'paidOrderText' : ''}>{item.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div>{item.orderNotes && <div><dt>Notas</dt><dd>{item.orderNotes}</dd></div>}</dl>
+          <dl><div><dt>Pedido</dt><dd className="scheduledProducts">{item.orderItems.length > 0 ? item.orderItems.map(orderItem => `${orderItem.quantity}× ${orderItem.productName} x${orderItem.unitsPerPackage}${orderItem.variantCode ? ` · ${orderItem.variantCode.toUpperCase()}` : ''}`).join(' · ') : 'Sin detalle registrado'}</dd></div><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div><div><dt>Pago</dt><dd className={item.orderPaid ? 'paidOrderText' : ''}>{item.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div>{item.orderNotes && <div><dt>Notas</dt><dd>{item.orderNotes}</dd></div>}</dl>
           <footer><Avatar name={item.scheduledByName} small /><div><span>Agendado por</span><strong>{item.scheduledByName}{item.scheduledById === user?.id ? ' (vos)' : ''}</strong></div><div className="scheduledOrderCardAction"><time>{formatScheduledAt(item.scheduledAt)}</time><span>Ver detalle ›</span></div></footer>
         </article>)}</div>
       </section>}
@@ -573,10 +584,10 @@ export default function AttentionWorkspace() {
       <header><div><span>Pedido agendado en Atención</span><h3>#{scheduledOrderModal.id.slice(0, 8)}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setScheduledOrderModal(null)}>×</button></header>
       <div className="orderModalContent">
         <div className="orderModalSummary"><div><span>Pedido para</span><strong>{formatOrderDate(scheduledOrderModal.orderDate)}</strong><small>{scheduledOrderModal.orderFulfillment === 'PICKUP' ? `Retiro en ${scheduledOrderModal.orderPickupLocationName || 'local sin nombre'}` : `Envío a ${scheduledOrderModal.orderAddress || 'dirección sin informar'}`} · {shiftName(scheduledOrderModal.orderShift)}</small></div><b className={scheduledOrderModal.orderPaid ? 'orderPaidStatus' : ''}>{scheduledOrderModal.orderPaid ? 'Pagado' : 'Sin marcar'}</b></div>
-        <section><h4>Productos encargados</h4>{scheduledOrderModal.orderItems.length > 0 ? <div className="orderModalItems">{scheduledOrderModal.orderItems.map(item => <article key={`${item.presentationId}-${item.quantity}`}><span className="orderModalItemQuantity">{item.quantity}×</span><div><strong>{item.productName} · x{item.unitsPerPackage}</strong><small>{item.productCode} · {item.quantity * item.unitsPerPackage} unidades en total</small></div><b>{item.quantity} packs</b></article>)}</div> : <div className="orderModalEmpty"><Icon name="bag" size={20} /><span>Este pedido fue agendado antes de incorporar el detalle de productos.</span></div>}</section>
+        <section><h4>Productos encargados</h4>{scheduledOrderModal.orderItems.length > 0 ? <div className="orderModalItems">{scheduledOrderModal.orderItems.map(item => <article key={`${item.presentationId}:${item.variantId || ''}`}><span className="orderModalItemQuantity">{item.quantity}×</span><div><strong>{item.productName} · x{item.unitsPerPackage}{item.variantCode ? ` · ${item.variantCode.toUpperCase()}` : ''}</strong><small>{item.productCode} · {item.quantity * item.unitsPerPackage} unidades en total{item.variantName && item.variantName.toUpperCase() !== item.variantCode?.toUpperCase() ? ` · ${item.variantName}` : ''}</small></div><b>{item.quantity} selec.</b></article>)}</div> : <div className="orderModalEmpty"><Icon name="bag" size={20} /><span>Este pedido fue agendado antes de incorporar el detalle de productos.</span></div>}</section>
         <section className="orderModalData"><h4>Información guardada</h4><dl><div><dt>Cliente</dt><dd>{active?.contact.displayName || 'Sin informar'}</dd></div><div><dt>Modalidad</dt><dd>{scheduledOrderModal.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</dd></div><div><dt>Destino</dt><dd>{scheduledOrderModal.orderFulfillment === 'PICKUP' ? scheduledOrderModal.orderPickupLocationName || 'Local sin nombre' : scheduledOrderModal.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(scheduledOrderModal.orderShift)}</dd></div><div><dt>Estado del pago</dt><dd>{scheduledOrderModal.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div><div><dt>Agendado por</dt><dd>{scheduledOrderModal.scheduledByName}{scheduledOrderModal.scheduledById === user?.id ? ' (vos)' : ''}</dd></div><div><dt>Fecha de registro</dt><dd>{formatScheduledAt(scheduledOrderModal.scheduledAt)}</dd></div></dl></section>
         {scheduledOrderModal.orderNotes && <section className="orderModalNotes"><h4>Observaciones</h4><p>{scheduledOrderModal.orderNotes}</p></section>}
-        <footer><div><span>{scheduledOrderTotals?.packs || 0} packs · {scheduledOrderTotals?.units || 0} unidades</span><strong>{scheduledOrderModal.orderPaid ? 'Pago confirmado' : 'Pago sin confirmar'}</strong></div><button type="button" onClick={() => setScheduledOrderModal(null)}>Cerrar</button></footer>
+        <footer><div><span>{scheduledOrderModal.orderItems.length} líneas · {scheduledOrderUnits} unidades</span><strong>{scheduledOrderModal.orderPaid ? 'Pago confirmado' : 'Pago sin confirmar'}</strong></div><button type="button" onClick={() => setScheduledOrderModal(null)}>Cerrar</button></footer>
       </div>
     </section></div>}
   </main>

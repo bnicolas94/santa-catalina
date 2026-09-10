@@ -49,13 +49,33 @@ test('envío exige dirección y limpia cualquier local de retiro anterior', () =
 
 test('completa los productos exclusivamente con referencias vigentes del ERP', () => {
   const items = canonicalizeOrderItems([{ presentationId: 'presentation-48', quantity: 3 }], [{
-    id: 'product-1', name: 'Triple clásico', code: 'CLA', presentations: [{ id: 'presentation-48', unitsPerPackage: 48, basePrice: 42000 }],
+    id: 'product-1', name: 'Triple clásico', code: 'CLA', variants: [], presentations: [{ id: 'presentation-48', unitsPerPackage: 48, basePrice: 42000 }],
   }])
   assert.deepEqual(items, [{ ...ORDER_ITEM, quantity: 3 }])
   assert.throws(
     () => canonicalizeOrderItems([{ presentationId: 'inactive', quantity: 1 }], []),
     (error: unknown) => error instanceof CrmApiError && error.code === 'ORDER_PRESENTATION_UNAVAILABLE',
   )
+})
+
+test('exige y conserva una variedad estructurada en productos configurables', () => {
+  const catalog = [{
+    id: 'product-selected', name: 'Elegidos', code: 'ELE',
+    variants: [{ id: 'variant-tom', code: 'tom', name: 'TOM' }, { id: 'variant-lechu', code: 'lechu', name: 'LECHU' }],
+    presentations: [{ id: 'selected-8', unitsPerPackage: 8, basePrice: 4700 }],
+  }]
+  assert.deepEqual(canonicalizeOrderItems([{ presentationId: 'selected-8', variantId: 'variant-tom', quantity: 1 }], catalog), [{
+    productId: 'product-selected', presentationId: 'selected-8', productName: 'Elegidos', productCode: 'ELE', unitsPerPackage: 8, quantity: 1,
+    variantId: 'variant-tom', variantCode: 'tom', variantName: 'TOM',
+  }])
+  assert.throws(
+    () => canonicalizeOrderItems([{ presentationId: 'selected-8', quantity: 1 }], catalog),
+    (error: unknown) => error instanceof CrmApiError && error.code === 'ORDER_VARIANT_REQUIRED',
+  )
+  assert.equal(canonicalizeOrderItems([
+    { presentationId: 'selected-8', variantId: 'variant-tom', quantity: 1 },
+    { presentationId: 'selected-8', variantId: 'variant-lechu', quantity: 1 },
+  ], catalog).length, 2)
 })
 
 test('la ficha requiere al menos un producto para quedar completa', () => {

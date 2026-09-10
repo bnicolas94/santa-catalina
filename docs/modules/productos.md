@@ -7,7 +7,8 @@ El módulo de **Productos** es el encargado de administrar el catálogo central 
 **Problemas que resuelve:**
 1. **Modelado de Costos y Recetas (Escandallo):** Permite armar la "receta" por producto, linkeando insumos y cantidades exactas para obtener un **Costo Directo Insumos (CDI)** en tiempo real.
 2. **Política de Empaque:** Centraliza cómo se envasan los productos (`planchasPorPaquete`, `paquetesPorRonda`) y su variante comercial (`Presentaciones`).
-3. **Parámetros de Calidad:** Define vida útil y temperaturas máximas de conservación.
+3. **Variedades configurables:** `VarianteProducto` mantiene códigos cerrados para productos como Elegidos. Atención consume únicamente las variedades activas y no acepta sabores escritos libremente.
+4. **Parámetros de Calidad:** Define vida útil y temperaturas máximas de conservación.
 
 ---
 
@@ -15,7 +16,7 @@ El módulo de **Productos** es el encargado de administrar el catálogo central 
 
 | Archivo | Responsabilidad |
 | --- | --- |
-| `prisma/schema.prisma` | Define los modelos `Producto`, `Presentacion` y `FichaTecnica`. |
+| `prisma/schema.prisma` | Define los modelos `Producto`, `Presentacion`, `VarianteProducto` y `FichaTecnica`. |
 | `app/api/productos/route.ts` | Endpoints (`GET`, `POST`) para listado y creación de productos (incluyendo inserción anidada de presentaciones). |
 | `app/api/productos/[id]/route.ts` | Endpoints (`PUT`, `DELETE`) para editar campos específicos del producto o eliminar su entidad completa (cascada). |
 | `app/(dashboard)/productos/page.tsx` | UI Principal (Master List). Tabla que expone el código del producto, CDI, parámetros físicos y un acceso a la administración de Presentaciones. |

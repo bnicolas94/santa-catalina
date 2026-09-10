@@ -139,8 +139,25 @@ model Producto {
   presentaciones      Presentacion[]
   requerimientos      RequerimientoProduccion[]
   stockUbicaciones    StockProducto[]
+  variantes           VarianteProducto[]
 
   @@map("productos")
+}
+
+model VarianteProducto {
+  id         String   @id @default(uuid())
+  codigo     String
+  nombre     String
+  activo     Boolean  @default(true)
+  orden      Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  productoId String   @map("id_producto")
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, codigo])
+  @@index([productoId, activo, orden])
+  @@map("variantes_producto")
 }
 
 model Presentacion {

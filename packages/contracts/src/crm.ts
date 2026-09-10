@@ -108,11 +108,18 @@ export interface ErpProductCatalogPresentation {
   basePrice: number
 }
 
+export interface ErpProductCatalogVariant {
+  id: string
+  code: string
+  name: string
+}
+
 export interface ErpProductCatalogItem {
   id: string
   name: string
   code: string
   presentations: ErpProductCatalogPresentation[]
+  variants: ErpProductCatalogVariant[]
 }
 
 export interface CrmOrderItem {
@@ -122,6 +129,9 @@ export interface CrmOrderItem {
   productCode: string
   unitsPerPackage: number
   quantity: number
+  variantId?: string | null
+  variantCode?: string | null
+  variantName?: string | null
 }
 
 export interface ErpOrderDetailItem extends CrmOrderItem {

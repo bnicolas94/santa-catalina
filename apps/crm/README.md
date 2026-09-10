@@ -90,6 +90,11 @@ la API interna del ERP; se guarda su ID externo y el nombre como instantánea. U
 envío exige dirección para considerar completa la ficha. Cada actualización deja
 un evento de auditoría.
 
+Los productos configurables usan variedades estructuradas del ERP. El operador
+elige únicamente botones habilitados —por ejemplo `TOM` o `LECHU`— y nunca escribe
+el sabor. La ficha distingue líneas con la misma presentación y distinta variedad,
+valida la relación en el servidor y conserva ID, código y nombre como instantánea.
+
 El botón `Agendado` no crea todavía un `Pedido` en el ERP. En una única
 transacción fotografía la ficha completa en `ScheduledOrder`, incluido si el pago
 por transferencia fue confirmado, registra agente y
@@ -100,9 +105,10 @@ pueda iniciar otro pedido sin sobrescribir los anteriores. La acción usa un
 todos los datos agendados en un modal al seleccionar cualquier tarjeta del
 historial, incluida la lista de productos, destino, turno, pago, observaciones,
 la marca temporal y el nombre actual del empleado,
-resuelto de forma segura mediante la API interna del ERP. Los IDs del producto y
-la presentación se acompañan con una instantánea de nombre, código y unidades por
-paquete para que cambios posteriores del catálogo no alteren el historial.
+resuelto de forma segura mediante la API interna del ERP. Los IDs del producto,
+la presentación y la variedad se acompañan con una instantánea de nombre, código
+y unidades por paquete para que cambios posteriores del catálogo no alteren el
+historial.
 
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en

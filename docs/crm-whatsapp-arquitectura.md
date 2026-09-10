@@ -190,6 +190,9 @@ Implementado:
   cantidades y observaciones, con guardado automático y edición
   protegida por lease. El vínculo al local conserva el ID externo y una
   instantánea de su nombre, sin crear una clave foránea entre esquemas.
+- Catálogo estructurado de variedades administrado por el ERP para productos
+  configurables. El CRM exige una variedad válida, la presenta como botones sin
+  texto libre y fotografía ID, código y nombre en cada línea del pedido.
 - Acción `Agendado` transaccional e idempotente: conserva una fotografía histórica
   en `ScheduledOrder`, incluido el estado de pago confirmado por el operador,
   registra el agente y limpia la ficha activa sólo después de
