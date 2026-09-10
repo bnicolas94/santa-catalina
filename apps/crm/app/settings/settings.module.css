@@ -1,7 +1,7 @@
 .loading { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--muted); }
 .loading span { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 15px; background: var(--wine); color: white; font-family: Impact, sans-serif; letter-spacing: .1em; }
 .loading strong { font-size: 13px; }
-.page { min-height: 100dvh; display: grid; grid-template-columns: 260px 1fr; background: #f6f3ea; }
+.page { height: 100dvh; min-height: 0; display: grid; grid-template-columns: 260px 1fr; overflow: hidden; background: #f6f3ea; }
 .sidebar { position: sticky; top: 0; height: 100dvh; padding: 22px 18px; display: flex; flex-direction: column; color: white; background: linear-gradient(165deg, #540302, #3b0202 72%); }
 .brand { width: 44px; height: 44px; display: grid; place-items: center; color: white; text-decoration: none; border: 1px solid rgba(255,255,255,.26); border-radius: 14px; font-family: Impact, sans-serif; letter-spacing: .1em; background: rgba(255,255,255,.08); }
 .sideHeading { margin: 30px 5px 16px; }
@@ -27,7 +27,7 @@
 .securityNote p { margin: 4px 0 0; color: rgba(255,255,255,.47); font-size: 8px; line-height: 1.45; }
 .backLink { margin: 14px 5px 2px; color: rgba(255,255,255,.57); text-decoration: none; font-size: 9px; }
 .backLink:hover { color: white; }
-.content { min-width: 0; padding: 32px clamp(24px, 4vw, 56px) 50px; }
+.content { min-width: 0; min-height: 0; padding: 32px clamp(24px, 4vw, 56px) 50px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .header { max-width: 1260px; margin: 0 auto 24px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .header > div:first-child > span { color: var(--red); font-size: 9px; text-transform: uppercase; letter-spacing: .15em; font-weight: 800; }
 .header h2 { margin: 5px 0 5px; color: var(--wine); font-size: clamp(26px, 3vw, 38px); letter-spacing: -.045em; }
@@ -145,7 +145,7 @@
   .tipCard { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
-  .page { display: block; }
+  .page { display: block; overflow-y: auto; }
   .sidebar { position: static; width: auto; height: auto; padding: 14px 16px; flex-direction: row; align-items: center; gap: 12px; }
   .brand { width: 38px; height: 38px; flex: 0 0 auto; }
   .sideHeading { margin: 0; }
@@ -154,7 +154,7 @@
   .newButton { width: auto; margin-left: auto; }
   .newButton span { display: none; }
   .channelList, .securityNote, .backLink { display: none; }
-  .content { padding: 22px 14px 35px; }
+  .content { padding: 22px 14px 35px; overflow: visible; }
   .header { align-items: flex-start; flex-direction: column; gap: 14px; }
   .headerStatus { width: 100%; }
   .coexistenceCard { grid-template-columns: 40px 1fr; padding: 15px; }
