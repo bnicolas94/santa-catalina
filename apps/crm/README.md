@@ -94,6 +94,9 @@ Los productos configurables usan variedades estructuradas del ERP. El operador
 elige únicamente botones habilitados —por ejemplo `TOM` o `LECHU`— y nunca escribe
 el sabor. La ficha distingue líneas con la misma presentación y distinta variedad,
 valida la relación en el servidor y conserva ID, código y nombre como instantánea.
+En Elegidos cada pulsación representa exclusivamente una porción `x8`; la cantidad
+acumula esas porciones (`+2` equivale a `x16`) y ninguna presentación mayor puede
+asignarse directamente a un sabor.
 
 El botón `Agendado` no crea todavía un `Pedido` en el ERP. En una única
 transacción fotografía la ficha completa en `ScheduledOrder`, incluido si el pago

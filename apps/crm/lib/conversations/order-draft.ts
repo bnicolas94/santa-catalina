@@ -49,6 +49,9 @@ export function canonicalizeOrderItems(value: unknown, catalog: ErpProductCatalo
     if (match.product.variants.length === 0 && selection.variantId) {
       throw new CrmApiError(400, 'ORDER_VARIANT_UNAVAILABLE', `${match.product.name} no admite variedades.`)
     }
+    if (variant && match.presentation.unitsPerPackage !== 8) {
+      throw new CrmApiError(400, 'ORDER_VARIANT_UNIT_INVALID', `Las variedades de ${match.product.name} sólo se seleccionan en porciones de x8.`)
+    }
     return {
       productId: match.product.id,
       presentationId: match.presentation.id,
