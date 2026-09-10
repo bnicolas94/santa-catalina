@@ -186,7 +186,8 @@ Implementado:
   heartbeat cada 25 segundos y envío idempotente.
 - Representación amigable de asignación y sólo lectura.
 - Ficha rápida de pedido persistida por conversación, con fecha, dirección,
-  envío/retiro, local real del ERP y turno, guardado automático y edición
+  envío/retiro, local real del ERP, turno, productos/presentaciones del catálogo,
+  cantidades y observaciones, con guardado automático y edición
   protegida por lease. El vínculo al local conserva el ID externo y una
   instantánea de su nombre, sin crear una clave foránea entre esquemas.
 - Acción `Agendado` transaccional e idempotente: conserva una fotografía histórica
@@ -195,6 +196,10 @@ Implementado:
   guardar. Es una marca operativa de carga en Excel y no crea un `Pedido` ERP. El
   historial resuelve el nombre del agente por API interna usando el ID externo;
   si el ERP no responde conserva visible la ficha con un nombre de respaldo.
+- Catálogo comercial de sólo lectura y detalle de pedidos históricos mediante APIs
+  internas del ERP. El CRM valida que el pedido consultado pertenezca al cliente
+  vinculado antes de mostrar el modal y usa la dirección actual del cliente como
+  valor inicial cuando la ficha no contiene una dirección.
 - Esquema CRM inicial y migración SQL.
 - Contratos TypeScript compartidos.
 - Permisos de Atención en los roles del ERP.

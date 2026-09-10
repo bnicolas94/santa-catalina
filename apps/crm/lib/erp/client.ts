@@ -1,4 +1,4 @@
-import type { ErpCustomerCandidate, ErpCustomerDetails, ErpEmployeeReference, ErpPickupLocation } from '@santa-catalina/contracts'
+import type { ErpCustomerCandidate, ErpCustomerDetails, ErpEmployeeReference, ErpOrderDetails, ErpPickupLocation, ErpProductCatalogItem } from '@santa-catalina/contracts'
 import { CrmApiError } from '@/lib/api'
 
 type ResolutionResponse = { candidates: ErpCustomerCandidate[] }
@@ -6,6 +6,12 @@ type ResolutionResponse = { candidates: ErpCustomerCandidate[] }
 export const DEMO_PICKUP_LOCATIONS: ErpPickupLocation[] = [
   { id: 'demo-local-centro', name: 'Local Centro' },
   { id: 'demo-local-fabrica', name: 'Local Fábrica' },
+]
+
+export const DEMO_PRODUCT_CATALOG: ErpProductCatalogItem[] = [
+  { id: 'demo-product-classic', name: 'Triple clásico', code: 'CLA', presentations: [{ id: 'demo-classic-48', unitsPerPackage: 48, basePrice: 42000 }, { id: 'demo-classic-24', unitsPerPackage: 24, basePrice: 22000 }] },
+  { id: 'demo-product-ham-cheese', name: 'Jamón y queso', code: 'JYQ', presentations: [{ id: 'demo-ham-cheese-48', unitsPerPackage: 48, basePrice: 44500 }, { id: 'demo-ham-cheese-24', unitsPerPackage: 24, basePrice: 23500 }] },
+  { id: 'demo-product-selected', name: 'Surtido elegido', code: 'ELE', presentations: [{ id: 'demo-selected-48', unitsPerPackage: 48, basePrice: 48000 }] },
 ]
 
 function erpBaseUrl() {
@@ -68,4 +74,18 @@ export function getAvailablePickupLocations(cookie: string) {
 export function getErpEmployeeReferences(ids: string[], cookie: string) {
   const query = new URLSearchParams({ ids: [...new Set(ids)].slice(0, 50).join(',') })
   return getFromErp<ErpEmployeeReference[]>(`api/internal/crm/employees?${query}`, cookie)
+}
+
+export function getErpProductCatalog(cookie: string) {
+  return getFromErp<ErpProductCatalogItem[]>('api/internal/crm/catalog', cookie)
+}
+
+export function getAvailableProductCatalog(cookie: string) {
+  return process.env.NODE_ENV === 'production'
+    ? getErpProductCatalog(cookie)
+    : Promise.resolve(DEMO_PRODUCT_CATALOG)
+}
+
+export function getErpOrderDetails(orderId: string, cookie: string) {
+  return getFromErp<ErpOrderDetails>(`api/internal/crm/orders/${encodeURIComponent(orderId)}`, cookie)
 }

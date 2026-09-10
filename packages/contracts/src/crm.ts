@@ -102,6 +102,52 @@ export interface ErpOrderSummary {
   paid: boolean
 }
 
+export interface ErpProductCatalogPresentation {
+  id: string
+  unitsPerPackage: number
+  basePrice: number
+}
+
+export interface ErpProductCatalogItem {
+  id: string
+  name: string
+  code: string
+  presentations: ErpProductCatalogPresentation[]
+}
+
+export interface CrmOrderItem {
+  productId: string
+  presentationId: string
+  productName: string
+  productCode: string
+  unitsPerPackage: number
+  quantity: number
+}
+
+export interface ErpOrderDetailItem extends CrmOrderItem {
+  unitPrice: number
+  totalAmount: number
+  totalUnits: number
+  notes?: string | null
+}
+
+export interface ErpOrderDetails extends ErpOrderSummary {
+  paymentMethod?: string | null
+  fulfillment: 'DELIVERY' | 'PICKUP'
+  shift?: string | null
+  pickupLocation?: { id: string; name: string } | null
+  customer: {
+    id: string
+    commercialName: string
+    contactName?: string | null
+    phone?: string | null
+    currentAddress?: string | null
+    locality?: string | null
+    zone?: string | null
+  }
+  items: ErpOrderDetailItem[]
+}
+
 export interface ErpPickupLocation {
   id: string
   name: string

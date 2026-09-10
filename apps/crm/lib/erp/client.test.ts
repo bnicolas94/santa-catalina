@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { CrmApiError } from '@/lib/api'
-import { getErpCustomerSummary, getErpEmployeeReferences, getErpPickupLocations, resolveErpCustomer } from './client'
+import { getErpCustomerSummary, getErpEmployeeReferences, getErpOrderDetails, getErpPickupLocations, getErpProductCatalog, resolveErpCustomer } from './client'
 
 const originalFetch = globalThis.fetch
 const originalBaseUrl = process.env.ERP_BASE_URL
@@ -64,4 +64,26 @@ test('resuelve nombres de agentes del ERP sin duplicar identificadores', async (
 
   assert.deepEqual(employees, [{ id: 'agent-1', name: 'Marina Soto' }])
   assert.equal(receivedUrl, 'https://app.example.test/api/internal/crm/employees?ids=agent-1')
+})
+
+test('consulta el catálogo comercial mediante la API interna del ERP', async () => {
+  process.env.ERP_BASE_URL = 'https://app.example.test'
+  let receivedUrl = ''
+  globalThis.fetch = async input => {
+    receivedUrl = String(input)
+    return Response.json([])
+  }
+  await getErpProductCatalog('session=segura')
+  assert.equal(receivedUrl, 'https://app.example.test/api/internal/crm/catalog')
+})
+
+test('consulta el detalle de un pedido histórico codificando su ID', async () => {
+  process.env.ERP_BASE_URL = 'https://app.example.test'
+  let receivedUrl = ''
+  globalThis.fetch = async input => {
+    receivedUrl = String(input)
+    return Response.json({ id: 'pedido con espacio' })
+  }
+  await getErpOrderDetails('pedido con espacio', 'session=segura')
+  assert.equal(receivedUrl, 'https://app.example.test/api/internal/crm/orders/pedido%20con%20espacio')
 })

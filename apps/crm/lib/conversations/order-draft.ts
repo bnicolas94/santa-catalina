@@ -1,4 +1,5 @@
-import type { OrderFulfillment, OrderShift, PrismaClient } from '@/generated/prisma'
+import type { CrmOrderItem, ErpProductCatalogItem } from '@santa-catalina/contracts'
+import type { OrderFulfillment, OrderShift, Prisma, PrismaClient } from '@/generated/prisma'
 import { CrmApiError } from '../api'
 import { isLeaseOwned } from './locking'
 
@@ -11,6 +12,61 @@ function optionalText(value: unknown, field: string, maxLength: number) {
   return normalized || null
 }
 
+function orderItemSelections(value: unknown) {
+  if (value == null) return []
+  if (!Array.isArray(value)) throw new CrmApiError(400, 'INVALID_ORDER_ITEMS', 'El detalle del pedido debe ser una lista.')
+  if (value.length > 20) throw new CrmApiError(400, 'ORDER_ITEMS_LIMIT', 'La ficha admite hasta 20 productos distintos.')
+  const seen = new Set<string>()
+  return value.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') throw new CrmApiError(400, 'INVALID_ORDER_ITEM', `El producto ${index + 1} no es válido.`)
+    const item = raw as Record<string, unknown>
+    const presentationId = optionalText(item.presentationId, 'Presentación', 80)
+    const quantity = Number(item.quantity)
+    if (!presentationId || !Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+      throw new CrmApiError(400, 'INVALID_ORDER_ITEM', `Revisá la presentación y cantidad del producto ${index + 1}.`)
+    }
+    if (seen.has(presentationId)) throw new CrmApiError(400, 'DUPLICATE_ORDER_ITEM', 'Una presentación no puede repetirse en la ficha.')
+    seen.add(presentationId)
+    return { presentationId, quantity }
+  })
+}
+
+export function orderItemSelectionKey(value: unknown) {
+  return JSON.stringify(orderItemSelections(value).sort((a, b) => a.presentationId.localeCompare(b.presentationId)))
+}
+
+export function canonicalizeOrderItems(value: unknown, catalog: ErpProductCatalogItem[]): CrmOrderItem[] {
+  const presentations = new Map(catalog.flatMap(product => product.presentations.map(presentation => [presentation.id, { product, presentation }] as const)))
+  return orderItemSelections(value).map(selection => {
+    const match = presentations.get(selection.presentationId)
+    if (!match) throw new CrmApiError(400, 'ORDER_PRESENTATION_UNAVAILABLE', 'Uno de los productos ya no está disponible en el ERP.')
+    return {
+      productId: match.product.id,
+      presentationId: match.presentation.id,
+      productName: match.product.name,
+      productCode: match.product.code,
+      unitsPerPackage: match.presentation.unitsPerPackage,
+      quantity: selection.quantity,
+    }
+  })
+}
+
+export function normalizeStoredOrderItems(value: unknown): CrmOrderItem[] {
+  const selections = orderItemSelections(value)
+  const source = value as Array<Record<string, unknown>>
+  return selections.map((selection, index) => {
+    const raw = source[index]
+    const productId = optionalText(raw.productId, 'Producto', 80)
+    const productName = optionalText(raw.productName, 'Nombre del producto', 160)
+    const productCode = optionalText(raw.productCode, 'Código del producto', 80)
+    const unitsPerPackage = Number(raw.unitsPerPackage)
+    if (!productId || !productName || !productCode || !Number.isInteger(unitsPerPackage) || unitsPerPackage < 1 || unitsPerPackage > 10000) {
+      throw new CrmApiError(400, 'INVALID_ORDER_ITEM', `El producto ${index + 1} no tiene una referencia válida.`)
+    }
+    return { productId, productName, productCode, unitsPerPackage, ...selection }
+  })
+}
+
 export function normalizeOrderDraft(input: {
   orderDate?: unknown
   orderAddress?: unknown
@@ -19,6 +75,8 @@ export function normalizeOrderDraft(input: {
   orderPickupLocationName?: unknown
   orderShift?: unknown
   orderPaid?: unknown
+  orderItems?: unknown
+  orderNotes?: unknown
 }) {
   const orderDate = optionalText(input.orderDate, 'Fecha', 10)
   if (orderDate) {
@@ -33,6 +91,8 @@ export function normalizeOrderDraft(input: {
   const pickupLocationId = optionalText(input.orderPickupLocationId, 'Local de retiro', 80)
   const pickupLocationName = optionalText(input.orderPickupLocationName, 'Nombre del local de retiro', 160)
   const shiftValue = optionalText(input.orderShift, 'Turno', 20)
+  const orderItems = normalizeStoredOrderItems(input.orderItems)
+  const orderNotes = optionalText(input.orderNotes, 'Observaciones', 500)
   if (input.orderPaid !== undefined && typeof input.orderPaid !== 'boolean') {
     throw new CrmApiError(400, 'INVALID_PAYMENT_STATUS', 'El estado de pago debe ser válido.')
   }
@@ -50,6 +110,8 @@ export function normalizeOrderDraft(input: {
     orderPickupLocationName: fulfillmentValue === 'PICKUP' ? pickupLocationName : null,
     orderShift: shiftValue as OrderShift | null,
     orderPaid: input.orderPaid === true,
+    orderItems,
+    orderNotes,
   }
 }
 
@@ -58,6 +120,7 @@ export function isOrderDraftComplete(draft: ReturnType<typeof normalizeOrderDraf
     draft.orderDate
     && draft.orderFulfillment
     && draft.orderShift
+    && draft.orderItems.length > 0
     && (draft.orderFulfillment === 'PICKUP'
       ? draft.orderPickupLocationId && draft.orderPickupLocationName
       : draft.orderAddress),
@@ -75,6 +138,8 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
   orderPickupLocationName?: unknown
   orderShift?: unknown
   orderPaid?: unknown
+  orderItems?: unknown
+  orderNotes?: unknown
 }) {
   const draft = normalizeOrderDraft(input)
   return prisma.$transaction(async transaction => {
@@ -94,7 +159,7 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
     const updatedAt = new Date()
     const updated = await transaction.conversation.update({
       where: { id: conversation.id },
-      data: { ...draft, orderDraftUpdatedById: input.agentId, orderDraftUpdatedAt: updatedAt },
+      data: { ...draft, orderItems: draft.orderItems as unknown as Prisma.InputJsonValue, orderDraftUpdatedById: input.agentId, orderDraftUpdatedAt: updatedAt },
       select: {
         orderDate: true,
         orderAddress: true,
@@ -103,6 +168,8 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
         orderPickupLocationName: true,
         orderShift: true,
         orderPaid: true,
+        orderItems: true,
+        orderNotes: true,
         orderDraftUpdatedById: true,
         orderDraftUpdatedAt: true,
       },
@@ -117,6 +184,7 @@ export async function updateConversationOrderDraft(prisma: PrismaClient, input: 
           fulfillment: draft.orderFulfillment,
           pickupLocationId: draft.orderPickupLocationId,
           paid: draft.orderPaid,
+          itemCount: draft.orderItems.length,
         },
       },
     })

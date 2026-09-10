@@ -3,6 +3,8 @@ import test from 'node:test'
 import { CrmApiError } from '../api'
 import { scheduledOrderSnapshot } from './schedule-order'
 
+const ORDER_ITEM = { productId: 'product-1', presentationId: 'presentation-48', productName: 'Triple clásico', productCode: 'CLA', unitsPerPackage: 48, quantity: 2 }
+
 test('genera una fotografía completa para un pedido agendado con envío', () => {
   const snapshot = scheduledOrderSnapshot({
     orderDate: '2026-09-15',
@@ -10,6 +12,8 @@ test('genera una fotografía completa para un pedido agendado con envío', () =>
     orderFulfillment: 'DELIVERY',
     orderShift: 'MORNING',
     orderPaid: true,
+    orderItems: [ORDER_ITEM],
+    orderNotes: 'Entregar después de las 15',
   })
 
   assert.deepEqual(snapshot, {
@@ -20,6 +24,8 @@ test('genera una fotografía completa para un pedido agendado con envío', () =>
     orderPickupLocationName: null,
     orderShift: 'MORNING',
     orderPaid: true,
+    orderItems: [ORDER_ITEM],
+    orderNotes: 'Entregar después de las 15',
   })
 })
 
@@ -30,6 +36,7 @@ test('conserva el local elegido en la fotografía histórica de retiro', () => {
     orderPickupLocationId: 'local-1',
     orderPickupLocationName: 'Local Gutierrez',
     orderShift: 'SIESTA',
+    orderItems: [ORDER_ITEM],
   })
 
   assert.equal(snapshot.orderPickupLocationId, 'local-1')

@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@/generated/prisma'
+import type { Prisma, PrismaClient } from '@/generated/prisma'
 import { CrmApiError } from '../api'
 import { isLeaseOwned } from './locking'
 import { isOrderDraftComplete, normalizeOrderDraft } from './order-draft'
@@ -11,6 +11,8 @@ const draftSelect = {
   orderPickupLocationName: true,
   orderShift: true,
   orderPaid: true,
+  orderItems: true,
+  orderNotes: true,
   orderDraftUpdatedById: true,
   orderDraftUpdatedAt: true,
 } as const
@@ -18,7 +20,7 @@ const draftSelect = {
 export function scheduledOrderSnapshot(input: Parameters<typeof normalizeOrderDraft>[0]) {
   const draft = normalizeOrderDraft(input)
   if (!isOrderDraftComplete(draft)) {
-    throw new CrmApiError(400, 'ORDER_DRAFT_INCOMPLETE', 'Completá fecha, modalidad, destino y turno antes de marcar el pedido como agendado.')
+    throw new CrmApiError(400, 'ORDER_DRAFT_INCOMPLETE', 'Agregá productos y completá fecha, modalidad, destino y turno antes de marcar el pedido como agendado.')
   }
   return {
     orderDate: draft.orderDate!,
@@ -28,6 +30,8 @@ export function scheduledOrderSnapshot(input: Parameters<typeof normalizeOrderDr
     orderPickupLocationName: draft.orderPickupLocationName,
     orderShift: draft.orderShift!,
     orderPaid: draft.orderPaid,
+    orderItems: draft.orderItems,
+    orderNotes: draft.orderNotes,
   }
 }
 
@@ -71,6 +75,7 @@ export async function scheduleConversationOrder(prisma: PrismaClient, input: {
         conversationId: conversation.id,
         clientActionId: input.clientActionId,
         ...snapshot,
+        orderItems: snapshot.orderItems as unknown as Prisma.InputJsonValue,
         scheduledById: input.agentId,
       },
     })
@@ -85,6 +90,8 @@ export async function scheduleConversationOrder(prisma: PrismaClient, input: {
         orderPickupLocationName: null,
         orderShift: null,
         orderPaid: false,
+        orderItems: [],
+        orderNotes: null,
         orderDraftUpdatedById: input.agentId,
         orderDraftUpdatedAt: updatedAt,
       },
@@ -101,6 +108,7 @@ export async function scheduleConversationOrder(prisma: PrismaClient, input: {
           fulfillment: scheduledOrder.orderFulfillment,
           pickupLocationId: scheduledOrder.orderPickupLocationId,
           paid: scheduledOrder.orderPaid,
+          itemCount: snapshot.orderItems.length,
         },
       },
     })

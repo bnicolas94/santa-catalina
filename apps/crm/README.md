@@ -80,8 +80,9 @@ La UI ejecuta `claim` automáticamente al abrir una conversación sin asignar. S
 dos agentes la abren al mismo tiempo, la operación atómica asigna a uno solo y
 el otro actualiza su bandeja sin obtener permiso de respuesta.
 
-Cada conversación tiene una ficha rápida de pedido con fecha calendario,
-dirección, modalidad `DELIVERY`/`PICKUP`, local de retiro y turno
+Cada conversación tiene una ficha rápida de pedido con productos y presentaciones
+activas del catálogo ERP, cantidades, observaciones, fecha calendario, dirección,
+modalidad `DELIVERY`/`PICKUP`, local de retiro y turno
 `MORNING`/`SIESTA`/`AFTERNOON`. La UI la guarda automáticamente, ofrece accesos
 rápidos para fechas y sólo permite editarla al agente que conserva el lease. Un
 retiro exige seleccionar una ubicación activa de tipo `LOCAL` obtenida mediante
@@ -97,13 +98,17 @@ El historial permanece asociado a la conversación para que un cliente recurrent
 pueda iniciar otro pedido sin sobrescribir los anteriores. La acción usa un
 `clientActionId` único para evitar duplicados ante reintentos. El detalle muestra
 todos los datos agendados, la marca temporal y el nombre actual del empleado,
-resuelto de forma segura mediante la API interna del ERP.
+resuelto de forma segura mediante la API interna del ERP. Los IDs del producto y
+la presentación se acompañan con una instantánea de nombre, código y unidades por
+paquete para que cambios posteriores del catálogo no alteren el historial.
 
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en
 `Contact.erpClientId`; si existen duplicados, devuelve candidatos para que el
-operador elija. El panel muestra dirección, zona, segmento y los cinco pedidos
-más recientes sin habilitar acceso directo del CRM al esquema `public`.
+operador elija. El panel autocompleta la dirección actual del ERP cuando la ficha
+todavía no tiene una y muestra dirección, zona, segmento y los cinco pedidos más
+recientes. Cada resumen abre un detalle completo con productos, cantidades,
+precios, entrega y pago, sin habilitar acceso directo del CRM al esquema `public`.
 
 La pantalla `/settings` es exclusiva para administradores. Muestra el estado de
 la clave maestra y de cada secreto sin devolver su contenido, permite conservar

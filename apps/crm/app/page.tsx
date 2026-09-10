@@ -1,15 +1,15 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationStatus, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate, ErpPickupLocation } from '@santa-catalina/contracts'
+import type { ConversationStatus, CrmOrderItem, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate, ErpOrderDetails, ErpPickupLocation, ErpProductCatalogItem } from '@santa-catalina/contracts'
 
 type ApiTag = { id: string; name: string; color: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
-type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderPaid: boolean; orderDraftUpdatedAt?: string | null }
-type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; orderPaid: boolean; scheduledById: string; scheduledByName: string; scheduledAt: string }
-type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderPaid: boolean; orderDraftUpdatedAt: string | null }
+type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string; orderDraftUpdatedAt?: string | null }
+type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; scheduledById: string; scheduledByName: string; scheduledAt: string }
+type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
 
@@ -19,7 +19,7 @@ const FILTERS: Array<{ id: FilterId; label: string; short: string }> = [
   { id: 'unassigned', label: 'Sin asignar', short: 'Nuevas' }, { id: 'waiting', label: 'En espera', short: 'Espera' },
   { id: 'resolved', label: 'Resueltas', short: 'Cerradas' },
 ]
-const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderPickupLocationId: null, orderPickupLocationName: '', orderShift: null, orderPaid: false, orderDraftUpdatedAt: null }
+const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderPickupLocationId: null, orderPickupLocationName: '', orderShift: null, orderPaid: false, orderItems: [], orderNotes: '', orderDraftUpdatedAt: null }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
@@ -41,6 +41,7 @@ function formatTime(value: string) { return new Intl.DateTimeFormat('es-AR', { h
 function formatDate(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(value)) }
 function formatOrderDate(value: string) { const [year, month, day] = value.split('-').map(Number); return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day)) }
 function formatScheduledAt(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
+function formatLongDate(value: string) { return new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(value)) }
 function formatMoney(value: number) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) }
 function shiftName(value: ScheduledOrder['orderShift']) { return value === 'MORNING' ? 'Mañana' : value === 'SIESTA' ? 'Siesta' : 'Tarde' }
 function orderStatus(value: string) {
@@ -70,6 +71,8 @@ function orderDraftFromConversation(conversation: ConversationDetail): OrderDraf
     orderPickupLocationName: conversation.orderPickupLocationName || '',
     orderShift: conversation.orderShift,
     orderPaid: conversation.orderPaid,
+    orderItems: Array.isArray(conversation.orderItems) ? conversation.orderItems : [],
+    orderNotes: conversation.orderNotes || '',
     orderDraftUpdatedAt: conversation.orderDraftUpdatedAt,
   }
 }
@@ -100,6 +103,11 @@ export default function AttentionWorkspace() {
   const [pickupLocations, setPickupLocations] = useState<ErpPickupLocation[]>([])
   const [pickupLocationsLoading, setPickupLocationsLoading] = useState(true)
   const [pickupLocationsError, setPickupLocationsError] = useState(false)
+  const [orderCatalog, setOrderCatalog] = useState<ErpProductCatalogItem[]>([])
+  const [orderCatalogLoading, setOrderCatalogLoading] = useState(true)
+  const [orderCatalogError, setOrderCatalogError] = useState(false)
+  const [productSearch, setProductSearch] = useState('')
+  const [orderModal, setOrderModal] = useState<{ loading: boolean; detail: ErpOrderDetails | null; error: string | null } | null>(null)
   const [orderDraftDirty, setOrderDraftDirty] = useState(false)
   const [orderSaveState, setOrderSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [schedulingOrder, setSchedulingOrder] = useState(false)
@@ -133,7 +141,19 @@ export default function AttentionWorkspace() {
       setPickupLocationsLoading(false)
     }
   }, [])
+  const refreshOrderCatalog = useCallback(async () => {
+    setOrderCatalogLoading(true)
+    try {
+      setOrderCatalog(await api<ErpProductCatalogItem[]>('/api/order-catalog'))
+      setOrderCatalogError(false)
+    } catch {
+      setOrderCatalogError(true)
+    } finally {
+      setOrderCatalogLoading(false)
+    }
+  }, [])
   useEffect(() => { void refreshPickupLocations() }, [refreshPickupLocations])
+  useEffect(() => { void refreshOrderCatalog() }, [refreshOrderCatalog])
   useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 10_000); return () => window.clearInterval(timer) }, [refreshList])
 
   const refreshCustomerContext = useCallback(async (conversationId: string) => {
@@ -160,7 +180,7 @@ export default function AttentionWorkspace() {
     if (!activeId || !user) return
     let cancelled = false
     orderDraftVersionRef.current += 1
-    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
+    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
@@ -254,14 +274,19 @@ export default function AttentionWorkspace() {
   }
 
   const canEditOrderDraft = Boolean(detail && lock && !schedulingOrder && detail.assignedToId === user?.id && detail.status !== 'RESOLVED' && detail.status !== 'ARCHIVED')
-  const changeOrderDraft = (patch: Partial<OrderDraft>) => {
+  const changeOrderDraft = useCallback((patch: Partial<OrderDraft>) => {
     if (!canEditOrderDraft) return
     orderDraftVersionRef.current += 1
     setOrderDraft(current => ({ ...current, ...patch }))
     setOrderDraftDirty(true)
     setOrderSaveState('idle')
     setScheduleFeedback(null)
-  }
+  }, [canEditOrderDraft])
+  const linkedAddress = customerContext?.status === 'LINKED' ? customerContext.customer.address?.trim() || '' : ''
+  useEffect(() => {
+    if (!linkedAddress || !canEditOrderDraft || orderDraft.orderAddress.trim() || orderDraft.orderFulfillment === 'PICKUP') return
+    changeOrderDraft({ orderAddress: linkedAddress })
+  }, [linkedAddress, canEditOrderDraft, orderDraft.orderAddress, orderDraft.orderFulfillment, changeOrderDraft])
   useEffect(() => {
     if (!orderDraftDirty || !canEditOrderDraft || !detail) return
     const version = orderDraftVersionRef.current
@@ -287,6 +312,8 @@ export default function AttentionWorkspace() {
           orderPickupLocationName: result.draft.orderPickupLocationName || null,
           orderShift: result.draft.orderShift,
           orderPaid: result.draft.orderPaid,
+          orderItems: result.draft.orderItems,
+          orderNotes: result.draft.orderNotes || null,
           orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt || null,
         } : current)
       } catch (cause) {
@@ -298,6 +325,38 @@ export default function AttentionWorkspace() {
     return () => window.clearTimeout(timer)
   }, [orderDraft, orderDraftDirty, canEditOrderDraft, detail])
 
+  const openHistoricalOrder = async (orderId: string) => {
+    if (!detail) return
+    setOrderModal({ loading: true, detail: null, error: null })
+    try {
+      const historicalOrder = await api<ErpOrderDetails>(`/api/conversations/${detail.id}/erp-orders/${encodeURIComponent(orderId)}`)
+      setOrderModal({ loading: false, detail: historicalOrder, error: null })
+    } catch (cause) {
+      setOrderModal({ loading: false, detail: null, error: cause instanceof Error ? cause.message : 'No se pudo abrir el pedido.' })
+    }
+  }
+
+  const catalogResults = useMemo(() => {
+    const term = productSearch.trim().toLowerCase()
+    if (!term) return []
+    return orderCatalog.filter(product => `${product.name} ${product.code}`.toLowerCase().includes(term)).slice(0, 6)
+  }, [orderCatalog, productSearch])
+  const addOrderItem = (product: ErpProductCatalogItem, presentationId: string) => {
+    const presentation = product.presentations.find(item => item.id === presentationId)
+    if (!presentation) return
+    const existing = orderDraft.orderItems.find(item => item.presentationId === presentationId)
+    const items = existing
+      ? orderDraft.orderItems.map(item => item.presentationId === presentationId ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item)
+      : [...orderDraft.orderItems, { productId: product.id, presentationId, productName: product.name, productCode: product.code, unitsPerPackage: presentation.unitsPerPackage, quantity: 1 }]
+    changeOrderDraft({ orderItems: items })
+    setProductSearch('')
+  }
+  const changeOrderItemQuantity = (presentationId: string, change: number) => {
+    const items = orderDraft.orderItems
+      .map(item => item.presentationId === presentationId ? { ...item, quantity: Math.min(999, item.quantity + change) } : item)
+      .filter(item => item.quantity > 0)
+    changeOrderDraft({ orderItems: items })
+  }
   const counts = useMemo(() => ({ all: conversations.filter(c => c.status !== 'RESOLVED').length, mine: conversations.filter(c => c.assignedToId === user?.id && c.status !== 'RESOLVED').length, unassigned: conversations.filter(c => c.status === 'UNASSIGNED').length, waiting: conversations.filter(c => c.status === 'WAITING_CUSTOMER').length, resolved: conversations.filter(c => c.status === 'RESOLVED').length }), [conversations, user])
   const visible = useMemo(() => conversations.filter(c => {
     const matchesFilter = filter === 'all' ? c.status !== 'RESOLVED' : filter === 'mine' ? c.assignedToId === user?.id && c.status !== 'RESOLVED' : filter === 'unassigned' ? c.status === 'UNASSIGNED' : filter === 'waiting' ? c.status === 'WAITING_CUSTOMER' : c.status === 'RESOLVED'
@@ -311,6 +370,7 @@ export default function AttentionWorkspace() {
   const currentName = user?.name || 'Agente de Atención'
   const isSupervisor = user?.rol === 'ADMIN' || user?.permisos.permisoAtencionAdmin === true
   const orderCompleted = [
+    orderDraft.orderItems.length > 0,
     Boolean(orderDraft.orderDate),
     Boolean(orderDraft.orderFulfillment),
     Boolean(orderDraft.orderShift),
@@ -320,7 +380,7 @@ export default function AttentionWorkspace() {
   ].filter(Boolean).length
   const scheduleOrder = async () => {
     const currentLock = lockRef.current
-    if (!detail || !currentLock || orderCompleted !== 4 || orderDraftDirty || orderSaveState === 'saving') return
+    if (!detail || !currentLock || orderCompleted !== 5 || orderDraftDirty || orderSaveState === 'saving') return
     const clientActionId = scheduleActionIdRef.current || crypto.randomUUID()
     scheduleActionIdRef.current = clientActionId
     setSchedulingOrder(true)
@@ -345,6 +405,8 @@ export default function AttentionWorkspace() {
         orderPickupLocationName: null,
         orderShift: null,
         orderPaid: false,
+        orderItems: [],
+        orderNotes: null,
         orderDraftUpdatedAt: result.draft.orderDraftUpdatedAt,
         scheduledOrders: [result.scheduledOrder, ...current.scheduledOrders.filter(item => item.id !== result.scheduledOrder.id)],
       } : current)
@@ -395,7 +457,18 @@ export default function AttentionWorkspace() {
         </div>
       </div>
       <section className="orderPlanner">
-        <div className="plannerHeading"><div><span>Ficha rápida</span><h4>Datos del pedido</h4></div><b className={orderCompleted === 4 ? 'plannerComplete' : ''}>{orderCompleted}/4</b></div>
+        <div className="plannerHeading"><div><span>Ficha rápida</span><h4>Datos del pedido</h4></div><b className={orderCompleted === 5 ? 'plannerComplete' : ''}>{orderCompleted}/5</b></div>
+        <div className="plannerField orderItemsField">
+          <label><Icon name="bag" size={15} /> ¿Qué va a pedir?</label>
+          <label className="orderProductSearch"><Icon name="search" size={15} /><input value={productSearch} disabled={!canEditOrderDraft || orderCatalogLoading} onChange={event => setProductSearch(event.target.value)} placeholder={orderCatalogLoading ? 'Cargando productos del ERP…' : 'Buscar producto o código'} /></label>
+          {orderCatalogError && <div className="orderCatalogNotice orderCatalogWarning"><span>No pudimos consultar el catálogo del ERP.</span><button type="button" onClick={() => void refreshOrderCatalog()}>Reintentar</button></div>}
+          {productSearch.trim() && !orderCatalogError && <div className="orderCatalogResults">
+            {catalogResults.map(product => <article key={product.id}><div><strong>{product.name}</strong><small>{product.code}</small></div><div>{product.presentations.map(presentation => <button type="button" key={presentation.id} disabled={!canEditOrderDraft} onClick={() => addOrderItem(product, presentation.id)}>+ x{presentation.unitsPerPackage}</button>)}</div></article>)}
+            {!orderCatalogLoading && catalogResults.length === 0 && <div className="orderCatalogNotice">No encontramos productos activos con ese nombre o código.</div>}
+          </div>}
+          {orderDraft.orderItems.length > 0 ? <div className="selectedOrderItems">{orderDraft.orderItems.map(item => <article key={item.presentationId}><div><strong>{item.productName}</strong><small>{item.productCode} · presentación x{item.unitsPerPackage}</small></div><div className="itemQuantity"><button type="button" disabled={!canEditOrderDraft} aria-label={`Quitar una presentación de ${item.productName}`} onClick={() => changeOrderItemQuantity(item.presentationId, -1)}>−</button><b>{item.quantity}</b><button type="button" disabled={!canEditOrderDraft || item.quantity >= 999} aria-label={`Agregar una presentación de ${item.productName}`} onClick={() => changeOrderItemQuantity(item.presentationId, 1)}>+</button></div></article>)}</div> : <div className="emptyOrderItems"><Icon name="bag" size={16} /><span>Agregá al menos un producto del catálogo.</span></div>}
+          <textarea className="orderNotes" rows={2} maxLength={500} value={orderDraft.orderNotes} disabled={!canEditOrderDraft} onChange={event => changeOrderDraft({ orderNotes: event.target.value })} placeholder="Aclaraciones del pedido (opcional)" />
+        </div>
         <div className="plannerField">
           <label><Icon name="calendar" size={15} /> Fecha</label>
           <input className="plannerDate" type="date" min={localDateOffset(0)} value={orderDraft.orderDate} disabled={!canEditOrderDraft} onChange={event => changeOrderDraft({ orderDate: event.target.value })} />
@@ -432,15 +505,15 @@ export default function AttentionWorkspace() {
           <label><Icon name="money" size={15} /> Estado del pago</label>
           <button type="button" className={`paymentStatusButton ${orderDraft.orderPaid ? 'selected' : ''}`} aria-pressed={orderDraft.orderPaid} disabled={!canEditOrderDraft} onClick={() => changeOrderDraft({ orderPaid: !orderDraft.orderPaid })}><span className="paymentStatusIcon"><Icon name={orderDraft.orderPaid ? 'check' : 'money'} size={18} /></span><span><strong>{orderDraft.orderPaid ? 'Pedido pagado' : 'Marcar como pagado'}</strong><small>{orderDraft.orderPaid ? 'Transferencia confirmada' : 'Activá esta opción al recibir el pago'}</small></span><b>{orderDraft.orderPaid ? 'PAGADO' : 'SIN MARCAR'}</b></button>
         </div>
-        <button type="button" className="scheduleOrderButton" disabled={!canEditOrderDraft || orderCompleted !== 4 || orderDraftDirty || orderSaveState === 'saving' || schedulingOrder} onClick={() => void scheduleOrder()}><span><Icon name="check" size={18} /></span><span><strong>{schedulingOrder ? 'Agendando…' : 'Agendado'}</strong><small>{orderCompleted !== 4 ? 'Completá los 4 datos primero' : orderDraftDirty || orderSaveState === 'saving' ? 'Esperando el guardado automático…' : 'Marcar después de pasarlo al Excel'}</small></span></button>
+        <button type="button" className="scheduleOrderButton" disabled={!canEditOrderDraft || orderCompleted !== 5 || orderDraftDirty || orderSaveState === 'saving' || schedulingOrder} onClick={() => void scheduleOrder()}><span><Icon name="check" size={18} /></span><span><strong>{schedulingOrder ? 'Agendando…' : 'Agendado'}</strong><small>{orderCompleted !== 5 ? 'Agregá productos y completá los datos' : orderDraftDirty || orderSaveState === 'saving' ? 'Esperando el guardado automático…' : 'Marcar después de pasarlo al Excel'}</small></span></button>
         {scheduleFeedback && <div className="scheduleFeedback"><Icon name="check" size={14} /><span>{scheduleFeedback}</span></div>}
-        <div className={`plannerSaveState state-${orderSaveState}`}><span>{orderSaveState === 'saving' ? '● Guardando…' : orderSaveState === 'error' ? '! No se pudo guardar' : orderSaveState === 'saved' ? '✓ Guardado automáticamente' : canEditOrderDraft ? 'Los cambios se guardan solos' : 'Sólo puede editar el agente que atiende'}</span>{orderCompleted === 4 && <b>Lista para agendar</b>}</div>
+        <div className={`plannerSaveState state-${orderSaveState}`}><span>{orderSaveState === 'saving' ? '● Guardando…' : orderSaveState === 'error' ? '! No se pudo guardar' : orderSaveState === 'saved' ? '✓ Guardado automáticamente' : canEditOrderDraft ? 'Los cambios se guardan solos' : 'Sólo puede editar el agente que atiende'}</span>{orderCompleted === 5 && <b>Lista para agendar</b>}</div>
       </section>
       {detail && detail.scheduledOrders.length > 0 && <section className="scheduledHistory">
         <div className="sectionLabel"><span>Historial agendado</span><b>{detail.scheduledOrders.length}</b></div>
         <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard" key={item.id}>
           <div className="scheduledOrderHeader"><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><small>Pedido para</small><strong>{formatOrderDate(item.orderDate)}</strong></div><div className="scheduledOrderBadges"><b className={item.orderFulfillment === 'PICKUP' ? 'pickupHistoryBadge' : ''}>{item.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</b><b className={item.orderPaid ? 'paidHistoryBadge' : 'unpaidHistoryBadge'}>{item.orderPaid ? 'Pagado' : 'Sin marcar'}</b></div></div>
-          <dl><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div><div><dt>Pago</dt><dd className={item.orderPaid ? 'paidOrderText' : ''}>{item.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div></dl>
+          <dl><div><dt>Pedido</dt><dd className="scheduledProducts">{item.orderItems.length > 0 ? item.orderItems.map(orderItem => `${orderItem.quantity}× ${orderItem.productName} x${orderItem.unitsPerPackage}`).join(' · ') : 'Sin detalle registrado'}</dd></div><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div><div><dt>Pago</dt><dd className={item.orderPaid ? 'paidOrderText' : ''}>{item.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div>{item.orderNotes && <div><dt>Notas</dt><dd>{item.orderNotes}</dd></div>}</dl>
           <footer><Avatar name={item.scheduledByName} small /><div><span>Agendado por</span><strong>{item.scheduledByName}{item.scheduledById === user?.id ? ' (vos)' : ''}</strong></div><time>{formatScheduledAt(item.scheduledAt)}</time></footer>
         </article>)}</div>
       </section>}
@@ -463,9 +536,20 @@ export default function AttentionWorkspace() {
       </section>
       <section className="detailSection">
         <div className="sectionLabel"><span>Pedidos recientes</span>{customerContext?.status === 'LINKED' && <b>{customerContext.customer.orderCount} históricos</b>}</div>
-        {customerContext?.status === 'LINKED' && customerContext.customer.recentOrders.length > 0 ? <div className="orderList">{customerContext.customer.recentOrders.map(order => <div className="orderCard" key={order.id}><span className="orderIcon"><Icon name="bag" size={16} /></span><div><strong>{formatDate(order.deliveryAt)} · {orderStatus(order.status)}</strong><span>{order.totalPacks} packs · {order.totalUnits} unidades</span></div><div className="orderAmount"><strong>{formatMoney(order.totalAmount)}</strong><span>{order.paid ? 'Abonado' : 'Pendiente'}</span></div></div>)}</div> : <div className="noOrder"><Icon name="bag" /><span>{customerContext?.status === 'LINKED' ? 'Todavía no tiene pedidos' : 'Vinculá el cliente para ver pedidos'}</span></div>}
+        {customerContext?.status === 'LINKED' && customerContext.customer.recentOrders.length > 0 ? <div className="orderList">{customerContext.customer.recentOrders.map(order => <button type="button" className="orderCard" key={order.id} onClick={() => void openHistoricalOrder(order.id)}><span className="orderIcon"><Icon name="bag" size={16} /></span><div><strong>{formatDate(order.deliveryAt)} · {orderStatus(order.status)}</strong><span>{order.totalPacks} packs · {order.totalUnits} unidades</span></div><div className="orderAmount"><strong>{formatMoney(order.totalAmount)}</strong><span>{order.paid ? 'Abonado' : 'Pendiente'} · Ver detalle</span></div></button>)}</div> : <div className="noOrder"><Icon name="bag" /><span>{customerContext?.status === 'LINKED' ? 'Todavía no tiene pedidos' : 'Vinculá el cliente para ver pedidos'}</span></div>}
       </section>
       <footer className="contextFooter"><button className={isSupervisor ? 'adminReleaseButton' : ''} onClick={isSupervisor ? unassignConversation : undefined} disabled={!isSupervisor || !active.assignedToId || busy}>{isSupervisor ? busy ? 'Liberando…' : 'Liberar chat' : 'Transferir'}</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer>
     </aside>}
+    {orderModal && <div className="orderModalBackdrop" role="presentation" onMouseDown={() => setOrderModal(null)}><section className="orderDetailModal" role="dialog" aria-modal="true" aria-label="Detalle del pedido histórico" onMouseDown={event => event.stopPropagation()}>
+      <header><div><span>Pedido histórico del ERP</span><h3>{orderModal.detail ? `#${orderModal.detail.id.slice(0, 8)}` : 'Consultando pedido'}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setOrderModal(null)}>×</button></header>
+      {orderModal.loading && <div className="orderModalState"><span className="claimSpinner" /><strong>Cargando toda la información…</strong></div>}
+      {orderModal.error && <div className="orderModalState orderModalError"><Icon name="bag" size={24} /><strong>{orderModal.error}</strong><button type="button" onClick={() => setOrderModal(null)}>Cerrar</button></div>}
+      {orderModal.detail && <div className="orderModalContent">
+        <div className="orderModalSummary"><div><span>Entrega</span><strong>{formatLongDate(orderModal.detail.deliveryAt)}</strong><small>{orderModal.detail.fulfillment === 'PICKUP' ? `Retiro${orderModal.detail.pickupLocation ? ` en ${orderModal.detail.pickupLocation.name}` : ''}` : 'Envío a domicilio'} · {orderModal.detail.shift || 'Sin turno'}</small></div><b className={orderModal.detail.paid ? 'orderPaidStatus' : ''}>{orderModal.detail.paid ? 'Abonado' : 'Pendiente'}</b></div>
+        <section><h4>Productos</h4><div className="orderModalItems">{orderModal.detail.items.map(item => <article key={`${item.presentationId}-${item.unitPrice}-${item.notes || ''}`}><span className="orderModalItemQuantity">{item.quantity}×</span><div><strong>{item.productName} · x{item.unitsPerPackage}</strong><small>{item.productCode} · {item.totalUnits} unidades{item.notes ? ` · ${item.notes}` : ''}</small></div><b>{formatMoney(item.totalAmount)}</b></article>)}</div></section>
+        <section className="orderModalData"><h4>Información del pedido</h4><dl><div><dt>Cliente</dt><dd>{orderModal.detail.customer.commercialName}</dd></div><div><dt>Dirección actual</dt><dd>{orderModal.detail.customer.currentAddress || 'Sin informar'}</dd></div><div><dt>Zona</dt><dd>{[orderModal.detail.customer.locality, orderModal.detail.customer.zone].filter(Boolean).join(' · ') || 'Sin informar'}</dd></div><div><dt>Fecha de carga</dt><dd>{formatLongDate(orderModal.detail.orderedAt)}</dd></div><div><dt>Estado</dt><dd>{orderStatus(orderModal.detail.status)}</dd></div><div><dt>Medio de pago</dt><dd>{orderModal.detail.paymentMethod || 'Sin informar'}</dd></div></dl></section>
+        <footer><div><span>{orderModal.detail.totalPacks} packs · {orderModal.detail.totalUnits} unidades</span><strong>Total {formatMoney(orderModal.detail.totalAmount)}</strong></div><button type="button" onClick={() => setOrderModal(null)}>Cerrar</button></footer>
+      </div>}
+    </section></div>}
   </main>
 }

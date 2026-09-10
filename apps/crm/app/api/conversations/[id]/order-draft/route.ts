@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CrmApiError, apiErrorResponse, requireText } from '@/lib/api'
-import { updateConversationOrderDraft } from '@/lib/conversations/order-draft'
-import { getAvailablePickupLocations } from '@/lib/erp/client'
+import { canonicalizeOrderItems, normalizeStoredOrderItems, orderItemSelectionKey, updateConversationOrderDraft } from '@/lib/conversations/order-draft'
+import { conversationVisibilityWhere } from '@/lib/conversations/access'
+import { getAvailablePickupLocations, getAvailableProductCatalog } from '@/lib/erp/client'
 import { crmPrisma } from '@/lib/prisma'
 import { requireCrmUser } from '@/lib/session'
 
@@ -10,6 +11,16 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const user = await requireCrmUser(request)
     const { id } = await context.params
     const body = await request.json()
+    const current = await crmPrisma.conversation.findFirst({
+      where: { id, ...conversationVisibilityWhere(user) },
+      select: { orderItems: true },
+    })
+    if (!current) throw new CrmApiError(404, 'CONVERSATION_NOT_FOUND', 'La conversación no existe.')
+
+    const itemsUnchanged = orderItemSelectionKey(body.orderItems) === orderItemSelectionKey(current.orderItems)
+    const orderItems = itemsUnchanged
+      ? normalizeStoredOrderItems(current.orderItems)
+      : canonicalizeOrderItems(body.orderItems, await getAvailableProductCatalog(request.headers.get('cookie') || ''))
     let pickupLocationId: string | null = null
     let pickupLocationName: string | null = null
     if (body.orderFulfillment === 'PICKUP' && body.orderPickupLocationId) {
@@ -32,6 +43,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       orderPickupLocationName: pickupLocationName,
       orderShift: body.orderShift,
       orderPaid: body.orderPaid,
+      orderItems,
+      orderNotes: body.orderNotes,
     })
     return NextResponse.json({ draft })
   } catch (error) {
