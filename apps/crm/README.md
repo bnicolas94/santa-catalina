@@ -94,7 +94,9 @@ transacción fotografía la ficha completa en `ScheduledOrder`, registra agente 
 horario, deja el evento `ORDER_SCHEDULED_EXTERNALLY` y limpia la ficha activa.
 El historial permanece asociado a la conversación para que un cliente recurrente
 pueda iniciar otro pedido sin sobrescribir los anteriores. La acción usa un
-`clientActionId` único para evitar duplicados ante reintentos.
+`clientActionId` único para evitar duplicados ante reintentos. El detalle muestra
+todos los datos agendados, la marca temporal y el nombre actual del empleado,
+resuelto de forma segura mediante la API interna del ERP.
 
 `customer-context` consulta el ERP con la misma sesión segura del agente. Si el
 teléfono coincide con un único cliente activo, conserva el vínculo en

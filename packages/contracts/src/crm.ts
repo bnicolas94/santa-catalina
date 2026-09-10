@@ -107,6 +107,11 @@ export interface ErpPickupLocation {
   name: string
 }
 
+export interface ErpEmployeeReference {
+  id: string
+  name: string
+}
+
 export interface ErpCustomerDetails extends Omit<ErpCustomerCandidate, 'matchQuality'> {
   segment?: string | null
   active: boolean

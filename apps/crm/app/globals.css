@@ -287,12 +287,23 @@ button { color: inherit; }
 .scheduledHistory .sectionLabel { margin-bottom: 8px; }
 .scheduledHistory .sectionLabel b { min-width: 22px; height: 20px; display: grid; place-items: center; border-radius: 8px; color: #08725a; background: #dff5ed; font-size: 8px; }
 .scheduledOrderList { display: flex; flex-direction: column; gap: 6px; }
-.scheduledOrderCard { padding: 9px; display: flex; align-items: flex-start; gap: 8px; border: 1px solid #dce5e1; border-radius: 10px; background: #fbfdfc; }
+.scheduledOrderCard { padding: 10px; border: 1px solid #dce5e1; border-radius: 11px; background: #fbfdfc; box-shadow: 0 3px 10px rgba(20,61,48,.04); }
+.scheduledOrderHeader { display: flex; align-items: center; gap: 8px; }
 .scheduledOrderCheck { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: white; background: #00a884; }
-.scheduledOrderCard > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.scheduledOrderCard strong { color: #273c36; font-size: 9px; }
-.scheduledOrderCard span { overflow: hidden; color: #64736d; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.scheduledOrderCard small { color: #929d98; font-size: 7px; }
+.scheduledOrderHeader > div { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.scheduledOrderHeader small { color: #929d98; font-size: 7px; }
+.scheduledOrderHeader strong { color: #273c36; font-size: 9px; text-transform: capitalize; }
+.scheduledOrderHeader > b { margin-left: auto; padding: 4px 7px; border-radius: 7px; color: #08725a; background: #dff5ed; font-size: 7px; }
+.scheduledOrderHeader > b.pickupHistoryBadge { color: #83560c; background: #fff0cf; }
+.scheduledOrderCard dl { margin: 9px 0; padding: 7px 0; border-top: 1px solid #edf1ef; border-bottom: 1px solid #edf1ef; }
+.scheduledOrderCard dl div { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 7px; padding: 2px 0; font-size: 8px; }
+.scheduledOrderCard dt { color: #929d98; }
+.scheduledOrderCard dd { overflow: hidden; margin: 0; color: #4d5e57; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.scheduledOrderCard footer { display: flex; align-items: center; gap: 7px; }
+.scheduledOrderCard footer > div { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.scheduledOrderCard footer span { color: #929d98; font-size: 7px; }
+.scheduledOrderCard footer strong { overflow: hidden; color: #4c5c56; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.scheduledOrderCard footer time { margin-left: auto; color: #929d98; font-size: 7px; white-space: nowrap; }
 .detailSection { padding: 14px; border-bottom: 1px solid var(--line); }
 .sectionLabel { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .sectionLabel span { color: #99968f; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }

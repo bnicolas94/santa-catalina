@@ -15,7 +15,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       lockToken: requireText(body.lockToken, 'lockToken', 100),
       clientActionId: requireText(body.clientActionId, 'clientActionId', 80),
     })
-    return NextResponse.json(result)
+    return NextResponse.json({
+      ...result,
+      scheduledOrder: { ...result.scheduledOrder, scheduledByName: user.name },
+    })
   } catch (error) {
     return apiErrorResponse(error)
   }

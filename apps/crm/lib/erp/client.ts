@@ -1,4 +1,4 @@
-import type { ErpCustomerCandidate, ErpCustomerDetails, ErpPickupLocation } from '@santa-catalina/contracts'
+import type { ErpCustomerCandidate, ErpCustomerDetails, ErpEmployeeReference, ErpPickupLocation } from '@santa-catalina/contracts'
 import { CrmApiError } from '@/lib/api'
 
 type ResolutionResponse = { candidates: ErpCustomerCandidate[] }
@@ -63,4 +63,9 @@ export function getAvailablePickupLocations(cookie: string) {
   return process.env.NODE_ENV === 'production'
     ? getErpPickupLocations(cookie)
     : Promise.resolve(DEMO_PICKUP_LOCATIONS)
+}
+
+export function getErpEmployeeReferences(ids: string[], cookie: string) {
+  const query = new URLSearchParams({ ids: [...new Set(ids)].slice(0, 50).join(',') })
+  return getFromErp<ErpEmployeeReference[]>(`api/internal/crm/employees?${query}`, cookie)
 }

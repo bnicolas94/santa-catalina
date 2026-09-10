@@ -191,7 +191,9 @@ Implementado:
   instantánea de su nombre, sin crear una clave foránea entre esquemas.
 - Acción `Agendado` transaccional e idempotente: conserva una fotografía histórica
   en `ScheduledOrder`, registra el agente y limpia la ficha activa sólo después de
-  guardar. Es una marca operativa de carga en Excel y no crea un `Pedido` ERP.
+  guardar. Es una marca operativa de carga en Excel y no crea un `Pedido` ERP. El
+  historial resuelve el nombre del agente por API interna usando el ID externo;
+  si el ERP no responde conserva visible la ficha con un nombre de respaldo.
 - Esquema CRM inicial y migración SQL.
 - Contratos TypeScript compartidos.
 - Permisos de Atención en los roles del ERP.

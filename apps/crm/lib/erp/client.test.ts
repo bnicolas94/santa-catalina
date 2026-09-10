@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { CrmApiError } from '@/lib/api'
-import { getErpCustomerSummary, getErpPickupLocations, resolveErpCustomer } from './client'
+import { getErpCustomerSummary, getErpEmployeeReferences, getErpPickupLocations, resolveErpCustomer } from './client'
 
 const originalFetch = globalThis.fetch
 const originalBaseUrl = process.env.ERP_BASE_URL
@@ -50,4 +50,18 @@ test('consulta solamente los locales de retiro expuestos por el ERP', async () =
 
   assert.deepEqual(locations, [{ id: 'local-1', name: 'Local Centro' }])
   assert.equal(receivedUrl, 'https://app.example.test/api/internal/crm/pickup-locations')
+})
+
+test('resuelve nombres de agentes del ERP sin duplicar identificadores', async () => {
+  process.env.ERP_BASE_URL = 'https://app.example.test'
+  let receivedUrl = ''
+  globalThis.fetch = async input => {
+    receivedUrl = String(input)
+    return Response.json([{ id: 'agent-1', name: 'Marina Soto' }])
+  }
+
+  const employees = await getErpEmployeeReferences(['agent-1', 'agent-1'], 'session=segura')
+
+  assert.deepEqual(employees, [{ id: 'agent-1', name: 'Marina Soto' }])
+  assert.equal(receivedUrl, 'https://app.example.test/api/internal/crm/employees?ids=agent-1')
 })

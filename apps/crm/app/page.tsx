@@ -8,7 +8,7 @@ type ApiContact = { id: string; displayName: string; profileName: string | null;
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
 type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderDraftUpdatedAt?: string | null }
-type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; scheduledById: string; scheduledAt: string }
+type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; scheduledById: string; scheduledByName: string; scheduledAt: string }
 type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
@@ -39,7 +39,8 @@ function initials(name: string) { return name.split(/\s+/).slice(0, 2).map(part 
 function agentName(id?: string | null) { return id ? DEMO_AGENT_NAMES[id] || 'Otro agente' : '' }
 function formatTime(value: string) { return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function formatDate(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(value)) }
-function formatOrderDate(value: string) { const [year, month, day] = value.split('-').map(Number); return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(year, month - 1, day)) }
+function formatOrderDate(value: string) { const [year, month, day] = value.split('-').map(Number); return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day)) }
+function formatScheduledAt(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function formatMoney(value: number) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value) }
 function shiftName(value: ScheduledOrder['orderShift']) { return value === 'MORNING' ? 'Mañana' : value === 'SIESTA' ? 'Siesta' : 'Tarde' }
 function orderStatus(value: string) {
@@ -430,7 +431,11 @@ export default function AttentionWorkspace() {
       </section>
       {detail && detail.scheduledOrders.length > 0 && <section className="scheduledHistory">
         <div className="sectionLabel"><span>Historial agendado</span><b>{detail.scheduledOrders.length}</b></div>
-        <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard" key={item.id}><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><strong>{formatOrderDate(item.orderDate)} · {shiftName(item.orderShift)}</strong><span>{item.orderFulfillment === 'PICKUP' ? `Retiro · ${item.orderPickupLocationName || 'Local'}` : `Envío · ${item.orderAddress || 'Sin dirección'}`}</span><small>Agendado {item.scheduledById === user?.id ? 'por vos' : 'por otro agente'} · {formatTime(item.scheduledAt)}</small></div></article>)}</div>
+        <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard" key={item.id}>
+          <div className="scheduledOrderHeader"><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><small>Pedido para</small><strong>{formatOrderDate(item.orderDate)}</strong></div><b className={item.orderFulfillment === 'PICKUP' ? 'pickupHistoryBadge' : ''}>{item.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</b></div>
+          <dl><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div></dl>
+          <footer><Avatar name={item.scheduledByName} small /><div><span>Agendado por</span><strong>{item.scheduledByName}{item.scheduledById === user?.id ? ' (vos)' : ''}</strong></div><time>{formatScheduledAt(item.scheduledAt)}</time></footer>
+        </article>)}</div>
       </section>}
       <section className="detailSection">
         <div className="sectionLabel"><span>Contacto</span><button onClick={() => refreshCustomerContext(active.id)} disabled={contextLoading}>{contextLoading ? 'Buscando…' : 'Actualizar'}</button></div>
