@@ -108,6 +108,7 @@ export default function AttentionWorkspace() {
   const [orderCatalogError, setOrderCatalogError] = useState(false)
   const [productSearch, setProductSearch] = useState('')
   const [orderModal, setOrderModal] = useState<{ loading: boolean; detail: ErpOrderDetails | null; error: string | null } | null>(null)
+  const [scheduledOrderModal, setScheduledOrderModal] = useState<ScheduledOrder | null>(null)
   const [orderDraftDirty, setOrderDraftDirty] = useState(false)
   const [orderSaveState, setOrderSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [schedulingOrder, setSchedulingOrder] = useState(false)
@@ -155,6 +156,16 @@ export default function AttentionWorkspace() {
   useEffect(() => { void refreshPickupLocations() }, [refreshPickupLocations])
   useEffect(() => { void refreshOrderCatalog() }, [refreshOrderCatalog])
   useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 10_000); return () => window.clearInterval(timer) }, [refreshList])
+  useEffect(() => {
+    if (!orderModal && !scheduledOrderModal) return
+    const closeModal = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setOrderModal(null)
+      setScheduledOrderModal(null)
+    }
+    window.addEventListener('keydown', closeModal)
+    return () => window.removeEventListener('keydown', closeModal)
+  }, [orderModal, scheduledOrderModal])
 
   const refreshCustomerContext = useCallback(async (conversationId: string) => {
     setContextLoading(true)
@@ -180,7 +191,7 @@ export default function AttentionWorkspace() {
     if (!activeId || !user) return
     let cancelled = false
     orderDraftVersionRef.current += 1
-    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
+    setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setOrderModal(null); setScheduledOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
       setDetail(conversation)
@@ -327,6 +338,7 @@ export default function AttentionWorkspace() {
 
   const openHistoricalOrder = async (orderId: string) => {
     if (!detail) return
+    setScheduledOrderModal(null)
     setOrderModal({ loading: true, detail: null, error: null })
     try {
       const historicalOrder = await api<ErpOrderDetails>(`/api/conversations/${detail.id}/erp-orders/${encodeURIComponent(orderId)}`)
@@ -334,6 +346,11 @@ export default function AttentionWorkspace() {
     } catch (cause) {
       setOrderModal({ loading: false, detail: null, error: cause instanceof Error ? cause.message : 'No se pudo abrir el pedido.' })
     }
+  }
+
+  const openScheduledOrder = (order: ScheduledOrder) => {
+    setOrderModal(null)
+    setScheduledOrderModal(order)
   }
 
   const catalogResults = useMemo(() => {
@@ -364,6 +381,7 @@ export default function AttentionWorkspace() {
     return matchesFilter && (!term || haystack.includes(term))
   }), [conversations, filter, search, user])
   const active = detail || conversations.find(item => item.id === activeId) || null
+  const scheduledOrderTotals = scheduledOrderModal?.orderItems.reduce((totals, item) => ({ packs: totals.packs + item.quantity, units: totals.units + (item.quantity * item.unitsPerPackage) }), { packs: 0, units: 0 }) || null
   const assignedToOther = Boolean(active?.assignedToId && active.assignedToId !== user?.id)
   const canReply = Boolean(active && lock && active.assignedToId === user?.id && active.status !== 'RESOLVED' && active.status !== 'ARCHIVED')
   const service = serviceWindow(active?.serviceWindowExpiresAt || null)
@@ -511,10 +529,10 @@ export default function AttentionWorkspace() {
       </section>
       {detail && detail.scheduledOrders.length > 0 && <section className="scheduledHistory">
         <div className="sectionLabel"><span>Historial agendado</span><b>{detail.scheduledOrders.length}</b></div>
-        <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard" key={item.id}>
+        <div className="scheduledOrderList">{detail.scheduledOrders.map(item => <article className="scheduledOrderCard scheduledOrderCardInteractive" key={item.id} role="button" tabIndex={0} aria-label={`Ver pedido agendado para el ${formatOrderDate(item.orderDate)}`} onClick={() => openScheduledOrder(item)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openScheduledOrder(item) } }}>
           <div className="scheduledOrderHeader"><span className="scheduledOrderCheck"><Icon name="check" size={14} /></span><div><small>Pedido para</small><strong>{formatOrderDate(item.orderDate)}</strong></div><div className="scheduledOrderBadges"><b className={item.orderFulfillment === 'PICKUP' ? 'pickupHistoryBadge' : ''}>{item.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</b><b className={item.orderPaid ? 'paidHistoryBadge' : 'unpaidHistoryBadge'}>{item.orderPaid ? 'Pagado' : 'Sin marcar'}</b></div></div>
           <dl><div><dt>Pedido</dt><dd className="scheduledProducts">{item.orderItems.length > 0 ? item.orderItems.map(orderItem => `${orderItem.quantity}× ${orderItem.productName} x${orderItem.unitsPerPackage}`).join(' · ') : 'Sin detalle registrado'}</dd></div><div><dt>Destino</dt><dd>{item.orderFulfillment === 'PICKUP' ? item.orderPickupLocationName || 'Local sin nombre' : item.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(item.orderShift)}</dd></div><div><dt>Pago</dt><dd className={item.orderPaid ? 'paidOrderText' : ''}>{item.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div>{item.orderNotes && <div><dt>Notas</dt><dd>{item.orderNotes}</dd></div>}</dl>
-          <footer><Avatar name={item.scheduledByName} small /><div><span>Agendado por</span><strong>{item.scheduledByName}{item.scheduledById === user?.id ? ' (vos)' : ''}</strong></div><time>{formatScheduledAt(item.scheduledAt)}</time></footer>
+          <footer><Avatar name={item.scheduledByName} small /><div><span>Agendado por</span><strong>{item.scheduledByName}{item.scheduledById === user?.id ? ' (vos)' : ''}</strong></div><div className="scheduledOrderCardAction"><time>{formatScheduledAt(item.scheduledAt)}</time><span>Ver detalle ›</span></div></footer>
         </article>)}</div>
       </section>}
       <section className="detailSection">
@@ -550,6 +568,16 @@ export default function AttentionWorkspace() {
         <section className="orderModalData"><h4>Información del pedido</h4><dl><div><dt>Cliente</dt><dd>{orderModal.detail.customer.commercialName}</dd></div><div><dt>Dirección actual</dt><dd>{orderModal.detail.customer.currentAddress || 'Sin informar'}</dd></div><div><dt>Zona</dt><dd>{[orderModal.detail.customer.locality, orderModal.detail.customer.zone].filter(Boolean).join(' · ') || 'Sin informar'}</dd></div><div><dt>Fecha de carga</dt><dd>{formatLongDate(orderModal.detail.orderedAt)}</dd></div><div><dt>Estado</dt><dd>{orderStatus(orderModal.detail.status)}</dd></div><div><dt>Medio de pago</dt><dd>{orderModal.detail.paymentMethod || 'Sin informar'}</dd></div></dl></section>
         <footer><div><span>{orderModal.detail.totalPacks} packs · {orderModal.detail.totalUnits} unidades</span><strong>Total {formatMoney(orderModal.detail.totalAmount)}</strong></div><button type="button" onClick={() => setOrderModal(null)}>Cerrar</button></footer>
       </div>}
+    </section></div>}
+    {scheduledOrderModal && <div className="orderModalBackdrop" role="presentation" onMouseDown={() => setScheduledOrderModal(null)}><section className="orderDetailModal scheduledOrderModal" role="dialog" aria-modal="true" aria-label="Detalle del pedido agendado" onMouseDown={event => event.stopPropagation()}>
+      <header><div><span>Pedido agendado en Atención</span><h3>#{scheduledOrderModal.id.slice(0, 8)}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setScheduledOrderModal(null)}>×</button></header>
+      <div className="orderModalContent">
+        <div className="orderModalSummary"><div><span>Pedido para</span><strong>{formatOrderDate(scheduledOrderModal.orderDate)}</strong><small>{scheduledOrderModal.orderFulfillment === 'PICKUP' ? `Retiro en ${scheduledOrderModal.orderPickupLocationName || 'local sin nombre'}` : `Envío a ${scheduledOrderModal.orderAddress || 'dirección sin informar'}`} · {shiftName(scheduledOrderModal.orderShift)}</small></div><b className={scheduledOrderModal.orderPaid ? 'orderPaidStatus' : ''}>{scheduledOrderModal.orderPaid ? 'Pagado' : 'Sin marcar'}</b></div>
+        <section><h4>Productos encargados</h4>{scheduledOrderModal.orderItems.length > 0 ? <div className="orderModalItems">{scheduledOrderModal.orderItems.map(item => <article key={`${item.presentationId}-${item.quantity}`}><span className="orderModalItemQuantity">{item.quantity}×</span><div><strong>{item.productName} · x{item.unitsPerPackage}</strong><small>{item.productCode} · {item.quantity * item.unitsPerPackage} unidades en total</small></div><b>{item.quantity} packs</b></article>)}</div> : <div className="orderModalEmpty"><Icon name="bag" size={20} /><span>Este pedido fue agendado antes de incorporar el detalle de productos.</span></div>}</section>
+        <section className="orderModalData"><h4>Información guardada</h4><dl><div><dt>Cliente</dt><dd>{active?.contact.displayName || 'Sin informar'}</dd></div><div><dt>Modalidad</dt><dd>{scheduledOrderModal.orderFulfillment === 'PICKUP' ? 'Retiro' : 'Envío'}</dd></div><div><dt>Destino</dt><dd>{scheduledOrderModal.orderFulfillment === 'PICKUP' ? scheduledOrderModal.orderPickupLocationName || 'Local sin nombre' : scheduledOrderModal.orderAddress || 'Sin dirección'}</dd></div><div><dt>Turno</dt><dd>{shiftName(scheduledOrderModal.orderShift)}</dd></div><div><dt>Estado del pago</dt><dd>{scheduledOrderModal.orderPaid ? 'Transferencia confirmada' : 'No marcado como pagado'}</dd></div><div><dt>Agendado por</dt><dd>{scheduledOrderModal.scheduledByName}{scheduledOrderModal.scheduledById === user?.id ? ' (vos)' : ''}</dd></div><div><dt>Fecha de registro</dt><dd>{formatScheduledAt(scheduledOrderModal.scheduledAt)}</dd></div></dl></section>
+        {scheduledOrderModal.orderNotes && <section className="orderModalNotes"><h4>Observaciones</h4><p>{scheduledOrderModal.orderNotes}</p></section>}
+        <footer><div><span>{scheduledOrderTotals?.packs || 0} packs · {scheduledOrderTotals?.units || 0} unidades</span><strong>{scheduledOrderModal.orderPaid ? 'Pago confirmado' : 'Pago sin confirmar'}</strong></div><button type="button" onClick={() => setScheduledOrderModal(null)}>Cerrar</button></footer>
+      </div>
     </section></div>}
   </main>
 }

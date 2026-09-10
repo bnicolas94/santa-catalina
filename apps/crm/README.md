@@ -97,7 +97,9 @@ horario, deja el evento `ORDER_SCHEDULED_EXTERNALLY` y limpia la ficha activa.
 El historial permanece asociado a la conversación para que un cliente recurrente
 pueda iniciar otro pedido sin sobrescribir los anteriores. La acción usa un
 `clientActionId` único para evitar duplicados ante reintentos. El detalle muestra
-todos los datos agendados, la marca temporal y el nombre actual del empleado,
+todos los datos agendados en un modal al seleccionar cualquier tarjeta del
+historial, incluida la lista de productos, destino, turno, pago, observaciones,
+la marca temporal y el nombre actual del empleado,
 resuelto de forma segura mediante la API interna del ERP. Los IDs del producto y
 la presentación se acompañan con una instantánea de nombre, código y unidades por
 paquete para que cambios posteriores del catálogo no alteren el historial.

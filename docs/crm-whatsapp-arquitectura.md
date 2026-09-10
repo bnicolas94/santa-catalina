@@ -194,8 +194,10 @@ Implementado:
   en `ScheduledOrder`, incluido el estado de pago confirmado por el operador,
   registra el agente y limpia la ficha activa sólo después de
   guardar. Es una marca operativa de carga en Excel y no crea un `Pedido` ERP. El
-  historial resuelve el nombre del agente por API interna usando el ID externo;
-  si el ERP no responde conserva visible la ficha con un nombre de respaldo.
+  historial abre cada fotografía en un modal con productos, destino, turno, pago,
+  observaciones, fecha y agente. El nombre del agente se resuelve por API interna
+  usando el ID externo; si el ERP no responde conserva visible la ficha con un
+  nombre de respaldo.
 - Catálogo comercial de sólo lectura y detalle de pedidos históricos mediante APIs
   internas del ERP. El CRM valida que el pedido consultado pertenezca al cliente
   vinculado antes de mostrar el modal y usa la dirección actual del cliente como
