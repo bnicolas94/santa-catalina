@@ -104,3 +104,48 @@ export async function sendWhatsAppText(
   }
   return { providerMessageId: result.messages[0].id }
 }
+
+export async function markWhatsAppMessageRead(
+  channel: ChannelCredentials,
+  waMessageId: string,
+  fetcher: typeof fetch = fetch,
+) {
+  if (isWhatsAppMockEnabled()) return { providerMarked: false, simulated: true }
+  if (!channel.accessTokenCiphertext || !channel.accessTokenIv || !channel.accessTokenTag) {
+    throw new CrmApiError(503, 'WHATSAPP_NOT_CONFIGURED', 'El canal de WhatsApp todavía no tiene credenciales.')
+  }
+  const accessToken = decryptSecret({
+    ciphertext: channel.accessTokenCiphertext,
+    iv: channel.accessTokenIv,
+    tag: channel.accessTokenTag,
+  })
+
+  if (channel.provider === 'YCLOUD') {
+    let response: Response
+    try {
+      response = await fetcher(`https://api.ycloud.com/v2/whatsapp/inboundMessages/${encodeURIComponent(waMessageId)}/markAsRead`, {
+        method: 'POST',
+        headers: { 'X-API-Key': accessToken, Accept: 'application/json' },
+        signal: AbortSignal.timeout(12_000),
+      })
+    } catch {
+      throw new CrmApiError(502, 'YCLOUD_UNAVAILABLE', 'YCloud no respondió al confirmar la lectura.')
+    }
+    if (!response.ok) throw new CrmApiError(502, 'WHATSAPP_READ_FAILED', 'YCloud no pudo confirmar la lectura del mensaje.')
+    return { providerMarked: true, simulated: false }
+  }
+
+  if (!channel.phoneNumberId) {
+    throw new CrmApiError(409, 'META_PHONE_ID_MISSING', 'El canal de Meta no tiene Phone Number ID.')
+  }
+  const response = await fetcher(
+    `https://graph.facebook.com/${encodeURIComponent(channel.graphApiVersion)}/${encodeURIComponent(channel.phoneNumberId)}/messages`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: waMessageId }),
+    },
+  )
+  if (!response.ok) throw new CrmApiError(502, 'WHATSAPP_READ_FAILED', 'Meta no pudo confirmar la lectura del mensaje.')
+  return { providerMarked: true, simulated: false }
+}

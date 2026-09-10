@@ -8,6 +8,7 @@ type ApiContact = { id: string; displayName: string; profileName: string | null;
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
 type MessageSync = { id: string; status: ConversationStatus; unreadCount: number; lastMessageAt: string; lastInboundAt: string | null; lastOutboundAt: string | null; serviceWindowExpiresAt: string | null; messages: ApiMessage[] }
+type ReadResult = { read: boolean; retry: boolean; providerMarked: boolean }
 type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string; orderDraftUpdatedAt?: string | null }
 type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; scheduledById: string; scheduledByName: string; scheduledAt: string }
 type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; orderDraftUpdatedAt: string | null }
@@ -210,6 +211,17 @@ export default function AttentionWorkspace() {
     try {
       const synced = await api<MessageSync>(`/api/conversations/${conversationId}/messages`)
       if (activeIdRef.current !== conversationId) return
+      let unreadCount = synced.unreadCount
+      const currentLock = lockRef.current
+      if (unreadCount > 0 && currentLock) {
+        const readResult = await api<ReadResult>(`/api/conversations/${conversationId}/read`, {
+          method: 'POST', body: JSON.stringify({ lockToken: currentLock.token }),
+        }).catch(() => null)
+        if (readResult?.read) {
+          unreadCount = 0
+          void refreshList()
+        }
+      }
       setDetail(current => {
         if (!current || current.id !== conversationId) return current
         const previousLastId = current.messages.at(-1)?.id
@@ -218,7 +230,7 @@ export default function AttentionWorkspace() {
         return {
           ...current,
           status: synced.status,
-          unreadCount: synced.unreadCount,
+          unreadCount,
           lastMessageAt: synced.lastMessageAt,
           serviceWindowExpiresAt: synced.serviceWindowExpiresAt,
           messages: synced.messages,
@@ -229,7 +241,7 @@ export default function AttentionWorkspace() {
     } finally {
       messageSyncBusyRef.current = false
     }
-  }, [])
+  }, [refreshList])
   useEffect(() => {
     if (!activeId) return
     const sync = () => void refreshActiveMessages(activeId)
@@ -277,6 +289,10 @@ export default function AttentionWorkspace() {
           return
         }
         lockRef.current = acquired; setLock(acquired)
+        const readResult = await api<ReadResult>(`/api/conversations/${conversation.id}/read`, {
+          method: 'POST', body: JSON.stringify({ lockToken: acquired.token }),
+        }).catch(() => null)
+        if (readResult?.read) void refreshList()
         if (wasUnassigned) {
           setDetail({ ...conversation, status: 'OPEN', assignedToId: user.id, activeById: user.id, lockExpiresAt: acquired.expiresAt })
           await refreshList()

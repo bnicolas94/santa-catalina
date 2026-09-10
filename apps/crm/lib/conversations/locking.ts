@@ -47,6 +47,7 @@ export async function claimConversation(prisma: LockDatabase, conversationId: st
         "lock_token" = ${token},
         "lock_expires_at" = NOW() + (${LOCK_LEASE_SECONDS} * INTERVAL '1 second'),
         "lock_version" = "lock_version" + 1,
+        "unread_count" = 0,
         "status" = 'OPEN'::"crm"."ConversationStatus",
         "updated_at" = NOW()
     WHERE "id" = ${conversationId}
