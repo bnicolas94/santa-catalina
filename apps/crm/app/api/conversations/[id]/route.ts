@@ -4,6 +4,7 @@ import { getErpEmployeeReferences } from '@/lib/erp/client'
 import { crmPrisma } from '@/lib/prisma'
 import { requireCrmUser } from '@/lib/session'
 import { conversationVisibilityWhere } from '@/lib/conversations/access'
+import { sortMessagesChronologically } from '@/lib/conversations/message-order'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       include: {
         contact: true,
         channel: { select: { id: true, name: true, displayPhoneNumber: true, connectionStatus: true } },
-        messages: { orderBy: [{ providerTimestamp: 'asc' }, { createdAt: 'asc' }], take: 300 },
+        messages: { orderBy: { createdAt: 'desc' }, take: 300 },
         scheduledOrders: { orderBy: { scheduledAt: 'desc' }, take: 20 },
         tags: { include: { tag: true } },
         assignments: { orderBy: { createdAt: 'desc' }, take: 20 },
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     return NextResponse.json({
       ...conversation,
+      messages: sortMessagesChronologically(conversation.messages),
       scheduledOrders: conversation.scheduledOrders.map(item => ({
         ...item,
         scheduledByName: agentNames.get(item.scheduledById) || 'Agente no disponible',

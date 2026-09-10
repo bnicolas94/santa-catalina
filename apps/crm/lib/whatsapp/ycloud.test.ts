@@ -41,6 +41,15 @@ test('clasifica ecos, estados e historial de Coexistencia de YCloud', () => {
   assert.equal(history.event.historyThreads[0].id, '+549110001111')
 })
 
+test('usa la hora del evento cuando un eco no incluye sendTime', () => {
+  const parsed = parseYCloudWebhook({
+    id: 'evt_echo_time', type: 'whatsapp.smb.message.echoes', createTime: '2026-09-10T19:08:00.000Z',
+    whatsappMessage: { id: 'm-time', wabaId: 'waba-1', from: '+5491159813546', to: '+549110001111', type: 'text', text: { body: 'Desde el teléfono' } },
+  })
+
+  assert.equal(parsed.event.echoes[0].timestamp, '2026-09-10T19:08:00.000Z')
+})
+
 test('valida el número conectado consultando YCloud sin enviar mensajes', async () => {
   const validation = await validateYCloudChannel({ wabaId: 'waba-1', phoneNumber: '+54 9 11 5981-3546', apiKey: 'key' }, async (url, init) => {
     assert.match(String(url), /waba-1\/%2B5491159813546$/)

@@ -177,18 +177,7 @@ async function persistLiveMessage(
   const inbound = direction === 'INBOUND'
   const conversation = await transaction.conversation.upsert({
     where: { channelId_contactId: { channelId, contactId: contact.id } },
-    update: {
-      lastMessageAt: occurredAt,
-      ...(inbound ? {
-        lastInboundAt: occurredAt,
-        serviceWindowExpiresAt: new Date(occurredAt.getTime() + 24 * 60 * 60 * 1000),
-        unreadCount: { increment: 1 },
-        status: 'OPEN' as const,
-      } : {
-        lastOutboundAt: occurredAt,
-        status: 'WAITING_CUSTOMER' as const,
-      }),
-    },
+    update: inbound ? { unreadCount: { increment: 1 } } : {},
     create: {
       channelId,
       contactId: contact.id,
@@ -200,6 +189,34 @@ async function persistLiveMessage(
       unreadCount: inbound ? 1 : 0,
     },
   })
+  if (inbound) {
+    await transaction.conversation.updateMany({
+      where: {
+        id: conversation.id,
+        OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: occurredAt } }],
+      },
+      data: {
+        lastInboundAt: occurredAt,
+        serviceWindowExpiresAt: new Date(occurredAt.getTime() + 24 * 60 * 60 * 1000),
+      },
+    })
+    await transaction.conversation.updateMany({
+      where: { id: conversation.id, lastMessageAt: { lt: occurredAt } },
+      data: { lastMessageAt: occurredAt, status: 'OPEN' },
+    })
+  } else {
+    await transaction.conversation.updateMany({
+      where: { id: conversation.id, lastMessageAt: { lt: occurredAt } },
+      data: { lastMessageAt: occurredAt, status: 'WAITING_CUSTOMER' },
+    })
+    await transaction.conversation.updateMany({
+      where: {
+        id: conversation.id,
+        OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lt: occurredAt } }],
+      },
+      data: { lastOutboundAt: occurredAt },
+    })
+  }
   await transaction.message.create({
     data: {
       conversationId: conversation.id,

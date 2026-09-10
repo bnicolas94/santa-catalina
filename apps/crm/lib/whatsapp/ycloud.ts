@@ -46,13 +46,13 @@ function messageId(message: YCloudMessage) {
   return message.wamid || message.id
 }
 
-function mapMessage(message: YCloudMessage): WhatsAppMessage {
+function mapMessage(message: YCloudMessage, eventCreateTime?: string): WhatsAppMessage {
   return {
     id: messageId(message),
     externalId: message.externalId,
     from: message.from,
     to: message.to,
-    timestamp: message.sendTime || message.createTime || message.updateTime,
+    timestamp: message.sendTime || message.createTime || message.updateTime || eventCreateTime,
     type: message.type,
     text: message.text,
     image: message.image as WhatsAppMessage['image'],
@@ -63,13 +63,13 @@ function mapMessage(message: YCloudMessage): WhatsAppMessage {
   }
 }
 
-function mapStatus(message: YCloudMessage): WhatsAppStatus {
+function mapStatus(message: YCloudMessage, eventCreateTime?: string): WhatsAppStatus {
   return {
     id: messageId(message),
     alternateId: message.wamid && message.id && message.wamid !== message.id ? message.id : undefined,
     externalId: message.externalId,
     status: message.status,
-    timestamp: message.updateTime || message.sendTime || message.createTime,
+    timestamp: message.updateTime || message.sendTime || message.createTime || eventCreateTime,
     errors: message.errorCode || message.errorMessage ? [{
       code: typeof message.errorCode === 'number' ? message.errorCode : undefined,
       title: message.errorCode ? String(message.errorCode) : undefined,
@@ -99,12 +99,12 @@ export function parseYCloudWebhook(value: unknown): ParsedYCloudWebhook {
   const echoes: WhatsAppMessage[] = []
   const statuses: WhatsAppStatus[] = []
   const historyThreads: HistoryThread[] = []
-  const mapped = mapMessage(source)
+  const mapped = mapMessage(source, payload.createTime)
 
   if (payload.type === 'whatsapp.inbound_message.received' && inbound) {
     messages.push(mapped)
   } else if (payload.type === 'whatsapp.message.updated' && outbound) {
-    statuses.push(mapStatus(outbound))
+    statuses.push(mapStatus(outbound, payload.createTime))
   } else if (payload.type === 'whatsapp.smb.message.echoes' && outbound) {
     echoes.push(mapped)
   } else if (payload.type === 'whatsapp.smb.history') {

@@ -7,6 +7,7 @@ type ApiTag = { id: string; name: string; color: string }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
+type MessageSync = { id: string; status: ConversationStatus; unreadCount: number; lastMessageAt: string; lastInboundAt: string | null; lastOutboundAt: string | null; serviceWindowExpiresAt: string | null; messages: ApiMessage[] }
 type OrderDraft = { orderDate: string; orderAddress: string; orderFulfillment: 'DELIVERY' | 'PICKUP' | null; orderPickupLocationId: string | null; orderPickupLocationName: string; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON' | null; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string; orderDraftUpdatedAt?: string | null }
 type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | null; orderFulfillment: 'DELIVERY' | 'PICKUP'; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: 'MORNING' | 'SIESTA' | 'AFTERNOON'; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; scheduledById: string; scheduledByName: string; scheduledAt: string }
 type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; orderDraftUpdatedAt: string | null }
@@ -39,6 +40,16 @@ function initials(name: string) { return name.split(/\s+/).slice(0, 2).map(part 
 function agentName(id?: string | null) { return id ? DEMO_AGENT_NAMES[id] || 'Otro agente' : '' }
 function formatTime(value: string) { return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function formatDate(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(value)) }
+function localDayKey(value: string) { const date = new Date(value); return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` }
+function formatMessageDay(value: string) {
+  const date = new Date(value)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (localDayKey(value) === localDayKey(today.toISOString())) return 'Hoy'
+  if (localDayKey(value) === localDayKey(yesterday.toISOString())) return 'Ayer'
+  return new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' }).format(date)
+}
 function formatOrderDate(value: string) { const [year, month, day] = value.split('-').map(Number); return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day)) }
 function formatScheduledAt(value: string) { return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function formatLongDate(value: string) { return new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(value)) }
@@ -121,6 +132,9 @@ export default function AttentionWorkspace() {
   const [error, setError] = useState<string | null>(null)
   const lockRef = useRef<Lock | null>(null)
   const activeIdRef = useRef<string | null>(null)
+  const messageCanvasRef = useRef<HTMLDivElement | null>(null)
+  const messageSyncBusyRef = useRef(false)
+  const shouldScrollMessagesRef = useRef(true)
   const orderDraftVersionRef = useRef(0)
   const scheduleActionIdRef = useRef<string | null>(null)
 
@@ -156,7 +170,7 @@ export default function AttentionWorkspace() {
   }, [])
   useEffect(() => { void refreshPickupLocations() }, [refreshPickupLocations])
   useEffect(() => { void refreshOrderCatalog() }, [refreshOrderCatalog])
-  useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 10_000); return () => window.clearInterval(timer) }, [refreshList])
+  useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 4_000); return () => window.clearInterval(timer) }, [refreshList])
   useEffect(() => {
     if (!orderModal && !scheduledOrderModal) return
     const closeModal = (event: KeyboardEvent) => {
@@ -188,10 +202,61 @@ export default function AttentionWorkspace() {
     const result = await api<{ lock: Lock }>(`/api/conversations/${conversationId}/claim`, { method: 'POST', body: '{}' })
     return result.lock
   }, [])
+  const refreshActiveMessages = useCallback(async (conversationId: string) => {
+    if (messageSyncBusyRef.current) return
+    messageSyncBusyRef.current = true
+    const canvas = messageCanvasRef.current
+    const wasNearBottom = !canvas || canvas.scrollHeight - canvas.scrollTop - canvas.clientHeight < 140
+    try {
+      const synced = await api<MessageSync>(`/api/conversations/${conversationId}/messages`)
+      if (activeIdRef.current !== conversationId) return
+      setDetail(current => {
+        if (!current || current.id !== conversationId) return current
+        const previousLastId = current.messages.at(-1)?.id
+        const nextLastId = synced.messages.at(-1)?.id
+        if (previousLastId !== nextLastId && wasNearBottom) shouldScrollMessagesRef.current = true
+        return {
+          ...current,
+          status: synced.status,
+          unreadCount: synced.unreadCount,
+          lastMessageAt: synced.lastMessageAt,
+          serviceWindowExpiresAt: synced.serviceWindowExpiresAt,
+          messages: synced.messages,
+        }
+      })
+    } catch {
+      // La actualización general de la bandeja comunicará errores persistentes.
+    } finally {
+      messageSyncBusyRef.current = false
+    }
+  }, [])
+  useEffect(() => {
+    if (!activeId) return
+    const sync = () => void refreshActiveMessages(activeId)
+    const timer = window.setInterval(sync, 2_000)
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') { void refreshList(); sync() } }
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [activeId, refreshActiveMessages, refreshList])
+  useEffect(() => {
+    if (!detail?.messages.length || !shouldScrollMessagesRef.current) return
+    shouldScrollMessagesRef.current = false
+    const frame = window.requestAnimationFrame(() => {
+      const canvas = messageCanvasRef.current
+      if (canvas) canvas.scrollTop = canvas.scrollHeight
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [detail?.id, detail?.messages])
   useEffect(() => {
     if (!activeId || !user) return
     let cancelled = false
     orderDraftVersionRef.current += 1
+    shouldScrollMessagesRef.current = true
     setError(null); setDetail(null); setLock(null); setOrderDraft(EMPTY_ORDER_DRAFT); setOrderDraftDirty(false); setOrderSaveState('idle'); setSchedulingOrder(false); setScheduleFeedback(null); setProductSearch(''); setVariantPicker(null); setOrderModal(null); setScheduledOrderModal(null); scheduleActionIdRef.current = null; lockRef.current = null; activeIdRef.current = activeId
     api<ConversationDetail>(`/api/conversations/${activeId}`).then(async conversation => {
       if (cancelled) return
@@ -471,7 +536,7 @@ export default function AttentionWorkspace() {
       {error && <div className="errorBanner" role="alert">{error}<button onClick={() => setError(null)}>×</button></div>}
       {assignedToOther && <div className="lockBanner"><span className="lockIcon"><Icon name="lock" size={18} /></span><div><strong>{agentName(active.assignedToId)} tiene asignada esta conversación</strong><span>Podés seguirla en tiempo real. La respuesta está bloqueada para evitar mensajes cruzados.</span></div><span className="watchingBadge">Sólo lectura</span></div>}
       {!active.assignedToId && <div className="claimBanner"><div><span className="claimSpinner" /><div><strong>{claiming ? 'Asignando conversación…' : 'Preparando la conversación…'}</strong><span>Quedará reservada automáticamente para vos.</span></div></div></div>}
-      <div className="messageCanvas"><div className="dateDivider"><span>Hoy</span></div>{detail?.messages.map(m => m.direction === 'INTERNAL' ? <div className="systemNote" key={m.id}><span><Icon name="check" size={14} /></span>{m.body} · {formatTime(m.createdAt)}</div> : <div className={`messageRow ${m.direction === 'OUTBOUND' ? 'messageRowOut' : ''}`} key={m.id}><div className={`messageBubble ${m.direction === 'OUTBOUND' ? 'messageOut' : 'messageIn'}`}>{m.direction === 'OUTBOUND' && <span className="messageSender">{agentName(m.sentById) || 'Atención'}</span>}<p>{m.body || 'Mensaje sin texto'}</p><span className="messageTime">{formatTime(m.providerTimestamp || m.createdAt)}{m.direction === 'OUTBOUND' && <b className={m.status === 'READ' ? 'readChecks' : ''}>✓✓</b>}</span></div></div>)}</div>
+      <div className="messageCanvas" ref={messageCanvasRef}>{detail?.messages.map((m, index, messages) => { const occurredAt = m.providerTimestamp || m.createdAt; const previousOccurredAt = index > 0 ? messages[index - 1].providerTimestamp || messages[index - 1].createdAt : null; const showDay = !previousOccurredAt || localDayKey(previousOccurredAt) !== localDayKey(occurredAt); return <div key={m.id}>{showDay && <div className="dateDivider"><span>{formatMessageDay(occurredAt)}</span></div>}{m.direction === 'INTERNAL' ? <div className="systemNote"><span><Icon name="check" size={14} /></span>{m.body} · {formatTime(m.createdAt)}</div> : <div className={`messageRow ${m.direction === 'OUTBOUND' ? 'messageRowOut' : ''}`}><div className={`messageBubble ${m.direction === 'OUTBOUND' ? 'messageOut' : 'messageIn'}`}>{m.direction === 'OUTBOUND' && <span className="messageSender">{agentName(m.sentById) || 'Atención'}</span>}<p>{m.body || 'Mensaje sin texto'}</p><span className="messageTime">{formatTime(occurredAt)}{m.direction === 'OUTBOUND' && <b className={m.status === 'READ' ? 'readChecks' : ''}>✓✓</b>}</span></div></div>}</div> })}</div>
       <div className="composerArea"><div className={`serviceWindow ${service.expired ? 'serviceWindowExpired' : ''}`}><Icon name="clock" size={14} /><span>{service.text}</span></div><form className={`composer ${!canReply ? 'composerDisabled' : ''}`} onSubmit={sendMessage}><button type="button" aria-label="Agregar emoji" disabled={!canReply}><Icon name="smile" /></button><button type="button" aria-label="Adjuntar archivo" disabled={!canReply}><Icon name="attach" /></button><textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={assignedToOther ? `Respuesta bloqueada por ${agentName(active.assignedToId)}` : !active.assignedToId ? 'Tomá la conversación para responder' : active.status === 'RESOLVED' ? 'Conversación resuelta' : !lock ? 'Obteniendo control seguro…' : 'Escribe un mensaje'} rows={1} disabled={!canReply || busy} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit() } }} /><button className="sendButton" type="submit" aria-label="Enviar mensaje" disabled={!canReply || !draft.trim() || busy}><Icon name="send" size={18} /></button></form><div className="composerHints"><button disabled={!canReply}>/ respuestas rápidas</button><span>Enter para enviar · Shift + Enter para salto</span></div></div>
     </section>
     {showContext && <aside className="contextPanel">

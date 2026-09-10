@@ -37,7 +37,14 @@ export async function GET(request: NextRequest) {
       take: 100,
       include: {
         contact: true,
-        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        messages: {
+          where: { direction: { not: 'INTERNAL' } },
+          orderBy: [
+            { providerTimestamp: { sort: 'desc', nulls: 'last' } },
+            { createdAt: 'desc' },
+          ],
+          take: 1,
+        },
         tags: { include: { tag: true } },
       },
     })
