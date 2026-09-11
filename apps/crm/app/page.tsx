@@ -16,10 +16,11 @@ type ScheduledOrder = { id: string; orderDate: string; orderAddress: string | nu
 type ConversationDetail = ConversationSummary & { messages: ApiMessage[]; scheduledOrders: ScheduledOrder[]; orderDate: string | null; orderAddress: string | null; orderFulfillment: OrderDraft['orderFulfillment']; orderPickupLocationId: string | null; orderPickupLocationName: string | null; orderShift: OrderDraft['orderShift']; orderPaid: boolean; orderItems: CrmOrderItem[]; orderNotes: string | null; orderDraftUpdatedAt: string | null }
 type Lock = { token: string; expiresAt: string; version: number; activeById: string; assignedToId: string }
 type FilterId = 'all' | 'mine' | 'unassigned' | 'waiting' | 'resolved'
+type ConversationCounts = Record<FilterId, number> & { unreadConversations: number; unreadMessages: number }
 
 const DEMO_AGENT_NAMES: Record<string, string> = { 'agent-marina': 'Marina Soto', 'agent-lucia': 'Lucía Rojas', 'agent-admin': 'Administración' }
 const FILTERS: Array<{ id: FilterId; label: string; short: string }> = [
-  { id: 'all', label: 'Todas', short: 'Inicio' }, { id: 'mine', label: 'Mis conversaciones', short: 'Mías' },
+  { id: 'all', label: 'Todas las conversaciones', short: 'Todas' }, { id: 'mine', label: 'Mis conversaciones', short: 'Mías' },
   { id: 'unassigned', label: 'Sin asignar', short: 'Nuevas' }, { id: 'waiting', label: 'En espera', short: 'Espera' },
   { id: 'resolved', label: 'Resueltas', short: 'Cerradas' },
 ]
@@ -106,6 +107,7 @@ function Avatar({ name, color = '#a3152f', small = false }: { name: string; colo
 export default function AttentionWorkspace() {
   const [user, setUser] = useState<CrmSessionUser | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [serverCounts, setServerCounts] = useState<ConversationCounts | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [lock, setLock] = useState<Lock | null>(null)
@@ -163,12 +165,15 @@ export default function AttentionWorkspace() {
     setConversations(items)
     setActiveId(current => current && items.some(item => item.id === current) ? current : null)
   }, [])
+  const refreshCounts = useCallback(async () => {
+    setServerCounts(await api<ConversationCounts>('/api/conversations/counts'))
+  }, [])
   const refreshQuickReplies = useCallback(async () => {
     setQuickReplies(await api<ApiQuickReply[]>('/api/quick-replies'))
   }, [])
   useEffect(() => {
-    Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
-  }, [refreshList])
+    Promise.all([api<CrmSessionUser>('/api/session'), refreshList(), refreshCounts()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
+  }, [refreshCounts, refreshList])
   useEffect(() => {
     api<ApiTag[]>('/api/tags').then(setAllTags).catch(() => setAllTags([]))
     refreshQuickReplies().catch(() => setQuickReplies([]))
@@ -213,6 +218,7 @@ export default function AttentionWorkspace() {
   useEffect(() => { void refreshPickupLocations() }, [refreshPickupLocations])
   useEffect(() => { void refreshOrderCatalog() }, [refreshOrderCatalog])
   useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 4_000); return () => window.clearInterval(timer) }, [refreshList])
+  useEffect(() => { const timer = window.setInterval(() => refreshCounts().catch(() => undefined), 15_000); return () => window.clearInterval(timer) }, [refreshCounts])
   useEffect(() => {
     if (!orderModal && !scheduledOrderModal && !quickReplyManagerOpen) return
     const closeModal = (event: KeyboardEvent) => {
@@ -262,6 +268,7 @@ export default function AttentionWorkspace() {
         if (readResult?.read) {
           unreadCount = 0
           void refreshList()
+          void refreshCounts()
         }
       }
       setDetail(current => {
@@ -283,12 +290,12 @@ export default function AttentionWorkspace() {
     } finally {
       messageSyncBusyRef.current = false
     }
-  }, [refreshList])
+  }, [refreshCounts, refreshList])
   useEffect(() => {
     if (!activeId) return
     const sync = () => void refreshActiveMessages(activeId)
     const timer = window.setInterval(sync, 2_000)
-    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') { void refreshList(); sync() } }
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') { void refreshList(); void refreshCounts(); sync() } }
     window.addEventListener('focus', refreshWhenVisible)
     document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
@@ -296,7 +303,7 @@ export default function AttentionWorkspace() {
       window.removeEventListener('focus', refreshWhenVisible)
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [activeId, refreshActiveMessages, refreshList])
+  }, [activeId, refreshActiveMessages, refreshCounts, refreshList])
   useEffect(() => {
     if (!detail?.messages.length || !shouldScrollMessagesRef.current) return
     shouldScrollMessagesRef.current = false
@@ -334,7 +341,7 @@ export default function AttentionWorkspace() {
         const readResult = await api<ReadResult>(`/api/conversations/${conversation.id}/read`, {
           method: 'POST', body: JSON.stringify({ lockToken: acquired.token }),
         }).catch(() => null)
-        if (readResult?.read) void refreshList()
+        if (readResult?.read) { void refreshList(); void refreshCounts() }
         if (wasUnassigned) {
           setDetail({ ...conversation, status: 'OPEN', assignedToId: user.id, activeById: user.id, lockExpiresAt: acquired.expiresAt })
           await refreshList()
@@ -349,7 +356,7 @@ export default function AttentionWorkspace() {
       }
     }).catch(cause => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'No se pudo abrir la conversación.') })
     return () => { cancelled = true }
-  }, [activeId, user, acquire, refreshList])
+  }, [activeId, user, acquire, refreshCounts, refreshList])
   useEffect(() => {
     if (!lock || !activeId) return
     const timer = window.setInterval(async () => {
@@ -580,7 +587,16 @@ export default function AttentionWorkspace() {
       .filter(item => item.quantity > 0)
     changeOrderDraft({ orderItems: items })
   }
-  const counts = useMemo(() => ({ all: conversations.filter(c => c.status !== 'RESOLVED').length, mine: conversations.filter(c => c.assignedToId === user?.id && c.status !== 'RESOLVED').length, unassigned: conversations.filter(c => c.status === 'UNASSIGNED').length, waiting: conversations.filter(c => c.status === 'WAITING_CUSTOMER').length, resolved: conversations.filter(c => c.status === 'RESOLVED').length }), [conversations, user])
+  const localCounts = useMemo<ConversationCounts>(() => ({
+    all: conversations.filter(c => c.status !== 'RESOLVED').length,
+    mine: conversations.filter(c => c.assignedToId === user?.id && c.status !== 'RESOLVED').length,
+    unassigned: conversations.filter(c => c.status === 'UNASSIGNED').length,
+    waiting: conversations.filter(c => c.status === 'WAITING_CUSTOMER').length,
+    resolved: conversations.filter(c => c.status === 'RESOLVED').length,
+    unreadConversations: conversations.filter(c => c.status !== 'RESOLVED' && c.unreadCount > 0).length,
+    unreadMessages: conversations.reduce((total, c) => total + (c.status !== 'RESOLVED' ? c.unreadCount : 0), 0),
+  }), [conversations, user])
+  const counts = serverCounts || localCounts
   const visible = useMemo(() => conversations.filter(c => {
     const matchesFilter = filter === 'all' ? c.status !== 'RESOLVED' : filter === 'mine' ? c.assignedToId === user?.id && c.status !== 'RESOLVED' : filter === 'unassigned' ? c.status === 'UNASSIGNED' : filter === 'waiting' ? c.status === 'WAITING_CUSTOMER' : c.status === 'RESOLVED'
     const term = search.trim().toLowerCase(); const haystack = `${c.contact.displayName} ${c.contact.profileName || ''} ${c.contact.phoneE164} ${c.lastMessage?.body || ''}`.toLowerCase()
@@ -763,7 +779,11 @@ export default function AttentionWorkspace() {
     <aside className="navigationRail" aria-label="Navegación principal">
       <div className="brandMark" title="Santa Catalina Atención">SC</div>
       <nav className="railNav" aria-label="Bandejas">
-        {FILTERS.map((item, index) => <button key={item.id} className={`railButton ${filter === item.id ? 'railButtonActive' : ''}`} aria-label={item.label} title={item.label} onClick={() => setFilter(item.id)}><Icon name={index === 0 ? 'inbox' : index === 1 ? 'chat' : index === 2 ? 'users' : index === 3 ? 'clock' : 'check'} /><span>{counts[item.id]}</span></button>)}
+        {FILTERS.map((item, index) => {
+          const badgeCount = index === 0 ? counts.unreadConversations : counts[item.id]
+          const title = index === 0 ? `${item.label} · ${counts.unreadConversations} sin leer (${counts.unreadMessages} mensajes)` : `${item.label} · ${counts[item.id]}`
+          return <button key={item.id} className={`railButton ${filter === item.id ? 'railButtonActive' : ''}`} aria-label={title} title={title} onClick={() => setFilter(item.id)}><Icon name={index === 0 ? 'inbox' : index === 1 ? 'chat' : index === 2 ? 'users' : index === 3 ? 'clock' : 'check'} />{badgeCount > 0 && <span className={index === 0 ? 'railUnreadBadge' : 'railCategoryBadge'}>{badgeCount}</span>}</button>
+        })}
       </nav>
       {isSupervisor && <a className="railButton railMetrics" aria-label="Métricas" title="Métricas" href="/metrics"><Icon name="chart" /></a>}
       <a className="railButton railSettings" aria-label="Configuración" title="Configuración" href="/settings"><Icon name="settings" /></a>
@@ -774,7 +794,7 @@ export default function AttentionWorkspace() {
         <div className="listToolbar"><div><span className="brandEyebrow">Santa Catalina</span><h1>Chats</h1></div><div className="listActions"><span className="liveBadge"><i /> Conectado</span><a className="iconButton" aria-label="Configuración" href="/settings"><Icon name="settings" /></a></div></div>
         <label className="searchBox"><Icon name="search" size={18} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar un chat" /><kbd>/</kbd></label>
         <nav className="filterChips" aria-label="Filtrar conversaciones">{FILTERS.map(item => <button key={item.id} className={filter === item.id ? 'filterActive' : ''} onClick={() => setFilter(item.id)}>{item.short}<span>{counts[item.id]}</span></button>)}</nav>
-        <div className="listMeta"><span>{visible.length} conversaciones</span><span>{currentName}</span></div>
+        <div className="listMeta"><span>{visible.length} mostradas · {counts.unreadConversations} sin leer</span><span>{currentName}</span></div>
       </header>
       <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${activeId === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
     </section>

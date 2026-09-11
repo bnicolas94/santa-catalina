@@ -4,6 +4,11 @@ type ConversationReadState = {
   lastOutboundAt: Date | string | null
 }
 
+type CountableConversation = ConversationReadState & {
+  status: 'UNASSIGNED' | 'OPEN' | 'WAITING_CUSTOMER' | 'RESOLVED' | 'ARCHIVED'
+  assignedToId: string | null
+}
+
 function timestamp(value: Date | string | null) {
   if (!value) return null
   const result = value instanceof Date ? value.getTime() : new Date(value).getTime()
@@ -23,4 +28,18 @@ export function effectiveUnreadCount(state: ConversationReadState) {
   if (lastOutboundAt !== null && (lastInboundAt === null || lastOutboundAt >= lastInboundAt)) return 0
 
   return unreadCount
+}
+
+export function summarizeConversationCounts(conversations: CountableConversation[], userId: string) {
+  const active = conversations.filter(item => item.status !== 'RESOLVED' && item.status !== 'ARCHIVED')
+  const unread = active.map(effectiveUnreadCount)
+  return {
+    all: active.length,
+    mine: active.filter(item => item.assignedToId === userId).length,
+    unassigned: active.filter(item => item.status === 'UNASSIGNED').length,
+    waiting: active.filter(item => item.status === 'WAITING_CUSTOMER').length,
+    resolved: conversations.filter(item => item.status === 'RESOLVED').length,
+    unreadConversations: unread.filter(count => count > 0).length,
+    unreadMessages: unread.reduce((total, count) => total + count, 0),
+  }
 }
