@@ -1,4 +1,4 @@
-.page { --wine: #760008; --wine-soft: #a3152f; --green: #008069; --green-bright: #00a884; --ink: #1f2c34; --muted: #667781; min-height: 100dvh; display: grid; grid-template-columns: 236px minmax(0, 1fr); color: var(--ink); background: #f7f5ed; }
+.page { --wine: #760008; --wine-soft: #a3152f; --green: #008069; --green-bright: #00a884; --ink: #1f2c34; --muted: #667781; height: 100dvh; min-height: 0; overflow: hidden; display: grid; grid-template-columns: 236px minmax(0, 1fr); color: var(--ink); background: #f7f5ed; }
 .sidebar { position: sticky; top: 0; height: 100dvh; padding: 26px 18px 22px; display: flex; flex-direction: column; color: white; background: linear-gradient(180deg, #760008 0%, #540005 100%); }
 .brand { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.2); border-radius: 13px; color: white; background: rgba(255,255,255,.08); font-size: 14px; font-weight: 900; text-decoration: none; }
 .sidebar nav { margin: 48px -8px 0; display: flex; flex-direction: column; gap: 7px; }
@@ -12,7 +12,7 @@
 .adminOnly b { font-size: 10px; }
 .adminOnly small { color: rgba(255,255,255,.58); font-size: 10px; }
 
-.content { min-width: 0; padding: 34px clamp(24px, 4vw, 58px) 42px; }
+.content { min-width: 0; min-height: 0; padding: 34px clamp(24px, 4vw, 58px) 42px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .header > div:first-child > span { color: var(--wine-soft); font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .15em; }
 .header h1 { margin: 4px 0 5px; color: var(--wine); font-size: clamp(29px, 3vw, 40px); line-height: 1; letter-spacing: -.035em; }
@@ -119,7 +119,7 @@
 }
 
 @media (max-width: 760px) {
-  .page { display: block; }
+  .page { display: block; overflow-y: auto; }
   .sidebar { position: static; width: 100%; height: auto; padding: 10px 14px; flex-direction: row; align-items: center; gap: 12px; }
   .brand { width: 38px; height: 38px; border-radius: 10px; }
   .sidebar nav { min-width: 0; margin: 0; flex: 1; flex-direction: row; justify-content: flex-end; }
@@ -127,7 +127,7 @@
   .sidebar nav a span { width: auto; }
   .sidebar nav a b { display: none; }
   .adminOnly { display: none; }
-  .content { padding: 22px 13px 30px; }
+  .content { padding: 22px 13px 30px; overflow: visible; }
   .header { align-items: flex-start; flex-direction: column; }
   .periodPicker { width: 100%; overflow-x: auto; }
   .periodPicker button { flex: 1 0 auto; }
