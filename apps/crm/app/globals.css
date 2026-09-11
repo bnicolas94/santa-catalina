@@ -515,7 +515,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   min-height: 0;
   background: var(--wa-panel);
 }
-.workspaceShell.contextOpen { grid-template-columns: 64px minmax(310px, 360px) minmax(440px, 1fr) 320px; }
+.workspaceShell.contextOpen { grid-template-columns: 64px minmax(310px, 360px) minmax(440px, 1fr) 340px; }
 
 .navigationRail {
   padding: 10px 0 12px;
@@ -698,6 +698,102 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .orderIcon { border-radius: 50%; color: var(--wa-green-dark); background: #e7f8f3; }
 .orderAmount span { color: var(--wa-green-dark); }
 .contextFooter .resolveButton { background: var(--wa-green-dark); border-color: var(--wa-green-dark); }
+
+/* Escala de lectura para turnos prolongados de atención. */
+.brandEyebrow { font-size: 9px; }
+.liveBadge { font-size: 10px; }
+.searchBox input { font-size: 13px; }
+.filterChips button { font-size: 12px; }
+.filterChips button span, .listMeta { font-size: 10px; }
+.unreadCount { min-width: 20px; height: 20px; font-size: 10px; }
+.cardTop strong { font-size: 15px; }
+.cardTop time { font-size: 11px; }
+.cardContent p { font-size: 13px; line-height: 1.4; }
+.companyName { font-size: 11px; }
+.statusPill, .priorityPill { padding: 4px 7px; font-size: 9px; }
+.emptyList strong { font-size: 14px; }
+.emptyList p { font-size: 12px; }
+
+.chatIdentity h2 { font-size: 16px; }
+.chatIdentity > span { font-size: 12px; }
+.chatTagButtonText { font-size: 12px; }
+.chatTagButton > b { font-size: 9px; }
+.tagMenu > header strong { font-size: 13px; }
+.tagMenu > header > span { font-size: 10px; }
+.tagMenuList > p, .tagMenuList button strong { font-size: 11px; }
+.tagMenu > footer { font-size: 9px; }
+.errorBanner { font-size: 11px; }
+.lockBanner strong, .claimBanner strong { font-size: 12px; }
+.lockBanner div span, .claimBanner div span { font-size: 10px; line-height: 1.4; }
+.watchingBadge { font-size: 9px; }
+.dateDivider span { font-size: 9px; }
+.messageSender { font-size: 11px; }
+.messageBubble p { font-size: 14px; line-height: 1.46; }
+.messageTime, .messageOut .messageTime { font-size: 10px; }
+.systemNote, .serviceWindow { font-size: 11px; }
+.composer textarea { font-size: 14px; }
+.quickReplyMenu > header strong { font-size: 13px; }
+.quickReplyMenu > header span, .quickReplyMenu > footer { font-size: 10px; }
+.quickReplyMenu > div > p { font-size: 11px; }
+.quickReplyMenu button > span b { font-size: 12px; }
+.quickReplyMenu button > span strong, .quickReplyMenu button > p { font-size: 11px; }
+
+.contextPanel > header { font-size: 11px; }
+.customerHero h3 { font-size: 17px; }
+.customerHero p { font-size: 11px; }
+.customerTags span { padding: 5px 8px; font-size: 9px; }
+.plannerHeading span { font-size: 9px; }
+.plannerHeading h4 { font-size: 16px; }
+.plannerHeading > b { font-size: 10px; }
+.plannerField > label, .plannerLabelRow label { font-size: 10px; }
+.plannerDate, .plannerField textarea { font-size: 12px; }
+.quickDateButtons button { height: 33px; font-size: 10px; }
+.fulfillmentButtons strong { font-size: 12px; }
+.fulfillmentButtons small { font-size: 9px; }
+.pickupLocationButtons > button strong { font-size: 11px; }
+.pickupLocationButtons > button small, .plannerLabelRow button { font-size: 9px; }
+.pickupLocationNotice, .orderCatalogNotice { font-size: 10px; }
+.orderProductSearch input { font-size: 12px; }
+.orderCatalogResults strong { font-size: 11px; }
+.orderCatalogResults small, .orderCatalogResults button, .orderCatalogUnavailable { font-size: 9px; }
+.variantPicker header span, .variantPicker > small { font-size: 9px; }
+.variantPicker header strong { font-size: 11px; }
+.variantPicker > div b { font-size: 10px; }
+.variantPicker > div span { font-size: 8px; }
+.selectedOrderItems strong { font-size: 11px; }
+.selectedVariantBadge { font-size: 9px; }
+.selectedOrderItems small { font-size: 9px; }
+.itemQuantity b, .emptyOrderItems { font-size: 10px; }
+.shiftButtons button strong { font-size: 10px; }
+.paymentStatusButton strong { font-size: 11px; }
+.paymentStatusButton small { font-size: 9px; }
+.paymentStatusButton > b { font-size: 8px; }
+.scheduleOrderButton strong { font-size: 12px; }
+.scheduleOrderButton small, .plannerSaveState, .plannerSaveState b { font-size: 9px; }
+.scheduleFeedback { font-size: 10px; }
+
+.sectionLabel span, .sectionLabel button, .sectionLabel b { font-size: 10px; }
+.scheduledHistory .sectionLabel b { font-size: 10px; }
+.scheduledOrderHeader small, .scheduledOrderCard footer span, .scheduledOrderCard footer time { font-size: 9px; }
+.scheduledOrderHeader strong, .scheduledOrderCard footer strong { font-size: 11px; }
+.scheduledOrderBadges b { font-size: 9px; }
+.scheduledOrderCard dl div, .detailSection dl div { font-size: 10px; }
+.orderCard strong { font-size: 11px; }
+.orderCard span { font-size: 9px; }
+.noOrder, .contextNotice span, .candidateBox > p, .internalNote p { font-size: 10px; }
+.contextNotice strong, .candidateBox > strong, .candidateBox button span { font-size: 11px; }
+.candidateBox button small, .internalNote span { font-size: 9px; }
+.contextFooter button { min-height: 39px; font-size: 10px; }
+
+.orderDetailModal > header span, .orderModalSummary span, .orderModalSummary small, .orderModalContent h4 { font-size: 10px; }
+.orderModalSummary strong { font-size: 14px; }
+.orderModalSummary > b, .orderModalItemQuantity { font-size: 10px; }
+.orderModalItems strong, .orderModalItems article > b, .orderModalData dd, .orderModalNotes p { font-size: 11px; }
+.orderModalItems small, .orderModalData dt, .orderModalContent > footer span { font-size: 10px; }
+.orderModalContent > footer button, .orderModalState button { font-size: 11px; }
+.chatEmptyContent > p { font-size: 13px; }
+.chatEmptyHint { font-size: 11px; }
+.chatEmptyPanel > footer { font-size: 10px; }
 
 @media (max-width: 1260px) {
   .workspaceShell, .workspaceShell.contextOpen { grid-template-columns: 64px minmax(310px, 360px) minmax(420px, 1fr); }
