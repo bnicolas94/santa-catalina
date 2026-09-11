@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationStatus, CrmOrderItem, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate, ErpOrderDetails, ErpPickupLocation, ErpProductCatalogItem } from '@santa-catalina/contracts'
 
 type ApiTag = { id: string; name: string; color: string }
@@ -113,6 +113,7 @@ export default function AttentionWorkspace() {
   const [lock, setLock] = useState<Lock | null>(null)
   const [filter, setFilter] = useState<FilterId>('all')
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
   const [draft, setDraft] = useState('')
   const [allTags, setAllTags] = useState<ApiTag[]>([])
   const [quickReplies, setQuickReplies] = useState<ApiQuickReply[]>([])
@@ -161,10 +162,11 @@ export default function AttentionWorkspace() {
   const scheduleActionIdRef = useRef<string | null>(null)
 
   const refreshList = useCallback(async () => {
-    const items = await api<ConversationSummary[]>('/api/conversations')
+    const params = new URLSearchParams({ view: filter })
+    if (deferredSearch.trim()) params.set('q', deferredSearch.trim())
+    const items = await api<ConversationSummary[]>(`/api/conversations?${params}`)
     setConversations(items)
-    setActiveId(current => current && items.some(item => item.id === current) ? current : null)
-  }, [])
+  }, [deferredSearch, filter])
   const refreshCounts = useCallback(async () => {
     setServerCounts(await api<ConversationCounts>('/api/conversations/counts'))
   }, [])
@@ -172,8 +174,11 @@ export default function AttentionWorkspace() {
     setQuickReplies(await api<ApiQuickReply[]>('/api/quick-replies'))
   }, [])
   useEffect(() => {
-    Promise.all([api<CrmSessionUser>('/api/session'), refreshList(), refreshCounts()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
-  }, [refreshCounts, refreshList])
+    Promise.all([api<CrmSessionUser>('/api/session'), refreshCounts()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
+  }, [refreshCounts])
+  useEffect(() => {
+    refreshList().catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo actualizar la bandeja.'))
+  }, [refreshList])
   useEffect(() => {
     api<ApiTag[]>('/api/tags').then(setAllTags).catch(() => setAllTags([]))
     refreshQuickReplies().catch(() => setQuickReplies([]))
@@ -597,11 +602,7 @@ export default function AttentionWorkspace() {
     unreadMessages: conversations.reduce((total, c) => total + (c.status !== 'RESOLVED' ? c.unreadCount : 0), 0),
   }), [conversations, user])
   const counts = serverCounts || localCounts
-  const visible = useMemo(() => conversations.filter(c => {
-    const matchesFilter = filter === 'all' ? c.status !== 'RESOLVED' : filter === 'mine' ? c.assignedToId === user?.id && c.status !== 'RESOLVED' : filter === 'unassigned' ? c.status === 'UNASSIGNED' : filter === 'waiting' ? c.status === 'WAITING_CUSTOMER' : c.status === 'RESOLVED'
-    const term = search.trim().toLowerCase(); const haystack = `${c.contact.displayName} ${c.contact.profileName || ''} ${c.contact.phoneE164} ${c.lastMessage?.body || ''}`.toLowerCase()
-    return matchesFilter && (!term || haystack.includes(term))
-  }), [conversations, filter, search, user])
+  const visible = conversations
   const matchingQuickReplies = useMemo(() => {
     if (!draft.startsWith('/')) return quickReplies.slice(0, 8)
     const query = draft.slice(1).trim().toLowerCase()
@@ -781,7 +782,7 @@ export default function AttentionWorkspace() {
       <nav className="railNav" aria-label="Bandejas">
         {FILTERS.map((item, index) => {
           const badgeCount = index === 0 ? counts.unreadConversations : counts[item.id]
-          const title = index === 0 ? `${item.label} · ${counts.unreadConversations} sin leer (${counts.unreadMessages} mensajes)` : `${item.label} · ${counts[item.id]}`
+          const title = index === 0 ? `${item.label} · ${counts.unreadConversations} pendientes en el CRM (${counts.unreadMessages} mensajes)` : `${item.label} · ${counts[item.id]}`
           return <button key={item.id} className={`railButton ${filter === item.id ? 'railButtonActive' : ''}`} aria-label={title} title={title} onClick={() => setFilter(item.id)}><Icon name={index === 0 ? 'inbox' : index === 1 ? 'chat' : index === 2 ? 'users' : index === 3 ? 'clock' : 'check'} />{badgeCount > 0 && <span className={index === 0 ? 'railUnreadBadge' : 'railCategoryBadge'}>{badgeCount}</span>}</button>
         })}
       </nav>
@@ -794,7 +795,7 @@ export default function AttentionWorkspace() {
         <div className="listToolbar"><div><span className="brandEyebrow">Santa Catalina</span><h1>Chats</h1></div><div className="listActions"><span className="liveBadge"><i /> Conectado</span><a className="iconButton" aria-label="Configuración" href="/settings"><Icon name="settings" /></a></div></div>
         <label className="searchBox"><Icon name="search" size={18} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar un chat" /><kbd>/</kbd></label>
         <nav className="filterChips" aria-label="Filtrar conversaciones">{FILTERS.map(item => <button key={item.id} className={filter === item.id ? 'filterActive' : ''} onClick={() => setFilter(item.id)}>{item.short}<span>{counts[item.id]}</span></button>)}</nav>
-        <div className="listMeta"><span>{visible.length} mostradas · {counts.unreadConversations} sin leer</span><span>{currentName}</span></div>
+        <div className="listMeta"><span>{visible.length} de {counts[filter]} · {counts.unreadConversations} pendientes CRM</span><span>{currentName}</span></div>
       </header>
       <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${activeId === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
     </section>
