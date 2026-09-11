@@ -16,14 +16,22 @@ export interface PagoSalienteMP {
 }
 
 export function montoEgresoMP(pago: PagoSalienteMP, cuentaId: string): number | null {
-    if (pago.status !== 'approved' || pago.currency_id !== 'ARS') return null
-    if (String(pago.payer?.id) !== cuentaId || !pago.collector_id || String(pago.collector_id) === cuentaId) return null
-    if (pago.operation_type === 'account_fund') return null
-    // Una compra con tarjeta externa no descuenta el saldo de Mercado Pago.
-    if (pago.payment_method_id !== 'account_money') return null
-    // El neto recibido pertenece al destinatario, no representa nuestro débito.
+    if (motivosDescarteEgresoMP(pago, cuentaId).length) return null
+    return pago.transaction_details?.total_paid_amount ?? pago.transaction_amount ?? null
+}
+
+export function motivosDescarteEgresoMP(pago: PagoSalienteMP, cuentaId: string): string[] {
+    const motivos: string[] = []
+    if (pago.status !== 'approved') motivos.push(`Estado: ${pago.status || 'ausente'}`)
+    if (pago.currency_id !== 'ARS') motivos.push(`Moneda: ${pago.currency_id || 'ausente'}`)
+    if (String(pago.payer?.id) !== cuentaId) motivos.push(pago.payer?.id ? 'El pagador no coincide con la cuenta configurada' : 'La API no informa el pagador')
+    if (!pago.collector_id) motivos.push('La API no informa el cobrador')
+    else if (String(pago.collector_id) === cuentaId) motivos.push('La cuenta configurada es el cobrador')
+    if (pago.operation_type === 'account_fund') motivos.push('Recarga de saldo')
+    if (pago.payment_method_id !== 'account_money') motivos.push(`Medio de pago: ${pago.payment_method_id || 'ausente'}; el filtro exige account_money`)
     const monto = pago.transaction_details?.total_paid_amount ?? pago.transaction_amount
-    return typeof monto === 'number' && Number.isFinite(monto) && monto > 0 ? monto : null
+    if (typeof monto !== 'number' || !Number.isFinite(monto) || monto <= 0) motivos.push('El importe no es un número positivo válido')
+    return motivos
 }
 
 export async function sincronizarEgresosMP(opciones: {

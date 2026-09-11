@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import useSWR from 'swr'
+import DiagnosticoMercadoPago from '@/components/caja/DiagnosticoMercadoPago'
 
 interface UsuarioCaja {
     id: string
@@ -1014,6 +1015,7 @@ export default function CajaPage() {
                                     <div role="status" style={{ marginTop: 4, color: errorSyncMP ? '#dc2626' : 'var(--color-gray-500)' }}>
                                         {estadoSyncMP || 'Consulta automática cada minuto mientras Caja esté visible.'}
                                     </div>
+                                    <DiagnosticoMercadoPago />
                                 </div>
                             )}
                         </div>

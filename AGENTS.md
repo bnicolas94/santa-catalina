@@ -106,6 +106,8 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - No usar scripts de `scratch/` o `tmp/` sobre datos reales sin leerlos completos y comprobar explícitamente la base de destino.
 - Para borrados o correcciones masivas, crear respaldo, acotar el conjunto afectado y ofrecer primero una verificación de sólo lectura.
 
+El diagnóstico de egresos MP está en POST `/api/mercadopago/diagnostico` (ADMIN) y `lib/mercadopago-diagnostico.ts`: consulta hasta 30 IDs sin escrituras. Caja permite seleccionar un CSV de settlement; sólo envía IDs con `REAL_AMOUNT` negativo. No confundir la consulta directa de un pago con su inclusión en Payments Search ni el campo `available_money` del reporte con `account_money` de Payments.
+
 ### CRM
 
 - El CRM es una aplicación independiente y su Prisma sólo puede administrar el esquema PostgreSQL `crm`.
