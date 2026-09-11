@@ -152,7 +152,7 @@ export default function AttentionWorkspace() {
   const refreshList = useCallback(async () => {
     const items = await api<ConversationSummary[]>('/api/conversations')
     setConversations(items)
-    setActiveId(current => current && items.some(item => item.id === current) ? current : items[0]?.id || null)
+    setActiveId(current => current && items.some(item => item.id === current) ? current : null)
   }, [])
   useEffect(() => {
     Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
@@ -355,6 +355,26 @@ export default function AttentionWorkspace() {
     lockRef.current = null; setLock(null)
     await api(`/api/conversations/${currentId}/release`, { method: 'POST', body: JSON.stringify({ lockToken: currentLock.token }), keepalive: true }).catch(() => undefined)
   }, [])
+  const closeConversation = useCallback(() => {
+    void releaseCurrent()
+    activeIdRef.current = null
+    setActiveId(null)
+    setDetail(null)
+    setMobileChat(false)
+    setShowTagMenu(false)
+    setShowQuickReplies(false)
+    setDraft('')
+  }, [releaseCurrent])
+  useEffect(() => {
+    if (!activeId) return
+    const closeWithEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || orderModal || scheduledOrderModal || showTagMenu || showQuickReplies) return
+      event.preventDefault()
+      closeConversation()
+    }
+    window.addEventListener('keydown', closeWithEscape)
+    return () => window.removeEventListener('keydown', closeWithEscape)
+  }, [activeId, closeConversation, orderModal, scheduledOrderModal, showQuickReplies, showTagMenu])
   const selectConversation = async (id: string) => { if (id !== activeId) await releaseCurrent(); setActiveId(id); setMobileChat(true) }
   const linkCustomer = async (candidate: ErpCustomerCandidate) => {
     if (!active) return
@@ -657,8 +677,7 @@ export default function AttentionWorkspace() {
   }
 
   if (loading) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>Preparando tu bandeja…</strong></main>
-  if (!active) return <main className="workspaceLoading"><span className="brandMark">SC</span><strong>{error || 'Todavía no hay conversaciones.'}</strong></main>
-  return <main className={`workspaceShell ${showContext ? 'contextOpen' : ''}`}>
+  return <main className={`workspaceShell ${active && showContext ? 'contextOpen' : ''}`}>
     <aside className="navigationRail" aria-label="Navegación principal">
       <div className="brandMark" title="Santa Catalina Atención">SC</div>
       <nav className="railNav" aria-label="Bandejas">
@@ -674,9 +693,9 @@ export default function AttentionWorkspace() {
         <nav className="filterChips" aria-label="Filtrar conversaciones">{FILTERS.map(item => <button key={item.id} className={filter === item.id ? 'filterActive' : ''} onClick={() => setFilter(item.id)}>{item.short}<span>{counts[item.id]}</span></button>)}</nav>
         <div className="listMeta"><span>{visible.length} conversaciones</span><span>{currentName}</span></div>
       </header>
-      <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${active.id === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
+      <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${activeId === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
     </section>
-    <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}>
+    {active ? <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}>
       <header className="chatHeader">
         <button className="mobileBack" onClick={() => setMobileChat(false)} aria-label="Volver a los chats"><Icon name="back" /></button>
         <button className="avatarButton" onClick={() => setShowContext(true)} aria-label="Ver información del cliente"><Avatar name={active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#687782'} /></button>
@@ -728,8 +747,16 @@ export default function AttentionWorkspace() {
           <button className="sendButton" type="submit" aria-label="Enviar mensaje" disabled={!canReply || !draft.trim() || busy}><Icon name="send" size={18} /></button>
         </form>
       </div>
-    </section>
-    {showContext && <aside className="contextPanel">
+    </section> : <section className="chatPanel chatEmptyPanel">
+      <div className="chatEmptyContent">
+        <div className="chatEmptyVisual"><span>SC</span><i><Icon name="chat" size={34} /></i></div>
+        <h2>Santa Catalina Atención</h2>
+        <p>Seleccioná una conversación de la bandeja para comenzar a atender.</p>
+        <span className="chatEmptyHint"><kbd>Esc</kbd> cierra el chat activo y libera la ventana de atención.</span>
+      </div>
+      <footer><Icon name="lock" size={13} /> Las conversaciones se protegen para evitar respuestas cruzadas.</footer>
+    </section>}
+    {active && showContext && <aside className="contextPanel">
       <header><span>Información del cliente</span><button className="iconButton" onClick={() => setShowContext(false)}>×</button></header>
       <div className="customerHero">
         <Avatar name={customerContext?.status === 'LINKED' ? customerContext.customer.commercialName : active.contact.displayName} color={active.priority > 0 ? '#a3152f' : '#67717f'} />

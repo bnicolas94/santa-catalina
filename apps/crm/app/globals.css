@@ -588,6 +588,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 .chatPanel { background: var(--wa-chat); }
 .chatPanel::before { opacity: .38; background-image: radial-gradient(circle at 12px 12px, rgba(17, 27, 33, .055) 1px, transparent 1.5px), radial-gradient(circle at 25px 28px, rgba(17, 27, 33, .035) 1px, transparent 1.5px), linear-gradient(45deg, transparent 48%, rgba(17, 27, 33, .018) 49%, rgba(17, 27, 33, .018) 51%, transparent 52%); background-size: 38px 38px, 47px 47px, 72px 72px; }
+.chatEmptyPanel { align-items: center; justify-content: center; color: #54656f; text-align: center; }
+.chatEmptyContent { position: relative; z-index: 1; width: min(420px, calc(100% - 40px)); display: flex; flex-direction: column; align-items: center; }
+.chatEmptyVisual { position: relative; width: 150px; height: 112px; display: grid; place-items: center; border-radius: 28px; background: rgba(255,255,255,.72); box-shadow: 0 8px 28px rgba(11,20,26,.06); }
+.chatEmptyVisual > span { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 18px; color: white; background: var(--wine); font-size: 15px; font-weight: 850; }
+.chatEmptyVisual > i { position: absolute; right: 27px; bottom: 17px; width: 47px; height: 47px; display: grid; place-items: center; border: 4px solid #fff; border-radius: 50%; color: white; background: var(--wa-green-dark); font-style: normal; }
+.chatEmptyContent h2 { margin: 24px 0 7px; color: var(--wa-ink); font-size: 22px; font-weight: 500; }
+.chatEmptyContent > p { margin: 0; color: #667781; font-size: 11px; line-height: 1.55; }
+.chatEmptyHint { margin-top: 20px; padding: 7px 10px; border-radius: 9px; color: #667781; background: rgba(255,255,255,.68); font-size: 9px; }
+.chatEmptyHint kbd { margin-right: 4px; padding: 2px 6px; border: 1px solid #cfd6d9; border-radius: 5px; color: #3b4a54; background: #fff; font-size: 8px; box-shadow: 0 1px 1px rgba(11,20,26,.08); }
+.chatEmptyPanel > footer { position: absolute; z-index: 1; bottom: 22px; display: flex; align-items: center; gap: 6px; color: #8696a0; font-size: 8px; }
 .chatHeader { min-height: 60px; padding: 7px 12px; gap: 10px; background: #fff; border-bottom-color: var(--wa-line); backdrop-filter: none; }
 .chatHeader .avatar { width: 40px; height: 40px; font-size: 11px; }
 .chatIdentity h2 { color: var(--wa-ink); font-size: 13px; font-weight: 650; }
