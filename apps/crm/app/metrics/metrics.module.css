@@ -1,0 +1,141 @@
+.page { --wine: #760008; --wine-soft: #a3152f; --green: #008069; --green-bright: #00a884; --ink: #1f2c34; --muted: #667781; min-height: 100dvh; display: grid; grid-template-columns: 236px minmax(0, 1fr); color: var(--ink); background: #f7f5ed; }
+.sidebar { position: sticky; top: 0; height: 100dvh; padding: 26px 18px 22px; display: flex; flex-direction: column; color: white; background: linear-gradient(180deg, #760008 0%, #540005 100%); }
+.brand { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.2); border-radius: 13px; color: white; background: rgba(255,255,255,.08); font-size: 14px; font-weight: 900; text-decoration: none; }
+.sidebar nav { margin: 48px -8px 0; display: flex; flex-direction: column; gap: 7px; }
+.sidebar nav a { min-height: 47px; padding: 0 13px; display: flex; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 12px; color: rgba(255,255,255,.72); font-size: 13px; text-decoration: none; }
+.sidebar nav a span { width: 24px; color: rgba(255,255,255,.66); font-size: 18px; text-align: center; }
+.sidebar nav a:hover, .sidebar nav .activeLink { border-color: rgba(255,255,255,.13); color: white; background: rgba(255,255,255,.1); }
+.sidebar nav .activeLink span { color: #7ff1d5; }
+.adminOnly { margin-top: auto; padding: 12px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(0,0,0,.12); }
+.adminOnly > i { color: #7ff1d5; font-size: 13px; font-style: normal; }
+.adminOnly span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.adminOnly b { font-size: 10px; }
+.adminOnly small { color: rgba(255,255,255,.58); font-size: 10px; }
+
+.content { min-width: 0; padding: 34px clamp(24px, 4vw, 58px) 42px; }
+.header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.header > div:first-child > span { color: var(--wine-soft); font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .15em; }
+.header h1 { margin: 4px 0 5px; color: var(--wine); font-size: clamp(29px, 3vw, 40px); line-height: 1; letter-spacing: -.035em; }
+.header p { margin: 0; color: var(--muted); font-size: 13px; }
+.periodPicker { padding: 4px; display: flex; gap: 3px; border: 1px solid #dddcd5; border-radius: 12px; background: rgba(255,255,255,.72); }
+.periodPicker button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; font-weight: 750; }
+.periodPicker button:hover { color: var(--wine); background: #f1eee6; }
+.periodPicker .periodActive { color: white; background: var(--wine); box-shadow: 0 3px 10px rgba(118,0,8,.18); }
+
+.error, .loading { min-height: 110px; margin-top: 26px; padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid #e8ded2; border-radius: 15px; background: white; }
+.error { flex-direction: column; color: #8b2831; }
+.error span { color: var(--muted); font-size: 12px; }
+.error button { border: 0; border-radius: 8px; padding: 8px 12px; color: white; background: var(--wine); cursor: pointer; }
+.loading span { width: 20px; height: 20px; border: 2px solid #d9eee8; border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; }
+.loading strong { color: var(--muted); font-size: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.kpis { margin-top: 27px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.kpis article { min-height: 185px; padding: 17px; display: flex; flex-direction: column; border: 1px solid #e1e0d9; border-radius: 16px; background: rgba(255,255,255,.88); box-shadow: 0 7px 24px rgba(49,44,35,.055); }
+.kpis article > div { min-height: 30px; display: flex; align-items: center; gap: 9px; color: #53636a; }
+.kpis article > div > b { font-size: 12px; line-height: 1.3; }
+.kpiIcon { width: 29px; height: 29px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; color: var(--green); background: #e4f6f0; font-size: 15px; font-weight: 900; }
+.kpis article > strong { margin-top: 15px; color: var(--ink); font-size: 34px; line-height: 1; }
+.kpis article > p { margin: 8px 0 0; color: #405159; font-size: 12px; font-weight: 700; }
+.kpis article > small { margin-top: auto; padding-top: 10px; color: #88959b; font-size: 10px; line-height: 1.4; }
+.kpis .criticalCard { border-color: #9ed8c9; background: linear-gradient(145deg, #f7fffc, #e7f8f3); }
+.criticalCard .kpiIcon { color: white; background: var(--green); }
+.kpis .criticalCard > strong { color: var(--green); font-size: 42px; }
+.kpis .complaintCard { border-color: #ead9db; background: linear-gradient(145deg, #fff, #f9f1f2); }
+.complaintCard .kpiIcon { color: var(--wine-soft); background: #f5e5e8; }
+.kpis .complaintCard > .pendingValue { margin-top: 20px; color: var(--wine-soft); font-size: 19px; }
+
+.dashboardGrid { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .75fr); gap: 16px; }
+.dashboardGrid > article { min-width: 0; overflow: hidden; border: 1px solid #e1e0d9; border-radius: 17px; background: rgba(255,255,255,.92); box-shadow: 0 7px 24px rgba(49,44,35,.045); }
+.dashboardGrid article > header { padding: 18px 19px 14px; }
+.dashboardGrid article > header span { color: var(--wine-soft); font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .1em; }
+.dashboardGrid article > header h2 { margin: 3px 0 4px; color: var(--ink); font-size: 17px; }
+.dashboardGrid article > header p { margin: 0; color: var(--muted); font-size: 11px; }
+
+.dailyCard > header { display: flex; justify-content: space-between; gap: 18px; }
+.dateRange { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; color: var(--muted); }
+.dateRange b { color: #405159; font-size: 11px; }
+.dateRange span { margin-top: 3px; font-size: 10px !important; font-weight: 500 !important; text-transform: none !important; letter-spacing: 0 !important; }
+.barChart { height: 285px; padding: 24px 18px 10px; display: flex; align-items: stretch; gap: clamp(4px, .8vw, 12px); border-top: 1px solid #eff0ed; background: linear-gradient(to top, rgba(0,128,105,.025), transparent); }
+.barColumn { min-width: 0; flex: 1; display: grid; grid-template-rows: 18px minmax(0, 1fr) 24px; align-items: end; justify-items: center; }
+.barColumn > span { color: #405159; font-size: 10px; font-weight: 800; }
+.barColumn > div { width: 100%; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.barColumn > div i { width: min(28px, 75%); min-height: 2px; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, var(--green-bright), var(--green)); box-shadow: 0 4px 10px rgba(0,128,105,.15); transition: height .25s ease; }
+.barColumn:hover > div i { filter: brightness(.92); }
+.barColumn > small { overflow: hidden; max-width: 100%; padding-top: 7px; color: #7d898e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.dailyCard > footer { min-height: 42px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid #eff0ed; color: var(--muted); font-size: 10px; }
+.dailyCard > footer > span { color: var(--green); }
+
+.queueCard { display: flex; flex-direction: column; }
+.queueRows { padding: 1px 15px; }
+.queueRows > div { min-height: 63px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #eef0ed; }
+.queueRows > div > span { width: 31px; height: 31px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; font-size: 10px; font-weight: 900; }
+.queueNew { color: #a86900; background: #fff0ce; }
+.queueOpen { color: var(--green); background: #e4f6f0; }
+.queueWaiting { color: #5360a5; background: #e9edff; }
+.queueRows p { min-width: 0; flex: 1; margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.queueRows p b { font-size: 12px; }
+.queueRows p small { color: var(--muted); font-size: 10px; }
+.queueRows > div > strong { font-size: 20px; }
+.queueTotal { margin-top: auto; min-height: 58px; padding: 0 17px; display: flex; align-items: center; justify-content: space-between; color: white; background: var(--wine); }
+.queueTotal span { font-size: 11px; font-weight: 750; }
+.queueTotal strong { font-size: 22px; }
+
+.operatorCard { min-height: 320px; }
+.operatorList { padding: 0 13px 10px; }
+.operatorRow { min-height: 72px; padding: 8px 5px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #eef0ed; }
+.rank { width: 18px; color: #98a2a7; font-size: 10px; font-weight: 800; text-align: center; }
+.operatorAvatar { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--wine-soft); font-size: 10px; font-weight: 850; }
+.operatorRow > div { min-width: 0; flex: 1; }
+.operatorRow > div > span { display: flex; justify-content: space-between; gap: 10px; }
+.operatorRow > div > span b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.operatorRow > div > span strong { flex: 0 0 auto; color: var(--green); font-size: 11px; }
+.operatorRow > div > div { height: 5px; margin: 7px 0 4px; overflow: hidden; border-radius: 4px; background: #edf0ee; }
+.operatorRow > div > div i { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, var(--green), var(--green-bright)); }
+.operatorRow small { color: #869399; font-size: 10px; }
+.operatorCard > footer { padding: 9px 18px; border-top: 1px solid #eef0ed; color: #869399; background: #fafbfa; font-size: 10px; }
+.empty { padding: 25px; color: var(--muted); font-size: 11px; text-align: center; }
+
+.operationsCard { min-height: 320px; }
+.operationMetric { min-height: 68px; margin: 0 15px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #eef0ed; }
+.operationIcon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: var(--green); background: #e4f6f0; font-size: 13px; font-weight: 900; }
+.operationMetric > div { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.operationMetric b { font-size: 12px; }
+.operationMetric small { color: var(--muted); font-size: 10px; }
+.operationMetric > strong { font-size: 21px; }
+.paidProgress { margin: 8px 15px 15px; padding: 13px; border-radius: 11px; background: #f5f7f6; }
+.paidProgress > div { display: flex; justify-content: space-between; gap: 10px; color: #53636a; font-size: 10px; }
+.paidProgress > span { height: 7px; margin-top: 9px; overflow: hidden; display: block; border-radius: 5px; background: #e0e5e3; }
+.paidProgress > span i { height: 100%; display: block; border-radius: inherit; background: var(--green); }
+
+.definition { margin-top: 16px; padding: 13px 16px; display: flex; align-items: flex-start; gap: 11px; border: 1px solid #cce4dd; border-radius: 13px; color: #506760; background: #edf8f4; }
+.definition > span { width: 22px; height: 22px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--green); font-size: 11px; font-weight: 900; }
+.definition p { margin: 1px 0 0; font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 1120px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboardGrid { grid-template-columns: 1fr; }
+  .queueCard { min-height: 300px; }
+}
+
+@media (max-width: 760px) {
+  .page { display: block; }
+  .sidebar { position: static; width: 100%; height: auto; padding: 10px 14px; flex-direction: row; align-items: center; gap: 12px; }
+  .brand { width: 38px; height: 38px; border-radius: 10px; }
+  .sidebar nav { min-width: 0; margin: 0; flex: 1; flex-direction: row; justify-content: flex-end; }
+  .sidebar nav a { min-height: 38px; padding: 0 10px; }
+  .sidebar nav a span { width: auto; }
+  .sidebar nav a b { display: none; }
+  .adminOnly { display: none; }
+  .content { padding: 22px 13px 30px; }
+  .header { align-items: flex-start; flex-direction: column; }
+  .periodPicker { width: 100%; overflow-x: auto; }
+  .periodPicker button { flex: 1 0 auto; }
+  .kpis { grid-template-columns: 1fr; }
+  .kpis article { min-height: 165px; }
+  .dailyCard > header { flex-direction: column; }
+  .dateRange { align-items: flex-start; }
+  .barChart { height: 250px; padding-left: 9px; padding-right: 9px; gap: 3px; overflow-x: auto; }
+  .barColumn { min-width: 24px; }
+  .dailyCard > footer { align-items: flex-start; flex-direction: column; justify-content: center; }
+}
