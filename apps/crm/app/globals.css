@@ -661,6 +661,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .quickReplyMenu > header b { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 7px; color: white; background: var(--wa-green-dark); font-size: 14px; }
 .quickReplyMenu > header strong { color: var(--wa-ink); font-size: 11px; }
 .quickReplyMenu > header span, .quickReplyMenu > footer { color: #8696a0; font-size: 8px; }
+.quickReplyHeaderActions { justify-content: flex-end; }
+.quickReplyHeaderActions button { border: 0; border-radius: 8px; padding: 7px 10px; color: white; background: var(--wa-green-dark); cursor: pointer; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.quickReplyHeaderActions button:hover { background: #006d5b; }
 .quickReplyMenu > div { min-height: 0; padding: 5px; overflow-y: auto; }
 .quickReplyMenu > div > p { margin: 22px 12px; color: #667781; text-align: center; font-size: 10px; }
 .quickReplyMenu > div > button { width: 100%; padding: 9px 10px; display: grid; grid-template-columns: minmax(120px, 34%) 1fr; align-items: center; gap: 12px; border: 0; border-radius: 8px; color: #3b4a54; background: transparent; text-align: left; cursor: pointer; }
@@ -683,6 +686,55 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .composerDisabled textarea { background: transparent; }
 .composerHints { display: none; }
 .composerHints button { color: var(--wa-green-dark); }
+
+.quickReplyAdminModal { overflow: hidden; width: min(920px, 100%); max-height: min(760px, calc(100dvh - 48px)); display: flex; flex-direction: column; border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(11,20,26,.3); }
+.quickReplyAdminModal > header { min-height: 84px; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--wa-line); background: #f0f2f5; }
+.quickReplyAdminModal > header > div { min-width: 0; }
+.quickReplyAdminModal > header span { color: var(--wa-green-dark); font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
+.quickReplyAdminModal > header h3 { margin: 2px 0; color: var(--wa-ink); font-size: 21px; }
+.quickReplyAdminModal > header p { margin: 0; color: #667781; font-size: 11px; }
+.quickReplyAdminModal > header p b { color: var(--wa-green-dark); }
+.quickReplyAdminModal > header > button { width: 36px; height: 36px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #54656f; background: white; cursor: pointer; font-size: 23px; }
+.quickReplyAdminContent { min-height: 0; display: grid; grid-template-columns: minmax(300px, 360px) minmax(360px, 1fr); }
+.quickReplyEditor { min-height: 0; padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 13px; border-right: 1px solid var(--wa-line); background: #fbfcfc; }
+.quickReplyEditorHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.quickReplyEditorHeading > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.quickReplyEditorHeading span { color: #8696a0; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.quickReplyEditorHeading strong { overflow: hidden; color: var(--wa-ink); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.quickReplyEditorHeading > button { border: 0; padding: 3px 0; color: var(--wa-green-dark); background: transparent; cursor: pointer; font-size: 10px; font-weight: 750; }
+.quickReplyEditor > label:not(.quickReplyActiveToggle) { display: flex; flex-direction: column; gap: 6px; color: #54656f; font-size: 11px; font-weight: 750; }
+.quickReplyEditor > label > input, .quickReplyEditor textarea, .shortcutInput { width: 100%; border: 1px solid #cfd6d9; border-radius: 9px; color: var(--wa-ink); background: white; font: inherit; font-size: 13px; font-weight: 400; outline: 0; }
+.quickReplyEditor > label > input { min-height: 40px; padding: 9px 11px; }
+.quickReplyEditor textarea { min-height: 120px; padding: 10px 11px; resize: vertical; line-height: 1.45; }
+.quickReplyEditor > label > input:focus, .quickReplyEditor textarea:focus, .shortcutInput:focus-within { border-color: var(--wa-green); box-shadow: 0 0 0 3px rgba(0,168,132,.1); }
+.shortcutInput { min-height: 40px; display: flex; align-items: center; }
+.shortcutInput b { padding-left: 11px; color: var(--wa-green-dark); font-size: 15px; }
+.shortcutInput input { min-width: 0; flex: 1; border: 0; padding: 9px 11px 9px 3px; outline: 0; color: inherit; background: transparent; font: inherit; }
+.quickReplyEditor label small { color: #8696a0; font-size: 9px; font-weight: 400; line-height: 1.4; }
+.quickReplyActiveToggle { min-height: 34px; display: flex; align-items: center; gap: 9px; color: #3b4a54; font-size: 11px; cursor: pointer; }
+.quickReplyActiveToggle input { width: 17px; height: 17px; accent-color: var(--wa-green-dark); }
+.quickReplyAdminError { padding: 9px 10px; border: 1px solid #f0bfc3; border-radius: 9px; color: #8b2831; background: #fff0f0; font-size: 10px; line-height: 1.4; }
+.quickReplySaveButton { min-height: 42px; border: 0; border-radius: 10px; color: white; background: var(--wa-green-dark); cursor: pointer; font-size: 12px; font-weight: 800; }
+.quickReplySaveButton:disabled { cursor: not-allowed; opacity: .5; }
+.quickReplyAdminList { min-height: 0; display: flex; flex-direction: column; }
+.quickReplyAdminList > header { min-height: 58px; padding: 12px 16px; display: flex; align-items: center; border-bottom: 1px solid var(--wa-line); }
+.quickReplyAdminList > header div { display: flex; flex-direction: column; gap: 2px; }
+.quickReplyAdminList > header span { color: #8696a0; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.quickReplyAdminList > header strong { color: var(--wa-ink); font-size: 13px; }
+.quickReplyAdminList > div { min-height: 0; padding: 7px; overflow-y: auto; }
+.quickReplyAdminList article { margin-bottom: 6px; padding: 11px 12px; border: 1px solid var(--wa-line); border-radius: 11px; background: white; }
+.quickReplyAdminList article > div > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.quickReplyAdminList article b { color: var(--wa-green-dark); font-size: 12px; }
+.quickReplyAdminList article i { padding: 3px 7px; border-radius: 8px; color: #08725a; background: #e7f8f3; font-size: 8px; font-style: normal; font-weight: 800; text-transform: uppercase; }
+.quickReplyAdminList article strong { display: block; margin-top: 4px; color: var(--wa-ink); font-size: 12px; }
+.quickReplyAdminList article p { overflow: hidden; margin: 5px 0 0; color: #667781; font-size: 11px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.quickReplyAdminList article footer { margin-top: 9px; display: flex; gap: 6px; }
+.quickReplyAdminList article footer button { border: 1px solid #d6dde0; border-radius: 8px; padding: 6px 9px; color: #54656f; background: #f7f9fa; cursor: pointer; font-size: 9px; font-weight: 750; }
+.quickReplyAdminList article footer button:hover:not(:disabled) { border-color: #9bc9bd; color: var(--wa-green-dark); background: #edf7f4; }
+.quickReplyAdminList article footer .quickReplyDeleteButton { margin-left: auto; color: #a3152f; }
+.quickReplyAdminList .quickReplyInactive { opacity: .68; background: #f5f6f7; }
+.quickReplyAdminList .quickReplyInactive i { color: #667781; background: #e7e9eb; }
+.quickReplyAdminEmpty { margin: 35px 12px; color: #8696a0; text-align: center; font-size: 11px; }
 
 .contextPanel { background: white; border-left-color: #d8dcdf; }
 .contextPanel > header { min-height: 60px; padding: 8px 14px; background: #fff; border-bottom-color: var(--wa-line); color: #54656f; }
@@ -828,6 +880,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .composerHints { display: none; }
   .serviceWindow { max-width: calc(100% - 20px); text-align: center; }
   .orderModalBackdrop { padding: 0; }
-  .orderDetailModal { width: 100%; max-height: 100dvh; min-height: 100dvh; border-radius: 0; }
+  .orderDetailModal, .quickReplyAdminModal { width: 100%; max-height: 100dvh; min-height: 100dvh; border-radius: 0; }
   .orderModalData dl { grid-template-columns: 1fr; }
+  .quickReplyHeaderActions > span { display: none; }
+  .quickReplyAdminContent { overflow-y: auto; display: block; }
+  .quickReplyEditor { overflow: visible; border-right: 0; border-bottom: 1px solid var(--wa-line); }
+  .quickReplyAdminList > div { overflow: visible; }
 }

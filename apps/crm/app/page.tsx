@@ -4,7 +4,8 @@ import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect,
 import type { ConversationStatus, CrmOrderItem, CrmSessionUser, CustomerContextResponse, ErpCustomerCandidate, ErpOrderDetails, ErpPickupLocation, ErpProductCatalogItem } from '@santa-catalina/contracts'
 
 type ApiTag = { id: string; name: string; color: string }
-type ApiQuickReply = { id: string; shortcut: string; title: string; body: string }
+type ApiQuickReply = { id: string; shortcut: string; title: string; body: string; active: boolean }
+type QuickReplyForm = { id: string | null; shortcut: string; title: string; body: string; active: boolean }
 type ApiContact = { id: string; displayName: string; profileName: string | null; phoneE164: string }
 type ApiMessage = { id: string; direction: 'INBOUND' | 'OUTBOUND' | 'INTERNAL'; body: string | null; status: 'RECEIVED' | 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; sentById: string | null; providerTimestamp: string | null; createdAt: string }
 type ConversationSummary = { id: string; status: ConversationStatus; priority: number; assignedToId: string | null; activeById: string | null; lockExpiresAt: string | null; unreadCount: number; lastMessageAt: string; serviceWindowExpiresAt: string | null; contact: ApiContact; tags: ApiTag[]; lastMessage: ApiMessage | null }
@@ -23,6 +24,7 @@ const FILTERS: Array<{ id: FilterId; label: string; short: string }> = [
   { id: 'resolved', label: 'Resueltas', short: 'Cerradas' },
 ]
 const EMPTY_ORDER_DRAFT: OrderDraft = { orderDate: '', orderAddress: '', orderFulfillment: null, orderPickupLocationId: null, orderPickupLocationName: '', orderShift: null, orderPaid: false, orderItems: [], orderNotes: '', orderDraftUpdatedAt: null }
+const EMPTY_QUICK_REPLY_FORM: QuickReplyForm = { id: null, shortcut: '', title: '', body: '', active: true }
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
@@ -115,6 +117,12 @@ export default function AttentionWorkspace() {
   const [tagBusyId, setTagBusyId] = useState<string | null>(null)
   const [showQuickReplies, setShowQuickReplies] = useState(false)
   const [quickReplyIndex, setQuickReplyIndex] = useState(0)
+  const [quickReplyManagerOpen, setQuickReplyManagerOpen] = useState(false)
+  const [managedQuickReplies, setManagedQuickReplies] = useState<ApiQuickReply[]>([])
+  const [quickReplyForm, setQuickReplyForm] = useState<QuickReplyForm>(EMPTY_QUICK_REPLY_FORM)
+  const [quickReplyManagerLoading, setQuickReplyManagerLoading] = useState(false)
+  const [quickReplyManagerBusy, setQuickReplyManagerBusy] = useState(false)
+  const [quickReplyManagerError, setQuickReplyManagerError] = useState<string | null>(null)
   const [showContext, setShowContext] = useState(true)
   const [customerContext, setCustomerContext] = useState<CustomerContextResponse | null>(null)
   const [contextLoading, setContextLoading] = useState(false)
@@ -154,13 +162,16 @@ export default function AttentionWorkspace() {
     setConversations(items)
     setActiveId(current => current && items.some(item => item.id === current) ? current : null)
   }, [])
+  const refreshQuickReplies = useCallback(async () => {
+    setQuickReplies(await api<ApiQuickReply[]>('/api/quick-replies'))
+  }, [])
   useEffect(() => {
     Promise.all([api<CrmSessionUser>('/api/session'), refreshList()]).then(([session]) => setUser(session)).catch(cause => setError(cause instanceof Error ? cause.message : 'No se pudo iniciar Atención.')).finally(() => setLoading(false))
   }, [refreshList])
   useEffect(() => {
     api<ApiTag[]>('/api/tags').then(setAllTags).catch(() => setAllTags([]))
-    api<ApiQuickReply[]>('/api/quick-replies').then(setQuickReplies).catch(() => setQuickReplies([]))
-  }, [])
+    refreshQuickReplies().catch(() => setQuickReplies([]))
+  }, [refreshQuickReplies])
   useEffect(() => {
     if (!showTagMenu) return
     const close = (event: PointerEvent) => {
@@ -202,15 +213,16 @@ export default function AttentionWorkspace() {
   useEffect(() => { void refreshOrderCatalog() }, [refreshOrderCatalog])
   useEffect(() => { const timer = window.setInterval(() => refreshList().catch(() => undefined), 4_000); return () => window.clearInterval(timer) }, [refreshList])
   useEffect(() => {
-    if (!orderModal && !scheduledOrderModal) return
+    if (!orderModal && !scheduledOrderModal && !quickReplyManagerOpen) return
     const closeModal = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setOrderModal(null)
       setScheduledOrderModal(null)
+      setQuickReplyManagerOpen(false)
     }
     window.addEventListener('keydown', closeModal)
     return () => window.removeEventListener('keydown', closeModal)
-  }, [orderModal, scheduledOrderModal])
+  }, [orderModal, quickReplyManagerOpen, scheduledOrderModal])
 
   const refreshCustomerContext = useCallback(async (conversationId: string) => {
     setContextLoading(true)
@@ -368,13 +380,13 @@ export default function AttentionWorkspace() {
   useEffect(() => {
     if (!activeId) return
     const closeWithEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || orderModal || scheduledOrderModal || showTagMenu || showQuickReplies) return
+      if (event.key !== 'Escape' || orderModal || scheduledOrderModal || quickReplyManagerOpen || showTagMenu || showQuickReplies) return
       event.preventDefault()
       closeConversation()
     }
     window.addEventListener('keydown', closeWithEscape)
     return () => window.removeEventListener('keydown', closeWithEscape)
-  }, [activeId, closeConversation, orderModal, scheduledOrderModal, showQuickReplies, showTagMenu])
+  }, [activeId, closeConversation, orderModal, quickReplyManagerOpen, scheduledOrderModal, showQuickReplies, showTagMenu])
   const selectConversation = async (id: string) => { if (id !== activeId) await releaseCurrent(); setActiveId(id); setMobileChat(true) }
   const linkCustomer = async (candidate: ErpCustomerCandidate) => {
     if (!active) return
@@ -598,6 +610,75 @@ export default function AttentionWorkspace() {
     setShowQuickReplies(true)
     window.requestAnimationFrame(() => composerInputRef.current?.focus())
   }
+  const loadManagedQuickReplies = async () => {
+    setQuickReplyManagerLoading(true)
+    try {
+      setManagedQuickReplies(await api<ApiQuickReply[]>('/api/quick-replies?includeInactive=true'))
+      setQuickReplyManagerError(null)
+    } catch (cause) {
+      setQuickReplyManagerError(cause instanceof Error ? cause.message : 'No se pudieron cargar las respuestas rápidas.')
+    } finally {
+      setQuickReplyManagerLoading(false)
+    }
+  }
+  const openQuickReplyManager = () => {
+    setShowQuickReplies(false)
+    setQuickReplyForm(EMPTY_QUICK_REPLY_FORM)
+    setQuickReplyManagerError(null)
+    setQuickReplyManagerOpen(true)
+    void loadManagedQuickReplies()
+  }
+  const saveQuickReply = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (quickReplyManagerBusy) return
+    setQuickReplyManagerBusy(true)
+    setQuickReplyManagerError(null)
+    try {
+      const url = quickReplyForm.id ? `/api/quick-replies/${quickReplyForm.id}` : '/api/quick-replies'
+      await api<ApiQuickReply>(url, {
+        method: quickReplyForm.id ? 'PUT' : 'POST',
+        body: JSON.stringify({
+          shortcut: quickReplyForm.shortcut,
+          title: quickReplyForm.title,
+          body: quickReplyForm.body,
+          active: quickReplyForm.active,
+        }),
+      })
+      setQuickReplyForm(EMPTY_QUICK_REPLY_FORM)
+      await Promise.all([refreshQuickReplies(), loadManagedQuickReplies()])
+    } catch (cause) {
+      setQuickReplyManagerError(cause instanceof Error ? cause.message : 'No se pudo guardar la respuesta rápida.')
+    } finally {
+      setQuickReplyManagerBusy(false)
+    }
+  }
+  const toggleQuickReply = async (reply: ApiQuickReply) => {
+    if (quickReplyManagerBusy) return
+    setQuickReplyManagerBusy(true)
+    setQuickReplyManagerError(null)
+    try {
+      await api<ApiQuickReply>(`/api/quick-replies/${reply.id}`, { method: 'PUT', body: JSON.stringify({ active: !reply.active }) })
+      await Promise.all([refreshQuickReplies(), loadManagedQuickReplies()])
+    } catch (cause) {
+      setQuickReplyManagerError(cause instanceof Error ? cause.message : 'No se pudo cambiar el estado de la respuesta.')
+    } finally {
+      setQuickReplyManagerBusy(false)
+    }
+  }
+  const deleteQuickReply = async (reply: ApiQuickReply) => {
+    if (quickReplyManagerBusy || !window.confirm(`¿Eliminar definitivamente la respuesta /${reply.shortcut}?`)) return
+    setQuickReplyManagerBusy(true)
+    setQuickReplyManagerError(null)
+    try {
+      await api<{ deleted: boolean }>(`/api/quick-replies/${reply.id}`, { method: 'DELETE' })
+      if (quickReplyForm.id === reply.id) setQuickReplyForm(EMPTY_QUICK_REPLY_FORM)
+      await Promise.all([refreshQuickReplies(), loadManagedQuickReplies()])
+    } catch (cause) {
+      setQuickReplyManagerError(cause instanceof Error ? cause.message : 'No se pudo eliminar la respuesta.')
+    } finally {
+      setQuickReplyManagerBusy(false)
+    }
+  }
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (showQuickReplies) {
       if (event.key === 'Escape') {
@@ -730,7 +811,7 @@ export default function AttentionWorkspace() {
       <div className="composerArea">
         <div className={`serviceWindow ${service.expired ? 'serviceWindowExpired' : ''}`}><Icon name="clock" size={14} /><span>{service.text}</span></div>
         {showQuickReplies && canReply && <div className="quickReplyMenu" role="listbox" aria-label="Respuestas rápidas">
-          <header><div><b>/</b><strong>Respuestas rápidas</strong></div><span>Elegí una para insertarla</span></header>
+          <header><div><b>/</b><strong>Respuestas rápidas</strong></div><div className="quickReplyHeaderActions"><span>Elegí una para insertarla</span>{isSupervisor && <button type="button" onClick={openQuickReplyManager}>+ Nueva respuesta</button>}</div></header>
           <div>
             {matchingQuickReplies.length === 0 && <p>No encontramos una respuesta para “{draft}”.</p>}
             {matchingQuickReplies.map((reply, index) => <button type="button" key={reply.id} role="option" aria-selected={index === quickReplyIndex} className={index === quickReplyIndex ? 'quickReplyActive' : ''} onMouseEnter={() => setQuickReplyIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseQuickReply(reply)}>
@@ -857,6 +938,31 @@ export default function AttentionWorkspace() {
         <button className="resolveButton" onClick={() => void resolveConversation()} disabled={!canResolveActive || busy}><Icon name="check" size={16} /> {active.status === 'RESOLVED' ? 'Resuelta' : busy ? 'Resolviendo…' : 'Resolver'}</button>
       </footer>
     </aside>}
+    {quickReplyManagerOpen && <div className="orderModalBackdrop" role="presentation" onMouseDown={() => setQuickReplyManagerOpen(false)}><section className="quickReplyAdminModal" role="dialog" aria-modal="true" aria-label="Administrar respuestas rápidas" onMouseDown={event => event.stopPropagation()}>
+      <header><div><span>Administración</span><h3>Respuestas rápidas</h3><p>Todo lo que guardes estará disponible para el equipo al escribir <b>/</b>.</p></div><button type="button" aria-label="Cerrar respuestas rápidas" onClick={() => setQuickReplyManagerOpen(false)}>×</button></header>
+      <div className="quickReplyAdminContent">
+        <form className="quickReplyEditor" onSubmit={saveQuickReply}>
+          <div className="quickReplyEditorHeading"><div><span>{quickReplyForm.id ? 'Editando respuesta' : 'Nueva respuesta'}</span><strong>{quickReplyForm.id ? `/${quickReplyForm.shortcut}` : 'Creá un atajo fácil de recordar'}</strong></div>{quickReplyForm.id && <button type="button" onClick={() => setQuickReplyForm(EMPTY_QUICK_REPLY_FORM)}>Cancelar edición</button>}</div>
+          <label><span>Atajo</span><div className="shortcutInput"><b>/</b><input autoFocus={!quickReplyForm.id} maxLength={41} value={quickReplyForm.shortcut} onChange={event => setQuickReplyForm(current => ({ ...current, shortcut: event.target.value.replace(/^\/+/, '') }))} placeholder="ej: envio" /></div><small>Sin espacios. Podés usar letras, números, guiones y guion bajo.</small></label>
+          <label><span>Nombre visible</span><input maxLength={80} value={quickReplyForm.title} onChange={event => setQuickReplyForm(current => ({ ...current, title: event.target.value }))} placeholder="Ej: Confirmación de envío" /></label>
+          <label><span>Mensaje</span><textarea rows={5} maxLength={2000} value={quickReplyForm.body} onChange={event => setQuickReplyForm(current => ({ ...current, body: event.target.value }))} placeholder="Escribí el texto que se insertará en la conversación…" /></label>
+          <label className="quickReplyActiveToggle"><input type="checkbox" checked={quickReplyForm.active} onChange={event => setQuickReplyForm(current => ({ ...current, active: event.target.checked }))} /><span>Disponible para los operadores</span></label>
+          {quickReplyManagerError && <div className="quickReplyAdminError" role="alert">{quickReplyManagerError}</div>}
+          <button className="quickReplySaveButton" type="submit" disabled={quickReplyManagerBusy || !quickReplyForm.shortcut.trim() || !quickReplyForm.title.trim() || !quickReplyForm.body.trim()}>{quickReplyManagerBusy ? 'Guardando…' : quickReplyForm.id ? 'Guardar cambios' : 'Crear respuesta rápida'}</button>
+        </form>
+        <section className="quickReplyAdminList">
+          <header><div><span>Biblioteca compartida</span><strong>{managedQuickReplies.length} respuestas</strong></div></header>
+          <div>
+            {quickReplyManagerLoading && <p className="quickReplyAdminEmpty">Cargando respuestas…</p>}
+            {!quickReplyManagerLoading && managedQuickReplies.length === 0 && <p className="quickReplyAdminEmpty">Todavía no hay respuestas guardadas.</p>}
+            {managedQuickReplies.map(reply => <article key={reply.id} className={!reply.active ? 'quickReplyInactive' : ''}>
+              <div><span><b>/{reply.shortcut}</b><i>{reply.active ? 'Activa' : 'Inactiva'}</i></span><strong>{reply.title}</strong><p>{reply.body}</p></div>
+              <footer><button type="button" onClick={() => setQuickReplyForm({ ...reply })} disabled={quickReplyManagerBusy}>Editar</button><button type="button" onClick={() => void toggleQuickReply(reply)} disabled={quickReplyManagerBusy}>{reply.active ? 'Desactivar' : 'Activar'}</button><button type="button" className="quickReplyDeleteButton" onClick={() => void deleteQuickReply(reply)} disabled={quickReplyManagerBusy}>Eliminar</button></footer>
+            </article>)}
+          </div>
+        </section>
+      </div>
+    </section></div>}
     {orderModal && <div className="orderModalBackdrop" role="presentation" onMouseDown={() => setOrderModal(null)}><section className="orderDetailModal" role="dialog" aria-modal="true" aria-label="Detalle del pedido histórico" onMouseDown={event => event.stopPropagation()}>
       <header><div><span>Pedido histórico del ERP</span><h3>{orderModal.detail ? `#${orderModal.detail.id.slice(0, 8)}` : 'Consultando pedido'}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setOrderModal(null)}>×</button></header>
       {orderModal.loading && <div className="orderModalState"><span className="claimSpinner" /><strong>Cargando toda la información…</strong></div>}
