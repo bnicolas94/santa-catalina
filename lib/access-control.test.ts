@@ -2,6 +2,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath, getAccessRule } from './access-control'
 
+test('sólo ADMIN puede sincronizar egresos de Mercado Pago', () => {
+    const path = '/api/mercadopago/sincronizar'
+    assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath(path, { rol: 'OPERARIO', permisos: { permisoCaja: true } }), false)
+    assert.equal(canAccessPath(path, {}), false)
+})
+
 test('la administración de sedes está reservada a ADMIN', () => {
     for (const path of ['/sedes', '/api/sedes']) {
         assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)

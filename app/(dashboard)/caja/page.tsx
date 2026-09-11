@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import useSWR from 'swr'
 
@@ -173,6 +173,41 @@ export default function CajaPage() {
     const [showMPModal, setShowMPModal] = useState(false)
     const [liveMPData, setLiveMPData] = useState<any[]>([])
     const [loadingMP, setLoadingMP] = useState(false)
+    const [sincronizandoMP, setSincronizandoMP] = useState(false)
+    const [estadoSyncMP, setEstadoSyncMP] = useState('')
+    const [errorSyncMP, setErrorSyncMP] = useState(false)
+    const syncMPEnCurso = useRef(false)
+
+    const sincronizarMP = useCallback(async () => {
+        if (syncMPEnCurso.current || userRol !== 'ADMIN') return
+        syncMPEnCurso.current = true
+        setSincronizandoMP(true)
+        try {
+            const respuesta = await fetch('/api/mercadopago/sincronizar', { method: 'POST' })
+            const resultado = await respuesta.json()
+            if (!respuesta.ok) throw new Error(resultado.error || 'No se pudieron consultar los egresos.')
+            setErrorSyncMP(false)
+            setEstadoSyncMP(`${resultado.newlyAdded} egresos incorporados · últimas 48 h · ${new Date().toLocaleTimeString('es-AR')}${resultado.complete ? '' : ' · Consulta parcial; quedan operaciones por revisar.'}`)
+            await mutate()
+        } catch (error) {
+            setErrorSyncMP(true)
+            setEstadoSyncMP(error instanceof Error ? error.message : 'Falló la sincronización de egresos.')
+            // Una ejecución puede haber incorporado pagos antes del error.
+            await mutate()
+        } finally {
+            syncMPEnCurso.current = false
+            setSincronizandoMP(false)
+        }
+    }, [userRol, mutate])
+
+    useEffect(() => {
+        if (userRol !== 'ADMIN') return
+        void sincronizarMP()
+        const intervalo = setInterval(() => {
+            if (document.visibilityState === 'visible') void sincronizarMP()
+        }, 60000)
+        return () => clearInterval(intervalo)
+    }, [userRol, sincronizarMP])
     const [editingSaldo, setEditingSaldo] = useState<string | null>(null)
     const [editSaldoValue, setEditSaldoValue] = useState('')
     const [editMotivo, setEditMotivo] = useState('ajuste')
@@ -970,6 +1005,16 @@ export default function CajaPage() {
                                 </div>
                             ) : (
                                 <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2980B9', textAlign: 'center' }}>{formatCurrency(saldoMercadoPago, showMontos)}</div>
+                            )}
+                            {userRol === 'ADMIN' && (
+                                <div style={{ marginTop: 'var(--space-2)', fontSize: '0.75rem' }}>
+                                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void sincronizarMP()} disabled={sincronizandoMP}>
+                                        {sincronizandoMP ? 'Consultando egresos…' : 'Actualizar egresos MP'}
+                                    </button>
+                                    <div role="status" style={{ marginTop: 4, color: errorSyncMP ? '#dc2626' : 'var(--color-gray-500)' }}>
+                                        {estadoSyncMP || 'Consulta automática cada minuto mientras Caja esté visible.'}
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>

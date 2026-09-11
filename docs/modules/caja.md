@@ -53,6 +53,14 @@ Este módulo es un "hub" al que confluyen otros procesos de negocio:
 *   **Empleados / Auth:** Dependencia fuerte para el control de accesos (Session del usuario, roles, y su atributo `ubicacionTipo`: FABRICA vs LOCAL).
 *   **Mercado Pago (`MovimientoMercadoPago`):** Integración indirecta, los webhooks y operaciones digitales replican data en el sistema para que la caja muestre los ingresos virtuales en tiempo real junto al efectivo.
 
+### Sincronización de egresos de Mercado Pago
+
+Para ADMIN, Caja ejecuta `POST /api/mercadopago/sincronizar` al abrir y cada minuto mientras la pestaña está visible. El botón **Actualizar egresos MP** permite repetir la consulta y muestra su resultado o error. Al finalizar se actualizan movimientos y saldos. El cron `/api/cron/mercadopago`, protegido por `CRON_SECRET`, utiliza el mismo servicio y permite sincronizar con Caja cerrada si el despliegue tiene una programación externa.
+
+La búsqueda pagina los pagos creados en las últimas 48 horas con `payer.id` de la cuenta configurada. Incorpora pagos aprobados en ARS hechos con saldo (`account_money`), incluyendo transferencias y pagos a comercios/servicios que Payments Search exponga. Descuenta `total_paid_amount` (respaldo: `transaction_amount`), no el neto recibido por el destinatario. Cada ID de MP se registra una sola vez, con bloqueo transaccional, movimiento de Caja, saldo y auditoría. Los límites de páginas/tiempo se informan como consulta parcial.
+
+Esta consulta no representa un extracto completo de la cuenta: no incorpora retiros u operaciones que no aparezcan en Payments Search, no corrige históricos anteriores a 48 horas ni concilia automáticamente pagos internos sin ID de MP. MP Juani conserva su flujo independiente.
+
 ---
 
 ## 5. 🗄️ Interacción con la base de datos

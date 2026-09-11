@@ -97,6 +97,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - No introducir una nueva fórmula de costos, stock, presentaciones, horas o liquidaciones en la UI. La regla de negocio debe vivir en `lib/` y tener pruebas.
 - Todo cambio efectivo de sueldo o valor de hora extra debe conservar su traza en `HistorialSalarial`; la actualización salarial y su auditoría deben ser atómicas.
 - Respetar los movimientos protegidos y las trazas de auditoría de Caja. No borrar o reescribir movimientos financieros relacionados sin revisar `lib/caja` y sus relaciones Prisma.
+- Los egresos de Mercado Pago se consultan por `payer.id` en `lib/mercadopago-egresos.ts` y se registran con saldo/auditoría en `lib/services/mercadopago.service.ts`. Cron y POST `/api/mercadopago/sincronizar` (ADMIN) comparten la lógica; Caja consulta al abrir y cada minuto visible para ADMIN. Se pagina sobre las últimas 48 h y se deduplica por `mpId` con bloqueo transaccional. Sólo pagos aprobados ARS desde `account_money` descuentan el total pagado, nunca el neto recibido por el destinatario. No cubre operaciones ausentes de Payments Search ni concilia pagos cargados manualmente sin ID de MP.
 - Los cambios de stock y de producto deben conservar trazabilidad hacia compras, lotes o pedidos según corresponda.
 
 ### Importaciones y operaciones destructivas
