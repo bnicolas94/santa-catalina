@@ -193,7 +193,7 @@ async function persistLiveMessage(
     await transaction.conversation.updateMany({
       where: {
         id: conversation.id,
-        OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: occurredAt } }],
+        OR: [{ lastInboundAt: null }, { lastInboundAt: { lte: occurredAt } }],
       },
       data: {
         lastInboundAt: occurredAt,
@@ -201,8 +201,8 @@ async function persistLiveMessage(
       },
     })
     await transaction.conversation.updateMany({
-      where: { id: conversation.id, lastMessageAt: { lt: occurredAt } },
-      data: { lastMessageAt: occurredAt, status: 'OPEN' },
+      where: { id: conversation.id, lastMessageAt: { lte: occurredAt } },
+      data: { lastMessageAt: occurredAt, status: 'OPEN', resolvedAt: null },
     })
   } else {
     await transaction.conversation.updateMany({
@@ -213,13 +213,13 @@ async function persistLiveMessage(
       data: { unreadCount: 0 },
     })
     await transaction.conversation.updateMany({
-      where: { id: conversation.id, lastMessageAt: { lt: occurredAt } },
-      data: { lastMessageAt: occurredAt, status: 'WAITING_CUSTOMER' },
+      where: { id: conversation.id, lastMessageAt: { lte: occurredAt } },
+      data: { lastMessageAt: occurredAt, status: 'WAITING_CUSTOMER', resolvedAt: null },
     })
     await transaction.conversation.updateMany({
       where: {
         id: conversation.id,
-        OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lt: occurredAt } }],
+        OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lte: occurredAt } }],
       },
       data: { lastOutboundAt: occurredAt },
     })

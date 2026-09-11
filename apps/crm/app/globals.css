@@ -456,6 +456,8 @@ button { color: inherit; }
 .contextFooter button:disabled { cursor: default; opacity: .55; }
 .contextFooter .adminReleaseButton { border-color: #e4a83c; color: #8a5b0b; background: #fff8e9; }
 .contextFooter .adminReleaseButton:hover:not(:disabled) { background: #ffefc7; }
+.contextFooter .archiveButton { display: flex; align-items: center; justify-content: center; gap: 5px; border-color: #b9c4c9; color: #3b4a54; background: #f5f7f8; }
+.contextFooter .archiveButton:hover:not(:disabled) { border-color: #8da0a9; background: #e9edef; }
 .contextFooter .resolveButton { background: var(--wine); color: white; border-color: var(--wine); display: flex; align-items: center; justify-content: center; gap: 5px; }
 
 @media (max-width: 1340px) {
@@ -616,6 +618,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .chatActions .iconButton { width: 36px; height: 36px; }
 .chatActions .adminHeaderAction { color: #9a670d; }
 .chatActions .adminHeaderAction:hover { background: #fff0c9; color: #704900; }
+.chatActions .lifecycleHeaderAction { color: var(--wa-green-dark); }
+.chatActions .lifecycleHeaderAction:hover:not(:disabled) { background: #e7f8f3; color: #006c58; }
+.chatActions .lifecycleHeaderAction:disabled { opacity: .5; cursor: wait; }
 .mobileBack { color: #54656f; }
 .lockBanner, .claimBanner, .errorBanner { margin: 8px 12px 0; border-radius: 8px; box-shadow: 0 1px 2px rgba(11, 20, 26, .08); }
 .lockBanner { background: var(--wa-yellow-soft); border-color: #efd56c; }

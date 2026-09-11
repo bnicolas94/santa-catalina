@@ -31,7 +31,7 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19 15l2 2-4 4-2-2M9 21H5v-4l-2-2 2-3-2-3 3-3 3 2 3-2 3 2 3-1 2 3-2 3"/></>, more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
     back: <path d="m15 18-6-6 6-6"/>, attach: <path d="m21 12-9 9a6 6 0 0 1-9-9l9-9a4 4 0 0 1 6 6l-9 9a2 2 0 1 1-3-3l8-8"/>, smile: <><circle cx="12" cy="12" r="9"/><path d="M8 14s2 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></>,
-    send: <><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>, lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, bag: <><path d="M6 8h12l1 13H5z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></>,
+    send: <><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></>, lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, archive: <><path d="M4 7h16v14H4zM3 3h18v4H3z"/><path d="M9 12h6"/></>, bag: <><path d="M6 8h12l1 13H5z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></>,
     phone: <path d="M22 17v3a2 2 0 0 1-2 2 20 20 0 0 1-9-3 20 20 0 0 1-6-6A20 20 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2l1 3-2 3a16 16 0 0 0 6 6l3-2 3 1a2 2 0 0 1 2 2z"/>, note: <><path d="M4 3h16v18H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
     tag: <><path d="M20 13 13 20l-9-9V4h7z"/><circle cx="8.5" cy="8.5" r="1"/></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>, map: <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></>, truck: <><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>, store: <><path d="M4 10v11h16V10M3 10l2-6h14l2 6"/><path d="M3 10a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2M9 21v-6h6v6"/></>, money: <><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.5-1.7-.8-2.8-.8-1.5 0-2.7.7-2.7 1.9 0 3.2 5.5 1.3 5.5 4.5 0 1.2-1.2 2.1-3 2.1-1.2 0-2.4-.4-3.2-1.1M12 6v12"/></>,
@@ -411,6 +411,43 @@ export default function AttentionWorkspace() {
       setBusy(false)
     }
   }
+  const resolveConversation = async () => {
+    if (!detail || !window.confirm(`¿Marcar como resuelta la conversación de ${detail.contact.displayName}? El historial se conservará.`)) return
+    setBusy(true); setError(null)
+    try {
+      await api(`/api/conversations/${detail.id}/resolve`, {
+        method: 'POST', body: JSON.stringify({ lockToken: lockRef.current?.token || null }),
+      })
+      lockRef.current = null; setLock(null)
+      setDetail(current => current && current.id === detail.id ? { ...current, status: 'RESOLVED', unreadCount: 0, activeById: null, lockExpiresAt: null } : current)
+      setConversations(current => current.map(item => item.id === detail.id ? { ...item, status: 'RESOLVED', unreadCount: 0, activeById: null, lockExpiresAt: null } : item))
+      setFilter('resolved')
+      await refreshList()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo resolver la conversación.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const archiveConversation = async () => {
+    if (!detail || !window.confirm(`¿Archivar la conversación de ${detail.contact.displayName}? Desaparecerá de las bandejas y se reabrirá si el cliente vuelve a escribir.`)) return
+    setBusy(true); setError(null)
+    try {
+      await api(`/api/conversations/${detail.id}/archive`, { method: 'POST', body: '{}' })
+      const archivedId = detail.id
+      const remaining = conversations.filter(item => item.id !== archivedId)
+      const nextResolved = remaining.find(item => item.status === 'RESOLVED')
+      const next = nextResolved || remaining.find(item => item.status !== 'ARCHIVED') || null
+      if (!nextResolved) setFilter('all')
+      lockRef.current = null; activeIdRef.current = next?.id || null
+      setLock(null); setDetail(null); setConversations(remaining); setActiveId(next?.id || null)
+      await refreshList()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo archivar la conversación.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const canEditOrderDraft = Boolean(detail && lock && !schedulingOrder && detail.assignedToId === user?.id && detail.status !== 'RESOLVED' && detail.status !== 'ARCHIVED')
   const changeOrderDraft = useCallback((patch: Partial<OrderDraft>) => {
@@ -568,6 +605,8 @@ export default function AttentionWorkspace() {
   const service = serviceWindow(active?.serviceWindowExpiresAt || null)
   const currentName = user?.name || 'Agente de Atención'
   const isSupervisor = user?.rol === 'ADMIN' || user?.permisos.permisoAtencionAdmin === true
+  const canResolveActive = Boolean(active && active.status !== 'RESOLVED' && active.status !== 'ARCHIVED' && (isSupervisor || canReply))
+  const canArchiveActive = Boolean(active && active.status === 'RESOLVED' && (isSupervisor || active.assignedToId === user?.id))
   const orderCompleted = [
     orderDraft.orderItems.length > 0,
     Boolean(orderDraft.orderDate),
@@ -663,7 +702,7 @@ export default function AttentionWorkspace() {
             <footer>Los cambios se guardan para todo el equipo.</footer>
           </div>}
         </div>
-        <div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button>{isSupervisor && active.assignedToId && <button className="iconButton adminHeaderAction" onClick={unassignConversation} aria-label="Liberar chat" title="Liberar chat"><Icon name="lock" size={17} /></button>}<button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div>
+        <div className="chatActions"><button className="iconButton" aria-label="Buscar en la conversación" title="Buscar"><Icon name="search" size={19} /></button><button className="iconButton" aria-label="Llamar al contacto" title="Llamar"><Icon name="phone" size={18} /></button>{(canResolveActive || canArchiveActive) && <button className="iconButton lifecycleHeaderAction" disabled={busy} onClick={() => void (active.status === 'RESOLVED' ? archiveConversation() : resolveConversation())} aria-label={active.status === 'RESOLVED' ? 'Archivar conversación' : 'Resolver conversación'} title={active.status === 'RESOLVED' ? 'Archivar conversación' : 'Resolver conversación'}><Icon name={active.status === 'RESOLVED' ? 'archive' : 'check'} size={18} /></button>}{isSupervisor && active.assignedToId && active.status !== 'RESOLVED' && <button className="iconButton adminHeaderAction" onClick={unassignConversation} aria-label="Liberar chat" title="Liberar chat"><Icon name="lock" size={17} /></button>}<button className={`iconButton ${showContext ? 'iconButtonActive' : ''}`} onClick={() => setShowContext(v => !v)} aria-label="Información del cliente" title="Información del cliente"><Icon name="more" /></button></div>
       </header>
       {error && <div className="errorBanner" role="alert">{error}<button onClick={() => setError(null)}>×</button></div>}
       {assignedToOther && <div className="lockBanner"><span className="lockIcon"><Icon name="lock" size={18} /></span><div><strong>{agentName(active.assignedToId)} tiene asignada esta conversación</strong><span>Podés seguirla en tiempo real. La respuesta está bloqueada para evitar mensajes cruzados.</span></div><span className="watchingBadge">Sólo lectura</span></div>}
@@ -784,7 +823,12 @@ export default function AttentionWorkspace() {
         <div className="sectionLabel"><span>Pedidos recientes</span>{customerContext?.status === 'LINKED' && <b>{customerContext.customer.orderCount} históricos</b>}</div>
         {customerContext?.status === 'LINKED' && customerContext.customer.recentOrders.length > 0 ? <div className="orderList">{customerContext.customer.recentOrders.map(order => <button type="button" className="orderCard" key={order.id} onClick={() => void openHistoricalOrder(order.id)}><span className="orderIcon"><Icon name="bag" size={16} /></span><div><strong>{formatDate(order.deliveryAt)} · {orderStatus(order.status)}</strong><span>{order.totalPacks} packs · {order.totalUnits} unidades</span></div><div className="orderAmount"><strong>{formatMoney(order.totalAmount)}</strong><span>{order.paid ? 'Abonado' : 'Pendiente'} · Ver detalle</span></div></button>)}</div> : <div className="noOrder"><Icon name="bag" /><span>{customerContext?.status === 'LINKED' ? 'Todavía no tiene pedidos' : 'Vinculá el cliente para ver pedidos'}</span></div>}
       </section>
-      <footer className="contextFooter"><button className={isSupervisor ? 'adminReleaseButton' : ''} onClick={isSupervisor ? unassignConversation : undefined} disabled={!isSupervisor || !active.assignedToId || busy}>{isSupervisor ? busy ? 'Liberando…' : 'Liberar chat' : 'Transferir'}</button><button className="resolveButton" disabled><Icon name="check" size={16} /> Resolver</button></footer>
+      <footer className="contextFooter">
+        {active.status === 'RESOLVED'
+          ? <button className="archiveButton" onClick={() => void archiveConversation()} disabled={!canArchiveActive || busy}><Icon name="archive" size={15} /> {busy ? 'Archivando…' : 'Archivar'}</button>
+          : <button className={isSupervisor ? 'adminReleaseButton' : ''} onClick={isSupervisor ? unassignConversation : undefined} disabled={!isSupervisor || !active.assignedToId || busy}>{isSupervisor ? busy ? 'Liberando…' : 'Liberar chat' : 'Transferir'}</button>}
+        <button className="resolveButton" onClick={() => void resolveConversation()} disabled={!canResolveActive || busy}><Icon name="check" size={16} /> {active.status === 'RESOLVED' ? 'Resuelta' : busy ? 'Resolviendo…' : 'Resolver'}</button>
+      </footer>
     </aside>}
     {orderModal && <div className="orderModalBackdrop" role="presentation" onMouseDown={() => setOrderModal(null)}><section className="orderDetailModal" role="dialog" aria-modal="true" aria-label="Detalle del pedido histórico" onMouseDown={event => event.stopPropagation()}>
       <header><div><span>Pedido histórico del ERP</span><h3>{orderModal.detail ? `#${orderModal.detail.id.slice(0, 8)}` : 'Consultando pedido'}</h3></div><button type="button" aria-label="Cerrar detalle" onClick={() => setOrderModal(null)}>×</button></header>

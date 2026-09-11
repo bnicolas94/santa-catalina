@@ -19,6 +19,8 @@ export async function GET(request: NextRequest) {
 
     if (statusParam && ALLOWED_STATUSES.has(statusParam as ConversationStatus)) {
       where.status = statusParam as ConversationStatus
+    } else {
+      where.status = { not: 'ARCHIVED' }
     }
     if (assigned === 'me') where.assignedToId = user.id
     if (assigned === 'unassigned') where.assignedToId = null

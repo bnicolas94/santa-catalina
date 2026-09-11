@@ -53,6 +53,8 @@ POST /api/conversations/{id}/release
 POST /api/conversations/{id}/messages
 PUT  /api/conversations/{id}/tags
 PUT  /api/conversations/{id}/order-draft
+POST /api/conversations/{id}/resolve
+POST /api/conversations/{id}/archive
 POST /api/conversations/{id}/unassign  # sólo supervisión
 
 GET  /api/tags
