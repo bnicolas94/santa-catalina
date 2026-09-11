@@ -149,6 +149,8 @@ export default function AttentionWorkspace() {
   const [mobileChat, setMobileChat] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [markingAllRead, setMarkingAllRead] = useState(false)
+  const [listFeedback, setListFeedback] = useState<string | null>(null)
   const [claiming, setClaiming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const lockRef = useRef<Lock | null>(null)
@@ -697,6 +699,24 @@ export default function AttentionWorkspace() {
       setQuickReplyManagerBusy(false)
     }
   }
+  const markAllAsRead = async () => {
+    if (markingAllRead || counts.unreadConversations === 0) return
+    const confirmed = window.confirm(`¿Marcar como leídas las ${counts.unreadConversations} conversaciones pendientes del CRM? No se borrarán chats ni mensajes.`)
+    if (!confirmed) return
+
+    setMarkingAllRead(true)
+    setListFeedback(null)
+    setError(null)
+    try {
+      const result = await api<{ updated: number }>('/api/conversations/read-all', { method: 'POST', body: '{}' })
+      await Promise.all([refreshList(), refreshCounts()])
+      setListFeedback(result.updated > 0 ? `${result.updated} conversaciones marcadas como leídas.` : 'No había conversaciones pendientes.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudieron marcar las conversaciones como leídas.')
+    } finally {
+      setMarkingAllRead(false)
+    }
+  }
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (showQuickReplies) {
       if (event.key === 'Escape') {
@@ -792,10 +812,11 @@ export default function AttentionWorkspace() {
     </aside>
     <section className={`conversationList ${mobileChat ? 'mobileHidden' : ''}`}>
       <header className="listHeader">
-        <div className="listToolbar"><div><span className="brandEyebrow">Santa Catalina</span><h1>Chats</h1></div><div className="listActions"><span className="liveBadge"><i /> Conectado</span><a className="iconButton" aria-label="Configuración" href="/settings"><Icon name="settings" /></a></div></div>
+        <div className="listToolbar"><div><span className="brandEyebrow">Santa Catalina</span><h1>Chats</h1></div><div className="listActions">{isSupervisor && <button type="button" className="markAllReadButton" onClick={() => void markAllAsRead()} disabled={markingAllRead || counts.unreadConversations === 0} title="Poner en cero los pendientes del CRM"><Icon name="check" size={14} /><span>{markingAllRead ? 'Marcando…' : 'Marcar leídos'}</span></button>}<span className="liveBadge"><i /> Conectado</span><a className="iconButton" aria-label="Configuración" href="/settings"><Icon name="settings" /></a></div></div>
         <label className="searchBox"><Icon name="search" size={18} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar un chat" /><kbd>/</kbd></label>
         <nav className="filterChips" aria-label="Filtrar conversaciones">{FILTERS.map(item => <button key={item.id} className={filter === item.id ? 'filterActive' : ''} onClick={() => setFilter(item.id)}>{item.short}<span>{counts[item.id]}</span></button>)}</nav>
         <div className="listMeta"><span>{visible.length} de {counts[filter]} · {counts.unreadConversations} pendientes CRM</span><span>{currentName}</span></div>
+        {listFeedback && <div className="listFeedback" role="status"><Icon name="check" size={13} />{listFeedback}<button type="button" onClick={() => setListFeedback(null)} aria-label="Cerrar aviso">×</button></div>}
       </header>
       <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aquí</strong><p>Probá con otro filtro o búsqueda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${activeId === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">✓✓</span>}{c.lastMessage?.body || 'Sin mensajes'}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
     </section>

@@ -551,6 +551,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .listToolbar h1 { margin: 1px 0 0; color: var(--wa-ink); font-size: 22px; line-height: 1.1; letter-spacing: -.02em; }
 .listActions { display: flex; align-items: center; gap: 5px; }
 .listActions a { text-decoration: none; }
+.markAllReadButton { height: 28px; padding: 0 9px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #cfe6de; border-radius: 14px; background: #edf9f5; color: var(--wa-green-dark); font-size: 9px; font-weight: 750; white-space: nowrap; cursor: pointer; }
+.markAllReadButton:hover:not(:disabled) { background: #dff5ed; border-color: #acd9ca; }
+.markAllReadButton:disabled { opacity: .48; cursor: default; }
+.listFeedback { min-height: 28px; margin-top: 8px; padding: 6px 8px; display: flex; align-items: center; gap: 6px; border: 1px solid #cbe7dc; border-radius: 8px; background: #edf9f5; color: #166b56; font-size: 9px; }
+.listFeedback button { margin-left: auto; border: 0; background: transparent; color: inherit; font-size: 16px; line-height: 1; cursor: pointer; }
 .iconButton { border-radius: 50%; color: #54656f; }
 .iconButton:hover, .iconButtonActive { background: #e4e7e9; color: #111b21; }
 .liveBadge { padding: 5px 8px; background: #e7f8f3; color: var(--wa-green-dark) !important; font-size: 8px; text-transform: none !important; letter-spacing: 0 !important; }
@@ -857,6 +862,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 900px) {
   .workspaceShell, .workspaceShell.contextOpen { grid-template-columns: 56px minmax(290px, 330px) minmax(380px, 1fr); }
   .navigationRail { padding-left: 0; padding-right: 0; }
+  .markAllReadButton span { display: none; }
+  .markAllReadButton { width: 28px; padding: 0; justify-content: center; }
   .chatTagPicker { flex-basis: 40px; }
   .chatTagButton { width: 36px; padding: 0; justify-content: center; }
   .chatTagButtonText, .chatTagButton > b, .tagChevron { display: none; }
