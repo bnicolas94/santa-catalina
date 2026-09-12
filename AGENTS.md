@@ -108,6 +108,8 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 
 El diagnóstico de egresos MP está en POST `/api/mercadopago/diagnostico` (ADMIN) y `lib/mercadopago-diagnostico.ts`: consulta hasta 30 IDs sin escrituras. Caja permite seleccionar un CSV de settlement; sólo envía IDs con `REAL_AMOUNT` negativo. No confundir la consulta directa de un pago con su inclusión en Payments Search ni el campo `available_money` del reporte con `account_money` de Payments.
 
+La recuperación por CSV está en POST `/api/mercadopago/reporte` (ADMIN) y `lib/services/mercadopago-reporte.service.ts`: preview firmada por usuario/cuenta durante 15 minutos, negativos SETTLEMENT y verificación API de identidad de cuenta, estado, moneda, medio, importe y fecha. La dirección se acredita con el reporte aunque falten payer/collector; si la API informa datos contradictorios se bloquea. Se buscan candidatos manuales del mismo importe en `mercado_pago` dentro de ±3 días. Confirmar permite crear sólo sin candidatos o vincular uno existente sin descontar otra vez; se vuelve a verificar MP y Caja. Todo el lote usa transacción Serializable, bloqueo por mpId compartido con cron y auditoría/hash del reporte. No reescribe ni anula movimientos históricos, ni cambia el filtro del cron.
+
 ### CRM
 
 - El CRM es una aplicación independiente y su Prisma sólo puede administrar el esquema PostgreSQL `crm`.

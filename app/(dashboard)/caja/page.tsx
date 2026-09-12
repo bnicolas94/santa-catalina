@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import useSWR from 'swr'
 import DiagnosticoMercadoPago from '@/components/caja/DiagnosticoMercadoPago'
+import ConciliarReporteMP from '@/components/caja/ConciliarReporteMP'
 
 interface UsuarioCaja {
     id: string
@@ -1016,6 +1017,7 @@ export default function CajaPage() {
                                         {estadoSyncMP || 'Consulta automática cada minuto mientras Caja esté visible.'}
                                     </div>
                                     <DiagnosticoMercadoPago />
+                                    <ConciliarReporteMP onConfirmado={() => { void mutate() }} />
                                 </div>
                             )}
                         </div>

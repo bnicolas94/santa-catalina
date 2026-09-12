@@ -47,6 +47,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/reportes/categorias', permissions: ['permisoReportes', 'permisoFlota'], legacyRoles: ['ADMIN'] },
 
     // Caja y movimientos financieros.
+    { path: '/api/mercadopago/reporte', legacyRoles: ['ADMIN'] },
     { path: '/api/mercadopago/diagnostico', legacyRoles: ['ADMIN'] },
     { path: '/api/mercadopago/sincronizar', legacyRoles: ['ADMIN'] },
     { path: '/api/caja', permissions: ['permisoCaja'], legacyRoles: ['ADMIN'] },
