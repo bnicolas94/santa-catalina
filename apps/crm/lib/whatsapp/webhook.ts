@@ -10,7 +10,7 @@ export type WhatsAppMessage = {
   timestamp?: string
   type?: string
   text?: { body?: string }
-  image?: { id?: string; mime_type?: string; caption?: string }
+  image?: { id?: string; link?: string; mime_type?: string; caption?: string }
   audio?: { id?: string; mime_type?: string }
   video?: { id?: string; mime_type?: string; caption?: string }
   document?: { id?: string; mime_type?: string; filename?: string; caption?: string }
@@ -117,6 +117,7 @@ function messageContent(message: WhatsAppMessage) {
     type: providerType === 'contacts' ? 'CONTACT' : providerType.toUpperCase() as 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT' | 'LOCATION' | 'CONTACT' | 'SYSTEM',
     body: message.text?.body || null,
     mediaId: media?.id || null,
+    mediaUrl: message.image?.link || null,
     mimeType: media?.mime_type || null,
     fileName: message.document?.filename || null,
     caption: message.image?.caption || message.video?.caption || message.document?.caption || null,

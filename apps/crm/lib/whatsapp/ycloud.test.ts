@@ -60,3 +60,13 @@ test('valida el número conectado consultando YCloud sin enviar mensajes', async
   assert.equal(validation.verifiedName, 'Santa Catalina')
   assert.equal(validation.isOnBizApp, true)
 })
+
+test('conserva el enlace y el texto de la imagen recibida por YCloud', () => {
+  const link = 'https://api.ycloud.com/v2/whatsapp/media/download/123?payload=abc&sig=xyz'
+  const parsed = parseYCloudWebhook({
+    id: 'evt_image', type: 'whatsapp.inbound_message.received',
+    whatsappInboundMessage: { id: 'img-1', wamid: 'wamid.image', wabaId: 'waba-1', from: '+549110001111', to: '+5491159813546', type: 'image', image: { id: '123', link, mime_type: 'image/jpeg', caption: 'Comprobante' } },
+  })
+  assert.equal(parsed.event.messages[0].image?.link, link)
+  assert.equal(parsed.event.messages[0].image?.caption, 'Comprobante')
+})

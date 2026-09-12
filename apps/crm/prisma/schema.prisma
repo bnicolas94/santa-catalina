@@ -210,6 +210,7 @@ model Message {
   status             MessageStatus
   body               String?          @db.Text
   mediaId            String?          @map("media_id")
+  mediaUrl           String?          @map("media_url") @db.Text
   mimeType           String?          @map("mime_type")
   fileName           String?          @map("file_name")
   caption            String?          @db.Text

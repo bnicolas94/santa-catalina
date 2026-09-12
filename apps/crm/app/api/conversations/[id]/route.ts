@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({
       ...conversation,
       unreadCount: effectiveUnreadCount(conversation),
-      messages: sortMessagesChronologically(conversation.messages),
+      messages: sortMessagesChronologically(conversation.messages).map(message => ({ ...message, mediaUrl: undefined })),
       scheduledOrders: conversation.scheduledOrders.map(item => ({
         ...item,
         scheduledByName: agentNames.get(item.scheduledById) || 'Agente no disponible',

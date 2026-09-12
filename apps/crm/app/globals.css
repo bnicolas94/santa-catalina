@@ -186,6 +186,14 @@ button { color: inherit; }
 .messageOut { background: var(--wine); color: white; border-bottom-right-radius: 5px; }
 .messageSender { display: block; color: #f2a6b0; font-size: 8px; font-weight: 800; margin-bottom: 3px; }
 .messageBubble p { font-size: 11px; line-height: 1.5; margin: 0; }
+.chatImageContent { width: min(320px, 100%); }
+.chatImageContent > a { display: block; }
+.chatImageContent img { display: block; max-width: 100%; width: 320px; min-height: 140px; max-height: 360px; object-fit: contain; border-radius: 6px; background: rgba(0,0,0,.04); }
+.chatImageContent > p { margin-top: 8px; white-space: pre-wrap; }
+.chatImageError { min-height: 150px; width: 240px; max-width: 100%; padding: 14px; display: flex; flex-direction: column; justify-content: center; gap: 8px; border-radius: 6px; background: #f3f5f5; color: #54656f; }
+.chatImageError strong { font-size: 13px; }
+.chatImageError span { font-size: 11px; }
+.chatImageError button { width: fit-content; padding: 7px 12px; border: 1px solid #bddbd2; border-radius: 16px; background: #e7f8f1; color: #008069; cursor: pointer; }
 .messageTime { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; color: #9a9a95; font-size: 7px; }
 .messageOut .messageTime { color: rgba(255,255,255,.55); }
 .messageTime b { letter-spacing: -3px; padding-right: 3px; color: rgba(255,255,255,.6); }

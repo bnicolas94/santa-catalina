@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       serviceWindowExpiresAt: conversation.serviceWindowExpiresAt,
       contact: conversation.contact,
       tags: conversation.tags.map(item => item.tag),
-      lastMessage: conversation.messages[0] || null,
+      lastMessage: conversation.messages[0] ? { ...conversation.messages[0], mediaUrl: undefined } : null,
     })))
   } catch (error) {
     return apiErrorResponse(error)

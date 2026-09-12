@@ -21,6 +21,7 @@ export async function proxy(request: NextRequest) {
   })
 
   if (!token) {
+    if (request.nextUrl.pathname.startsWith('/api/')) return NextResponse.json({ error: 'La sesión no es válida.' }, { status: 401 })
     const erpBaseUrl = process.env.ERP_BASE_URL || 'https://app.santacatalina.online'
     const loginUrl = new URL('/login', erpBaseUrl)
     loginUrl.searchParams.set('callbackUrl', getCrmCallbackUrl(request.url, process.env.CRM_BASE_URL))
@@ -35,6 +36,7 @@ export async function proxy(request: NextRequest) {
     || permisos.permisoAtencionAdmin === true
 
   if (!tieneAcceso) {
+    if (request.nextUrl.pathname.startsWith('/api/')) return NextResponse.json({ error: 'No tenés acceso al CRM de Atención.' }, { status: 403 })
     const erpBaseUrl = process.env.ERP_BASE_URL || 'https://app.santacatalina.online'
     return NextResponse.redirect(new URL('/?crm=sin-acceso', erpBaseUrl))
   }
