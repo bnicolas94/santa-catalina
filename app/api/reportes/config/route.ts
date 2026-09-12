@@ -9,6 +9,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url)
         const clave = searchParams.get('clave')
         if (!clave) return NextResponse.json({ error: 'Clave requerida' }, { status: 400 })
+        if (clave.startsWith('mp:')) return NextResponse.json({ error: 'El estado de MP se consulta desde Caja.' }, { status: 403 })
 
         const valor = await getGlobalConfig(clave, null)
         return NextResponse.json({ valor })
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
 
         const { clave, valor } = await request.json()
         if (!clave) return NextResponse.json({ error: 'Clave requerida' }, { status: 400 })
+        if (typeof clave !== 'string' || clave.startsWith('mp:')) return NextResponse.json({ error: 'Esta configuración es administrada por el proceso de MP.' }, { status: 403 })
 
         await updateGlobalConfig(clave, valor)
         

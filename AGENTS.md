@@ -112,7 +112,7 @@ La recuperación por CSV está en POST `/api/mercadopago/reporte` (ADMIN) y `lib
 
 ### CRM
 
-- El CRM es una aplicación independiente y su Prisma sólo puede administrar el esquema PostgreSQL `crm`.
+- El CRM es una aplicación independiente y su Prisma sólo puede administrar el esquema PostgreSQL `crm`. Su `apps/crm/instrumentation.ts` es propio para no heredar procesos del ERP al compilar el monorepo.
 - Los IDs de empleados y clientes del ERP son referencias externas, no claves foráneas entre esquemas.
 - El CRM consulta el contexto del cliente mediante las APIs internas del ERP; no debe obtener acceso directo al esquema principal.
 - En producción valida la sesión compartida y los permisos `permisoAtencion` / `permisoAtencionAdmin`.
