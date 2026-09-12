@@ -8,7 +8,7 @@ interface Fila {
 interface Preview { resultados: Fila[]; token: string; totalReporte: number }
 const moneda = (valor: number) => valor.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 
-export default function ConciliarReporteMP({ onConfirmado }: { onConfirmado: () => void }) {
+export default function ConciliarReporteMP({ onConfirmado, automaticos = false }: { onConfirmado: () => void; automaticos?: boolean }) {
     const [abierto, setAbierto] = useState(false)
     const [csv, setCsv] = useState('')
     const [preview, setPreview] = useState<Preview | null>(null)
@@ -28,7 +28,7 @@ export default function ConciliarReporteMP({ onConfirmado }: { onConfirmado: () 
         try {
             const response = await fetch('/api/mercadopago/reporte', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(confirmar ? { accion: 'confirmar', token: preview?.token, decisiones } : { accion: 'preview', csv }),
+                body: JSON.stringify(confirmar ? { accion: 'confirmar', token: preview?.token, decisiones } : automaticos ? { accion: 'pendientes' } : { accion: 'preview', csv }),
             })
             const data = await response.json()
             if (!response.ok) throw new Error(data.error || 'No se pudo procesar el reporte.')
@@ -41,9 +41,10 @@ export default function ConciliarReporteMP({ onConfirmado }: { onConfirmado: () 
     }
 
     return <>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierto(true)}>Conciliar reporte MP</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setAbierto(true); if (automaticos) void enviar(false) }}>{automaticos ? 'Revisar pendientes automáticos' : 'Conciliar reporte MP'}</button>
         {abierto && <div className="modal-overlay"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-conciliar-mp" style={{ maxWidth: 1050, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 id="titulo-conciliar-mp">Conciliar egresos desde el reporte de MP</h2>
+            <h2 id="titulo-conciliar-mp">{automaticos ? 'Revisar egresos pendientes de MP' : 'Conciliar egresos desde el reporte de MP'}</h2>
+            {automaticos ? <p>Estos egresos se descargaron automáticamente. Revisá las coincidencias con cargas manuales; cada lote muestra hasta 30 operaciones de un mismo reporte.</p> : <>
             <p>Seleccioná el CSV de la cuenta conectada. La vista previa verifica hasta 30 egresos con MP sin modificar Caja; admite fechas anteriores a las últimas 48 horas.</p>
             <input type="file" accept=".csv" aria-label="Reporte de egresos MP" disabled={ocupado} onChange={async e => {
                 const archivo = e.target.files?.[0]
@@ -57,6 +58,8 @@ export default function ConciliarReporteMP({ onConfirmado }: { onConfirmado: () 
                 finally { setOcupado(false) }
             }} />
             <button type="button" className="btn btn-primary" disabled={ocupado || !csv} onClick={() => void enviar(false)}>{ocupado ? 'Procesando…' : 'Generar vista previa'}</button>
+            </>}
+            {automaticos && <button type="button" className="btn btn-primary" disabled={ocupado} onClick={() => void enviar(false)}>{ocupado ? 'Verificando…' : 'Actualizar pendientes'}</button>}
             {error && <p role="alert" style={{ color: '#dc2626' }}>{error}</p>}
             {mensaje && <p role="status">{mensaje}</p>}
             {preview && <>

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "npx prisma generate && next build",
-    "start": "next start",
+    "start": "node scripts/start-erp.cjs",
     "db:deploy": "prisma migrate deploy",
     "db:backup": "tsx scripts/backup_db.ts",
     "postinstall": "prisma generate",

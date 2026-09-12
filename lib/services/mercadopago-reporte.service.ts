@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { CajaService } from './caja.service'
 import { leerEgresosMP, validarPagoContraReporte, type EgresoReporteMP } from '@/lib/mercadopago-reporte'
-import { firmarPreviewMP, verificarPreviewMP } from '@/lib/mercadopago-preview'
+import { firmarPreviewMP, verificarPreviewMP, type PreviewMP } from '@/lib/mercadopago-preview'
 import type { PagoSalienteMP } from '@/lib/mercadopago-egresos'
 
 type Cliente = Pick<Prisma.TransactionClient, 'movimientoCaja' | 'movimientoMercadoPago'>
@@ -19,14 +19,14 @@ async function consultarMP(path: string) {
     return response.json()
 }
 
-async function cuentaVerificada() {
+export async function cuentaVerificada() {
     const cuentaId = process.env.MP_COLLECTOR_ID || '231378824'
     const cuenta = await consultarMP('/users/me')
     if (String(cuenta.id) !== cuentaId) throw new Error('El token de Mercado Pago no corresponde a la cuenta configurada.')
     return cuentaId
 }
 
-async function estadoInterno(cliente: Cliente, fila: EgresoReporteMP) {
+export async function estadoInterno(cliente: Cliente, fila: EgresoReporteMP) {
     const existente = await cliente.movimientoMercadoPago.findUnique({ where: { mpId: fila.id }, select: { id: true, movimientoCajaId: true } })
     const fecha = Date.parse(fila.fecha)
     const candidatos = await cliente.movimientoCaja.findMany({
@@ -43,6 +43,10 @@ async function estadoInterno(cliente: Cliente, fila: EgresoReporteMP) {
 
 export async function previewReporteMP(csv: string, usuarioId: string) {
     const filas = leerEgresosMP(csv)
+    return previewFilasMP(filas, createHash('sha256').update(csv).digest('hex'), usuarioId)
+}
+
+export async function previewFilasMP(filas: EgresoReporteMP[], hash: string, usuarioId: string) {
     const cuentaId = await cuentaVerificada()
     const resultados = []
     const elegibles: EgresoReporteMP[] = []
@@ -60,7 +64,6 @@ export async function previewReporteMP(csv: string, usuarioId: string) {
         }))
         resultados.push(...lote)
     }
-    const hash = createHash('sha256').update(csv).digest('hex')
     const token = firmarPreviewMP({ usuarioId, cuentaId, hash, filas: elegibles, vence: Date.now() + 15 * 60000 })
     return { resultados, token, totalReporte: filas.reduce((s, f) => s + Math.round(f.monto * 100), 0) / 100 }
 }
@@ -68,13 +71,19 @@ export async function previewReporteMP(csv: string, usuarioId: string) {
 export async function confirmarReporteMP(token: string, decisiones: DecisionMP[], usuarioId: string) {
     const cuentaId = process.env.MP_COLLECTOR_ID || '231378824'
     const preview = verificarPreviewMP(token, usuarioId, cuentaId)
+    return aplicarReporteMP(preview, decisiones, usuarioId)
+}
+
+// Uso interno: el proceso automático sólo entrega filas descargadas de la API de la cuenta verificada.
+export async function aplicarReporteMP(preview: Pick<PreviewMP, 'cuentaId' | 'hash' | 'filas'>, decisiones: DecisionMP[], usuarioId?: string) {
+    const cuentaId = preview.cuentaId
     if (!Array.isArray(decisiones) || !decisiones.length || decisiones.length > 30 || new Set(decisiones.map(d => d.id)).size !== decisiones.length) throw new Error('Seleccioná entre 1 y 30 operaciones distintas.')
     const filas = decisiones.map(d => {
         const fila = preview.filas.find(f => f.id === d.id)
         if (!fila || !['crear', 'vincular'].includes(d.accion) || (d.accion === 'vincular' && typeof d.movimientoId !== 'string')) throw new Error('La selección no corresponde a la vista previa.')
         return { fila, decision: d }
     }).sort((a, b) => a.fila.id.localeCompare(b.fila.id))
-    await cuentaVerificada()
+    if (await cuentaVerificada() !== cuentaId) throw new Error('La cuenta del reporte no coincide con la conexión de MP.')
     // Volver a verificar estado e importe antes de abrir la transacción.
     for (let i = 0; i < filas.length; i += 5) {
         await Promise.all(filas.slice(i, i + 5).map(async ({ fila }) => {

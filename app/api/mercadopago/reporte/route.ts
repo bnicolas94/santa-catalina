@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { confirmarReporteMP, previewReporteMP } from '@/lib/services/mercadopago-reporte.service'
+import { previewPendientesMP } from '@/lib/services/mercadopago-automatico.service'
 
 export const maxDuration = 60
 export async function POST(req: Request) {
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
         const texto = await req.text()
         if (Buffer.byteLength(texto) > 3 * 1024 * 1024) return NextResponse.json({ error: 'El archivo es demasiado grande.' }, { status: 413 })
         const body = JSON.parse(texto)
+        if (body.accion === 'pendientes') return NextResponse.json(await previewPendientesMP(usuario.id))
         if (body.accion === 'preview') return NextResponse.json(await previewReporteMP(body.csv, usuario.id))
         if (body.accion === 'confirmar') return NextResponse.json(await confirmarReporteMP(body.token, body.decisiones, usuario.id))
         return NextResponse.json({ error: 'Acción inválida.' }, { status: 400 })
