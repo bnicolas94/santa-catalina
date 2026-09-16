@@ -80,6 +80,8 @@ model Empleado {
   talleUniforme             TalleUniforme?
   entregasUniforme          EntregaUniforme[]         @relation("EmpleadoEntregasUniforme")
   conteosInsumo             ConteoInsumo[]            @relation("ResponsableConteoInsumo")
+  plantillasHorario         PlantillaHorarioEmpleado[]
+  excepcionesHorario        ExcepcionHorarioEmpleado[]
 
   @@map("empleados")
 }
@@ -823,6 +825,33 @@ model ItemLiquidacion {
   liquidacion        LiquidacionSueldo @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
 
   @@map("items_liquidacion")
+}
+
+model PlantillaHorarioEmpleado {
+  id            String   @id @default(uuid())
+  empleadoId    String   @map("id_empleado")
+  vigenciaDesde DateTime @map("vigencia_desde")
+  dias          Json
+  registradoPor String   @map("registrado_por")
+  createdAt     DateTime @default(now())
+  empleado      Empleado @relation(fields: [empleadoId], references: [id])
+
+  @@unique([empleadoId, vigenciaDesde])
+  @@map("plantillas_horario_empleado")
+}
+
+model ExcepcionHorarioEmpleado {
+  id            String   @id @default(uuid())
+  empleadoId    String   @map("id_empleado")
+  fecha         DateTime
+  detalle       Json
+  registradoPor String   @map("registrado_por")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  empleado      Empleado @relation(fields: [empleadoId], references: [id])
+
+  @@unique([empleadoId, fecha])
+  @@map("excepciones_horario_empleado")
 }
 
 model DocumentoEmpleado {
