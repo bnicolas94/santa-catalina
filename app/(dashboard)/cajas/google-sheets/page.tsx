@@ -11,7 +11,8 @@ interface Resumen {
     config: { activo: boolean; spreadsheetId: string; intervaloMinutos: number; fechaInicio: string | null }
     estado: { ultimaSincronizacion?: string; filasLeidas: number; incorporados: number; pendientes: number; revisiones: number; error?: string }
     sucursales: Sucursal[]
-    recientes: { id: string; externalId: string; hoja: string; precio: number; pago: string; ubicacion: string; estadoProcesamiento: string; detalle: string | null; updatedAt: string }[]
+    recientes: { id: string; externalId: string; hoja: string; precio: number; pago: string; ubicacion: string; estadoFuente: string; estadoProcesamiento: string; detalle: string | null; fechaExterna: string | null; updatedAt: string }[]
+    totalesPorHoja: { hoja: string; _count: { _all: number } }[]
 }
 
 async function cargar<T,>(url: string): Promise<T> {
@@ -71,6 +72,15 @@ export default function IntegracionGoogleSheetsPage() {
         setSucursales(actuales => actuales.map((fila, i) => i === indice ? { ...fila, ...cambio } : fila))
     }
     const cajasActivas = (cajas || []).filter(c => c.activo)
+    function resultadoVisible(fila: Resumen['recientes'][number]) {
+        if (fila.estadoProcesamiento === 'REGISTRADO') return 'Incorporado en Caja'
+        if (fila.estadoProcesamiento === 'PENDIENTE_DATOS') return 'Datos incompletos'
+        if (fila.estadoProcesamiento === 'PENDIENTE_CONFIGURACION') return 'Falta configurar caja'
+        if (fila.estadoProcesamiento === 'REQUIERE_REVISION') return 'Requiere revisión'
+        if (fila.estadoProcesamiento === 'IGNORADO') return 'Medio de pago no soportado'
+        if (fila.estadoFuente === 'entregado') return 'Entregado anterior a la activación'
+        return `Esperando estado Entregado (${fila.estadoFuente || 'sin estado'})`
+    }
     return <div>
         <div className="page-header"><div><h1>Integración Google Sheets</h1><p>Registra en Caja los pedidos cuando su estado pasa a Entregado.</p></div>
             <div style={{ display: 'flex', gap: 8 }}><Link className="btn btn-secondary" href="/cajas">Volver a cajas</Link>
@@ -101,9 +111,9 @@ export default function IntegracionGoogleSheetsPage() {
                     <button className="btn btn-primary" disabled={ocupado || !sucursales.length} onClick={() => void guardar()}>Guardar destinos</button></div>
             </section>
 
-            <section style={{ marginTop: 28 }}><h2>Actividad reciente</h2><div className="table-container"><table className="table"><thead><tr><th>Pedido</th><th>Hoja</th><th>Ubicación</th><th>Pago</th><th>Importe</th><th>Resultado</th></tr></thead><tbody>
-                {data.recientes.map(r => <tr key={r.id}><td>#{r.externalId}</td><td>{r.hoja}</td><td>{r.ubicacion}</td><td>{r.pago}</td><td>{r.precio.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</td><td>{r.estadoProcesamiento}{r.detalle && <small style={{ display: 'block' }}>{r.detalle}</small>}</td></tr>)}
-                {!data.recientes.length && <tr><td colSpan={6}>Todavía no hay movimientos procesados.</td></tr>}
+            <section style={{ marginTop: 28 }}><h2>Pedidos leídos</h2><p>{data.totalesPorHoja.map(t => `${t.hoja}: ${t._count._all}`).join(' · ')}. Se muestran también los pendientes y los anteriores a la activación.</p><div className="table-container"><table className="table"><thead><tr><th>Pedido</th><th>Hoja</th><th>Estado Sheet</th><th>Ubicación</th><th>Pago</th><th>Importe</th><th>Resultado</th></tr></thead><tbody>
+                {data.recientes.map(r => <tr key={r.id}><td>#{r.externalId}</td><td>{r.hoja}</td><td>{r.estadoFuente || '—'}</td><td>{r.ubicacion || '—'}</td><td>{r.pago || '—'}</td><td>{r.precio.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</td><td>{resultadoVisible(r)}{r.detalle && <small style={{ display: 'block' }}>{r.detalle}</small>}</td></tr>)}
+                {!data.recientes.length && <tr><td colSpan={7}>Todavía no hay movimientos procesados.</td></tr>}
             </tbody></table></div></section>
         </>}
     </div>

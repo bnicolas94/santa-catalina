@@ -232,10 +232,11 @@ export async function sincronizarGoogleSheetsCaja(forzar = false) {
 }
 
 export async function resumenGoogleSheetsCaja() {
-    const [config, estado, sucursales, recientes] = await Promise.all([
+    const [config, estado, sucursales, recientes, totalesPorHoja] = await Promise.all([
         obtenerConfiguracionSheetCaja(), obtenerEstadoSheetCaja(),
         prisma.integracionSheetSucursal.findMany({ include: { ubicacion: true, cajaEfectivo: true, cajaTransferencia: true }, orderBy: { ubicacionTexto: 'asc' } }),
-        prisma.movimientoSheetCaja.findMany({ where: { estadoProcesamiento: { not: 'OBSERVADO' } }, include: { movimientoCaja: true }, orderBy: { updatedAt: 'desc' }, take: 50 }),
+        prisma.movimientoSheetCaja.findMany({ include: { movimientoCaja: true }, orderBy: [{ hoja: 'asc' }, { fila: 'asc' }], take: 200 }),
+        prisma.movimientoSheetCaja.groupBy({ by: ['hoja'], _count: { _all: true } }),
     ])
-    return { config, estado, sucursales, recientes }
+    return { config, estado, sucursales, recientes, totalesPorHoja }
 }
