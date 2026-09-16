@@ -28,6 +28,7 @@ type AccessRule = {
 
 // Las reglas más específicas deben declararse primero.
 const accessRules: AccessRule[] = [
+    { path: '/api/caja/google-sheets', legacyRoles: ['ADMIN'] },
     { path: '/cajas', legacyRoles: ['ADMIN'] },
     { path: '/api/cajas', legacyRoles: ['ADMIN'] },
     { path: '/sedes', legacyRoles: ['ADMIN'] },
@@ -152,6 +153,7 @@ export function canAccessPath(pathname: string, token: AccessToken): boolean {
     if (
         token.ubicacionTipo?.toUpperCase() === 'LOCAL'
         && (isPathWithin(pathname, '/caja') || isPathWithin(pathname, '/api/caja'))
+        && !isPathWithin(pathname, '/api/caja/google-sheets')
     ) {
         return true
     }

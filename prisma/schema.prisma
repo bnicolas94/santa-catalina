@@ -299,6 +299,7 @@ model Ubicacion {
   conteosInsumo       ConteoInsumo[]
   compras             Compra[]
   cajas               SaldoCaja[]
+  integracionesSheet  IntegracionSheetSucursal[]
 
   @@map("ubicaciones")
 }
@@ -664,6 +665,7 @@ model MovimientoCaja {
   depositoAjuste               DepositoCaja?             @relation("DepositoMovimientoAjuste")
   depositoTransferenciaOrigen  DepositoCaja?             @relation("DepositoMovimientoTransferenciaOrigen")
   depositoTransferenciaDestino DepositoCaja?             @relation("DepositoMovimientoTransferenciaDestino")
+  movimientoSheet              MovimientoSheetCaja?
 
   @@index([estado, fecha])
   @@index([creadoPorId])
@@ -771,10 +773,55 @@ model SaldoCaja {
   recibeDepositos Boolean @default(false) @map("recibe_depositos")
   conceptoDeposito String @default("Depósito diario") @map("concepto_deposito")
   auditorias AuditoriaConfiguracionCaja[]
+  integracionesEfectivo       IntegracionSheetSucursal[] @relation("CajaSheetEfectivo")
+  integracionesTransferencia  IntegracionSheetSucursal[] @relation("CajaSheetTransferencia")
 
   @@index([ubicacionId, activo])
 
   @@map("saldos_caja")
+}
+
+model IntegracionSheetSucursal {
+  id                   String    @id @default(uuid())
+  ubicacionTexto       String    @map("ubicacion_texto")
+  ubicacionClave       String    @unique @map("ubicacion_clave")
+  activo               Boolean   @default(true)
+  ubicacionId          String    @map("id_ubicacion")
+  cajaEfectivoId       String?   @map("id_caja_efectivo")
+  cajaTransferenciaId  String?   @map("id_caja_transferencia")
+  actualizadoPorId     String    @map("id_actualizado_por")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  ubicacion            Ubicacion @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  cajaEfectivo         SaldoCaja? @relation("CajaSheetEfectivo", fields: [cajaEfectivoId], references: [id], onDelete: Restrict)
+  cajaTransferencia    SaldoCaja? @relation("CajaSheetTransferencia", fields: [cajaTransferenciaId], references: [id], onDelete: Restrict)
+
+  @@index([ubicacionId, activo])
+  @@map("integraciones_sheet_sucursal")
+}
+
+model MovimientoSheetCaja {
+  id                  String          @id @default(uuid())
+  spreadsheetId       String          @map("spreadsheet_id")
+  hoja                String
+  externalId          String          @map("external_id")
+  fila                Int
+  fechaExterna        DateTime?       @map("fecha_externa")
+  precio              Float
+  pago                String
+  ubicacion           String
+  estadoFuente        String          @map("estado_fuente")
+  huellaFinanciera    String          @map("huella_financiera")
+  estadoProcesamiento String          @map("estado_procesamiento")
+  detalle             String?
+  movimientoCajaId    String?         @unique @map("id_movimiento_caja")
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  movimientoCaja      MovimientoCaja? @relation(fields: [movimientoCajaId], references: [id], onDelete: Restrict)
+
+  @@unique([spreadsheetId, hoja, externalId])
+  @@index([estadoProcesamiento, updatedAt])
+  @@map("movimientos_sheet_caja")
 }
 
 model AuditoriaConfiguracionCaja {

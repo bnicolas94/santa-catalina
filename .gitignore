@@ -25,6 +25,7 @@
 # misc
 .DS_Store
 *.pem
+/API GOOGLE.txt
 
 # debug
 npm-debug.log*

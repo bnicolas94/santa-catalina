@@ -112,9 +112,14 @@ Al realizar modificaciones, verificar obligatoriamente:
 ### 🧠 Notas para futuras IAs o desarrolladores
 
 *   **¡PELIGRO AL BORRAR / EDITAR!**: El proceso de `PUT` y `DELETE` ejecuta una reversión matemática del movimiento original antes de aplicar el nuevo. **Nunca toques esta sección del código (`app/api/caja/route.ts`) sin escribir pruebas o entender al 100% que revertir un ingreso implica un `decrement` y revertir un egreso implica un `increment`.**
-*   **Agregar una nueva Caja**: Si la empresa decide tener una "Caja Banco X", debes: 
-    1. Agregarlo a `allowedBoxes` en el page.tsx (frontend).
-    2. Agregarlo a los arrays de control de permisos (fabricBoxes, localBoxes, etc) dentro de `route.ts` y `transferir/route.ts` (backend).
-    3. Asegurarte de poblar un `SaldoCaja` inicial en base de datos.
+*   **Agregar una nueva Caja**: Se hace desde `/cajas`. La caja comienza en cero, queda vinculada a una sede y aparece dinámicamente en Caja y Compras; no se agregan claves a listas del frontend.
 *   **Mercado Pago**: Las cajas rotuladas como "MP" y "MP Juani" son virtuales. Cualquier ajuste o sincronización con estas debe tratar a las APIs como principal fuente de verdad, la sección de caja actúa aquí en modo espejo/visor.
 *   **Fechas UTC vs Local**: **NO MODIFIQUES** la función anónima `(() => { if (!fecha) return new Date()... })()` en la creación de movimientos. Fue ajustada específicamente para solucionar un bug molesto de desfase horario. 
+
+## Integración de ventas desde Google Sheets
+
+ADMIN configura la integración en `/cajas/google-sheets`. Cada valor de la columna `Ubicación` se vincula con una sede y tiene destinos independientes para `Efectivo` y `Transferencia`. La configuración inicial reconoce `Local 1` como Local Gutierrez y `Villa Elisa` como Local Villa Elisa; la transferencia de Villa Elisa apunta a MP Juani. Las cajas que todavía no se definieron quedan pendientes y no alteran saldos.
+
+El worker consulta `Pedidos_comunes` y `Pedidos_online` cada dos minutos. Lee `ID`, `Fecha/Hora`, `Precio`, `Pago`, `Ubicación` y `Estado`. Sólo crea un ingreso cuando el estado normalizado es `entregado`, el medio es efectivo o transferencia, el importe y la fecha son válidos y existe una caja activa configurada. La activación guarda su hora de inicio y no incorpora filas históricas anteriores. Un pedido nuevo que ya aparezca entregado después de esa hora sí se incorpora.
+
+`MovimientoSheetCaja` conserva la identidad `spreadsheetId + hoja + externalId`, el estado observado, la huella financiera y el movimiento generado. Esa restricción y el bloqueo transaccional evitan duplicados entre worker, botón manual y réplicas. La creación del movimiento, la actualización del saldo, la auditoría de Caja y el vínculo externo se confirman en una misma transacción. Si precio, pago, ubicación o estado cambian después del registro, no se revierte dinero automáticamente: queda `REQUIERE_REVISION`. El Sheet se consulta en modo de sólo lectura y debe permitir lectura mediante enlace.

@@ -33,6 +33,11 @@ test('la administración de sedes está reservada a ADMIN', () => {
         assert.equal(canAccessPath(path, { rol: 'OPERARIO', ubicacionTipo: 'LOCAL' }), false)
         assert.equal(canAccessPath(path, {}), false)
     }
+
+    for (const path of ['/cajas/google-sheets', '/api/caja/google-sheets']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { rol: 'LOCAL', ubicacionTipo: 'LOCAL', permisos: { permisoCaja: true } }), false)
+    }
 })
 
 test('ADMIN puede acceder a cualquier ruta protegida', () => {

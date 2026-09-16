@@ -40,7 +40,7 @@ export default function CajasPage() {
         (estado === 'todas' || c.activo === (estado === 'activas')) && (c.nombre || c.tipo).toLocaleLowerCase().includes(busqueda.toLocaleLowerCase()))
     return <div>
         <div className="page-header"><div><h1>Cajas por sede</h1><p>Creá las cajas de cada local o fábrica y elegí dónde se reciben sus depósitos.</p></div>
-            <div style={{ display: 'flex', gap: 8 }}><Link className="btn btn-secondary" href="/caja">Ver movimientos</Link>
+            <div style={{ display: 'flex', gap: 8 }}><Link className="btn btn-secondary" href="/caja">Ver movimientos</Link><Link className="btn btn-secondary" href="/cajas/google-sheets">Integración Google Sheets</Link>
                 <button className="btn btn-primary" disabled={ocupado || !sedes?.some(s => s.activo)} onClick={() => {
                     setEdicion(null); setForm({ ...inicial, ubicacionId: filtroSede !== 'todas' && filtroSede !== 'sin-sede' ? filtroSede : '' }); setError(''); setAbierto(true)
                 }}>+ Nueva caja</button></div></div>
