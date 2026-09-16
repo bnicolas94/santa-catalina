@@ -6,34 +6,14 @@ import { CajaService } from '@/lib/services/caja.service'
 import { esMovimientoGestionadoPorRRHH } from '@/lib/caja/movimientosProtegidos'
 import { esDeclaracionDepositoConfigurada } from '@/lib/caja/depositos'
 import { leerConfigDepositos } from '@/lib/caja/configDepositos'
+import { exigirAccesoCaja, listarCajas } from '@/lib/services/cajas-catalogo.service'
+import type { UsuarioCajas } from '@/lib/caja/catalogo'
 
 // ─── Helpers de Autorización ─────────────────────────────────────────────────
 
-function getAllowedBoxes(userRol: string, ubicacionTipo: string): string[] | undefined {
-    if (userRol === 'ADMIN') return undefined // Sin restricción
-    const uType = ubicacionTipo?.toUpperCase()
-    if (uType === 'LOCAL') return ['local', 'caja_chica_local']
-    if (uType === 'FABRICA') return ['caja_madre', 'caja_chica']
-    return []
-}
-
-function validateCajaAccess(userRol: string, ubicacionTipo: string, cajaOrigen: string): string | null {
-    if (userRol?.toUpperCase() === 'ADMIN') return null
-    const cajaLower = cajaOrigen.toLowerCase()
-    const uType = ubicacionTipo?.toUpperCase()
-
-    if (uType === 'LOCAL') {
-        if (cajaLower !== 'local' && cajaLower !== 'caja_chica_local') {
-            return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación LOCAL`
-        }
-    } else if (uType === 'FABRICA') {
-        if (!['caja_madre', 'caja_chica'].includes(cajaLower)) {
-            return `No tienes permiso para operar en la caja '${cajaOrigen}' desde ubicación FABRICA`
-        }
-    } else {
-        return 'Tu usuario no tiene una ubicación asignada para operar en caja'
-    }
-    return null
+async function validateCajaAccess(usuario: UsuarioCajas, caja: unknown) {
+    try { await exigirAccesoCaja(usuario, caja); return null }
+    catch { return 'No tenés permiso para operar en esta caja o la caja está inactiva.' }
 }
 
 // ─── GET /api/caja ───────────────────────────────────────────────────────────
@@ -41,10 +21,11 @@ function validateCajaAccess(userRol: string, ubicacionTipo: string, cajaOrigen: 
 export async function GET(request: Request) {
     try {
         const session = await getServerSession(authOptions)
+        if (!session?.user) return NextResponse.json({ error: 'Sesión requerida' }, { status: 401 })
         const userRol = (session?.user as any)?.rol
         const permisos = (session?.user as any)?.permisos || {}
 
-        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja && (session.user as UsuarioCajas).ubicacionTipo !== 'LOCAL') {
             return NextResponse.json({ error: 'No tienes permiso para ver la caja' }, { status: 403 })
         }
 
@@ -56,7 +37,7 @@ export async function GET(request: Request) {
         const endOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 23, 59, 59, 999)
 
         const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-        const allowedBoxes = getAllowedBoxes(userRol, ubicacionTipo)
+        const allowedBoxes = userRol === 'ADMIN' ? undefined : (await listarCajas(session.user as UsuarioCajas, true)).map(c => c.tipo)
         const esAdmin = userRol === 'ADMIN'
 
         const movimientos = await prisma.movimientoCaja.findMany({
@@ -127,10 +108,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const session = await getServerSession(authOptions)
+        if (!session?.user) return NextResponse.json({ error: 'Sesión requerida' }, { status: 401 })
         const userRol = (session?.user as any)?.rol
         const permisos = (session?.user as any)?.permisos || {}
 
-        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja && (session.user as UsuarioCajas).ubicacionTipo !== 'LOCAL') {
             return NextResponse.json({ error: 'No tienes permiso para operar en caja' }, { status: 403 })
         }
 
@@ -143,9 +125,9 @@ export async function POST(request: Request) {
         }
 
         // Validación de ubicación
-        if (userRol?.toUpperCase() !== 'ADMIN' && cajaOrigen) {
+        {
             const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
-            const error = validateCajaAccess(userRol, ubicacionTipo, cajaOrigen)
+            const error = await validateCajaAccess(session.user as UsuarioCajas, cajaOrigen)
             if (error) return NextResponse.json({ error }, { status: 403 })
         }
 
@@ -160,7 +142,7 @@ export async function POST(request: Request) {
         // siempre quede pendiente de validación administrativa.
         const ubicacionTipo = String((session?.user as any)?.ubicacionTipo || '').toUpperCase()
         const configDepositos = await leerConfigDepositos()
-        const configUbicacion = configDepositos[ubicacionTipo]
+        const configUbicacion = configDepositos[(session.user as UsuarioCajas).ubicacionId || '']
         if (userRol !== 'ADMIN' && esDeclaracionDepositoConfigurada({
             tipo,
             concepto,
@@ -168,6 +150,7 @@ export async function POST(request: Request) {
             cajaOrigen,
         }, configUbicacion)) {
             const deposito = await CajaService.registrarDeposito({
+                ubicacionCajaId: (session.user as UsuarioCajas).ubicacionId || '__sin_sede__',
                 montoDeclarado: numericMonto,
                 cajaOrigen: configUbicacion.cajaDepositoId,
                 concepto: configUbicacion.conceptoDeposito,
@@ -199,6 +182,7 @@ export async function POST(request: Request) {
         }
 
         const result = await CajaService.createMovimiento({
+            ubicacionCajaId: userRol === 'ADMIN' ? undefined : (session.user as UsuarioCajas).ubicacionId || '__sin_sede__',
             tipo,
             concepto,
             monto: numericMonto,
@@ -228,10 +212,11 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
     try {
         const session = await getServerSession(authOptions)
+        if (!session?.user) return NextResponse.json({ error: 'Sesión requerida' }, { status: 401 })
         const userRol = (session?.user as any)?.rol
         const permisos = (session?.user as any)?.permisos || {}
 
-        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja && (session.user as UsuarioCajas).ubicacionTipo !== 'LOCAL') {
             return NextResponse.json({ error: 'No tienes permiso para editar caja' }, { status: 403 })
         }
 
@@ -241,22 +226,23 @@ export async function PUT(request: Request) {
         if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
         // Validar acceso al movimiento existente
-        if (userRol !== 'ADMIN') {
+        {
             const oldMov = await prisma.movimientoCaja.findUnique({ where: { id } })
             if (!oldMov) return NextResponse.json({ error: 'Movimiento no encontrado' }, { status: 404 })
 
             const ubicacionTipo = (session?.user as any)?.ubicacionTipo
             if (oldMov.cajaOrigen) {
-                const err = validateCajaAccess(userRol, ubicacionTipo, oldMov.cajaOrigen)
+                const err = await validateCajaAccess(session.user as UsuarioCajas, oldMov.cajaOrigen)
                 if (err) return NextResponse.json({ error: 'No tienes permiso para editar este movimiento' }, { status: 403 })
             }
-            if (cajaOrigen) {
-                const err = validateCajaAccess(userRol, ubicacionTipo, cajaOrigen)
+            if (cajaOrigen !== undefined) {
+                const err = await validateCajaAccess(session.user as UsuarioCajas, cajaOrigen)
                 if (err) return NextResponse.json({ error: 'No tienes permiso para mover fondos a esta caja' }, { status: 403 })
             }
         }
 
         const result = await CajaService.updateMovimiento(id, {
+            ubicacionCajaId: userRol === 'ADMIN' ? undefined : (session.user as UsuarioCajas).ubicacionId || '__sin_sede__',
             tipo,
             concepto,
             monto: monto !== undefined ? parseFloat(monto) : undefined,
@@ -281,10 +267,11 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
     try {
         const session = await getServerSession(authOptions)
+        if (!session?.user) return NextResponse.json({ error: 'Sesión requerida' }, { status: 401 })
         const userRol = (session?.user as any)?.rol
         const permisos = (session?.user as any)?.permisos || {}
 
-        if (userRol !== 'ADMIN' && !permisos.permisoCaja) {
+        if (userRol !== 'ADMIN' && !permisos.permisoCaja && (session.user as UsuarioCajas).ubicacionTipo !== 'LOCAL') {
             return NextResponse.json({ error: 'No tienes permiso para eliminar en caja' }, { status: 403 })
         }
 
@@ -295,11 +282,11 @@ export async function DELETE(request: Request) {
         const motivo = body?.motivo
 
         // Validar acceso
-        if (userRol !== 'ADMIN') {
+        {
             const mov = await prisma.movimientoCaja.findUnique({ where: { id } })
             if (mov?.cajaOrigen) {
                 const ubicacionTipo = (session?.user as any)?.ubicacionTipo
-                const err = validateCajaAccess(userRol, ubicacionTipo, mov.cajaOrigen)
+                const err = await validateCajaAccess(session.user as UsuarioCajas, mov.cajaOrigen)
                 if (err) return NextResponse.json({ error: 'No tienes permiso para eliminar este movimiento' }, { status: 403 })
             }
         }

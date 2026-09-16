@@ -44,3 +44,21 @@ test('separa el total activo de las conversaciones realmente sin leer', () => {
     unreadMessages: 6,
   })
 })
+
+test('nuevas cuenta por dueño real aunque el estado histórico sea abierto o en espera', () => {
+  const emptyReadState = { unreadCount: 0, lastInboundAt: null, lastOutboundAt: null }
+  const summary = summarizeConversationCounts([
+    { ...emptyReadState, status: 'UNASSIGNED', assignedToId: null },
+    { ...emptyReadState, status: 'OPEN', assignedToId: null },
+    { ...emptyReadState, status: 'WAITING_CUSTOMER', assignedToId: null },
+    { ...emptyReadState, status: 'UNASSIGNED', assignedToId: 'agent-a' },
+    { ...emptyReadState, status: 'OPEN', assignedToId: 'agent-b' },
+    { ...emptyReadState, status: 'RESOLVED', assignedToId: null },
+    { ...emptyReadState, status: 'ARCHIVED', assignedToId: null },
+  ], 'agent-a')
+
+  assert.equal(summary.unassigned, 3)
+  assert.equal(summary.all, 5)
+  assert.equal(summary.mine, 1)
+  assert.equal(summary.unreadConversations, 0)
+})

@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import useSWR from 'swr'
 import DiagnosticoMercadoPago from '@/components/caja/DiagnosticoMercadoPago'
 import ConciliarReporteMP from '@/components/caja/ConciliarReporteMP'
 import EstadoAutomaticoMP from '@/components/caja/EstadoAutomaticoMP'
+
+interface CajaCatalogo { id: string; tipo: string; nombre: string | null; saldo: number; activo: boolean; ubicacionId: string | null; ubicacion: { nombre: string; activo: boolean } | null; recibeDepositos: boolean }
 
 interface UsuarioCaja {
     id: string
@@ -144,6 +147,7 @@ export default function CajaPage() {
     const { data: session } = useSession()
     const userRol = (session?.user as any)?.rol
     const ubicacionTipo = (session?.user as any)?.ubicacionTipo
+    const ubicacionId = (session?.user as { ubicacionId?: string })?.ubicacionId
 
     const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0])
 
@@ -161,12 +165,8 @@ export default function CajaPage() {
     const depositosPendientes: DepositoCaja[] = Array.isArray(swrData?.depositosData) ? swrData.depositosData : []
 
     const saldosData = swrData?.saldosData || {}
-    const saldoMadre = saldosData.cajaMadre?.saldo ?? 0
-    const saldoChica = saldosData.cajaChica?.saldo ?? 0
-    const saldoLocal = saldosData.local?.saldo ?? 0
-    const saldoChicaLocal = saldosData.cajaChicaLocal?.saldo ?? 0
-    const saldoMercadoPago = saldosData.mercadoPago?.saldo ?? 0
-    const saldoMercadoPagoJuani = saldosData.mercadoPagoJuani?.saldo ?? 0
+    const cajasCatalogo: CajaCatalogo[] = Array.isArray(saldosData.cajas) ? saldosData.cajas : []
+    const cajasActivas = cajasCatalogo.filter(c => c.activo && (!c.ubicacion || c.ubicacion.activo))
 
     const conceptosData = swrData?.conceptosData
     const conceptos = Array.isArray(conceptosData) ? conceptosData : []
@@ -186,16 +186,10 @@ export default function CajaPage() {
 
     const getBoxLabel = (id: string | null) => {
         if (!id) return '-';
-        const labels: Record<string, string> = {
-            'caja_madre': '🔒 Caja Fuerte Oficina',
-            'local': '🔒 Caja Fuerte Local',
-            'caja_chica': '💼 Caja Chica (Fábrica)',
-            'caja_chica_local': '💼 Caja Chica Local',
-            'mercado_pago': '💳 Mercado Pago',
-            'mercado_pago_juani': '🔵 MP Juani',
-        };
-        return labels[id] || id.replace(/_/g, ' ').toUpperCase();
+        const caja = cajasCatalogo.find(c => c.tipo === id)
+        return caja ? (caja.nombre || caja.tipo) + (caja.ubicacion ? ' · ' + caja.ubicacion.nombre : '') : id.replace(/_/g, ' ')
     };
+
 
 
     const checkLiveMP = async () => {
@@ -216,7 +210,7 @@ export default function CajaPage() {
     const [showTransferModal, setShowTransferModal] = useState(false)
     const [transfForm, setTransfForm] = useState({ origen: 'local', destino: 'caja_chica', monto: '', fecha: new Date().toISOString().split('T')[0] })
     const [showRendicionModal, setShowRendicionModal] = useState<Rendicion | null>(null)
-    const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
+    const [form, setForm] = useState({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: '', choferId: '', fecha: new Date().toISOString().split('T')[0] })
     const [rendForm, setRendForm] = useState({ montoEntregado: '', observaciones: '' })
     const [editingPedidoId, setEditingPedidoId] = useState<string | null>(null)
     const [editingPedidoPrice, setEditingPedidoPrice] = useState<string>('')
@@ -233,29 +227,13 @@ export default function CajaPage() {
     const [showValidacionDeposito, setShowValidacionDeposito] = useState<DepositoCaja | null>(null)
     const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', observaciones: '', fecha: new Date().toISOString().split('T')[0] })
     const [depositConfig, setDepositConfig] = useState<any>(null)
-    const [showAdminConfig, setShowAdminConfig] = useState(false)
-    const [allConfigs, setAllConfigs] = useState<any>(null)
     const [filtroTexto, setFiltroTexto] = useState('')
     const [filtroCaja, setFiltroCaja] = useState('todas')
     const [filtroTipo, setFiltroTipo] = useState('todos')
 
-    const allowedBoxes = userRol === 'ADMIN' 
-        ? ['caja_madre', 'local', 'caja_chica', 'caja_chica_local', 'mercado_pago', 'mercado_pago_juani'] 
-        : (ubicacionTipo === 'LOCAL' ? ['local', 'caja_chica_local'] : ['caja_madre', 'caja_chica'])
-
-    const getBoxSaldo = (boxKey: string) => {
-        const saldos: Record<string, number> = {
-            'caja_madre': saldoMadre,
-            'caja_chica': saldoChica,
-            'local': saldoLocal,
-            'caja_chica_local': saldoChicaLocal,
-            'mercado_pago': saldoMercadoPago,
-            'mercado_pago_juani': saldoMercadoPagoJuani,
-        };
-        return saldos[boxKey] ?? 0;
-    };
-
-    const saldosBoxes = allowedBoxes;
+    const allowedBoxes = cajasActivas.map(c => c.tipo)
+    const getBoxSaldo = (tipo: string) => cajasCatalogo.find(c => c.tipo === tipo)?.saldo ?? 0
+    const defaultBox = allowedBoxes.find(k => k !== depositConfig?.cajaDepositoId) || allowedBoxes[0] || ''
 
     const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
         // Filtro por Tipo
@@ -278,17 +256,12 @@ export default function CajaPage() {
         return true;
     });
 
+    const cajasDisponiblesKey = allowedBoxes.join('|')
     useEffect(() => {
-        // Reset default form boxes if restricted
-        if (ubicacionTipo === 'LOCAL') {
-            setForm(f => ({ ...f, cajaOrigen: 'local' }))
-            setTransfForm(f => ({ ...f, origen: 'local', destino: 'caja_chica' }))
-        } else if (ubicacionTipo === 'FABRICA') {
-            setForm(f => ({ ...f, cajaOrigen: 'caja_madre' }))
-            setTransfForm(f => ({ ...f, origen: 'caja_madre', destino: 'caja_chica' }))
-        }
-    }, [ubicacionTipo])
-
+        const cajas = cajasDisponiblesKey ? cajasDisponiblesKey.split('|') : []
+        setForm(f => cajas.includes(f.cajaOrigen) ? f : { ...f, cajaOrigen: cajas[0] || '' })
+        setTransfForm(f => ({ ...f, origen: cajas.includes(f.origen) ? f.origen : cajas[0] || '', destino: cajas.includes(f.destino) ? f.destino : cajas[1] || '' }))
+    }, [cajasDisponiblesKey])
 
     useEffect(() => { 
         // Solicitar permisos de notificación de escritorio
@@ -302,16 +275,15 @@ export default function CajaPage() {
         if (userRol) {
             fetchDepositConfig()
         }
-    }, [fechaFiltro, userRol, ubicacionTipo])
+    }, [fechaFiltro, userRol, ubicacionId])
 
     const fetchDepositConfig = async () => {
         try {
             const res = await fetch('/api/caja/config-deposito')
             const data = await res.json()
             if (userRol === 'ADMIN') {
-                setAllConfigs(data)
-                // Usar la ubicación del admin si existe en la config, de lo contrario usar LOCAL como fallback seguro
-                const safeTarget = (ubicacionTipo && data[ubicacionTipo]) ? ubicacionTipo : 'LOCAL'
+                // Usar la sede del administrador o la primera sede con depósitos habilitados
+                const safeTarget = ubicacionId && data[ubicacionId] ? ubicacionId : Object.keys(data)[0]
                 setDepositConfig(data[safeTarget])
             } else {
                 setDepositConfig(data)
@@ -385,7 +357,7 @@ export default function CajaPage() {
             }
             setSuccess('Movimiento registrado')
             setShowModal(false)
-            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
+            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: defaultBox, choferId: '', fecha: new Date().toISOString().split('T')[0] })
             fetchData()
 
             setTimeout(() => setSuccess(''), 3000)
@@ -409,7 +381,7 @@ export default function CajaPage() {
             setSuccess('Movimiento actualizado')
             setShowModal(false)
             setEditingMov(null)
-            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: 'caja_madre', choferId: '', fecha: new Date().toISOString().split('T')[0] })
+            setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: defaultBox, choferId: '', fecha: new Date().toISOString().split('T')[0] })
 
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
@@ -664,21 +636,6 @@ export default function CajaPage() {
         }
     }
 
-    async function handleSaveAdminConfig(e: React.FormEvent) {
-        e.preventDefault()
-        try {
-            const res = await fetch('/api/caja/config-deposito', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(allConfigs),
-            })
-            if (!res.ok) throw new Error()
-            setSuccess('Configuración guardada')
-            setShowAdminConfig(false)
-            fetchDepositConfig()
-            setTimeout(() => setSuccess(''), 3000)
-        } catch { setError('Error al guardar configuración') }
-    }
 
     if (loading) return <div className="empty-state"><div className="spinner" /><p>Cargando caja...</p></div>
 
@@ -719,7 +676,7 @@ export default function CajaPage() {
                         style={{ fontSize: '1.2rem' }}>
                         {showMontos ? '👁️' : '🙈'}
                     </button>
-                    <button className="btn btn-secondary" onClick={() => setShowTransferModal(true)}>⇄ Transferir</button>
+                    <button className="btn btn-secondary" disabled={allowedBoxes.length < 2} onClick={() => setShowTransferModal(true)}>⇄ Transferir</button>
                     {depositConfig?.habilitarDeposito && (
                         <button className="btn btn-accent" 
                             style={{ backgroundColor: '#27AE60', color: 'white', border: 'none' }}
@@ -732,13 +689,10 @@ export default function CajaPage() {
                         </button>
                     )}
                     {userRol === 'ADMIN' && (
-                        <button className="btn btn-ghost btn-icon" onClick={() => setShowAdminConfig(true)} title="Configurar Depósitos">
-                            ⚙️
-                        </button>
+                        <Link className="btn btn-secondary" href="/cajas">Administrar cajas</Link>
                     )}
-                    <button className="btn btn-primary" onClick={() => { 
+                    <button className="btn btn-primary" disabled={!allowedBoxes.length} onClick={() => { 
                         setEditingMov(null); 
-                        const defaultBox = ubicacionTipo === 'LOCAL' ? 'caja_chica_local' : 'caja_chica';
                         setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: defaultBox, choferId: '', fecha: new Date().toISOString().split('T')[0] }); 
                         setShowModal(true) 
                     }}>+ Registrar Movimiento</button>
@@ -763,268 +717,33 @@ export default function CajaPage() {
                             💰 Dinero Disponible Global (Todas las Cajas)
                         </div>
                         <div style={{ fontSize: '3rem', fontWeight: 800, color: '#10b981', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                            {formatCurrency(saldoMadre + saldoChica + saldoLocal + saldoChicaLocal + saldoMercadoPago + saldoMercadoPagoJuani, showMontos)}
+                            {formatCurrency(cajasCatalogo.reduce((total, caja) => total + caja.saldo, 0), showMontos)}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
-                            Suma de Madre + Chica Fabrica + Local + Chica Local + MP + MP Juani
+                            Suma de todas las cajas
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ═══ Saldos de Caja ═══ */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${saldosBoxes.length}, 1fr)`, gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                {/* Caja Madre */}
-                {allowedBoxes.includes('caja_madre') && (
-                    <div className="card" style={{ borderTop: '3px solid #8E44AD' }}>
-                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#8E44AD', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('caja_madre')}</span>
-                                {(userRol === 'ADMIN') && (
-                                    editingSaldo === 'caja_madre' ? (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_madre')}>✓</button>
-                                        </div>
-                                    ) : (
-                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                            onClick={() => { setEditingSaldo('caja_madre'); setEditSaldoValue(String(saldoMadre)) }}>✏️ Editar</button>
-                                    )
-                                )}
-                            </div>
-                            {editingSaldo === 'caja_madre' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                        onChange={(e) => setEditSaldoValue(e.target.value)}
-                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
-                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
-                                            <option value="ajuste">⚙️ AJUSTE</option>
-                                            <option value="arqueo">📋 ARQUEO</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
-                                        style={{ fontSize: '0.75rem', padding: '4px' }}
-                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#8E44AD', textAlign: 'center' }}>{formatCurrency(saldoMadre, showMontos)}</div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {/* Caja Chica */}
-                {allowedBoxes.includes('caja_chica') && (
-                    <div className="card" style={{ borderTop: '3px solid #E67E22' }}>
-                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#E67E22', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('caja_chica')}</span>
-                                {(userRol === 'ADMIN') && (
-                                    editingSaldo === 'caja_chica' ? (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_chica')}>✓</button>
-                                        </div>
-                                    ) : (
-                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                            onClick={() => { setEditingSaldo('caja_chica'); setEditSaldoValue(String(saldoChica)) }}>✏️ Editar</button>
-                                    )
-                                )}
-                            </div>
-                            {editingSaldo === 'caja_chica' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                        onChange={(e) => setEditSaldoValue(e.target.value)}
-                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
-                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
-                                            <option value="ajuste">⚙️ AJUSTE</option>
-                                            <option value="arqueo">📋 ARQUEO</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
-                                        style={{ fontSize: '0.75rem', padding: '4px' }}
-                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#E67E22', textAlign: 'center' }}>{formatCurrency(saldoChica, showMontos)}</div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {/* Local Fuerte */}
-                {allowedBoxes.includes('local') && (
-                    <div className="card" style={{ borderTop: '3px solid #27AE60' }}>
-                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#27AE60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('local')}</span>
-                                {(userRol === 'ADMIN' || ubicacionTipo === 'LOCAL') && (
-                                    editingSaldo === 'local' ? (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('local')}>✓</button>
-                                        </div>
-                                    ) : (
-                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                            onClick={() => { setEditingSaldo('local'); setEditSaldoValue(String(saldoLocal)) }}>✏️ Editar</button>
-                                    )
-                                )}
-                            </div>
-                            {editingSaldo === 'local' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                        onChange={(e) => setEditSaldoValue(e.target.value)}
-                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
-                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
-                                            <option value="ajuste">⚙️ AJUSTE</option>
-                                            <option value="arqueo">📋 ARQUEO</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
-                                        style={{ fontSize: '0.75rem', padding: '4px' }}
-                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#27AE60', textAlign: 'center' }}>{formatCurrency(saldoLocal, showMontos)}</div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {/* Caja Chica Local */}
-                {allowedBoxes.includes('caja_chica_local') && (
-                    <div className="card" style={{ borderTop: '3px solid #F39C12' }}>
-                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#F39C12', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('caja_chica_local')}</span>
-                                {(userRol === 'ADMIN' || ubicacionTipo === 'LOCAL') && (
-                                    editingSaldo === 'caja_chica_local' ? (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('caja_chica_local')}>✓</button>
-                                        </div>
-                                    ) : (
-                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                            onClick={() => { setEditingSaldo('caja_chica_local'); setEditSaldoValue(String(saldoChicaLocal)) }}>✏️ Editar</button>
-                                    )
-                                )}
-                            </div>
-                            {editingSaldo === 'caja_chica_local' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                        onChange={(e) => setEditSaldoValue(e.target.value)}
-                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
-                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
-                                            <option value="ajuste">⚙️ AJUSTE</option>
-                                            <option value="arqueo">📋 ARQUEO</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
-                                        style={{ fontSize: '0.75rem', padding: '4px' }}
-                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#F39C12', textAlign: 'center' }}>{formatCurrency(saldoChicaLocal, showMontos)}</div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {/* Mercado Pago */}
-                {allowedBoxes.includes('mercado_pago') && (
-                    <div className="card" style={{ borderTop: '3px solid #2980B9' }}>
-                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#2980B9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('mercado_pago')}</span>
-                                {(userRol === 'ADMIN') && (
-                                    editingSaldo === 'mercado_pago' ? (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('mercado_pago')}>✓</button>
-                                        </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: '#2980B9' }} onClick={checkLiveMP}>🔄 En Vivo</button>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                                onClick={() => { setEditingSaldo('mercado_pago'); setEditSaldoValue(String(saldoMercadoPago)) }}>✏️ Editar</button>
-                                        </div>
-                                    )
-                                )}
-                            </div>
-                            {editingSaldo === 'mercado_pago' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                        onChange={(e) => setEditSaldoValue(e.target.value)}
-                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
-                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
-                                            <option value="ajuste">⚙️ AJUSTE</option>
-                                            <option value="arqueo">📋 ARQUEO</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
-                                        style={{ fontSize: '0.75rem', padding: '4px' }}
-                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#2980B9', textAlign: 'center' }}>{formatCurrency(saldoMercadoPago, showMontos)}</div>
-                            )}
-                            {userRol === 'ADMIN' && (
-                                <div style={{ marginTop: 'var(--space-2)', fontSize: '0.75rem' }}>
-                                    <EstadoAutomaticoMP onActualizado={() => { void mutate() }} />
-                                    <DiagnosticoMercadoPago />
-                                    <ConciliarReporteMP onConfirmado={() => { void mutate() }} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {/* Mercado Pago Juani */}
-                {saldosBoxes.includes('mercado_pago_juani') && (
-                    <div className="card" style={{ borderTop: '3px solid #00BFA5' }}>
-                        <div className="card-body" style={{ padding: 'var(--space-4)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#00BFA5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{getBoxLabel('mercado_pago_juani')}</span>
-                                {(userRol === 'ADMIN') && (
-                                    editingSaldo === 'mercado_pago_juani' ? (
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 6px' }} onClick={() => setEditingSaldo(null)}>✕</button>
-                                            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => updateSaldo('mercado_pago_juani')}>✓</button>
-                                        </div>
-                                    ) : (
-                                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--color-gray-400)' }}
-                                            onClick={() => { setEditingSaldo('mercado_pago_juani'); setEditSaldoValue(String(saldoMercadoPagoJuani)) }}>✏️ Editar</button>
-                                    )
-                                )}
-                            </div>
-                            {editingSaldo === 'mercado_pago_juani' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                    <input type="number" step="0.01" className="form-input" value={editSaldoValue}
-                                        onChange={(e) => setEditSaldoValue(e.target.value)}
-                                        style={{ fontSize: '1.5rem', fontWeight: 700, textAlign: 'center' }} autoFocus />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <select className="form-select" style={{ fontSize: '0.75rem', padding: '4px' }} 
-                                            value={editMotivo} onChange={(e) => setEditMotivo(e.target.value)}>
-                                            <option value="ajuste">⚙️ AJUSTE</option>
-                                            <option value="arqueo">📋 ARQUEO</option>
-                                        </select>
-                                    </div>
-                                    <input type="text" className="form-input" placeholder="Detalle (opcional)" 
-                                        style={{ fontSize: '0.75rem', padding: '4px' }}
-                                        value={editDescripcion} onChange={(e) => setEditDescripcion(e.target.value)} />
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#00BFA5', textAlign: 'center' }}>{formatCurrency(saldoMercadoPagoJuani, showMontos)}</div>
-                            )}
-                        </div>
-                    </div>
-                )}
+            {/* Cajas autorizadas de la sede, con tarjetas generadas desde el catálogo. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 }}>
+                {cajasActivas.map(caja => <div key={caja.id} className="card"><div className="card-body">
+                    <strong>{caja.nombre || caja.tipo}</strong><p>{caja.ubicacion?.nombre || 'Central'}</p>
+                    {editingSaldo === caja.tipo ? <>
+                        <input aria-label="Saldo" type="number" step="0.01" className="form-input" value={editSaldoValue} onChange={e => setEditSaldoValue(e.target.value)} />
+                        <select aria-label="Motivo de ajuste" className="form-select" value={editMotivo} onChange={e => setEditMotivo(e.target.value)}><option value="ajuste">Ajuste</option><option value="arqueo">Arqueo</option></select>
+                        <input aria-label="Detalle de ajuste" className="form-input" placeholder="Detalle" value={editDescripcion} onChange={e => setEditDescripcion(e.target.value)} />
+                        <button className="btn btn-primary btn-sm" onClick={() => void updateSaldo(caja.tipo)}>Guardar ajuste</button><button className="btn btn-ghost btn-sm" onClick={() => setEditingSaldo(null)}>Cancelar</button>
+                    </> : <><p style={{ fontSize: '1.8rem', fontWeight: 700, color: '#2980b9' }}>{formatCurrency(caja.saldo, showMontos)}</p>
+                        {userRol === 'ADMIN' && <button className="btn btn-ghost btn-sm" onClick={() => { setEditingSaldo(caja.tipo); setEditSaldoValue(String(caja.saldo)) }}>Ajustar saldo</button>}</>}
+                    {caja.tipo === 'mercado_pago' && userRol === 'ADMIN' && <div style={{ fontSize: '0.8rem' }}>
+                        <button className="btn btn-ghost btn-sm" onClick={checkLiveMP}>Ver conexión MP</button>
+                        <EstadoAutomaticoMP onActualizado={() => { void mutate() }} /><DiagnosticoMercadoPago /><ConciliarReporteMP onConfirmado={() => { void mutate() }} />
+                    </div>}
+                </div></div>)}
             </div>
+            {!loading && !cajasActivas.length && <p role="status">No hay cajas activas vinculadas a tu sede. Solicitá la vinculación a Administración.</p>}
 
             {/* ═══ Rendiciones Pendientes ═══ */}
             {depositosPendientes.length > 0 && (
@@ -1344,7 +1063,7 @@ export default function CajaPage() {
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                        {allowedBoxes.filter(bk => bk !== 'caja_madre' && bk !== 'local').map((boxKey) => {
+                                        {allowedBoxes.map((boxKey) => {
                                             const boxColors: Record<string, string> = {
                                                 'caja_chica': '#E67E22',
                                                 'caja_chica_local': '#F39C12',
@@ -1994,66 +1713,6 @@ export default function CajaPage() {
                 </div>
             )}
 
-            {/* MODAL CONFIGURACION DEPOSITOS (ADMIN) */}
-            {showAdminConfig && userRol === 'ADMIN' && allConfigs && (
-                <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={() => setShowAdminConfig(false)}>
-                    <div className="modal" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem' }} onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header" style={{ marginBottom: '2rem' }}>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-gray-800)' }}>⚙️ Configuración de Depósitos Rápidos</h2>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setShowAdminConfig(false)}>✕</button>
-                        </div>
-                        <form onSubmit={handleSaveAdminConfig}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
-                                {['LOCAL', 'FABRICA'].map(tipo => (
-                                    <div key={tipo} style={{ padding: '1.5rem', border: '1px solid var(--color-gray-200)', borderRadius: '12px', backgroundColor: 'var(--color-gray-50)' }}>
-                                        <h3 style={{ marginBottom: '1.5rem', color: 'var(--color-primary)', borderBottom: '2px solid var(--color-primary-10)', paddingBottom: '0.5rem' }}>
-                                            Configuración para {tipo}
-                                        </h3>
-                                        <div className="form-grid" style={{ gridTemplateColumns: '1fr' }}>
-                                            <div className="form-group">
-                                                <label className="form-label">Caja Destino</label>
-                                                <select 
-                                                    className="form-input"
-                                                    value={allConfigs[tipo]?.cajaDepositoId}
-                                                    onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], cajaDepositoId: e.target.value }})}
-                                                >
-                                                    {allowedBoxes.map(box => (
-                                                        <option key={box} value={box}>{getBoxLabel(box)}</option>
-                                                    ))}
-                                                    <option value="caja_fuerte_local">🔒 Caja Fuerte Local (v2)</option>
-                                                    <option value="caja_fuerte_oficina">🔒 Caja Fuerte Oficina (v2)</option>
-                                                </select>
-                                            </div>
-                                            <div className="form-group">
-                                                <label className="form-label">Concepto por Defecto</label>
-                                                <input 
-                                                    type="text" 
-                                                    className="form-input"
-                                                    value={allConfigs[tipo]?.conceptoDeposito}
-                                                    onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], conceptoDeposito: e.target.value }})}
-                                                />
-                                            </div>
-                                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '1rem', padding: '0.5rem', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid var(--color-gray-200)' }}>
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={allConfigs[tipo]?.habilitarDeposito}
-                                                    onChange={(e) => setAllConfigs({...allConfigs, [tipo]: { ...allConfigs[tipo], habilitarDeposito: e.target.checked }})}
-                                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                                />
-                                                <label className="form-label" style={{ marginBottom: 0, cursor: 'pointer', fontWeight: 500 }}>Habilitar botón "Depositar"</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="form-actions" style={{ justifyContent: 'flex-end', gap: '1rem' }}>
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowAdminConfig(false)}>Cerrar</button>
-                                <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem 2rem' }}>Guardar Cambios</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     )
 }

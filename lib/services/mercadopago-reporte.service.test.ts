@@ -26,7 +26,7 @@ test('crear descuenta una sola vez; vincular conserva saldo y deja auditoría; r
             findMany: async () => candidato ? [{ id: 'mov', monto: 11000, fecha: new Date(fila.fecha), concepto: 'Pago manual', descripcion: null }] : [],
             create: async ({ data }: { data: Record<string, unknown> }) => { creados++; return { ...data, id: 'mov' } },
         },
-        saldoCaja: { upsert: async ({ update }: { update: { saldo: { decrement: number } } }) => { saldo -= update.saldo.decrement } },
+        saldoCaja: { updateMany: async ({ data }: { data: { saldo: { decrement: number } } }) => { saldo -= data.saldo.decrement; return { count: 1 } } },
         auditoriaMovimientoCaja: { create: async () => { auditorias++ } },
     }
     const original = prisma.$transaction

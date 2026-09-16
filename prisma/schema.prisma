@@ -296,6 +296,7 @@ model Ubicacion {
   stocks              StockProducto[]
   conteosInsumo       ConteoInsumo[]
   compras             Compra[]
+  cajas               SaldoCaja[]
 
   @@map("ubicaciones")
 }
@@ -760,8 +761,32 @@ model SaldoCaja {
   tipo      String   @unique
   saldo     Float    @default(0)
   updatedAt DateTime @updatedAt
+  nombre    String?
+  activo    Boolean @default(true)
+  sistema   Boolean @default(false)
+  ubicacionId String? @map("id_ubicacion")
+  ubicacion Ubicacion? @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  recibeDepositos Boolean @default(false) @map("recibe_depositos")
+  conceptoDeposito String @default("Depósito diario") @map("concepto_deposito")
+  auditorias AuditoriaConfiguracionCaja[]
+
+  @@index([ubicacionId, activo])
 
   @@map("saldos_caja")
+}
+
+model AuditoriaConfiguracionCaja {
+  id String @id @default(uuid())
+  cajaId String @map("id_caja")
+  caja SaldoCaja @relation(fields: [cajaId], references: [id], onDelete: Restrict)
+  usuarioId String @map("id_usuario")
+  accion String
+  anteriores Json?
+  nuevos Json
+  createdAt DateTime @default(now())
+
+  @@index([cajaId, createdAt])
+  @@map("auditorias_configuracion_caja")
 }
 
 model ConceptoCaja {

@@ -9,6 +9,7 @@ import { calcularDiferenciaDeposito, validarMontoDeposito, validarObservacionesD
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
 
 export interface CreateMovimientoInput {
+    ubicacionCajaId?: string
     tipo: 'ingreso' | 'egreso'
     concepto: string
     monto: number
@@ -29,6 +30,7 @@ export interface CreateMovimientoInput {
 }
 
 export interface UpdateMovimientoInput {
+    ubicacionCajaId?: string
     tipo?: string
     concepto?: string
     monto?: number
@@ -106,27 +108,20 @@ async function registrarAuditoria(
 /**
  * Aplica el impacto de un movimiento sobre SaldoCaja.
  * Ingreso → incrementa, Egreso → decrementa.
- * Usa upsert para creación defensiva del registro de saldo si no existiera.
+ * Sólo afecta cajas registradas y activas; el bloqueo de fila coordina con su baja.
  */
 async function aplicarImpactoSaldo(
     tx: TxClient,
     cajaOrigen: string,
     tipo: string,
-    monto: number
+    monto: number,
+    ubicacionCajaId?: string
 ): Promise<void> {
-    if (tipo === 'ingreso') {
-        await (tx as any).saldoCaja.upsert({
-            where: { tipo: cajaOrigen },
-            update: { saldo: { increment: monto } },
-            create: { tipo: cajaOrigen, saldo: monto },
-        })
-    } else {
-        await (tx as any).saldoCaja.upsert({
-            where: { tipo: cajaOrigen },
-            update: { saldo: { decrement: monto } },
-            create: { tipo: cajaOrigen, saldo: -monto },
-        })
-    }
+    const resultado = await tx.saldoCaja.updateMany({
+        where: { tipo: cajaOrigen, activo: true, ...(ubicacionCajaId ? { ubicacionId: ubicacionCajaId } : {}), OR: [{ ubicacionId: null }, { ubicacion: { activo: true } }] },
+        data: { saldo: tipo === 'ingreso' ? { increment: monto } : { decrement: monto } },
+    })
+    if (resultado.count !== 1) throw new Error('La caja no existe, está inactiva o su sede está desactivada.')
 }
 
 /**
@@ -164,6 +159,7 @@ export class CajaService {
      * movimientos de caja dentro de su propia transacción).
      */
     static async createMovimiento(input: CreateMovimientoInput, tx?: TxClient) {
+        if (!['ingreso', 'egreso'].includes(input.tipo) || !Number.isFinite(input.monto) || input.monto < 0) throw new Error('Tipo o monto de movimiento inválido.')
         let finalMedioPago = input.medioPago || 'efectivo'
         if (input.cajaOrigen === 'mercado_pago' || input.cajaOrigen === 'mercado_pago_juani') {
             finalMedioPago = 'transferencia'
@@ -193,7 +189,7 @@ export class CajaService {
             })
 
             if (input.cajaOrigen) {
-                await aplicarImpactoSaldo(client, input.cajaOrigen, input.tipo, input.monto)
+                await aplicarImpactoSaldo(client, input.cajaOrigen, input.tipo, input.monto, input.ubicacionCajaId)
             }
 
             await registrarAuditoria(client, {
@@ -267,7 +263,7 @@ export class CajaService {
 
             // 3. Aplicar nuevo impacto
             if (mov.cajaOrigen) {
-                await aplicarImpactoSaldo(tx, mov.cajaOrigen, mov.tipo, mov.monto)
+                await aplicarImpactoSaldo(tx, mov.cajaOrigen, mov.tipo, mov.monto, input.ubicacionCajaId)
             }
 
             await registrarAuditoria(tx, {
@@ -460,7 +456,8 @@ export class CajaService {
     /**
      * Crea un egreso en origen y un ingreso en destino, actualizando ambos saldos.
      */
-    static async transferir(origen: string, destino: string, monto: number, fecha?: Date | string | null, usuarioId?: string | null) {
+    static async transferir(origen: string, destino: string, monto: number, fecha?: Date | string | null, usuarioId?: string | null, ubicacionCajaId?: string) {
+        if (!origen || !destino || origen === destino || !Number.isFinite(monto) || monto <= 0) throw new Error('Transferencia inválida.')
         const customDate = normalizeFecha(fecha)
         const egresoMedio = (origen === 'mercado_pago' || origen === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
         const ingresoMedio = (destino === 'mercado_pago' || destino === 'mercado_pago_juani') ? 'transferencia' : 'efectivo'
@@ -501,18 +498,19 @@ export class CajaService {
                 },
             })
 
-            await aplicarImpactoSaldo(tx, origen, 'egreso', monto)
-            await aplicarImpactoSaldo(tx, destino, 'ingreso', monto)
+            await aplicarImpactoSaldo(tx, origen, 'egreso', monto, ubicacionCajaId)
+            await aplicarImpactoSaldo(tx, destino, 'ingreso', monto, ubicacionCajaId)
 
             await registrarAuditoria(tx, { movimientoId: egreso.id, accion: 'CREACION', usuarioId, valoresNuevos: snapshotMovimiento(egreso) })
             await registrarAuditoria(tx, { movimientoId: ingreso.id, accion: 'CREACION', usuarioId, valoresNuevos: snapshotMovimiento(ingreso) })
 
             return { egreso, ingreso }
-        })
+        }, { isolationLevel: 'Serializable' })
     }
 
     // ─── Depósitos declarados y validados ───────────────────────────────────
     static async registrarDeposito(input: {
+        ubicacionCajaId?: string
         montoDeclarado: number
         cajaOrigen: string
         concepto: string
@@ -529,6 +527,7 @@ export class CajaService {
                 tipo: 'ingreso',
                 concepto: input.concepto,
                 monto: montoDeclarado,
+                ubicacionCajaId: input.ubicacionCajaId,
                 medioPago: 'efectivo',
                 cajaOrigen: input.cajaOrigen,
                 descripcion: `Depósito declarado desde ${input.ubicacionTipo || 'ubicación no informada'} (pendiente de validación)`,

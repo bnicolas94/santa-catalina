@@ -19,7 +19,7 @@ export function conversationListWhere(
 
   if (view === 'all') constraints.push({ status: { notIn: ['RESOLVED', 'ARCHIVED'] } })
   if (view === 'mine') constraints.push({ assignedToId: user.id, status: { notIn: ['RESOLVED', 'ARCHIVED'] } })
-  if (view === 'unassigned') constraints.push({ status: 'UNASSIGNED' })
+  if (view === 'unassigned') constraints.push({ assignedToId: null, status: { notIn: ['RESOLVED', 'ARCHIVED'] } })
   if (view === 'waiting') constraints.push({ status: 'WAITING_CUSTOMER' })
   if (view === 'resolved') constraints.push({ status: 'RESOLVED' })
 

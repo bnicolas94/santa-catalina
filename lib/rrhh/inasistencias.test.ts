@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from './inasistencias'
+import { esAusenciaAutomaticaPorFaltaDeFichada, novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from './inasistencias'
 
 test('prioriza una licencia paga sobre una ausencia automática injustificada', () => {
     const seleccionada = seleccionarInasistenciaPreferida([
@@ -26,4 +26,17 @@ test('un estado operativo de trabajo no descarta las horas ajustadas del seguimi
     assert.equal(novedadRRHHBloqueaSeguimientoGuardado(undefined), false)
     assert.equal(novedadRRHHBloqueaSeguimientoGuardado('VACACIONES'), true)
     assert.equal(novedadRRHHBloqueaSeguimientoGuardado('JUSTIFICADA_PAGA'), true)
+})
+
+test('distingue una ausencia automática de una decisión manual de RR. HH.', () => {
+    assert.equal(esAusenciaAutomaticaPorFaltaDeFichada({
+        tipo: 'INJUSTIFICADA',
+        motivo: 'Ausencia detectada automáticamente por falta de fichada.',
+        observaciones: 'Generado automáticamente por el sistema.',
+    }), true)
+    assert.equal(esAusenciaAutomaticaPorFaltaDeFichada({
+        tipo: 'INJUSTIFICADA',
+        motivo: 'Ausencia sin aviso',
+        observaciones: 'Modificado desde Planilla de Asistencia Diaria',
+    }), false)
 })

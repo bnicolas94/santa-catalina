@@ -1,0 +1,93 @@
+[2026-08-11T16:55:12.400Z] Error: 
+Invalid `tx.insumo.findUnique()` invocation in
+C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:263:36
+
+  260 async function aplicarDeltaStockInsumo(tx, input) {
+  261     const delta = roundStock(input.deltaStock);
+  262     if (Math.abs(delta) <= STOCK_TOLERANCE) return;
+→ 263     const insumo = await tx.insumo.findUnique(
+Transaction API error: Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.
+Stack: PrismaClientKnownRequestError: 
+Invalid `tx.insumo.findUnique()` invocation in
+C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:263:36
+
+  260 async function aplicarDeltaStockInsumo(tx, input) {
+  261     const delta = roundStock(input.deltaStock);
+  262     if (Math.abs(delta) <= STOCK_TOLERANCE) return;
+→ 263     const insumo = await tx.insumo.findUnique(
+Transaction API error: Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.
+    at ei.handleRequestError (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:121:7268)
+    at ei.handleAndLogRequestError (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async aplicarDeltaStockInsumo (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:263:20)
+    at async registrarConsumoInicial (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:322:9)
+    at async C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:697:13
+    at async Proxy._transactionWithCallback (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:130:8120)
+    at async POST (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:667:22)
+    at async AppRouteRouteModule.do (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\node_modules_next_70cba459._.js:16529:38)
+    at async AppRouteRouteModule.handleResponse (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\node_modules_next_70cba459._.js:16592:32)
+    at async Module.handler (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\node_modules_next_70cba459._.js:16645:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\start-server.js:226:13)
+
+[2026-08-11T16:56:14.163Z] Error: 
+Invalid `tx.movimientoStock.create()` invocation in
+C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:308:31
+
+  305         }
+  306     }
+  307 });
+→ 308 return tx.movimientoStock.create(
+Transaction API error: Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.
+Stack: PrismaClientKnownRequestError: 
+Invalid `tx.movimientoStock.create()` invocation in
+C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:308:31
+
+  305         }
+  306     }
+  307 });
+→ 308 return tx.movimientoStock.create(
+Transaction API error: Transaction not found. Transaction ID is invalid, refers to an old closed transaction Prisma doesn't have information about anymore, or was obtained before disconnecting.
+    at ei.handleRequestError (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:121:7268)
+    at ei.handleAndLogRequestError (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async registrarConsumoInicial (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:322:9)
+    at async C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:697:13
+    at async Proxy._transactionWithCallback (C:\Users\sandw\Documents\santa-catalina\node_modules\@prisma\client\runtime\library.js:130:8120)
+    at async POST (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__250b9946._.js:667:22)
+    at async AppRouteRouteModule.do (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\node_modules_next_70cba459._.js:16529:38)
+    at async AppRouteRouteModule.handleResponse (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\node_modules_next_70cba459._.js:16592:32)
+    at async Module.handler (C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\node_modules_next_70cba459._.js:16645:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\Users\sandw\Documents\santa-catalina\node_modules\next\dist\server\lib\start-server.js:226:13)
+

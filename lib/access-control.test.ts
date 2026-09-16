@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath, getAccessRule } from './access-control'
+test('planificar horarios requiere acceso a Personal', () => {
+    assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }), true)
+    assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'OPERARIO', permisos: { permisoProduccion: true } }), false)
+})
 
 test('la conciliación por reporte de MP es exclusiva de ADMIN', () => {
     assert.equal(canAccessPath('/api/mercadopago/reporte', { rol: 'ADMIN' }), true)

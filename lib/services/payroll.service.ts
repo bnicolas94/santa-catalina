@@ -4,12 +4,15 @@ import { CajaService } from '@/lib/services/caja.service'
 import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
 import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/payroll/validacionLiquidacion'
 import { fechaClaveRRHH, instanteRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
-import { novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from '@/lib/rrhh/inasistencias'
+import { esAusenciaAutomaticaPorFaltaDeFichada, novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from '@/lib/rrhh/inasistencias'
 import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
+import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
+import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
 import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorFechas, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
 import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
 import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
 import { horasJornadaParaFecha } from '@/lib/payroll/jornadaSemanal'
+import { seguimientoAbiertoDebeRefrescarAsistencia } from '@/lib/payroll/seguimientoSemanalMixto'
 import {
     normalizarRangoLiquidacion,
     rangoHistoricoLiquidacion,
@@ -27,6 +30,8 @@ export interface DiaTrabajado {
     nombreFeriado?: string
     horasTrabajadas: number
     horasJornada: number
+    horarioEsperadoEntrada?: string | null
+    horarioEsperadoSalida?: string | null
     horasExtras: number
     entrada: string | null
     salida: string | null
@@ -269,6 +274,7 @@ export class PayrollService {
         // 3. Procesar Fichadas
         const fichadas = empleado.fichadas
         const gruposPorDia = agruparFichadasPorDia(fichadas)
+        const planHorarios = await cargarPlanHorarios([empleadoId], fechaInicio, fechaFin)
 
         // Generar rango de fechas
         const desglosePorDia: DiaTrabajado[] = []
@@ -289,22 +295,32 @@ export class PayrollService {
 
             const marcas = marcasRaw
 
-            const horasJornadaDia = horasJornadaParaFecha(fechaStr, hsJornada, empleado.horasTrabajoSabado)
+            const horarioPlanificado = resolverHorarioPlanificado(planHorarios, empleadoId, fechaStr)
+            const horasJornadaDia = horarioPlanificado && !horarioPlanificado.esFranco ? horarioPlanificado.horasEsperadas : horasJornadaParaFecha(fechaStr, hsJornada, empleado.horasTrabajoSabado)
             const valorHoraDia = empleado.valorHoraNormal && empleado.valorHoraNormal > 0
                 ? empleado.valorHoraNormal
                 : (horasJornadaDia > 0 ? jornalBase / horasJornadaDia : 0)
             const resumen = calcularResumenDia(marcas, horasJornadaDia, {
-                horarioEntrada: current.getDay() === 0
+                horarioEntrada: horarioPlanificado?.esFranco ? null : horarioPlanificado?.horaInicio ?? (current.getDay() === 0
                     ? null
-                    : empleado.turno?.horaInicio || empleado.horarioEntrada,
+                    : empleado.turno?.horaInicio || empleado.horarioEntrada),
             })
 
             const esFeriado = !!feriadosMap[fechaStr]
             
             // 3.1 Verificar Inasistencias registradas
-            const inasistencia = inasistenciasPorFecha.get(fechaStr)
+            const inasistenciaRegistrada = inasistenciasPorFecha.get(fechaStr)
+            const inasistencia = marcas.length > 0 && esAusenciaAutomaticaPorFaltaDeFichada(inasistenciaRegistrada)
+                ? undefined
+                : inasistenciaRegistrada
             const esVacaciones = fechasVacaciones.has(fechaStr)
-            const tipoInasistencia = esVacaciones ? 'VACACIONES' : inasistencia?.tipo
+            const entradaPlan = marcas.find(m => m.tipo === 'entrada')?.fechaHora
+            const tardanzaObsoleta = horarioPlanificado && entradaPlan && inasistencia?.tipo === 'TARDANZA'
+                && inasistencia.observaciones?.startsWith('Llegada tarde detectada automáticamente')
+                && minutosTardanzaHorario(new Date(entradaPlan), horarioPlanificado) === 0
+            const francoPlanificado = horarioPlanificado?.esFranco && !marcas.length
+                && (!inasistencia || esAusenciaAutomaticaPorFaltaDeFichada(inasistencia))
+            const tipoInasistencia = esVacaciones ? 'VACACIONES' : francoPlanificado ? 'FRANCO' : tardanzaObsoleta ? undefined : inasistencia?.tipo
 
             const calculoDia = calcularDiaSemanal({
                 horasTrabajadas: resumen.horasTrabajadas,
@@ -322,6 +338,8 @@ export class PayrollService {
             const ultimaSalida = [...marcas].reverse().find((m: any) => m.tipo === 'salida')?.fechaHora
 
             desglosePorDia.push({
+                horarioEsperadoEntrada: horarioPlanificado?.esFranco ? null : horarioPlanificado?.horaInicio ?? null,
+                horarioEsperadoSalida: horarioPlanificado?.esFranco ? null : horarioPlanificado?.horaFin ?? null,
                 fecha: fechaStr,
                 diaSemana: nombresDias[current.getDay()],
                 esFeriado,
@@ -352,15 +370,23 @@ export class PayrollService {
                     empleadoId,
                     fecha: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt },
                 },
-                select: { fecha: true, detalle: true },
+                select: { fecha: true, detalle: true, cierreMensualId: true },
             })
             const detallePorFecha = new Map(seguimientos.flatMap(registro => {
                 if (!registro.detalle || typeof registro.detalle !== 'object' || Array.isArray(registro.detalle)) return []
-                return [[fechaClaveRRHH(registro.fecha), registro.detalle as unknown as DiaTrabajado] as const]
+                return [[fechaClaveRRHH(registro.fecha), {
+                    detalle: registro.detalle as unknown as DiaTrabajado,
+                    cerrado: !!registro.cierreMensualId,
+                }] as const]
             }))
             desglosePorDia.forEach((dia, indice) => {
-                const guardado = detallePorFecha.get(dia.fecha)
-                if (!guardado) return
+                const registroGuardado = detallePorFecha.get(dia.fecha)
+                if (!registroGuardado) return
+                const guardado = registroGuardado.detalle
+
+                if (!registroGuardado.cerrado && seguimientoAbiertoDebeRefrescarAsistencia(guardado, dia)) {
+                    return
+                }
 
                 // El seguimiento conserva ajustes manuales de horas, pero no puede
                 // reponer un estado de asistencia anterior después de que RR. HH.

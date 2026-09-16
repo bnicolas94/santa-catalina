@@ -31,7 +31,7 @@ export function cantidadGastoOpcional(value: unknown): number | null {
 
 export function validarCajaCompra(value: unknown): string {
     const caja = String(value || '').trim()
-    if (!(CAJAS_COMPRA as readonly string[]).includes(caja)) {
+    if (!(CAJAS_COMPRA as readonly string[]).includes(caja) && !/^caja_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(caja)) {
         throw new CompraValidationError('Caja de origen inválida')
     }
     return caja

@@ -26,6 +26,7 @@ export function WeeklyPayrollDayCard(props: Props) {
                 {dia.tipoInasistencia.replace(/_/g, ' ')}
             </span>}
         </div>
+        {dia.horarioEsperadoEntrada && <div style={{ color: 'var(--color-gray-500)', marginBottom: 4 }}>Previsto: {dia.horarioEsperadoEntrada}–{dia.horarioEsperadoSalida} · {dia.horasJornada} h</div>}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>

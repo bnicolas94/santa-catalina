@@ -26,6 +26,11 @@ import { SancionesModal } from '@/components/empleados/SancionesModal'
 import LiquidacionFinalModal from '@/components/empleados/LiquidacionFinalModal'
 import { PlanillaUniformesModal } from '@/components/empleados/PlanillaUniformesModal'
 import { HistorialSalarialModal } from '@/components/empleados/HistorialSalarialModal'
+import {
+    parsearFicheroFabrica,
+    parsearReporteMensualLocal,
+    type RegistroFichadaArchivo,
+} from '@/lib/fichadas/importar-archivo'
 import Link from 'next/link'
 
 export default function EmpleadosPage() {
@@ -59,7 +64,8 @@ function EmpleadosContent() {
     const [cierresMensualesOpen, setCierresMensualesOpen] = useState(false)
     const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
     const [showFeriadosModal, setShowFeriadosModal] = useState(false)
-    const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
+    const [pendingRegistros, setPendingRegistros] = useState<RegistroFichadaArchivo[]>([])
+    const [pendingImportFormat, setPendingImportFormat] = useState('')
     const [ubicaciones, setUbicaciones] = useState<any[]>([])
     const [updatingId, setUpdatingId] = useState<string | null>(null)
     const [showOrganigramaModal, setShowOrganigramaModal] = useState(false)
@@ -249,96 +255,73 @@ function EmpleadosContent() {
 
         setImportLoading(true)
         try {
-            let registrosExtraidos: any[] = []
+            const extension = file.name.toLowerCase().split('.').pop()
+            let resultado
 
-            if (file.name.endsWith('.txt')) {
-                const text = await file.text()
-                const lines = text.split('\n')
-                const marcasPorDia: Record<string, string[]> = {}
+            if (extension === 'txt') {
+                resultado = parsearFicheroFabrica(await file.text())
+            } else if (extension === 'xls' || extension === 'xlsx') {
+                const XLSX = await import('xlsx')
+                const libro = XLSX.read(await file.arrayBuffer(), { type: 'array', raw: true })
+                const primeraHoja = libro.SheetNames
+                    .map(nombre => libro.Sheets[nombre])
+                    .find(hoja => Boolean(hoja?.['!ref']))
 
-                lines.forEach(line => {
-                    // Soporta Tabs (\t) o 2+ espacios como separadores de columna
-                    const columns = line.split(/\t|\s{2,}/).map(c => c.trim()).filter(c => c !== '')
-                    if (columns.length >= 4) {
-                        // EnNo es la 3era columna (index 2)
-                        const rawCode = columns[2]
-                        if (rawCode && /^\d+$/.test(rawCode)) {
-                            const cleanCode = parseInt(rawCode, 10).toString()
-                            // Buscamos algo que parezca YYYY/MM/DD o YYYY-MM-DD
-                            const dateMatch = line.match(/(\d{4}[\/-]\d{2}[\/-]\d{2})\s+(\d{2}:\d{2}:\d{2})/)
-                            
-                            if (dateMatch) {
-                                const [_, fechaStr, horaStr] = dateMatch
-                                const normalizedDate = fechaStr.replace(/\//g, '-')
-                                const key = `${cleanCode}_${normalizedDate}`
-                                if (!marcasPorDia[key]) marcasPorDia[key] = []
-                                marcasPorDia[key].push(`${normalizedDate} ${horaStr}`)
-                            }
-                        }
-                    }
+                if (!primeraHoja) throw new Error('El Excel no contiene hojas con datos.')
+
+                const filas = XLSX.utils.sheet_to_json<unknown[]>(primeraHoja, {
+                    header: 1,
+                    defval: null,
+                    raw: true,
                 })
-
-                Object.entries(marcasPorDia).forEach(([key, marcas]) => {
-                    const [codigo] = key.split('_')
-                    marcas.sort()
-                    marcas.forEach((m, idx) => {
-                        const tipo = idx % 2 === 0 ? 'entrada' : 'salida'
-                        // Asegurar formato ISO para que el backend no tenga dudas
-                        const [f, h] = m.split(' ')
-                        const isoStr = new Date(`${f}T${h}`).toISOString()
-                        
-                        registrosExtraidos.push({
-                            idTemp: Math.random().toString(36).substr(2, 9),
-                            codigoBiometrico: codigo,
-                            fechaHora: isoStr,
-                            tipo,
-                            originalStr: m
-                        })
-                    })
-                })
+                resultado = parsearReporteMensualLocal(
+                    filas as Parameters<typeof parsearReporteMensualLocal>[0],
+                )
             } else {
-                // Placeholder para Excel
-                registrosExtraidos = [
-                    { idTemp: '1', codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(8, 0)).toISOString(), tipo: "entrada" },
-                    { idTemp: '2', codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(18, 0)).toISOString(), tipo: "salida" }
-                ]
+                throw new Error('Formato no compatible. Usá el TXT de fábrica o el XLS/XLSX del local.')
             }
 
-            if (registrosExtraidos.length === 0) {
-                alert('No se encontraron registros válidos en el archivo.')
+            if (resultado.registros.length === 0) {
+                alert('El archivo es válido, pero todavía no contiene fichadas para importar.')
                 return
             }
 
-            setPendingRegistros(registrosExtraidos)
+            setPendingRegistros(resultado.registros)
+            setPendingImportFormat(resultado.formato)
             setReviewModalOpen(true)
 
         } catch (error) {
             console.error(error)
-            alert('Falló el procesamiento del archivo.')
+            alert(error instanceof Error ? error.message : 'Falló el procesamiento del archivo.')
         } finally {
             setImportLoading(false)
             if (fileInputRef.current) fileInputRef.current.value = ''
         }
     }
 
-    const handleConfirmImport = async (finalRegistros: any[]) => {
+    const handleConfirmImport = async (finalRegistros: RegistroFichadaArchivo[]) => {
         try {
             setImportLoading(true)
             const res = await fetch('/api/fichadas/importar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ registros: finalRegistros })
+                body: JSON.stringify({ registros: finalRegistros }),
+                signal: AbortSignal.timeout(60_000),
             })
 
             const dat = await res.json()
             if (dat.success) {
-                alert(`¡Éxito! ${dat.mensaje}`)
+                const detalleErrores = Array.isArray(dat.errores) && dat.errores.length > 0
+                    ? `\n\nObservaciones:\n${dat.errores.join('\n')}`
+                    : ''
+                alert(`¡Éxito! ${dat.mensaje}${detalleErrores}`)
                 setReviewModalOpen(false)
             } else {
                 alert('Error en importación: ' + dat.error)
             }
         } catch (error) {
-            alert('Error al conectar con el servidor.')
+            console.error(error)
+            alert('No se pudo completar la importación. Revisá la conexión y volvé a intentar; las marcas ya guardadas no se duplicarán.')
         } finally {
             setImportLoading(false)
         }
@@ -374,7 +357,7 @@ function EmpleadosContent() {
                         ref={fileInputRef}
                         onChange={handleFileSelected}
                         style={{ display: 'none' }}
-                        accept=".txt, .csv, .xls, .xlsx"
+                        accept=".txt,.xls,.xlsx"
                     />
                 </div>
             </div>
@@ -630,6 +613,8 @@ function EmpleadosContent() {
                 <ReviewImportModal
                     registros={pendingRegistros}
                     empleados={empleados}
+                    formato={pendingImportFormat}
+                    confirmando={importLoading}
                     onClose={() => setReviewModalOpen(false)}
                     onConfirm={handleConfirmImport}
                 />
@@ -707,7 +692,7 @@ function EmpleadosContent() {
                 />
             )}
             {showTurnosModal && (
-                <TurnosConfigModal onClose={closeModal} />
+                <TurnosConfigModal onClose={closeModal} empleados={empleados} />
             )}
             {showConceptosModal && (
                 <ConceptosSalarialesModal onClose={closeModal} />
@@ -747,8 +732,16 @@ function EmpleadosContent() {
     )
 }
 
-function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { registros: any[], empleados: any[], onClose: () => void, onConfirm: (data: any[]) => void }) {
+function ReviewImportModal({ registros, empleados, formato, confirmando, onClose, onConfirm }: {
+    registros: RegistroFichadaArchivo[]
+    empleados: Empleado[]
+    formato: string
+    confirmando: boolean
+    onClose: () => void
+    onConfirm: (data: RegistroFichadaArchivo[]) => void
+}) {
     const [localRegistros, setLocalRegistros] = useState(registros)
+    const manualIdRef = useRef(0)
 
     const handleUpdateFichada = (idTemp: string, newTime: string) => {
         setLocalRegistros(prev => prev.map(r => {
@@ -763,13 +756,16 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
         }))
     }
 
-    const handleAddMissing = (baseRegistro: any, type: 'entrada' | 'salida') => {
-        const newReg = {
-            idTemp: Math.random().toString(36).substr(2, 9),
+    const handleAddMissing = (baseRegistro: RegistroFichadaArchivo, type: 'entrada' | 'salida') => {
+        manualIdRef.current += 1
+        const newReg: RegistroFichadaArchivo = {
+            idTemp: `manual-${baseRegistro.idTemp}-${type}-${manualIdRef.current}`,
             codigoBiometrico: baseRegistro.codigoBiometrico,
             fechaHora: baseRegistro.fechaHora, // Por defecto misma hora para que el usuario la ajuste
             tipo: type,
-            originalStr: 'Manual'
+            originalStr: 'Manual',
+            nombreOrigen: baseRegistro.nombreOrigen,
+            fuente: baseRegistro.fuente,
         }
         setLocalRegistros(prev => [...prev, newReg].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()))
     }
@@ -779,31 +775,55 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
     }
 
     // Agrupar por empleado y día para visualizar inconsistencias
-    const agrupados: Record<string, any[]> = {}
+    const agrupados: Record<string, RegistroFichadaArchivo[]> = {}
     localRegistros.forEach(r => {
-        const emp = empleados.find(e => e.codigoBiometrico === r.codigoBiometrico)
+        const codigoNormalizado = String(r.codigoBiometrico).replace(/^0+/, '') || '0'
+        const emp = empleados.find(e => (String(e.codigoBiometrico || '').replace(/^0+/, '') || '0') === codigoNormalizado)
         const nombre = emp ? `${emp.nombre} ${emp.apellido || ''}` : `Código ${r.codigoBiometrico} (No vinculado)`
         const fecha = new Date(r.fechaHora).toLocaleDateString()
-        const key = `${nombre} - ${fecha}`
+        const nombreArchivo = r.nombreOrigen && r.nombreOrigen.toLocaleLowerCase() !== nombre.trim().toLocaleLowerCase()
+            ? ` · En archivo: ${r.nombreOrigen}`
+            : ''
+        const key = `${nombre}${nombreArchivo} - ${fecha}`
         if (!agrupados[key]) agrupados[key] = []
         agrupados[key].push(r)
     })
+    const cantidadConflictos = Object.values(agrupados).filter(marcas => {
+        const ordenadas = [...marcas].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora))
+        return ordenadas.length % 2 !== 0 || ordenadas.some((marca, indice) =>
+            marca.tipo !== (indice % 2 === 0 ? 'entrada' : 'salida'))
+    }).length
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay" onClick={confirmando ? undefined : onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', overflow: 'hidden' }}>
                 <div className="modal-header">
                     <div>
                         <h2>🛡️ Asistente de Validación</h2>
                         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Revisa y corrige las fichadas antes de guardarlas.</p>
                     </div>
-                    <button onClick={onClose} className="btn btn-ghost btn-icon">✕</button>
+                    <button onClick={onClose} className="btn btn-ghost btn-icon" disabled={confirmando}>✕</button>
                 </div>
                 <div className="modal-body" style={{ overflowY: 'auto' }}>
+                    <div style={{
+                        marginBottom: 'var(--space-4)',
+                        padding: 'var(--space-3)',
+                        borderRadius: 'var(--radius-md)',
+                        background: cantidadConflictos > 0 ? '#fff7ed' : 'var(--color-gray-50)',
+                        border: `1px solid ${cantidadConflictos > 0 ? '#fdba74' : 'var(--color-gray-200)'}`,
+                    }}>
+                        <strong>{formato}</strong> · {localRegistros.length} marcas detectadas
+                        {cantidadConflictos > 0 && (
+                            <div style={{ marginTop: '6px', color: '#9a3412', fontSize: 'var(--text-xs)' }}>
+                                {cantidadConflictos} jornada(s) necesitan revisión porque falta o está desordenada alguna marca.
+                            </div>
+                        )}
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                         {Object.entries(agrupados).map(([key, marcas]) => {
-                            const isOdd = marcas.length % 2 !== 0
-                            const hasConflict = isOdd || marcas.some((m, idx) => {
+                            const marcasOrdenadas = [...marcas].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime())
+                            const isOdd = marcasOrdenadas.length % 2 !== 0
+                            const hasConflict = isOdd || marcasOrdenadas.some((m, idx) => {
                                 // Verificar secuencia entrada -> salida
                                 if (idx % 2 === 0 && m.tipo !== 'entrada') return true
                                 if (idx % 2 !== 0 && m.tipo !== 'salida') return true
@@ -818,7 +838,7 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
                                             {isOdd && <span className="badge badge-danger">Falta una marca</span>}
                                         </div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                                            {marcas.sort((a: any, b: any) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()).map((m) => (
+                                            {marcasOrdenadas.map((m) => (
                                                 <div key={m.idTemp} style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
@@ -852,8 +872,14 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
                     </div>
                 </div>
                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-                    <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-                    <button className="btn btn-primary" onClick={() => onConfirm(localRegistros)}>Confirmar e Importar ({localRegistros.length})</button>
+                    <button className="btn btn-outline" onClick={onClose} disabled={confirmando}>Cancelar</button>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => onConfirm(localRegistros)}
+                        disabled={confirmando}
+                    >
+                        {confirmando ? 'Importando fichadas…' : `Confirmar e Importar (${localRegistros.length})`}
+                    </button>
                 </div>
             </div>
             <style jsx>{`

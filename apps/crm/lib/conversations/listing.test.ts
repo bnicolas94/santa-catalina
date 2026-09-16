@@ -17,7 +17,7 @@ test('la vista nuevas consulta las conversaciones sin asignar en la base', () =>
   assert.deepEqual(conversationListWhere(agent(), 'unassigned'), {
     AND: [
       { OR: [{ assignedToId: null }, { assignedToId: 'agent-a' }] },
-      { status: 'UNASSIGNED' },
+      { assignedToId: null, status: { notIn: ['RESOLVED', 'ARCHIVED'] } },
     ],
   })
 })

@@ -1,0 +1,1133 @@
+﻿diff --git a/AGENTS.md b/AGENTS.md
+index 386690f..1762160 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -96,6 +96,8 @@ La navegaci├│n visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
+ - El negocio opera con fecha local de Argentina. Evitar conversiones impl├¡citas a UTC que desplacen el d├¡a; reutilizar las utilidades y patrones existentes del m├│dulo.
+ - No introducir una nueva f├│rmula de costos, stock, presentaciones, horas o liquidaciones en la UI. La regla de negocio debe vivir en `lib/` y tener pruebas.
+ - Todo cambio efectivo de sueldo o valor de hora extra debe conservar su traza en `HistorialSalarial`; la actualizaci├│n salarial y su auditor├¡a deben ser at├│micas.
++- Los horarios rotativos se resuelven en `lib/rrhh/horarios.ts`: excepci├│n por fecha ΓåÆ plantilla semanal con vigencia ΓåÆ horario habitual. Plantillas y excepciones viven en modelos independientes; ADMIN las administra desde Turnos / Horarios por empleado. No se permite modificar per├¡odos pagados o cerrados ni aplicar plantillas retroactivas. N├│mina e importaci├│n comparten esta planificaci├│n para horas esperadas y tardanzas; no reescriben fichadas ni liquidaciones hist├│ricas.
++- La grilla `PlanificadorSemanal` guarda excepciones diarias y copia la semana anterior primero como vista previa, sin duplicar fichadas. `esFranco` expl├¡cito evita tardanzas y ausencias autom├íticas; sin marcas no devenga jornal, con marcas conserva el c├ílculo de trabajo para revisi├│n. D├¡as sin planificaci├│n mantienen el horario habitual. Cada d├¡a se confirma independientemente y los rechazos permanecen pendientes y visibles.
+ - Respetar los movimientos protegidos y las trazas de auditor├¡a de Caja. No borrar o reescribir movimientos financieros relacionados sin revisar `lib/caja` y sus relaciones Prisma.
+ - Los egresos de MP se sincronizan desde reportes settlement en `lib/services/mercadopago-automatico.service.ts`: `npm start` inicia el worker v├¡a `instrumentation.ts`, independiente de Caja. Estado, checkpoint y lease se guardan en `ConfiguracionGlobal` por cuenta. Recupera inicialmente 7 d├¡as y luego avanza con solapamiento de 48 h. S├│lo SETTLEMENT negativos verificados como pagos aprobados ARS/account_money, con importe y fecha coincidentes, se incorporan con saldo/auditor├¡a y deduplicaci├│n por mpId; posibles cargas manuales quedan pendientes para preview y confirmaci├│n ADMIN. Tipos no soportados o diferencias no descuentan y se muestran como pendientes. Cron y POST `/api/mercadopago/sincronizar` comparten el proceso; GET consulta el estado. La b├║squeda antigua `lib/mercadopago-egresos.ts` queda como utilitario, sin programaci├│n activa.
+ - Los cambios de stock y de producto deben conservar trazabilidad hacia compras, lotes o pedidos seg├║n corresponda.
+@@ -103,6 +105,7 @@ La navegaci├│n visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
+ ### Importaciones y operaciones destructivas
+ 
+ - Las importaciones siguen el patr├│n **preview ΓåÆ validaci├│n ΓåÆ confirmaci├│n**. No saltar la vista previa ni confiar en datos de Excel sin normalizarlos.
++- La importaci├│n de fichadas admite el TXT lineal de f├íbrica y el reporte mensual XLS/XLSX del local. Ambos se normalizan a marcas por c├│digo biom├⌐trico y se confirman como lote idempotente. El reporte del local es una n├│mina parcial y nunca debe disparar por s├¡ solo la detecci├│n global de ausencias.
+ - No usar scripts de `scratch/` o `tmp/` sobre datos reales sin leerlos completos y comprobar expl├¡citamente la base de destino.
+ - Para borrados o correcciones masivas, crear respaldo, acotar el conjunto afectado y ofrecer primero una verificaci├│n de s├│lo lectura.
+ 
+@@ -129,6 +132,7 @@ La recuperaci├│n por CSV est├í en POST `/api/mercadopago/reporte` (ADMIN) y `lib
+ - La bandeja y el chat se ordenan por `providerTimestamp` (con `createdAt` s├│lo como respaldo). Los eventos tard├¡os de historial o ecos de Coexistencia nunca deben hacer retroceder `lastMessageAt`; la conversaci├│n abierta consulta mensajes por el endpoint liviano `/api/conversations/[id]/messages` sin sobrescribir el borrador del pedido.
+ - La ficha r├ípida del pedido vive en `Conversation` dentro de `crm`: fecha como `YYYY-MM-DD` local, direcci├│n, modalidad, turno, estado de pago confirmado, observaciones, productos/presentaciones externas del ERP con cantidades e instant├íneas descriptivas, y el ID externo/nombre instant├íneo del local de retiro. Los productos configurables exigen una `VarianteProducto` activa del ERP seleccionada mediante botones; nunca admiten sabor libre y cada l├¡nea fotograf├¡a ID, c├│digo y nombre de la variedad. Las variedades de Elegidos s├│lo admiten la presentaci├│n `x8`; la cantidad acumula porciones de ocho unidades. Cat├ílogo, puntos de retiro, direcci├│n actual y pedidos hist├│ricos se consultan exclusivamente por APIs internas del ERP; el detalle de un pedido se muestra s├│lo si pertenece al cliente vinculado. S├│lo el agente due├▒o del lease puede editar la ficha. `Agendado` fotograf├¡a la ficha en `ScheduledOrder` con idempotencia y auditor├¡a, luego limpia el borrador; representa la carga manual en Excel y a├║n no crea un `Pedido` en el ERP. Las tarjetas del historial agendado abren el detalle completo de esa fotograf├¡a en un modal. El historial resuelve nombres de agentes por una API interna del ERP y conserva un respaldo visual si esa consulta falla.
+ - Los operadores s├│lo pueden listar y abrir conversaciones sin asignar o asignadas a s├¡ mismos. La bandeja no selecciona un chat autom├íticamente; `Esc` cierra el activo y libera su lease. Abrir una conversaci├│n sin asignar intenta tomarla autom├íticamente mediante la operaci├│n at├│mica de claim. Los supervisores con `permisoAtencionAdmin` y `ADMIN` pueden ver todas y liberar una asignaci├│n, dejando siempre trazas de auditor├¡a.
++- La bandeja Nuevas y su contador usan `assignedToId=null` y excluyen resueltas/archivadas, incluso si un registro hist├│rico qued├│ abierto o en espera. Recibir un mensaje entrante mantiene `UNASSIGNED` mientras no haya due├▒o y abre el chat para el mismo agente cuando ya est├í asignado; no reasigna por recepci├│n.
+ - Resolver una conversaci├│n conserva su asignaci├│n e historial, limpia el lease y deja auditor├¡a. S├│lo una conversaci├│n resuelta puede archivarse; las archivadas no aparecen en las bandejas, pero un mensaje entrante posterior las reabre autom├íticamente para el mismo agente asignado.
+ - `/metrics` y `/api/admin/metrics` son exclusivos de `ADMIN` o `permisoAtencionAdmin`. La m├⌐trica diaria principal cuenta contactos distintos con al menos un mensaje `INBOUND` por fecha local de Argentina, nunca cantidad de mensajes; el desglose por operador cuenta conversaciones distintas con mensajes `OUTBOUND` enviados desde el CRM.
+ 
+diff --git a/app/empleados/page.tsx b/app/empleados/page.tsx
+index a46d1c3..ec08269 100644
+--- a/app/empleados/page.tsx
++++ b/app/empleados/page.tsx
+@@ -26,6 +26,11 @@ import { SancionesModal } from '@/components/empleados/SancionesModal'
+ import LiquidacionFinalModal from '@/components/empleados/LiquidacionFinalModal'
+ import { PlanillaUniformesModal } from '@/components/empleados/PlanillaUniformesModal'
+ import { HistorialSalarialModal } from '@/components/empleados/HistorialSalarialModal'
++import {
++    parsearFicheroFabrica,
++    parsearReporteMensualLocal,
++    type RegistroFichadaArchivo,
++} from '@/lib/fichadas/importar-archivo'
+ import Link from 'next/link'
+ 
+ export default function EmpleadosPage() {
+@@ -59,7 +64,8 @@ function EmpleadosContent() {
+     const [cierresMensualesOpen, setCierresMensualesOpen] = useState(false)
+     const [expressLiquidationOpen, setExpressLiquidationOpen] = useState(false)
+     const [showFeriadosModal, setShowFeriadosModal] = useState(false)
+-    const [pendingRegistros, setPendingRegistros] = useState<any[]>([])
++    const [pendingRegistros, setPendingRegistros] = useState<RegistroFichadaArchivo[]>([])
++    const [pendingImportFormat, setPendingImportFormat] = useState('')
+     const [ubicaciones, setUbicaciones] = useState<any[]>([])
+     const [updatingId, setUpdatingId] = useState<string | null>(null)
+     const [showOrganigramaModal, setShowOrganigramaModal] = useState(false)
+@@ -249,96 +255,73 @@ function EmpleadosContent() {
+ 
+         setImportLoading(true)
+         try {
+-            let registrosExtraidos: any[] = []
+-
+-            if (file.name.endsWith('.txt')) {
+-                const text = await file.text()
+-                const lines = text.split('\n')
+-                const marcasPorDia: Record<string, string[]> = {}
+-
+-                lines.forEach(line => {
+-                    // Soporta Tabs (\t) o 2+ espacios como separadores de columna
+-                    const columns = line.split(/\t|\s{2,}/).map(c => c.trim()).filter(c => c !== '')
+-                    if (columns.length >= 4) {
+-                        // EnNo es la 3era columna (index 2)
+-                        const rawCode = columns[2]
+-                        if (rawCode && /^\d+$/.test(rawCode)) {
+-                            const cleanCode = parseInt(rawCode, 10).toString()
+-                            // Buscamos algo que parezca YYYY/MM/DD o YYYY-MM-DD
+-                            const dateMatch = line.match(/(\d{4}[\/-]\d{2}[\/-]\d{2})\s+(\d{2}:\d{2}:\d{2})/)
+-                            
+-                            if (dateMatch) {
+-                                const [_, fechaStr, horaStr] = dateMatch
+-                                const normalizedDate = fechaStr.replace(/\//g, '-')
+-                                const key = `${cleanCode}_${normalizedDate}`
+-                                if (!marcasPorDia[key]) marcasPorDia[key] = []
+-                                marcasPorDia[key].push(`${normalizedDate} ${horaStr}`)
+-                            }
+-                        }
+-                    }
+-                })
+-
+-                Object.entries(marcasPorDia).forEach(([key, marcas]) => {
+-                    const [codigo] = key.split('_')
+-                    marcas.sort()
+-                    marcas.forEach((m, idx) => {
+-                        const tipo = idx % 2 === 0 ? 'entrada' : 'salida'
+-                        // Asegurar formato ISO para que el backend no tenga dudas
+-                        const [f, h] = m.split(' ')
+-                        const isoStr = new Date(`${f}T${h}`).toISOString()
+-                        
+-                        registrosExtraidos.push({
+-                            idTemp: Math.random().toString(36).substr(2, 9),
+-                            codigoBiometrico: codigo,
+-                            fechaHora: isoStr,
+-                            tipo,
+-                            originalStr: m
+-                        })
+-                    })
++            const extension = file.name.toLowerCase().split('.').pop()
++            let resultado
++
++            if (extension === 'txt') {
++                resultado = parsearFicheroFabrica(await file.text())
++            } else if (extension === 'xls' || extension === 'xlsx') {
++                const XLSX = await import('xlsx')
++                const libro = XLSX.read(await file.arrayBuffer(), { type: 'array', raw: true })
++                const primeraHoja = libro.SheetNames
++                    .map(nombre => libro.Sheets[nombre])
++                    .find(hoja => Boolean(hoja?.['!ref']))
++
++                if (!primeraHoja) throw new Error('El Excel no contiene hojas con datos.')
++
++                const filas = XLSX.utils.sheet_to_json<unknown[]>(primeraHoja, {
++                    header: 1,
++                    defval: null,
++                    raw: true,
+                 })
++                resultado = parsearReporteMensualLocal(
++                    filas as Parameters<typeof parsearReporteMensualLocal>[0],
++                )
+             } else {
+-                // Placeholder para Excel
+-                registrosExtraidos = [
+-                    { idTemp: '1', codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(8, 0)).toISOString(), tipo: "entrada" },
+-                    { idTemp: '2', codigoBiometrico: "1", fechaHora: new Date(new Date().setHours(18, 0)).toISOString(), tipo: "salida" }
+-                ]
++                throw new Error('Formato no compatible. Us├í el TXT de f├íbrica o el XLS/XLSX del local.')
+             }
+ 
+-            if (registrosExtraidos.length === 0) {
+-                alert('No se encontraron registros v├ílidos en el archivo.')
++            if (resultado.registros.length === 0) {
++                alert('El archivo es v├ílido, pero todav├¡a no contiene fichadas para importar.')
+                 return
+             }
+ 
+-            setPendingRegistros(registrosExtraidos)
++            setPendingRegistros(resultado.registros)
++            setPendingImportFormat(resultado.formato)
+             setReviewModalOpen(true)
+ 
+         } catch (error) {
+             console.error(error)
+-            alert('Fall├│ el procesamiento del archivo.')
++            alert(error instanceof Error ? error.message : 'Fall├│ el procesamiento del archivo.')
+         } finally {
+             setImportLoading(false)
+             if (fileInputRef.current) fileInputRef.current.value = ''
+         }
+     }
+ 
+-    const handleConfirmImport = async (finalRegistros: any[]) => {
++    const handleConfirmImport = async (finalRegistros: RegistroFichadaArchivo[]) => {
+         try {
+             setImportLoading(true)
+             const res = await fetch('/api/fichadas/importar', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+-                body: JSON.stringify({ registros: finalRegistros })
++                body: JSON.stringify({ registros: finalRegistros }),
++                signal: AbortSignal.timeout(60_000),
+             })
+ 
+             const dat = await res.json()
+             if (dat.success) {
+-                alert(`┬í├ëxito! ${dat.mensaje}`)
++                const detalleErrores = Array.isArray(dat.errores) && dat.errores.length > 0
++                    ? `\n\nObservaciones:\n${dat.errores.join('\n')}`
++                    : ''
++                alert(`┬í├ëxito! ${dat.mensaje}${detalleErrores}`)
+                 setReviewModalOpen(false)
+             } else {
+                 alert('Error en importaci├│n: ' + dat.error)
+             }
+         } catch (error) {
+-            alert('Error al conectar con el servidor.')
++            console.error(error)
++            alert('No se pudo completar la importaci├│n. Revis├í la conexi├│n y volv├⌐ a intentar; las marcas ya guardadas no se duplicar├ín.')
+         } finally {
+             setImportLoading(false)
+         }
+@@ -374,7 +357,7 @@ function EmpleadosContent() {
+                         ref={fileInputRef}
+                         onChange={handleFileSelected}
+                         style={{ display: 'none' }}
+-                        accept=".txt, .csv, .xls, .xlsx"
++                        accept=".txt,.xls,.xlsx"
+                     />
+                 </div>
+             </div>
+@@ -630,6 +613,8 @@ function EmpleadosContent() {
+                 <ReviewImportModal
+                     registros={pendingRegistros}
+                     empleados={empleados}
++                    formato={pendingImportFormat}
++                    confirmando={importLoading}
+                     onClose={() => setReviewModalOpen(false)}
+                     onConfirm={handleConfirmImport}
+                 />
+@@ -707,7 +692,7 @@ function EmpleadosContent() {
+                 />
+             )}
+             {showTurnosModal && (
+-                <TurnosConfigModal onClose={closeModal} />
++                <TurnosConfigModal onClose={closeModal} empleados={empleados} />
+             )}
+             {showConceptosModal && (
+                 <ConceptosSalarialesModal onClose={closeModal} />
+@@ -747,8 +732,16 @@ function EmpleadosContent() {
+     )
+ }
+ 
+-function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { registros: any[], empleados: any[], onClose: () => void, onConfirm: (data: any[]) => void }) {
++function ReviewImportModal({ registros, empleados, formato, confirmando, onClose, onConfirm }: {
++    registros: RegistroFichadaArchivo[]
++    empleados: Empleado[]
++    formato: string
++    confirmando: boolean
++    onClose: () => void
++    onConfirm: (data: RegistroFichadaArchivo[]) => void
++}) {
+     const [localRegistros, setLocalRegistros] = useState(registros)
++    const manualIdRef = useRef(0)
+ 
+     const handleUpdateFichada = (idTemp: string, newTime: string) => {
+         setLocalRegistros(prev => prev.map(r => {
+@@ -763,13 +756,16 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
+         }))
+     }
+ 
+-    const handleAddMissing = (baseRegistro: any, type: 'entrada' | 'salida') => {
+-        const newReg = {
+-            idTemp: Math.random().toString(36).substr(2, 9),
++    const handleAddMissing = (baseRegistro: RegistroFichadaArchivo, type: 'entrada' | 'salida') => {
++        manualIdRef.current += 1
++        const newReg: RegistroFichadaArchivo = {
++            idTemp: `manual-${baseRegistro.idTemp}-${type}-${manualIdRef.current}`,
+             codigoBiometrico: baseRegistro.codigoBiometrico,
+             fechaHora: baseRegistro.fechaHora, // Por defecto misma hora para que el usuario la ajuste
+             tipo: type,
+-            originalStr: 'Manual'
++            originalStr: 'Manual',
++            nombreOrigen: baseRegistro.nombreOrigen,
++            fuente: baseRegistro.fuente,
+         }
+         setLocalRegistros(prev => [...prev, newReg].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()))
+     }
+@@ -779,31 +775,55 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
+     }
+ 
+     // Agrupar por empleado y d├¡a para visualizar inconsistencias
+-    const agrupados: Record<string, any[]> = {}
++    const agrupados: Record<string, RegistroFichadaArchivo[]> = {}
+     localRegistros.forEach(r => {
+-        const emp = empleados.find(e => e.codigoBiometrico === r.codigoBiometrico)
++        const codigoNormalizado = String(r.codigoBiometrico).replace(/^0+/, '') || '0'
++        const emp = empleados.find(e => (String(e.codigoBiometrico || '').replace(/^0+/, '') || '0') === codigoNormalizado)
+         const nombre = emp ? `${emp.nombre} ${emp.apellido || ''}` : `C├│digo ${r.codigoBiometrico} (No vinculado)`
+         const fecha = new Date(r.fechaHora).toLocaleDateString()
+-        const key = `${nombre} - ${fecha}`
++        const nombreArchivo = r.nombreOrigen && r.nombreOrigen.toLocaleLowerCase() !== nombre.trim().toLocaleLowerCase()
++            ? ` ┬╖ En archivo: ${r.nombreOrigen}`
++            : ''
++        const key = `${nombre}${nombreArchivo} - ${fecha}`
+         if (!agrupados[key]) agrupados[key] = []
+         agrupados[key].push(r)
+     })
++    const cantidadConflictos = Object.values(agrupados).filter(marcas => {
++        const ordenadas = [...marcas].sort((a, b) => a.fechaHora.localeCompare(b.fechaHora))
++        return ordenadas.length % 2 !== 0 || ordenadas.some((marca, indice) =>
++            marca.tipo !== (indice % 2 === 0 ? 'entrada' : 'salida'))
++    }).length
+ 
+     return (
+-        <div className="modal-overlay" onClick={onClose}>
++        <div className="modal-overlay" onClick={confirmando ? undefined : onClose}>
+             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', overflow: 'hidden' }}>
+                 <div className="modal-header">
+                     <div>
+                         <h2>≡ƒ¢í∩╕Å Asistente de Validaci├│n</h2>
+                         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Revisa y corrige las fichadas antes de guardarlas.</p>
+                     </div>
+-                    <button onClick={onClose} className="btn btn-ghost btn-icon">Γ£ò</button>
++                    <button onClick={onClose} className="btn btn-ghost btn-icon" disabled={confirmando}>Γ£ò</button>
+                 </div>
+                 <div className="modal-body" style={{ overflowY: 'auto' }}>
++                    <div style={{
++                        marginBottom: 'var(--space-4)',
++                        padding: 'var(--space-3)',
++                        borderRadius: 'var(--radius-md)',
++                        background: cantidadConflictos > 0 ? '#fff7ed' : 'var(--color-gray-50)',
++                        border: `1px solid ${cantidadConflictos > 0 ? '#fdba74' : 'var(--color-gray-200)'}`,
++                    }}>
++                        <strong>{formato}</strong> ┬╖ {localRegistros.length} marcas detectadas
++                        {cantidadConflictos > 0 && (
++                            <div style={{ marginTop: '6px', color: '#9a3412', fontSize: 'var(--text-xs)' }}>
++                                {cantidadConflictos} jornada(s) necesitan revisi├│n porque falta o est├í desordenada alguna marca.
++                            </div>
++                        )}
++                    </div>
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                         {Object.entries(agrupados).map(([key, marcas]) => {
+-                            const isOdd = marcas.length % 2 !== 0
+-                            const hasConflict = isOdd || marcas.some((m, idx) => {
++                            const marcasOrdenadas = [...marcas].sort((a, b) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime())
++                            const isOdd = marcasOrdenadas.length % 2 !== 0
++                            const hasConflict = isOdd || marcasOrdenadas.some((m, idx) => {
+                                 // Verificar secuencia entrada -> salida
+                                 if (idx % 2 === 0 && m.tipo !== 'entrada') return true
+                                 if (idx % 2 !== 0 && m.tipo !== 'salida') return true
+@@ -818,7 +838,7 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
+                                             {isOdd && <span className="badge badge-danger">Falta una marca</span>}
+                                         </div>
+                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+-                                            {marcas.sort((a: any, b: any) => new Date(a.fechaHora).getTime() - new Date(b.fechaHora).getTime()).map((m) => (
++                                            {marcasOrdenadas.map((m) => (
+                                                 <div key={m.idTemp} style={{
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+@@ -852,8 +872,14 @@ function ReviewImportModal({ registros, empleados, onClose, onConfirm }: { regis
+                     </div>
+                 </div>
+                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+-                    <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+-                    <button className="btn btn-primary" onClick={() => onConfirm(localRegistros)}>Confirmar e Importar ({localRegistros.length})</button>
++                    <button className="btn btn-outline" onClick={onClose} disabled={confirmando}>Cancelar</button>
++                    <button
++                        className="btn btn-primary"
++                        onClick={() => onConfirm(localRegistros)}
++                        disabled={confirmando}
++                    >
++                        {confirmando ? 'Importando fichadasΓÇª' : `Confirmar e Importar (${localRegistros.length})`}
++                    </button>
+                 </div>
+             </div>
+             <style jsx>{`
+diff --git a/apps/crm/app/page.tsx b/apps/crm/app/page.tsx
+index ddc1ec3..3a3cde0 100644
+--- a/apps/crm/app/page.tsx
++++ b/apps/crm/app/page.tsx
+@@ -613,7 +613,7 @@ export default function AttentionWorkspace() {
+   const localCounts = useMemo<ConversationCounts>(() => ({
+     all: conversations.filter(c => c.status !== 'RESOLVED').length,
+     mine: conversations.filter(c => c.assignedToId === user?.id && c.status !== 'RESOLVED').length,
+-    unassigned: conversations.filter(c => c.status === 'UNASSIGNED').length,
++    unassigned: conversations.filter(c => !c.assignedToId && c.status !== 'RESOLVED' && c.status !== 'ARCHIVED').length,
+     waiting: conversations.filter(c => c.status === 'WAITING_CUSTOMER').length,
+     resolved: conversations.filter(c => c.status === 'RESOLVED').length,
+     unreadConversations: conversations.filter(c => c.status !== 'RESOLVED' && c.unreadCount > 0).length,
+@@ -834,7 +834,10 @@ export default function AttentionWorkspace() {
+         <div className="listMeta"><span>{visible.length} de {counts[filter]} ┬╖ {counts.unreadConversations} pendientes CRM</span><span>{currentName}</span></div>
+         {listFeedback && <div className="listFeedback" role="status"><Icon name="check" size={13} />{listFeedback}<button type="button" onClick={() => setListFeedback(null)} aria-label="Cerrar aviso">├ù</button></div>}
+       </header>
+-      <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aqu├¡</strong><p>Prob├í con otro filtro o b├║squeda.</p></div> : visible.map(c => <button key={c.id} className={`conversationCard ${activeId === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">Γ£ôΓ£ô</span>}{messagePreview(c.lastMessage)}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${c.status.toLowerCase()}`}>{c.status === 'UNASSIGNED' ? 'Sin asignar' : c.status === 'WAITING_CUSTOMER' ? 'En espera' : c.status === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>)}</div>
++      <div className="conversationCards">{visible.length === 0 ? <div className="emptyList"><span><Icon name="chat" size={28} /></span><strong>No hay conversaciones aqu├¡</strong><p>Prob├í con otro filtro o b├║squeda.</p></div> : visible.map(c => {
++        const cardStatus = !c.assignedToId && c.status !== 'RESOLVED' && c.status !== 'ARCHIVED' ? 'UNASSIGNED' : c.status
++        return <button key={c.id} className={`conversationCard ${activeId === c.id ? 'conversationCardActive' : ''}`} onClick={() => selectConversation(c.id)}><div className="cardAvatarWrap"><Avatar name={c.contact.displayName} color={c.priority > 0 ? '#a3152f' : '#687782'} />{c.unreadCount > 0 && <span className="unreadCount">{c.unreadCount}</span>}</div><div className="cardContent"><div className="cardTop"><strong>{c.contact.displayName}</strong><time className={c.unreadCount ? 'timeUnread' : ''}>{formatTime(c.lastMessageAt)}</time></div><p className={c.unreadCount ? 'previewUnread' : ''}>{c.lastMessage?.direction === 'OUTBOUND' && <span className="previewChecks">Γ£ôΓ£ô</span>}{messagePreview(c.lastMessage)}</p><div className="cardBottom"><span className="companyName">{c.contact.profileName || c.contact.phoneE164}</span><span className={`statusPill status-${cardStatus.toLowerCase()}`}>{cardStatus === 'UNASSIGNED' ? 'Sin asignar' : cardStatus === 'WAITING_CUSTOMER' ? 'En espera' : cardStatus === 'RESOLVED' ? 'Resuelta' : agentName(c.assignedToId)}</span>{c.priority > 0 && <span className="priorityPill">Prioridad</span>}</div></div></button>
++      })}</div>
+     </section>
+     {active ? <section className={`chatPanel ${mobileChat ? 'mobileVisible' : ''}`}>
+       <header className="chatHeader">
+diff --git a/apps/crm/lib/conversations/listing.test.ts b/apps/crm/lib/conversations/listing.test.ts
+index 44bffc2..cb27f88 100644
+--- a/apps/crm/lib/conversations/listing.test.ts
++++ b/apps/crm/lib/conversations/listing.test.ts
+@@ -17,7 +17,7 @@ test('la vista nuevas consulta las conversaciones sin asignar en la base', () =>
+   assert.deepEqual(conversationListWhere(agent(), 'unassigned'), {
+     AND: [
+       { OR: [{ assignedToId: null }, { assignedToId: 'agent-a' }] },
+-      { status: 'UNASSIGNED' },
++      { assignedToId: null, status: { notIn: ['RESOLVED', 'ARCHIVED'] } },
+     ],
+   })
+ })
+diff --git a/apps/crm/lib/conversations/listing.ts b/apps/crm/lib/conversations/listing.ts
+index 62f80c1..554839d 100644
+--- a/apps/crm/lib/conversations/listing.ts
++++ b/apps/crm/lib/conversations/listing.ts
+@@ -19,7 +19,7 @@ export function conversationListWhere(
+ 
+   if (view === 'all') constraints.push({ status: { notIn: ['RESOLVED', 'ARCHIVED'] } })
+   if (view === 'mine') constraints.push({ assignedToId: user.id, status: { notIn: ['RESOLVED', 'ARCHIVED'] } })
+-  if (view === 'unassigned') constraints.push({ status: 'UNASSIGNED' })
++  if (view === 'unassigned') constraints.push({ assignedToId: null, status: { notIn: ['RESOLVED', 'ARCHIVED'] } })
+   if (view === 'waiting') constraints.push({ status: 'WAITING_CUSTOMER' })
+   if (view === 'resolved') constraints.push({ status: 'RESOLVED' })
+ 
+diff --git a/apps/crm/lib/conversations/unread.test.ts b/apps/crm/lib/conversations/unread.test.ts
+index 23a27db..e54ab3b 100644
+--- a/apps/crm/lib/conversations/unread.test.ts
++++ b/apps/crm/lib/conversations/unread.test.ts
+@@ -44,3 +44,21 @@ test('separa el total activo de las conversaciones realmente sin leer', () => {
+     unreadMessages: 6,
+   })
+ })
++
++test('nuevas cuenta por due├▒o real aunque el estado hist├│rico sea abierto o en espera', () => {
++  const emptyReadState = { unreadCount: 0, lastInboundAt: null, lastOutboundAt: null }
++  const summary = summarizeConversationCounts([
++    { ...emptyReadState, status: 'UNASSIGNED', assignedToId: null },
++    { ...emptyReadState, status: 'OPEN', assignedToId: null },
++    { ...emptyReadState, status: 'WAITING_CUSTOMER', assignedToId: null },
++    { ...emptyReadState, status: 'UNASSIGNED', assignedToId: 'agent-a' },
++    { ...emptyReadState, status: 'OPEN', assignedToId: 'agent-b' },
++    { ...emptyReadState, status: 'RESOLVED', assignedToId: null },
++    { ...emptyReadState, status: 'ARCHIVED', assignedToId: null },
++  ], 'agent-a')
++
++  assert.equal(summary.unassigned, 3)
++  assert.equal(summary.all, 5)
++  assert.equal(summary.mine, 1)
++  assert.equal(summary.unreadConversations, 0)
++})
+diff --git a/apps/crm/lib/conversations/unread.ts b/apps/crm/lib/conversations/unread.ts
+index 7e4710b..c48118d 100644
+--- a/apps/crm/lib/conversations/unread.ts
++++ b/apps/crm/lib/conversations/unread.ts
+@@ -36,7 +36,7 @@ export function summarizeConversationCounts(conversations: CountableConversation
+   return {
+     all: active.length,
+     mine: active.filter(item => item.assignedToId === userId).length,
+-    unassigned: active.filter(item => item.status === 'UNASSIGNED').length,
++    unassigned: active.filter(item => item.assignedToId === null).length,
+     waiting: active.filter(item => item.status === 'WAITING_CUSTOMER').length,
+     resolved: conversations.filter(item => item.status === 'RESOLVED').length,
+     unreadConversations: unread.filter(count => count > 0).length,
+diff --git a/apps/crm/lib/whatsapp/webhook.ts b/apps/crm/lib/whatsapp/webhook.ts
+index d8398bf..c82b2b3 100644
+--- a/apps/crm/lib/whatsapp/webhook.ts
++++ b/apps/crm/lib/whatsapp/webhook.ts
+@@ -203,7 +203,7 @@ async function persistLiveMessage(
+     })
+     await transaction.conversation.updateMany({
+       where: { id: conversation.id, lastMessageAt: { lte: occurredAt } },
+-      data: { lastMessageAt: occurredAt, status: 'OPEN', resolvedAt: null },
++      data: { lastMessageAt: occurredAt, status: conversation.assignedToId ? 'OPEN' : 'UNASSIGNED', resolvedAt: null },
+     })
+   } else {
+     await transaction.conversation.updateMany({
+diff --git a/components/empleados/TurnosConfigModal.tsx b/components/empleados/TurnosConfigModal.tsx
+index b26984a..60bbce6 100644
+--- a/components/empleados/TurnosConfigModal.tsx
++++ b/components/empleados/TurnosConfigModal.tsx
+@@ -1,6 +1,8 @@
+ 'use client'
+ 
+ import { useState, useEffect } from 'react'
++import HorariosRotativosPanel from './HorariosRotativosPanel'
++import PlanificadorSemanal from './PlanificadorSemanal'
+ 
+ interface Turno {
+     id: string
+@@ -13,7 +15,9 @@ interface Turno {
+     _count?: { empleados: number }
+ }
+ 
+-export default function TurnosConfigModal({ onClose }: { onClose: () => void }) {
++export default function TurnosConfigModal({ onClose, empleados = [] }: { onClose: () => void; empleados?: Array<{ id: string; nombre: string; apellido: string | null }> }) {
++    const [rotativos, setRotativos] = useState(false)
++    const [plantillas, setPlantillas] = useState(false)
+     const [turnos, setTurnos] = useState<Turno[]>([])
+     const [loading, setLoading] = useState(true)
+     const [editingId, setEditingId] = useState<string | null>(null)
+@@ -115,13 +119,15 @@ export default function TurnosConfigModal({ onClose }: { onClose: () => void })
+ 
+     return (
+         <div className="modal-overlay" onClick={onClose}>
+-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '100%' }}>
++            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: rotativos ? '1500px' : '800px', width: '96vw' }}>
+                 <div className="modal-header">
+                     <h2>≡ƒòÆ Configuraci├│n de Turnos</h2>
+                     <button onClick={onClose} className="btn btn-ghost btn-icon">Γ£ò</button>
+                 </div>
+                 
+-                <div className="modal-body" style={{ display: 'flex', gap: 'var(--space-6)', maxHeight: '70vh', overflowY: 'auto' }}>
++                <div style={{ display: 'flex', gap: 12, padding: 16 }}><button className="btn btn-outline" onClick={() => setRotativos(false)}>Turnos generales</button><button className="btn btn-outline" onClick={() => setRotativos(true)}>Horarios por empleado</button></div>
++                {rotativos && <><div style={{ padding: '0 16px' }}><button className="btn btn-outline" onClick={() => setPlantillas(!plantillas)}>{plantillas ? 'Ver grilla semanal' : 'Editar plantillas habituales'}</button></div>{plantillas ? <HorariosRotativosPanel empleados={empleados} /> : <PlanificadorSemanal empleados={empleados} />}</>}
++                <div className="modal-body" style={{ display: rotativos ? 'none' : 'flex', gap: 'var(--space-6)', maxHeight: '70vh', overflowY: 'auto' }}>
+                     {/* Lista de Turnos */}
+                     <div style={{ flex: 1 }}>
+                         <h3 style={{ marginBottom: 'var(--space-3)' }}>Turnos Registrados</h3>
+diff --git a/components/empleados/WeeklyPayrollDayCard.tsx b/components/empleados/WeeklyPayrollDayCard.tsx
+index 4ddac4a..4b5008e 100644
+--- a/components/empleados/WeeklyPayrollDayCard.tsx
++++ b/components/empleados/WeeklyPayrollDayCard.tsx
+@@ -26,6 +26,7 @@ export function WeeklyPayrollDayCard(props: Props) {
+                 {dia.tipoInasistencia.replace(/_/g, ' ')}
+             </span>}
+         </div>
++        {dia.horarioEsperadoEntrada && <div style={{ color: 'var(--color-gray-500)', marginBottom: 4 }}>Previsto: {dia.horarioEsperadoEntrada}ΓÇô{dia.horarioEsperadoSalida} ┬╖ {dia.horasJornada} h</div>}
+         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+             <div>
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+diff --git a/components/empleados/weeklyPayroll.types.ts b/components/empleados/weeklyPayroll.types.ts
+index e09416d..18a114e 100644
+--- a/components/empleados/weeklyPayroll.types.ts
++++ b/components/empleados/weeklyPayroll.types.ts
+@@ -26,6 +26,8 @@ export interface DiaLiquidacionUI {
+     nombreFeriado?: string
+     horasTrabajadas: number
+     horasJornada?: number
++    horarioEsperadoEntrada?: string | null
++    horarioEsperadoSalida?: string | null
+     horasExtras: number
+     entrada: string | null
+     salida: string | null
+diff --git a/lib/access-control.test.ts b/lib/access-control.test.ts
+index b3a3e5a..57ece06 100644
+--- a/lib/access-control.test.ts
++++ b/lib/access-control.test.ts
+@@ -1,6 +1,11 @@
+ import assert from 'node:assert/strict'
+ import test from 'node:test'
+ import { canAccessPath, getAccessRule } from './access-control'
++test('planificar horarios requiere acceso a Personal', () => {
++    assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN' }), true)
++    assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }), true)
++    assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'OPERARIO', permisos: { permisoProduccion: true } }), false)
++})
+ 
+ test('la conciliaci├│n por reporte de MP es exclusiva de ADMIN', () => {
+     assert.equal(canAccessPath('/api/mercadopago/reporte', { rol: 'ADMIN' }), true)
+diff --git a/lib/payroll/seguimientoSemanalMixto.test.ts b/lib/payroll/seguimientoSemanalMixto.test.ts
+index b3ac645..fcb192b 100644
+--- a/lib/payroll/seguimientoSemanalMixto.test.ts
++++ b/lib/payroll/seguimientoSemanalMixto.test.ts
+@@ -1,7 +1,7 @@
+ import assert from 'node:assert/strict'
+ import test from 'node:test'
+ 
+-import { fechasSeguimientoSemanal, validarFechasDesgloseSemanal } from './seguimientoSemanalMixto'
++import { fechasSeguimientoSemanal, seguimientoAbiertoDebeRefrescarAsistencia, validarFechasDesgloseSemanal } from './seguimientoSemanalMixto'
+ 
+ test('conserva los siete d├¡as aunque la semana cruce de mes', () => {
+     assert.deepEqual(fechasSeguimientoSemanal('2026-07-27', '2026-08-02'), [
+@@ -16,3 +16,21 @@ test('rechaza rangos o detalles que no representen la semana completa', () => {
+         { fecha: '2026-07-27' },
+     ]), /no coincide/)
+ })
++
++test('refresca un seguimiento abierto cuando despu├⌐s aparecen fichadas reales', () => {
++    assert.equal(seguimientoAbiertoDebeRefrescarAsistencia(
++        { entrada: null, salida: null, horasTrabajadas: 0 },
++        { entrada: '08:46', salida: '18:14', horasTrabajadas: 9.47 },
++    ), true)
++})
++
++test('conserva un ajuste manual aunque las marcas de origen hayan cambiado', () => {
++    assert.equal(seguimientoAbiertoDebeRefrescarAsistencia(
++        { entrada: '09:00', salida: '18:00', horasTrabajadas: 9, ajusteManual: true },
++        { entrada: null, salida: null, horasTrabajadas: 0 },
++    ), false)
++})
++test('refresca horas esperadas cuando cambia la planificaci├│n sin borrar ajustes manuales', () => {
++    assert.equal(seguimientoAbiertoDebeRefrescarAsistencia({ horasJornada: 9 }, { horasJornada: 8 }), true)
++    assert.equal(seguimientoAbiertoDebeRefrescarAsistencia({ horasJornada: 9, ajusteManual: true }, { horasJornada: 8 }), false)
++})
+diff --git a/lib/payroll/seguimientoSemanalMixto.ts b/lib/payroll/seguimientoSemanalMixto.ts
+index 851b813..0e82f06 100644
+--- a/lib/payroll/seguimientoSemanalMixto.ts
++++ b/lib/payroll/seguimientoSemanalMixto.ts
+@@ -1,5 +1,35 @@
+ import { sumarDiasRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
+ 
++interface AsistenciaSeguimiento {
++    horasJornada?: number
++    horarioEsperadoEntrada?: string | null
++    entrada?: string | null
++    salida?: string | null
++    horasTrabajadas?: number
++    ajusteManual?: boolean
++}
++
++function normalizarMarca(valor: string | null | undefined): string {
++    return (valor || '').trim().toLocaleLowerCase()
++}
++
++/**
++ * Un seguimiento abierto conserva correcciones manuales, pero no debe ocultar
++ * fichadas cargadas o corregidas despu├⌐s de haber guardado la semana.
++ */
++export function seguimientoAbiertoDebeRefrescarAsistencia(
++    guardado: AsistenciaSeguimiento,
++    calculado: AsistenciaSeguimiento,
++): boolean {
++    if (guardado.ajusteManual) return false
++
++    return normalizarMarca(guardado.entrada) !== normalizarMarca(calculado.entrada)
++        || Number(guardado.horasJornada || 0) !== Number(calculado.horasJornada || 0)
++        || normalizarMarca(guardado.horarioEsperadoEntrada) !== normalizarMarca(calculado.horarioEsperadoEntrada)
++        || normalizarMarca(guardado.salida) !== normalizarMarca(calculado.salida)
++        || Math.abs(Number(guardado.horasTrabajadas || 0) - Number(calculado.horasTrabajadas || 0)) > 0.001
++}
++
+ export function fechasSeguimientoSemanal(desdeInformado: string, hastaInformado: string): string[] {
+     const desde = validarFechaCivilRRHH(desdeInformado)
+     const hasta = validarFechaCivilRRHH(hastaInformado)
+diff --git a/lib/rrhh/inasistencias.test.ts b/lib/rrhh/inasistencias.test.ts
+index 9a48c6d..f618829 100644
+--- a/lib/rrhh/inasistencias.test.ts
++++ b/lib/rrhh/inasistencias.test.ts
+@@ -1,6 +1,6 @@
+ import assert from 'node:assert/strict'
+ import test from 'node:test'
+-import { novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from './inasistencias'
++import { esAusenciaAutomaticaPorFaltaDeFichada, novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from './inasistencias'
+ 
+ test('prioriza una licencia paga sobre una ausencia autom├ítica injustificada', () => {
+     const seleccionada = seleccionarInasistenciaPreferida([
+@@ -27,3 +27,16 @@ test('un estado operativo de trabajo no descarta las horas ajustadas del seguimi
+     assert.equal(novedadRRHHBloqueaSeguimientoGuardado('VACACIONES'), true)
+     assert.equal(novedadRRHHBloqueaSeguimientoGuardado('JUSTIFICADA_PAGA'), true)
+ })
++
++test('distingue una ausencia autom├ítica de una decisi├│n manual de RR. HH.', () => {
++    assert.equal(esAusenciaAutomaticaPorFaltaDeFichada({
++        tipo: 'INJUSTIFICADA',
++        motivo: 'Ausencia detectada autom├íticamente por falta de fichada.',
++        observaciones: 'Generado autom├íticamente por el sistema.',
++    }), true)
++    assert.equal(esAusenciaAutomaticaPorFaltaDeFichada({
++        tipo: 'INJUSTIFICADA',
++        motivo: 'Ausencia sin aviso',
++        observaciones: 'Modificado desde Planilla de Asistencia Diaria',
++    }), false)
++})
+diff --git a/lib/rrhh/inasistencias.ts b/lib/rrhh/inasistencias.ts
+index 9a72ee2..d797a27 100644
+--- a/lib/rrhh/inasistencias.ts
++++ b/lib/rrhh/inasistencias.ts
+@@ -2,6 +2,19 @@ export interface InasistenciaSeleccionable {
+     tipo: string
+ }
+ 
++export interface InasistenciaAutomaticaSeleccionable extends InasistenciaSeleccionable {
++    motivo?: string | null
++    observaciones?: string | null
++}
++
++export function esAusenciaAutomaticaPorFaltaDeFichada(
++    inasistencia: InasistenciaAutomaticaSeleccionable | null | undefined,
++): boolean {
++    return inasistencia?.tipo === 'INJUSTIFICADA'
++        && inasistencia.motivo === 'Ausencia detectada autom├íticamente por falta de fichada.'
++        && inasistencia.observaciones === 'Generado autom├íticamente por el sistema.'
++}
++
+ export function novedadRRHHBloqueaSeguimientoGuardado(tipo: string | null | undefined): boolean {
+     return !!tipo && tipo !== 'TRABAJO' && tipo !== 'INJUSTIFICADA'
+ }
+diff --git a/lib/services/asistencia.service.ts b/lib/services/asistencia.service.ts
+index 22c91ab..5818859 100644
+--- a/lib/services/asistencia.service.ts
++++ b/lib/services/asistencia.service.ts
+@@ -1,6 +1,8 @@
+ import { prisma } from '@/lib/prisma'
+ import { eventBus } from '@/lib/events'
+ import { SancionService } from './sancion.service'
++import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
++import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
+ import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, sumarDiasRRHH } from '@/lib/rrhh/fechas'
+ 
+ // ΓöÇΓöÇΓöÇ Tipos ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+@@ -9,6 +11,7 @@ export interface ImportarFichadaInput {
+     codigoBiometrico: string
+     fechaHora: string
+     tipo: 'entrada' | 'salida'
++    fuente?: 'fabrica_txt' | 'local_xls'
+ }
+ 
+ export interface ImportResult {
+@@ -44,7 +47,6 @@ export class AsistenciaService {
+             throw new Error('Formato inv├ílido. Se espera un array de registros.')
+         }
+ 
+-        let importados = 0
+         const errores: string[] = []
+ 
+         // Obtener mapa de c├│digo biom├⌐trico ΓåÆ empleado completo (con turno)
+@@ -60,101 +62,177 @@ export class AsistenciaService {
+             return [normalized, e]
+         }))
+  
++        const registrosResueltos: Array<{
++            empleadoId: string
++            empleado: typeof empleadosData[number]
++            fecha: Date
++            tipo: 'entrada' | 'salida'
++        }> = []
++        const clavesRecibidas = new Set<string>()
++
+         for (const reg of registros) {
+             const regRaw = reg.codigoBiometrico?.toString() || ""
+             const regNormalized = regRaw.replace(/^0+/, '')
+- 
+             const emp = mapEmpleados.get(regNormalized)
+-            const empleadoId = emp?.id
+- 
+-            if (!empleadoId) {
++
++            if (!emp) {
+                 errores.push(`No se encontr├│ empleado con c├│digo biom├⌐trico: ${regRaw} (Normalizado: ${regNormalized})`)
+                 continue
+             }
+- 
+-            try {
+-                const fecha = new Date(reg.fechaHora)
+-                const tipo = reg.tipo.toLowerCase()
+-                const lockKey = `fichada:${empleadoId}:${fecha.toISOString()}:${tipo}`
+ 
+-                const resultado = await prisma.$transaction(async (tx) => {
+-                    // Serializa importaciones concurrentes de la misma marca sin
+-                    // requerir depurar previamente los duplicados hist├│ricos.
+-                    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
++            const fecha = new Date(reg.fechaHora)
++            const tipoNormalizado = reg.tipo?.toLowerCase()
++            if (Number.isNaN(fecha.getTime()) || (tipoNormalizado !== 'entrada' && tipoNormalizado !== 'salida')) {
++                errores.push(`Fichada inv├ílida para el c├│digo biom├⌐trico ${regRaw}.`)
++                continue
++            }
+ 
+-                    const existe = await tx.fichadaEmpleado.findFirst({
+-                        where: { empleadoId, fechaHora: fecha, tipo }
+-                    })
++            const tipo = tipoNormalizado as 'entrada' | 'salida'
++            const clave = `${emp.id}|${fecha.toISOString()}|${tipo}`
++            if (clavesRecibidas.has(clave)) continue
+ 
+-                    if (existe) return { creada: false, tieneTardanza: false }
++            clavesRecibidas.add(clave)
++            registrosResueltos.push({ empleadoId: emp.id, empleado: emp, fecha, tipo })
++        }
+ 
+-                    await tx.fichadaEmpleado.create({
+-                        data: {
+-                            empleadoId,
+-                            fechaHora: fecha,
+-                            tipo,
+-                            origen: 'importado'
+-                        }
+-                    })
++        if (registrosResueltos.length === 0) {
++            return { success: true, importados: 0, errores }
++        }
+ 
+-                    let tieneTardanza = false
+-                    if (tipo === 'entrada') {
+-                        const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
+-                        if (mins > 0) {
+-                            tieneTardanza = true
+-                            const fechaLocal = fechaClaveRRHH(fecha)
+-                            const rangoDia = rangoDiaRRHH(fechaLocal)
+-                            const tardanzaLockKey = `tardanza:${empleadoId}:${fechaLocal}`
+-                            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${tardanzaLockKey}))::text AS lock_result`
+-
+-                            const existeTardanza = await tx.inasistencia.findFirst({
+-                                where: {
+-                                    empleadoId,
+-                                    tipo: 'TARDANZA',
+-                                    fecha: { gte: rangoDia.gte, lt: rangoDia.lt }
+-                                }
+-                            })
+-
+-                            if (!existeTardanza) {
+-                                await tx.inasistencia.create({
+-                                    data: {
+-                                        empleadoId,
+-                                        fecha,
+-                                        tipo: 'TARDANZA',
+-                                        minutosRetraso: mins,
+-                                        observaciones: `Llegada tarde detectada autom├íticamente al importar fichada (${mins} min de retraso).`
+-                                    }
+-                                })
+-                            }
+-                        }
+-                    }
++        const empleadosIds = [...new Set(registrosResueltos.map(registro => registro.empleadoId))]
++        const fechasPlan = registrosResueltos.map(registro => fechaClaveRRHH(registro.fecha)).sort()
++        const planHorarios = await cargarPlanHorarios(empleadosIds, fechasPlan[0], fechasPlan[fechasPlan.length - 1])
++        const fechasLocales = registrosResueltos.map(registro => fechaClaveRRHH(registro.fecha)).sort()
++        const rangoImportacion = {
++            gte: rangoDiaRRHH(fechasLocales[0]).gte,
++            lt: rangoDiaRRHH(fechasLocales[fechasLocales.length - 1]).lt,
++        }
++
++        const resultado = await prisma.$transaction(async (tx) => {
++            // Una importaci├│n se procesa como lote para evitar una ida a la base por cada marca.
++            // El bloqueo conserva la idempotencia frente a dos confirmaciones simult├íneas.
++            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('fichadas:importar'))::text AS lock_result`
+ 
+-                    return { creada: true, tieneTardanza }
++            const existentes = await tx.fichadaEmpleado.findMany({
++                where: {
++                    empleadoId: { in: empleadosIds },
++                    fechaHora: rangoImportacion,
++                },
++                select: { empleadoId: true, fechaHora: true, tipo: true },
++            })
++            const clavesExistentes = new Set(existentes.map(fichada =>
++                `${fichada.empleadoId}|${fichada.fechaHora.toISOString()}|${fichada.tipo.toLowerCase()}`))
++            const nuevas = registrosResueltos.filter(registro =>
++                !clavesExistentes.has(`${registro.empleadoId}|${registro.fecha.toISOString()}|${registro.tipo}`))
++
++            if (nuevas.length > 0) {
++                await tx.fichadaEmpleado.createMany({
++                    data: nuevas.map(registro => ({
++                        empleadoId: registro.empleadoId,
++                        fechaHora: registro.fecha,
++                        tipo: registro.tipo,
++                        origen: 'importado',
++                    })),
+                 })
++            }
+ 
+-                if (resultado.creada) importados++
+-                if (resultado.tieneTardanza) {
+-                    // Las alertas se procesan una vez confirmada la fichada.
+-                    await SancionService.checkAndApplyAlerts(empleadoId)
++            const tardanzasExistentes = await tx.inasistencia.findMany({
++                where: {
++                    empleadoId: { in: empleadosIds },
++                    tipo: 'TARDANZA',
++                    fecha: rangoImportacion,
++                },
++                select: { empleadoId: true, fecha: true },
++            })
++            const clavesTardanza = new Set(tardanzasExistentes.map(tardanza =>
++                `${tardanza.empleadoId}|${fechaClaveRRHH(tardanza.fecha)}`))
++
++            // S├│lo la primera entrada de cada jornada puede generar tardanza. Una segunda
++            // entrada (por corte o turno partido) no se compara con el inicio del d├¡a.
++            const entradasPorDia = new Map<string, typeof registrosResueltos[number] | null>()
++            const todasLasEntradas: Array<{
++                empleadoId: string
++                fecha: Date
++                registro: typeof registrosResueltos[number] | null
++            }> = [
++                ...existentes
++                    .filter(fichada => fichada.tipo.toLowerCase() === 'entrada')
++                    .map(fichada => ({ empleadoId: fichada.empleadoId, fecha: fichada.fechaHora, registro: null })),
++                ...nuevas
++                    .filter(registro => registro.tipo === 'entrada')
++                    .map(registro => ({ empleadoId: registro.empleadoId, fecha: registro.fecha, registro })),
++            ].sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
++
++            for (const entrada of todasLasEntradas) {
++                const claveDia = `${entrada.empleadoId}|${fechaClaveRRHH(entrada.fecha)}`
++                if (!entradasPorDia.has(claveDia)) {
++                    entradasPorDia.set(claveDia, entrada.registro)
+                 }
+-            } catch (err: any) {
+-                errores.push(`Error al insertar registro para empleado ${empleadoId}: ${err.message}`)
+             }
+-        }
+- 
++
++            const tardanzasNuevas: Array<{
++                empleadoId: string
++                fecha: Date
++                tipo: string
++                minutosRetraso: number
++                observaciones: string
++            }> = []
++            for (const [claveDia, registro] of entradasPorDia.entries()) {
++                if (!registro || clavesTardanza.has(claveDia)) continue
++
++                const horario = resolverHorarioPlanificado(planHorarios, registro.empleadoId, fechaClaveRRHH(registro.fecha))
++                const minutos = horario ? minutosTardanzaHorario(registro.fecha, horario) : this.calcularTardanza(
++                    registro.fecha,
++                    registro.empleado.horarioEntrada,
++                    registro.empleado.turno,
++                )
++                if (minutos <= 0) continue
++
++                tardanzasNuevas.push({
++                    empleadoId: registro.empleadoId,
++                    fecha: registro.fecha,
++                    tipo: 'TARDANZA',
++                    minutosRetraso: minutos,
++                    observaciones: `Llegada tarde detectada autom├íticamente al importar fichada (${minutos} min de retraso).`,
++                })
++                clavesTardanza.add(claveDia)
++            }
++
++            if (tardanzasNuevas.length > 0) {
++                await tx.inasistencia.createMany({ data: tardanzasNuevas })
++            }
++
++            return {
++                importados: nuevas.length,
++                empleadosConTardanza: [...new Set(tardanzasNuevas.map(tardanza => tardanza.empleadoId))],
++            }
++        }, { maxWait: 10_000, timeout: 30_000 })
++
++        // Las alertas se verifican una sola vez por empleado, fuera de la transacci├│n del lote.
++        await Promise.all(resultado.empleadosConTardanza.map(async empleadoId => {
++            try {
++                await SancionService.checkAndApplyAlerts(empleadoId)
++            } catch (error) {
++                console.error(`Error verificando alertas para empleado ${empleadoId}:`, error)
++            }
++        }))
++
+         // Evento de dominio
+-        if (importados > 0) {
+-            eventBus.emit('fichadas:imported', { importados, errores: errores.length })
++        if (resultado.importados > 0) {
++            eventBus.emit('fichadas:imported', { importados: resultado.importados, errores: errores.length })
+             
+             // AUTO-DETECCI├ôN DE AUSENCIAS PARA LOS D├ìAS IMPORTADOS (SOLO D├ìAS PASADOS)
++            // El reporte del local abarca s├│lo su propio reloj, por lo que no debe inferir
++            // ausencias del resto del personal a partir de una n├│mina parcial.
++            const esReporteLocal = registros.some(registro => registro.fuente === 'local_xls')
+             try {
+                 const fechasUnicas = [...new Set(registros.map(r => r.fechaHora.split('T')[0]))]
+                 const hoyStr = fechaClaveRRHH(new Date())
+-                
+-                for (const fecha of fechasUnicas) {
+-                    if (fecha < hoyStr) {
+-                        await this.procesarAusenciasAutomaticas(fecha)
+-                    }
++
++                if (!esReporteLocal) {
++                    await Promise.all(fechasUnicas
++                        .filter(fecha => fecha < hoyStr)
++                        .map(fecha => this.procesarAusenciasAutomaticas(fecha)))
+                 }
+             } catch (autoErr) {
+                 console.error('Error en auto-detecci├│n de ausencias tras importaci├│n:', autoErr)
+@@ -163,7 +241,7 @@ export class AsistenciaService {
+  
+         return {
+             success: true,
+-            importados,
++            importados: resultado.importados,
+             errores
+         }
+     }
+@@ -230,7 +308,10 @@ export class AsistenciaService {
+                 include: { turno: true }
+             })
+             if (emp) {
+-                const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
++                const clave = fechaClaveRRHH(fecha)
++                const plan = await cargarPlanHorarios([emp.id], clave, clave)
++                const horario = resolverHorarioPlanificado(plan, emp.id, clave)
++                const mins = horario ? minutosTardanzaHorario(fecha, horario) : this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
+                 if (mins > 0) {
+                     await prisma.inasistencia.create({
+                         data: {
+@@ -306,11 +387,15 @@ export class AsistenciaService {
+         })
+ 
+         const idsConFichada = new Set(fichadasDelDia.map(f => f.empleadoId))
++        const plan = await cargarPlanHorarios(empleadosActivos.map(e => e.id), fecha, fecha)
+ 
+         const targetDate = new Date(`${fecha}T12:00:00Z`)
+         const dayOfWeek = targetDate.getUTCDay() // 0: Domingo, 6: S├íbado
+ 
+         return empleadosActivos.filter(e => {
++            const horario = resolverHorarioPlanificado(plan, e.id, fecha)
++            if (horario?.esFranco) return false
++            if (horario) return !idsConFichada.has(e.id)
+             const tieneHorario = e.turno?.horaInicio || e.horarioEntrada
+             if (!tieneHorario || idsConFichada.has(e.id)) return false
+ 
+diff --git a/lib/services/payroll.service.ts b/lib/services/payroll.service.ts
+index 652311a..37c57c3 100644
+--- a/lib/services/payroll.service.ts
++++ b/lib/services/payroll.service.ts
+@@ -4,12 +4,15 @@ import { CajaService } from '@/lib/services/caja.service'
+ import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
+ import { reconstruirLiquidacionCalculada, validarMontoAdicional } from '@/lib/payroll/validacionLiquidacion'
+ import { fechaClaveRRHH, instanteRRHH, rangoDiasRRHH } from '@/lib/rrhh/fechas'
+-import { novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from '@/lib/rrhh/inasistencias'
++import { esAusenciaAutomaticaPorFaltaDeFichada, novedadRRHHBloqueaSeguimientoGuardado, seleccionarInasistenciaPreferida } from '@/lib/rrhh/inasistencias'
+ import { agruparFichadasPorDia, calcularResumenDia } from '@/utils/horas'
++import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
++import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
+ import { fechasDeRangoVacaciones, periodoLaboralCubiertoPorFechas, periodoLaboralCubiertoPorVacaciones, rangoVacacionesDesdeDesglose } from '@/lib/payroll/vacaciones'
+ import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
+ import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
+ import { horasJornadaParaFecha } from '@/lib/payroll/jornadaSemanal'
++import { seguimientoAbiertoDebeRefrescarAsistencia } from '@/lib/payroll/seguimientoSemanalMixto'
+ import {
+     normalizarRangoLiquidacion,
+     rangoHistoricoLiquidacion,
+@@ -27,6 +30,8 @@ export interface DiaTrabajado {
+     nombreFeriado?: string
+     horasTrabajadas: number
+     horasJornada: number
++    horarioEsperadoEntrada?: string | null
++    horarioEsperadoSalida?: string | null
+     horasExtras: number
+     entrada: string | null
+     salida: string | null
+@@ -269,6 +274,7 @@ export class PayrollService {
+         // 3. Procesar Fichadas
+         const fichadas = empleado.fichadas
+         const gruposPorDia = agruparFichadasPorDia(fichadas)
++        const planHorarios = await cargarPlanHorarios([empleadoId], fechaInicio, fechaFin)
+ 
+         // Generar rango de fechas
+         const desglosePorDia: DiaTrabajado[] = []
+@@ -289,22 +295,32 @@ export class PayrollService {
+ 
+             const marcas = marcasRaw
+ 
+-            const horasJornadaDia = horasJornadaParaFecha(fechaStr, hsJornada, empleado.horasTrabajoSabado)
++            const horarioPlanificado = resolverHorarioPlanificado(planHorarios, empleadoId, fechaStr)
++            const horasJornadaDia = horarioPlanificado && !horarioPlanificado.esFranco ? horarioPlanificado.horasEsperadas : horasJornadaParaFecha(fechaStr, hsJornada, empleado.horasTrabajoSabado)
+             const valorHoraDia = empleado.valorHoraNormal && empleado.valorHoraNormal > 0
+                 ? empleado.valorHoraNormal
+                 : (horasJornadaDia > 0 ? jornalBase / horasJornadaDia : 0)
+             const resumen = calcularResumenDia(marcas, horasJornadaDia, {
+-                horarioEntrada: current.getDay() === 0
++                horarioEntrada: horarioPlanificado?.esFranco ? null : horarioPlanificado?.horaInicio ?? (current.getDay() === 0
+                     ? null
+-                    : empleado.turno?.horaInicio || empleado.horarioEntrada,
++                    : empleado.turno?.horaInicio || empleado.horarioEntrada),
+             })
+ 
+             const esFeriado = !!feriadosMap[fechaStr]
+             
+             // 3.1 Verificar Inasistencias registradas
+-            const inasistencia = inasistenciasPorFecha.get(fechaStr)
++            const inasistenciaRegistrada = inasistenciasPorFecha.get(fechaStr)
++            const inasistencia = marcas.length > 0 && esAusenciaAutomaticaPorFaltaDeFichada(inasistenciaRegistrada)
++                ? undefined
++                : inasistenciaRegistrada
+             const esVacaciones = fechasVacaciones.has(fechaStr)
+-            const tipoInasistencia = esVacaciones ? 'VACACIONES' : inasistencia?.tipo
++            const entradaPlan = marcas.find(m => m.tipo === 'entrada')?.fechaHora
++            const tardanzaObsoleta = horarioPlanificado && entradaPlan && inasistencia?.tipo === 'TARDANZA'
++                && inasistencia.observaciones?.startsWith('Llegada tarde detectada autom├íticamente')
++                && minutosTardanzaHorario(new Date(entradaPlan), horarioPlanificado) === 0
++            const francoPlanificado = horarioPlanificado?.esFranco && !marcas.length
++                && (!inasistencia || esAusenciaAutomaticaPorFaltaDeFichada(inasistencia))
++            const tipoInasistencia = esVacaciones ? 'VACACIONES' : francoPlanificado ? 'FRANCO' : tardanzaObsoleta ? undefined : inasistencia?.tipo
+ 
+             const calculoDia = calcularDiaSemanal({
+                 horasTrabajadas: resumen.horasTrabajadas,
+@@ -322,6 +338,8 @@ export class PayrollService {
+             const ultimaSalida = [...marcas].reverse().find((m: any) => m.tipo === 'salida')?.fechaHora
+ 
+             desglosePorDia.push({
++                horarioEsperadoEntrada: horarioPlanificado?.esFranco ? null : horarioPlanificado?.horaInicio ?? null,
++                horarioEsperadoSalida: horarioPlanificado?.esFranco ? null : horarioPlanificado?.horaFin ?? null,
+                 fecha: fechaStr,
+                 diaSemana: nombresDias[current.getDay()],
+                 esFeriado,
+@@ -352,15 +370,23 @@ export class PayrollService {
+                     empleadoId,
+                     fecha: { gte: rangoPeriodo.gte, lt: rangoPeriodo.lt },
+                 },
+-                select: { fecha: true, detalle: true },
++                select: { fecha: true, detalle: true, cierreMensualId: true },
+             })
+             const detallePorFecha = new Map(seguimientos.flatMap(registro => {
+                 if (!registro.detalle || typeof registro.detalle !== 'object' || Array.isArray(registro.detalle)) return []
+-                return [[fechaClaveRRHH(registro.fecha), registro.detalle as unknown as DiaTrabajado] as const]
++                return [[fechaClaveRRHH(registro.fecha), {
++                    detalle: registro.detalle as unknown as DiaTrabajado,
++                    cerrado: !!registro.cierreMensualId,
++                }] as const]
+             }))
+             desglosePorDia.forEach((dia, indice) => {
+-                const guardado = detallePorFecha.get(dia.fecha)
+-                if (!guardado) return
++                const registroGuardado = detallePorFecha.get(dia.fecha)
++                if (!registroGuardado) return
++                const guardado = registroGuardado.detalle
++
++                if (!registroGuardado.cerrado && seguimientoAbiertoDebeRefrescarAsistencia(guardado, dia)) {
++                    return
++                }
+ 
+                 // El seguimiento conserva ajustes manuales de horas, pero no puede
+                 // reponer un estado de asistencia anterior despu├⌐s de que RR. HH.
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 906eb28..292128a 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -41,6 +41,8 @@ model Empleado {
+   areaId                    String?                   @map("id_area")
+   puestoId                  String?                   @map("id_puesto")
+   turnoId                   String?                   @map("id_turno")
++  plantillasHorario         PlantillaHorarioEmpleado[]
++  excepcionesHorario        ExcepcionHorarioEmpleado[]
+   areasResponsable          Area[]                    @relation("ResponsableArea")
+   asignaciones              AsignacionOperario[]
+   asignacionesVehiculo      AsignacionVehiculo[]      @relation("AsignacionesVehiculo")
+@@ -1091,6 +1093,33 @@ model Puesto {
+   @@map("puestos")
+ }
+ 
++model PlantillaHorarioEmpleado {
++  id             String   @id @default(uuid())
++  empleadoId     String   @map("id_empleado")
++  vigenciaDesde  DateTime @map("vigencia_desde")
++  dias           Json
++  registradoPor  String   @map("registrado_por")
++  createdAt      DateTime @default(now())
++  empleado       Empleado @relation(fields: [empleadoId], references: [id])
++
++  @@unique([empleadoId, vigenciaDesde])
++  @@map("plantillas_horario_empleado")
++}
++
++model ExcepcionHorarioEmpleado {
++  id            String   @id @default(uuid())
++  empleadoId    String   @map("id_empleado")
++  fecha         DateTime
++  detalle       Json
++  registradoPor String   @map("registrado_por")
++  createdAt     DateTime @default(now())
++  updatedAt     DateTime @updatedAt
++  empleado      Empleado @relation(fields: [empleadoId], references: [id])
++
++  @@unique([empleadoId, fecha])
++  @@map("excepciones_horario_empleado")
++}
++
+ model TurnoTrabajo {
+   id                String     @id @default(uuid())
+   nombre            String     @unique

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { CajaService } from '@/lib/services/caja.service'
-import { puedeTransferirEntreCajas } from '@/lib/caja/acceso'
+import { exigirAccesoCaja } from '@/lib/services/cajas-catalogo.service'
+import type { UsuarioCajas } from '@/lib/caja/catalogo'
 
 export async function POST(req: Request) {
     try {
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
         const { origen, destino, monto, fecha } = await req.json()
         const numericMonto = parseFloat(monto)
 
-        if (!origen || !destino || !numericMonto || numericMonto <= 0) {
+        if (!origen || !destino || !Number.isFinite(numericMonto) || numericMonto <= 0) {
             return NextResponse.json({ error: 'Datos de transferencia inválidos' }, { status: 400 })
         }
 
@@ -20,14 +21,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'La caja de origen y destino deben ser diferentes' }, { status: 400 })
         }
 
-        // Validación de ubicación
-        const userRol = (session?.user as any)?.rol
-        if (userRol !== 'ADMIN') {
-            const uType = (session?.user as any)?.ubicacionTipo?.toUpperCase()
-            if (!puedeTransferirEntreCajas(uType, origen, destino)) {
-                return NextResponse.json({ error: 'No tienes permiso para operar en estas cajas' }, { status: 403 })
-            }
-        }
+        try {
+            await exigirAccesoCaja(session.user as UsuarioCajas, origen)
+            await exigirAccesoCaja(session.user as UsuarioCajas, destino)
+        } catch { return NextResponse.json({ error: 'Sólo podés transferir entre cajas activas autorizadas de tu sede.' }, { status: 403 }) }
 
         const result = await CajaService.transferir(
             origen,
@@ -35,6 +32,7 @@ export async function POST(req: Request) {
             numericMonto,
             fecha,
             (session?.user as any)?.id || null,
+            (session.user as UsuarioCajas).rol === 'ADMIN' ? undefined : (session.user as UsuarioCajas).ubicacionId || '__sin_sede__',
         )
 
         return NextResponse.json(result)

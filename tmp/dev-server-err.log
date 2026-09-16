@@ -1,0 +1,23 @@
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+Error obteniendo caja: Error [PrismaClientKnownRequestError]: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].movimientoCaja.findMany()` invocation in
+C:\Users\sandw\Documents\santa-catalina\.next\dev\server\chunks\[root-of-the-server]__52a55774._.js:1102:172
+
+  1099 const ubicacionTipo = session?.user?.ubicacionTipo;
+  1100 const allowedBoxes = getAllowedBoxes(userRol, ubicacionTipo);
+  1101 const esAdmin = userRol === 'ADMIN';
+→ 1102 const movimientos = await __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].movimientoCaja.findMany(
+The column `movimientos_caja.updatedAt` does not exist in the current database.
+    at <unknown> (app\api\caja\route.ts:60:57)
+    at async GET (app\api\caja\route.ts:60:29)
+  58 |         const esAdmin = userRol === 'ADMIN'
+  59 |
+> 60 |         const movimientos = await prisma.movimientoCaja.findMany({
+     |                                                         ^
+  61 |             where: {
+  62 |                 fecha: { gte: startOfDay, lte: endOfDay },
+  63 |                 ...(!esAdmin && { estado: 'activo' }), {
+  code: 'P2022',
+  meta: [Object],
+  clientVersion: '6.19.2'
+}

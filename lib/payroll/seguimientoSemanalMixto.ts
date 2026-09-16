@@ -1,5 +1,35 @@
 import { sumarDiasRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 
+interface AsistenciaSeguimiento {
+    horasJornada?: number
+    horarioEsperadoEntrada?: string | null
+    entrada?: string | null
+    salida?: string | null
+    horasTrabajadas?: number
+    ajusteManual?: boolean
+}
+
+function normalizarMarca(valor: string | null | undefined): string {
+    return (valor || '').trim().toLocaleLowerCase()
+}
+
+/**
+ * Un seguimiento abierto conserva correcciones manuales, pero no debe ocultar
+ * fichadas cargadas o corregidas después de haber guardado la semana.
+ */
+export function seguimientoAbiertoDebeRefrescarAsistencia(
+    guardado: AsistenciaSeguimiento,
+    calculado: AsistenciaSeguimiento,
+): boolean {
+    if (guardado.ajusteManual) return false
+
+    return normalizarMarca(guardado.entrada) !== normalizarMarca(calculado.entrada)
+        || Number(guardado.horasJornada || 0) !== Number(calculado.horasJornada || 0)
+        || normalizarMarca(guardado.horarioEsperadoEntrada) !== normalizarMarca(calculado.horarioEsperadoEntrada)
+        || normalizarMarca(guardado.salida) !== normalizarMarca(calculado.salida)
+        || Math.abs(Number(guardado.horasTrabajadas || 0) - Number(calculado.horasTrabajadas || 0)) > 0.001
+}
+
 export function fechasSeguimientoSemanal(desdeInformado: string, hastaInformado: string): string[] {
     const desde = validarFechaCivilRRHH(desdeInformado)
     const hasta = validarFechaCivilRRHH(hastaInformado)

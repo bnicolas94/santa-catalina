@@ -8,7 +8,7 @@ interface StockInsumoResumen { ubicacionId: string; cantidad: number }
 interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; activo: boolean; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
 interface Proveedor { id: string; nombre: string }
 interface Ubicacion { id: string; nombre: string; tipo: string }
-interface CajaCompra { tipo: string }
+interface CajaCompra { tipo: string; nombre?: string }
 interface CategoriaGasto { id: string; nombre: string; color: string | null }
 interface PagoForm { cajaOrigen: string; monto: string }
 interface ItemFacturaForm {
@@ -131,7 +131,7 @@ function ComprasContent() {
     const [editingCompraId, setEditingCompraId] = useState<string | null>(null)
     const [editingFacturaItemIndex, setEditingFacturaItemIndex] = useState<number | null>(null)
     const [loadingFactura, setLoadingFactura] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '' })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '' })
     const [tempItem, setTempItem] = useState({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -153,7 +153,7 @@ function ComprasContent() {
         montoPagado: '',
         useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'),
         fechaFactura: '',
-        ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] as PagoForm[],
+        ubicacionId: '', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] as PagoForm[],
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -266,7 +266,7 @@ function ComprasContent() {
             setSuccess(`Movimiento ${editingId ? 'actualizado' : 'registrado'} correctamente`)
             setShowModal(false)
             setEditingId(null)
-            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', montoPagado: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: '', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
+            setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', montoPagado: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: '', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -387,7 +387,7 @@ function ComprasContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess(editingCompraId ? 'Factura actualizada correctamente' : 'Factura registrada correctamente')
             closeFacturaModal()
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -413,9 +413,9 @@ function ComprasContent() {
                 fechaFactura: fechaInput(compra.fechaFactura),
                 fechaMovimiento: fechaInput(compra.fechaMovimiento),
                 estadoPago: compra.estadoPago,
-                cajaOrigen: 'caja_chica',
+                cajaOrigen: cajas[0]?.tipo || '',
                 pagoDividido: false,
-                pagos: [{ cajaOrigen: 'caja_chica', monto: '' }],
+                pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }],
                 ubicacionId: compra.ubicacion?.id || '',
                 observaciones: compra.observaciones || '',
                 montoPagado: String(compra.montoPagado || ''),
@@ -475,7 +475,7 @@ function ComprasContent() {
             if (montoPago > saldoPendiente + 0.01) return setError('El monto supera el saldo pendiente')
         }
 
-        const opcionesStr = cajas.map((c, i) => `${i + 1} = ${c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}`).join('\n')
+        const opcionesStr = cajas.map((c, i) => `${i + 1} = ${(c.nombre || c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '))}`).join('\n')
         const resp = prompt(`¿De qué caja sale el pago?\n\n${opcionesStr}\n\nIngresá el número:`, '1')
         if (!resp) return
         
@@ -751,7 +751,7 @@ function ComprasContent() {
                         const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
                         setEditingCompraId(null)
                         setEditingFacturaItemIndex(null)
-                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
                         setTempItem(emptyTempItem())
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
@@ -761,7 +761,7 @@ function ComprasContent() {
                     <button className="btn btn-primary" onClick={() => {
                         setEditingId(null)
                         const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
-                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', montoPagado: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: defaultUbi, cajaOrigen: 'caja_chica', pagoDividido: false, pagos: [{ cajaOrigen: 'caja_chica', monto: '' }] })
+                        setForm({ insumoId: '', tipo: 'entrada', cantidad: '', cantidadSecundaria: '', observaciones: '', proveedorId: '', costoTotal: '', estadoPago: 'pagado', montoPagado: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), fechaFactura: '', ubicacionId: defaultUbi, cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] })
                         setShowModal(true)
                     }}>➕ Ajuste Manual</button>
                 </div>
@@ -1215,7 +1215,7 @@ function ComprasContent() {
                                                             cajas.map((c) => {
                                                                 const isMP = c.tipo === 'mercado_pago';
                                                                 const color = isMP ? '#3498DB' : (c.tipo === 'caja_madre' ? '#8E44AD' : (c.tipo === 'caja_chica' ? '#E67E22' : '#27AE60'));
-                                                                const label = c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                                                const label = (c.nombre || c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '));
                                                                 return (
                                                                     <button key={c.tipo} type="button" className="btn btn-sm"
                                                                         onClick={() => setForm({ ...form, cajaOrigen: c.tipo })}
@@ -1255,7 +1255,7 @@ function ComprasContent() {
                                                                     newPagos[idx].cajaOrigen = e.target.value;
                                                                     setForm({ ...form, pagos: newPagos });
                                                                 }}>
-                                                                    {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
+                                                                    {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {(c.nombre || c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '))}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
                                                                 </select>
                                                                 <input type="number" step="0.01" className="form-input" placeholder="Monto ($)" value={p.monto} onChange={(e) => {
                                                                     const newPagos = [...form.pagos];
@@ -1394,7 +1394,7 @@ function ComprasContent() {
                                                         cajas.map((c) => {
                                                             const isMP = c.tipo === 'mercado_pago';
                                                             const color = isMP ? '#3498DB' : (c.tipo === 'caja_madre' ? '#8E44AD' : (c.tipo === 'caja_chica' ? '#E67E22' : '#27AE60'));
-                                                            const label = c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                                            const label = (c.nombre || c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '));
                                                             return (
                                                                 <button key={c.tipo} type="button" className="btn btn-sm"
                                                                     onClick={() => setFacturaForm({ ...facturaForm, cajaOrigen: c.tipo })}
@@ -1428,7 +1428,7 @@ function ComprasContent() {
                                                                 newPagos[idx].cajaOrigen = e.target.value;
                                                                 setFacturaForm({ ...facturaForm, pagos: newPagos });
                                                             }}>
-                                                                {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
+                                                                {cajas.length > 0 ? cajas.map(c => <option key={c.tipo} value={c.tipo}>{c.tipo === 'mercado_pago' ? '💳 ' : '🏦 '} {(c.nombre || c.tipo.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' '))}</option>) : <><option value="caja_madre">Caja Madre</option><option value="caja_chica">Caja Chica</option><option value="local">Local</option></>}
                                                             </select>
                                                             <input type="number" step="0.01" className="form-input" placeholder="Monto ($)" value={p.monto} onChange={(e) => {
                                                                 const newPagos = [...facturaForm.pagos];

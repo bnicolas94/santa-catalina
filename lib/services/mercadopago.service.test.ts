@@ -45,9 +45,11 @@ test('un egreso crea movimiento, débito de saldo, vínculo y auditoría en la m
             },
         },
         saldoCaja: {
-            upsert: async ({ where, update }: { where: { tipo: string }; update: { saldo: { decrement: number } } }) => {
+            updateMany: async ({ where, data }: { where: { tipo: string; activo: boolean }; data: { saldo: { decrement: number } } }) => {
                 assert.equal(where.tipo, 'mercado_pago')
-                saldo -= update.saldo.decrement
+                assert.equal(where.activo, true)
+                saldo -= data.saldo.decrement
+                return { count: 1 }
             },
         },
         auditoriaMovimientoCaja: {

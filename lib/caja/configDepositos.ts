@@ -1,5 +1,4 @@
-import fs from 'fs/promises'
-import path from 'path'
+import { prisma } from '@/lib/prisma'
 
 export interface ConfigDepositoUbicacion {
     cajaDepositoId: string
@@ -9,18 +8,10 @@ export interface ConfigDepositoUbicacion {
 
 export type ConfigDepositos = Record<string, ConfigDepositoUbicacion>
 
-const CONFIG_PATH = path.join(process.cwd(), 'config', 'caja-depositos.json')
-
+// La clave es el ID de sede: cada local tiene su propia caja de depósitos.
 export async function leerConfigDepositos(): Promise<ConfigDepositos> {
-    try {
-        const data = await fs.readFile(CONFIG_PATH, 'utf-8')
-        return JSON.parse(data) as ConfigDepositos
-    } catch (error) {
-        console.error('Error reading caja config:', error)
-        return {}
-    }
-}
-
-export async function guardarConfigDepositos(config: ConfigDepositos): Promise<void> {
-    await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
+    const cajas = await prisma.saldoCaja.findMany({ where: { activo: true, recibeDepositos: true, ubicacion: { activo: true } } })
+    return Object.fromEntries(cajas.filter(c => c.ubicacionId).map(c => [c.ubicacionId!, {
+        cajaDepositoId: c.tipo, conceptoDeposito: c.conceptoDeposito, habilitarDeposito: true,
+    }]))
 }

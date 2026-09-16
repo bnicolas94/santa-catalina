@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import HorariosRotativosPanel from './HorariosRotativosPanel'
+import PlanificadorSemanal from './PlanificadorSemanal'
 
 interface Turno {
     id: string
@@ -13,7 +15,9 @@ interface Turno {
     _count?: { empleados: number }
 }
 
-export default function TurnosConfigModal({ onClose }: { onClose: () => void }) {
+export default function TurnosConfigModal({ onClose, empleados = [] }: { onClose: () => void; empleados?: Array<{ id: string; nombre: string; apellido: string | null }> }) {
+    const [rotativos, setRotativos] = useState(false)
+    const [plantillas, setPlantillas] = useState(false)
     const [turnos, setTurnos] = useState<Turno[]>([])
     const [loading, setLoading] = useState(true)
     const [editingId, setEditingId] = useState<string | null>(null)
@@ -115,13 +119,15 @@ export default function TurnosConfigModal({ onClose }: { onClose: () => void }) 
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', width: '100%' }}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: rotativos ? '1500px' : '800px', width: '96vw' }}>
                 <div className="modal-header">
                     <h2>🕒 Configuración de Turnos</h2>
                     <button onClick={onClose} className="btn btn-ghost btn-icon">✕</button>
                 </div>
                 
-                <div className="modal-body" style={{ display: 'flex', gap: 'var(--space-6)', maxHeight: '70vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', gap: 12, padding: 16 }}><button className="btn btn-outline" onClick={() => setRotativos(false)}>Turnos generales</button><button className="btn btn-outline" onClick={() => setRotativos(true)}>Horarios por empleado</button></div>
+                {rotativos && <><div style={{ padding: '0 16px' }}><button className="btn btn-outline" onClick={() => setPlantillas(!plantillas)}>{plantillas ? 'Ver grilla semanal' : 'Editar plantillas habituales'}</button></div>{plantillas ? <HorariosRotativosPanel empleados={empleados} /> : <PlanificadorSemanal empleados={empleados} />}</>}
+                <div className="modal-body" style={{ display: rotativos ? 'none' : 'flex', gap: 'var(--space-6)', maxHeight: '70vh', overflowY: 'auto' }}>
                     {/* Lista de Turnos */}
                     <div style={{ flex: 1 }}>
                         <h3 style={{ marginBottom: 'var(--space-3)' }}>Turnos Registrados</h3>

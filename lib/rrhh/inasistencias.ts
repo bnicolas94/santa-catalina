@@ -2,6 +2,19 @@ export interface InasistenciaSeleccionable {
     tipo: string
 }
 
+export interface InasistenciaAutomaticaSeleccionable extends InasistenciaSeleccionable {
+    motivo?: string | null
+    observaciones?: string | null
+}
+
+export function esAusenciaAutomaticaPorFaltaDeFichada(
+    inasistencia: InasistenciaAutomaticaSeleccionable | null | undefined,
+): boolean {
+    return inasistencia?.tipo === 'INJUSTIFICADA'
+        && inasistencia.motivo === 'Ausencia detectada automáticamente por falta de fichada.'
+        && inasistencia.observaciones === 'Generado automáticamente por el sistema.'
+}
+
 export function novedadRRHHBloqueaSeguimientoGuardado(tipo: string | null | undefined): boolean {
     return !!tipo && tipo !== 'TRABAJO' && tipo !== 'INJUSTIFICADA'
 }

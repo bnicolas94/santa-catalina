@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
 import { SancionService } from './sancion.service'
+import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
+import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
 import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, sumarDiasRRHH } from '@/lib/rrhh/fechas'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -9,6 +11,7 @@ export interface ImportarFichadaInput {
     codigoBiometrico: string
     fechaHora: string
     tipo: 'entrada' | 'salida'
+    fuente?: 'fabrica_txt' | 'local_xls'
 }
 
 export interface ImportResult {
@@ -44,7 +47,6 @@ export class AsistenciaService {
             throw new Error('Formato inválido. Se espera un array de registros.')
         }
 
-        let importados = 0
         const errores: string[] = []
 
         // Obtener mapa de código biométrico → empleado completo (con turno)
@@ -60,101 +62,177 @@ export class AsistenciaService {
             return [normalized, e]
         }))
  
+        const registrosResueltos: Array<{
+            empleadoId: string
+            empleado: typeof empleadosData[number]
+            fecha: Date
+            tipo: 'entrada' | 'salida'
+        }> = []
+        const clavesRecibidas = new Set<string>()
+
         for (const reg of registros) {
             const regRaw = reg.codigoBiometrico?.toString() || ""
             const regNormalized = regRaw.replace(/^0+/, '')
- 
             const emp = mapEmpleados.get(regNormalized)
-            const empleadoId = emp?.id
- 
-            if (!empleadoId) {
+
+            if (!emp) {
                 errores.push(`No se encontró empleado con código biométrico: ${regRaw} (Normalizado: ${regNormalized})`)
                 continue
             }
- 
-            try {
-                const fecha = new Date(reg.fechaHora)
-                const tipo = reg.tipo.toLowerCase()
-                const lockKey = `fichada:${empleadoId}:${fecha.toISOString()}:${tipo}`
 
-                const resultado = await prisma.$transaction(async (tx) => {
-                    // Serializa importaciones concurrentes de la misma marca sin
-                    // requerir depurar previamente los duplicados históricos.
-                    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
-
-                    const existe = await tx.fichadaEmpleado.findFirst({
-                        where: { empleadoId, fechaHora: fecha, tipo }
-                    })
-
-                    if (existe) return { creada: false, tieneTardanza: false }
-
-                    await tx.fichadaEmpleado.create({
-                        data: {
-                            empleadoId,
-                            fechaHora: fecha,
-                            tipo,
-                            origen: 'importado'
-                        }
-                    })
-
-                    let tieneTardanza = false
-                    if (tipo === 'entrada') {
-                        const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
-                        if (mins > 0) {
-                            tieneTardanza = true
-                            const fechaLocal = fechaClaveRRHH(fecha)
-                            const rangoDia = rangoDiaRRHH(fechaLocal)
-                            const tardanzaLockKey = `tardanza:${empleadoId}:${fechaLocal}`
-                            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${tardanzaLockKey}))::text AS lock_result`
-
-                            const existeTardanza = await tx.inasistencia.findFirst({
-                                where: {
-                                    empleadoId,
-                                    tipo: 'TARDANZA',
-                                    fecha: { gte: rangoDia.gte, lt: rangoDia.lt }
-                                }
-                            })
-
-                            if (!existeTardanza) {
-                                await tx.inasistencia.create({
-                                    data: {
-                                        empleadoId,
-                                        fecha,
-                                        tipo: 'TARDANZA',
-                                        minutosRetraso: mins,
-                                        observaciones: `Llegada tarde detectada automáticamente al importar fichada (${mins} min de retraso).`
-                                    }
-                                })
-                            }
-                        }
-                    }
-
-                    return { creada: true, tieneTardanza }
-                })
-
-                if (resultado.creada) importados++
-                if (resultado.tieneTardanza) {
-                    // Las alertas se procesan una vez confirmada la fichada.
-                    await SancionService.checkAndApplyAlerts(empleadoId)
-                }
-            } catch (err: any) {
-                errores.push(`Error al insertar registro para empleado ${empleadoId}: ${err.message}`)
+            const fecha = new Date(reg.fechaHora)
+            const tipoNormalizado = reg.tipo?.toLowerCase()
+            if (Number.isNaN(fecha.getTime()) || (tipoNormalizado !== 'entrada' && tipoNormalizado !== 'salida')) {
+                errores.push(`Fichada inválida para el código biométrico ${regRaw}.`)
+                continue
             }
+
+            const tipo = tipoNormalizado as 'entrada' | 'salida'
+            const clave = `${emp.id}|${fecha.toISOString()}|${tipo}`
+            if (clavesRecibidas.has(clave)) continue
+
+            clavesRecibidas.add(clave)
+            registrosResueltos.push({ empleadoId: emp.id, empleado: emp, fecha, tipo })
         }
- 
+
+        if (registrosResueltos.length === 0) {
+            return { success: true, importados: 0, errores }
+        }
+
+        const empleadosIds = [...new Set(registrosResueltos.map(registro => registro.empleadoId))]
+        const fechasPlan = registrosResueltos.map(registro => fechaClaveRRHH(registro.fecha)).sort()
+        const planHorarios = await cargarPlanHorarios(empleadosIds, fechasPlan[0], fechasPlan[fechasPlan.length - 1])
+        const fechasLocales = registrosResueltos.map(registro => fechaClaveRRHH(registro.fecha)).sort()
+        const rangoImportacion = {
+            gte: rangoDiaRRHH(fechasLocales[0]).gte,
+            lt: rangoDiaRRHH(fechasLocales[fechasLocales.length - 1]).lt,
+        }
+
+        const resultado = await prisma.$transaction(async (tx) => {
+            // Una importación se procesa como lote para evitar una ida a la base por cada marca.
+            // El bloqueo conserva la idempotencia frente a dos confirmaciones simultáneas.
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('fichadas:importar'))::text AS lock_result`
+
+            const existentes = await tx.fichadaEmpleado.findMany({
+                where: {
+                    empleadoId: { in: empleadosIds },
+                    fechaHora: rangoImportacion,
+                },
+                select: { empleadoId: true, fechaHora: true, tipo: true },
+            })
+            const clavesExistentes = new Set(existentes.map(fichada =>
+                `${fichada.empleadoId}|${fichada.fechaHora.toISOString()}|${fichada.tipo.toLowerCase()}`))
+            const nuevas = registrosResueltos.filter(registro =>
+                !clavesExistentes.has(`${registro.empleadoId}|${registro.fecha.toISOString()}|${registro.tipo}`))
+
+            if (nuevas.length > 0) {
+                await tx.fichadaEmpleado.createMany({
+                    data: nuevas.map(registro => ({
+                        empleadoId: registro.empleadoId,
+                        fechaHora: registro.fecha,
+                        tipo: registro.tipo,
+                        origen: 'importado',
+                    })),
+                })
+            }
+
+            const tardanzasExistentes = await tx.inasistencia.findMany({
+                where: {
+                    empleadoId: { in: empleadosIds },
+                    tipo: 'TARDANZA',
+                    fecha: rangoImportacion,
+                },
+                select: { empleadoId: true, fecha: true },
+            })
+            const clavesTardanza = new Set(tardanzasExistentes.map(tardanza =>
+                `${tardanza.empleadoId}|${fechaClaveRRHH(tardanza.fecha)}`))
+
+            // Sólo la primera entrada de cada jornada puede generar tardanza. Una segunda
+            // entrada (por corte o turno partido) no se compara con el inicio del día.
+            const entradasPorDia = new Map<string, typeof registrosResueltos[number] | null>()
+            const todasLasEntradas: Array<{
+                empleadoId: string
+                fecha: Date
+                registro: typeof registrosResueltos[number] | null
+            }> = [
+                ...existentes
+                    .filter(fichada => fichada.tipo.toLowerCase() === 'entrada')
+                    .map(fichada => ({ empleadoId: fichada.empleadoId, fecha: fichada.fechaHora, registro: null })),
+                ...nuevas
+                    .filter(registro => registro.tipo === 'entrada')
+                    .map(registro => ({ empleadoId: registro.empleadoId, fecha: registro.fecha, registro })),
+            ].sort((a, b) => a.fecha.getTime() - b.fecha.getTime())
+
+            for (const entrada of todasLasEntradas) {
+                const claveDia = `${entrada.empleadoId}|${fechaClaveRRHH(entrada.fecha)}`
+                if (!entradasPorDia.has(claveDia)) {
+                    entradasPorDia.set(claveDia, entrada.registro)
+                }
+            }
+
+            const tardanzasNuevas: Array<{
+                empleadoId: string
+                fecha: Date
+                tipo: string
+                minutosRetraso: number
+                observaciones: string
+            }> = []
+            for (const [claveDia, registro] of entradasPorDia.entries()) {
+                if (!registro || clavesTardanza.has(claveDia)) continue
+
+                const horario = resolverHorarioPlanificado(planHorarios, registro.empleadoId, fechaClaveRRHH(registro.fecha))
+                const minutos = horario ? minutosTardanzaHorario(registro.fecha, horario) : this.calcularTardanza(
+                    registro.fecha,
+                    registro.empleado.horarioEntrada,
+                    registro.empleado.turno,
+                )
+                if (minutos <= 0) continue
+
+                tardanzasNuevas.push({
+                    empleadoId: registro.empleadoId,
+                    fecha: registro.fecha,
+                    tipo: 'TARDANZA',
+                    minutosRetraso: minutos,
+                    observaciones: `Llegada tarde detectada automáticamente al importar fichada (${minutos} min de retraso).`,
+                })
+                clavesTardanza.add(claveDia)
+            }
+
+            if (tardanzasNuevas.length > 0) {
+                await tx.inasistencia.createMany({ data: tardanzasNuevas })
+            }
+
+            return {
+                importados: nuevas.length,
+                empleadosConTardanza: [...new Set(tardanzasNuevas.map(tardanza => tardanza.empleadoId))],
+            }
+        }, { maxWait: 10_000, timeout: 30_000 })
+
+        // Las alertas se verifican una sola vez por empleado, fuera de la transacción del lote.
+        await Promise.all(resultado.empleadosConTardanza.map(async empleadoId => {
+            try {
+                await SancionService.checkAndApplyAlerts(empleadoId)
+            } catch (error) {
+                console.error(`Error verificando alertas para empleado ${empleadoId}:`, error)
+            }
+        }))
+
         // Evento de dominio
-        if (importados > 0) {
-            eventBus.emit('fichadas:imported', { importados, errores: errores.length })
+        if (resultado.importados > 0) {
+            eventBus.emit('fichadas:imported', { importados: resultado.importados, errores: errores.length })
             
             // AUTO-DETECCIÓN DE AUSENCIAS PARA LOS DÍAS IMPORTADOS (SOLO DÍAS PASADOS)
+            // El reporte del local abarca sólo su propio reloj, por lo que no debe inferir
+            // ausencias del resto del personal a partir de una nómina parcial.
+            const esReporteLocal = registros.some(registro => registro.fuente === 'local_xls')
             try {
                 const fechasUnicas = [...new Set(registros.map(r => r.fechaHora.split('T')[0]))]
                 const hoyStr = fechaClaveRRHH(new Date())
-                
-                for (const fecha of fechasUnicas) {
-                    if (fecha < hoyStr) {
-                        await this.procesarAusenciasAutomaticas(fecha)
-                    }
+
+                if (!esReporteLocal) {
+                    await Promise.all(fechasUnicas
+                        .filter(fecha => fecha < hoyStr)
+                        .map(fecha => this.procesarAusenciasAutomaticas(fecha)))
                 }
             } catch (autoErr) {
                 console.error('Error en auto-detección de ausencias tras importación:', autoErr)
@@ -163,7 +241,7 @@ export class AsistenciaService {
  
         return {
             success: true,
-            importados,
+            importados: resultado.importados,
             errores
         }
     }
@@ -230,7 +308,10 @@ export class AsistenciaService {
                 include: { turno: true }
             })
             if (emp) {
-                const mins = this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
+                const clave = fechaClaveRRHH(fecha)
+                const plan = await cargarPlanHorarios([emp.id], clave, clave)
+                const horario = resolverHorarioPlanificado(plan, emp.id, clave)
+                const mins = horario ? minutosTardanzaHorario(fecha, horario) : this.calcularTardanza(fecha, emp.horarioEntrada, emp.turno)
                 if (mins > 0) {
                     await prisma.inasistencia.create({
                         data: {
@@ -306,11 +387,15 @@ export class AsistenciaService {
         })
 
         const idsConFichada = new Set(fichadasDelDia.map(f => f.empleadoId))
+        const plan = await cargarPlanHorarios(empleadosActivos.map(e => e.id), fecha, fecha)
 
         const targetDate = new Date(`${fecha}T12:00:00Z`)
         const dayOfWeek = targetDate.getUTCDay() // 0: Domingo, 6: Sábado
 
         return empleadosActivos.filter(e => {
+            const horario = resolverHorarioPlanificado(plan, e.id, fecha)
+            if (horario?.esFranco) return false
+            if (horario) return !idsConFichada.has(e.id)
             const tieneHorario = e.turno?.horaInicio || e.horarioEntrada
             if (!tieneHorario || idsConFichada.has(e.id)) return false
 

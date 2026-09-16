@@ -1,3 +1,4 @@
+import { autorizarCajasCompra } from '@/lib/compras/acceso-cajas'
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
 import { ComprasService } from '@/lib/services/compras.service'
@@ -101,6 +102,8 @@ export async function POST(request: Request) {
         const pagos = montoPagado > 0
             ? validarPagosDivididos(body.pagoDividido ? body.pagos : undefined, montoPagado, cajaOrigen)
             : []
+        const rechazoCaja = await autorizarCajasCompra(pagos.map(p => p.cajaOrigen))
+        if (rechazoCaja) return rechazoCaja
         const fechaMovimiento = fechaCivil(body.fechaMovimiento)
         const fechaFactura = body.fechaFactura ? fechaCivil(body.fechaFactura) : null
         const numeroFactura = String(body.numeroFactura || '').trim() || null

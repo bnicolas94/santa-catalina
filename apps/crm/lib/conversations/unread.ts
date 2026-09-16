@@ -36,7 +36,7 @@ export function summarizeConversationCounts(conversations: CountableConversation
   return {
     all: active.length,
     mine: active.filter(item => item.assignedToId === userId).length,
-    unassigned: active.filter(item => item.status === 'UNASSIGNED').length,
+    unassigned: active.filter(item => item.assignedToId === null).length,
     waiting: active.filter(item => item.status === 'WAITING_CUSTOMER').length,
     resolved: conversations.filter(item => item.status === 'RESOLVED').length,
     unreadConversations: unread.filter(count => count > 0).length,

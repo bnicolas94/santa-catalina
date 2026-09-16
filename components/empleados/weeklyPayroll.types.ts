@@ -26,6 +26,8 @@ export interface DiaLiquidacionUI {
     nombreFeriado?: string
     horasTrabajadas: number
     horasJornada?: number
+    horarioEsperadoEntrada?: string | null
+    horarioEsperadoSalida?: string | null
     horasExtras: number
     entrada: string | null
     salida: string | null

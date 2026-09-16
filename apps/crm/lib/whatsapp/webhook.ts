@@ -203,7 +203,7 @@ async function persistLiveMessage(
     })
     await transaction.conversation.updateMany({
       where: { id: conversation.id, lastMessageAt: { lte: occurredAt } },
-      data: { lastMessageAt: occurredAt, status: 'OPEN', resolvedAt: null },
+      data: { lastMessageAt: occurredAt, status: conversation.assignedToId ? 'OPEN' : 'UNASSIGNED', resolvedAt: null },
     })
   } else {
     await transaction.conversation.updateMany({

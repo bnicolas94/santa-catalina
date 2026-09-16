@@ -2,45 +2,19 @@ import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
+import { exigirAccesoCaja, listarCajas } from '@/lib/services/cajas-catalogo.service'
+import { tieneAccesoCaja, type UsuarioCajas } from '@/lib/caja/catalogo'
 
 // GET /api/caja/saldos — Obtener saldos actuales de Caja Madre y Caja Chica
 export async function GET() {
     try {
-        // Crear registros si no existen (upsert)
-        const [cajaMadre, cajaChica, local, cajaChicaLocal, mercadoPago, mercadoPagoJuani] = await Promise.all([
-            prisma.saldoCaja.upsert({
-                where: { tipo: 'caja_madre' },
-                create: { tipo: 'caja_madre', saldo: 0 },
-                update: {},
-            }),
-            prisma.saldoCaja.upsert({
-                where: { tipo: 'caja_chica' },
-                create: { tipo: 'caja_chica', saldo: 0 },
-                update: {},
-            }),
-            prisma.saldoCaja.upsert({
-                where: { tipo: 'local' },
-                create: { tipo: 'local', saldo: 0 },
-                update: {},
-            }),
-            prisma.saldoCaja.upsert({
-                where: { tipo: 'caja_chica_local' },
-                create: { tipo: 'caja_chica_local', saldo: 0 },
-                update: {},
-            }),
-            prisma.saldoCaja.upsert({
-                where: { tipo: 'mercado_pago' },
-                create: { tipo: 'mercado_pago', saldo: 0 },
-                update: {},
-            }),
-            prisma.saldoCaja.upsert({
-                where: { tipo: 'mercado_pago_juani' },
-                create: { tipo: 'mercado_pago_juani', saldo: 0 },
-                update: {},
-            }),
-        ])
-
-        return NextResponse.json({ cajaMadre, cajaChica, local, cajaChicaLocal, mercadoPago, mercadoPagoJuani })
+        const session = await getServerSession(authOptions)
+        if (!session?.user) return NextResponse.json({ error: 'Sesión requerida.' }, { status: 401 })
+        const cajas = await listarCajas(session.user as UsuarioCajas, true)
+        const porTipo = Object.fromEntries(cajas.map(c => [c.tipo, c]))
+        return NextResponse.json({ cajas, cajaMadre: porTipo.caja_madre, cajaChica: porTipo.caja_chica,
+            local: porTipo.local, cajaChicaLocal: porTipo.caja_chica_local,
+            mercadoPago: porTipo.mercado_pago, mercadoPagoJuani: porTipo.mercado_pago_juani })
     } catch (error) {
         console.error('Error obteniendo saldos:', error)
         return NextResponse.json({ error: 'Error al obtener saldos' }, { status: 500 })
@@ -54,43 +28,16 @@ export async function PUT(request: NextRequest) {
         const { tipo, saldo, motivo, descripcion } = body
 
         const session = await getServerSession(authOptions)
-        const userRol = (session?.user as any)?.rol
-        const permisos = (session?.user as any)?.permisos || {}
-
-        if (userRol?.toUpperCase() !== 'ADMIN') {
-            if (!permisos.permisoCaja) {
-                return NextResponse.json({ error: 'No tienes permiso para operar en caja' }, { status: 403 })
-            }
-            const ubicacionTipo = (session?.user as any)?.ubicacionTipo?.toUpperCase()
-            const cajaLower = tipo?.toLowerCase()
-
-            if (ubicacionTipo === 'LOCAL') {
-                if (cajaLower !== 'local' && cajaLower !== 'caja_chica_local') {
-                    return NextResponse.json({ error: `No tienes permiso para ajustar la caja '${tipo}' desde ubicación LOCAL` }, { status: 403 })
-                }
-            } else if (ubicacionTipo === 'FABRICA') {
-                const allowed = ['caja_madre', 'caja_chica']
-                if (!allowed.includes(cajaLower)) {
-                    return NextResponse.json({ error: `No tienes permiso para ajustar la caja '${tipo}' desde ubicación FABRICA` }, { status: 403 })
-                }
-            } else {
-                return NextResponse.json({ error: 'Tu usuario no tiene una ubicación asignada para operar en caja' }, { status: 403 })
-            }
-        }
-
-        if (!tipo || saldo === undefined) {
-            return NextResponse.json({ error: 'Tipo y saldo son requeridos' }, { status: 400 })
-        }
-
-        if (!['caja_madre', 'caja_chica', 'caja_chica_local', 'local', 'mercado_pago', 'mercado_pago_juani'].includes(tipo)) {
-            return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
-        }
-
-        const nuevoSaldo = parseFloat(saldo)
+        if (!session?.user) return NextResponse.json({ error: 'Sesión requerida.' }, { status: 401 })
+        try { await exigirAccesoCaja(session.user as UsuarioCajas, tipo) }
+        catch { return NextResponse.json({ error: 'Caja no autorizada o inactiva.' }, { status: 403 }) }
+        const nuevoSaldo = Number(saldo)
+        if (saldo === null || saldo === '' || !Number.isFinite(nuevoSaldo)) return NextResponse.json({ error: 'Saldo inválido.' }, { status: 400 })
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Obtener saldo actual
-            const actual = await tx.saldoCaja.findUnique({ where: { tipo } })
+            const actual = await tx.saldoCaja.findUnique({ where: { tipo }, include: { ubicacion: true } })
+            if (!actual || !tieneAccesoCaja(session.user as UsuarioCajas, actual)) throw new Error('La caja cambió o ya no está activa.')
             const saldoAnterior = actual?.saldo || 0
             const diferencia = nuevoSaldo - saldoAnterior
 
@@ -134,7 +81,7 @@ export async function PUT(request: NextRequest) {
                 create: { tipo, saldo: nuevoSaldo },
                 update: { saldo: nuevoSaldo },
             })
-        })
+        }, { isolationLevel: 'Serializable' })
 
         return NextResponse.json(result)
     } catch (error) {
