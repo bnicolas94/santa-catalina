@@ -234,6 +234,17 @@ export default function CajaPage() {
             total: 0,
         }
         grupo.cajas.push(caja)
+        grupo.cajas.sort((a, b) => {
+            const orden = (nombre: string | null) => {
+                const valor = (nombre || '').toLocaleLowerCase('es')
+                if (valor.includes('chica')) return 0
+                if (valor.includes('fuerte')) return 1
+                return 2
+            }
+
+            return orden(a.nombre) - orden(b.nombre)
+                || (a.nombre || a.tipo).localeCompare(b.nombre || b.tipo, 'es')
+        })
         grupo.total += caja.saldo
         grupos.set(clave, grupo)
         return grupos
