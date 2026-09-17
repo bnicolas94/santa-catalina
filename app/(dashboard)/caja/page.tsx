@@ -4,11 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import DiagnosticoMercadoPago from '@/components/caja/DiagnosticoMercadoPago'
-import ConciliarReporteMP from '@/components/caja/ConciliarReporteMP'
-import EstadoAutomaticoMP from '@/components/caja/EstadoAutomaticoMP'
 
-interface CajaCatalogo { id: string; tipo: string; nombre: string | null; saldo: number; activo: boolean; ubicacionId: string | null; ubicacion: { nombre: string; activo: boolean } | null; recibeDepositos: boolean }
+interface CajaCatalogo { id: string; tipo: string; nombre: string | null; saldo: number; activo: boolean; ubicacionId: string | null; ubicacion: { nombre: string; activo: boolean; tipo?: string } | null; recibeDepositos: boolean }
 
 interface UsuarioCaja {
     id: string
@@ -184,9 +181,6 @@ export default function CajaPage() {
 
     const empData = swrData?.empleadosData
     const choferes = Array.isArray(empData) ? empData : []
-    const [showMPModal, setShowMPModal] = useState(false)
-    const [liveMPData, setLiveMPData] = useState<any[]>([])
-    const [loadingMP, setLoadingMP] = useState(false)
     const [editingSaldo, setEditingSaldo] = useState<string | null>(null)
     const [editSaldoValue, setEditSaldoValue] = useState('')
     const [editMotivo, setEditMotivo] = useState('ajuste')
@@ -201,20 +195,6 @@ export default function CajaPage() {
         return caja ? (caja.nombre || caja.tipo) + (caja.ubicacion ? ' · ' + caja.ubicacion.nombre : '') : id.replace(/_/g, ' ')
     };
 
-
-
-    const checkLiveMP = async () => {
-        setLoadingMP(true)
-        setShowMPModal(true)
-        try {
-            const res = await fetch('/api/mercadopago/movimientos?live_mp=true')
-            const data = await res.json()
-            setLiveMPData(data)
-        } catch (error) {
-            console.error("Error fetching live MP data", error)
-        }
-        setLoadingMP(false)
-    }
 
     const [showMontos, setShowMontos] = useState(true)
     const [showModal, setShowModal] = useState(false)
@@ -244,6 +224,24 @@ export default function CajaPage() {
     const [filtroTipo, setFiltroTipo] = useState('todos')
 
     const allowedBoxes = cajasActivas.map(c => c.tipo)
+    const cajasPorSucursal = [...cajasActivas.reduce((grupos, caja) => {
+        const clave = caja.ubicacionId || '__sin_sede__'
+        const grupo = grupos.get(clave) || {
+            clave,
+            nombre: caja.ubicacion?.nombre || 'Sin sede',
+            tipo: caja.ubicacion?.tipo || 'OTRA',
+            cajas: [] as CajaCatalogo[],
+            total: 0,
+        }
+        grupo.cajas.push(caja)
+        grupo.total += caja.saldo
+        grupos.set(clave, grupo)
+        return grupos
+    }, new Map<string, { clave: string; nombre: string; tipo: string; cajas: CajaCatalogo[]; total: number }>()).values()]
+        .sort((a, b) => {
+            const orden = (tipo: string) => tipo === 'FABRICA' ? 0 : tipo === 'LOCAL' ? 1 : 2
+            return orden(a.tipo) - orden(b.tipo) || a.nombre.localeCompare(b.nombre, 'es')
+        })
     const getBoxSaldo = (tipo: string) => cajasCatalogo.find(c => c.tipo === tipo)?.saldo ?? 0
     const cajaDepositoSeleccionada = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig?.cajaDepositoId
     const saldoDisponibleDeposito = cajaDepositoSeleccionada ? getBoxSaldo(cajaDepositoSeleccionada) : 0
@@ -756,22 +754,60 @@ export default function CajaPage() {
                 </div>
             )}
 
-            {/* Cajas autorizadas de la sede, con tarjetas generadas desde el catálogo. */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 24 }}>
-                {cajasActivas.map(caja => <div key={caja.id} className="card"><div className="card-body">
-                    <strong>{caja.nombre || caja.tipo}</strong><p>{caja.ubicacion?.nombre || 'Central'}</p>
-                    {editingSaldo === caja.tipo ? <>
-                        <input aria-label="Saldo" type="number" step="0.01" className="form-input" value={editSaldoValue} onChange={e => setEditSaldoValue(e.target.value)} />
-                        <select aria-label="Motivo de ajuste" className="form-select" value={editMotivo} onChange={e => setEditMotivo(e.target.value)}><option value="ajuste">Ajuste</option><option value="arqueo">Arqueo</option></select>
-                        <input aria-label="Detalle de ajuste" className="form-input" placeholder="Detalle" value={editDescripcion} onChange={e => setEditDescripcion(e.target.value)} />
-                        <button className="btn btn-primary btn-sm" onClick={() => void updateSaldo(caja.tipo)}>Guardar ajuste</button><button className="btn btn-ghost btn-sm" onClick={() => setEditingSaldo(null)}>Cancelar</button>
-                    </> : <><p style={{ fontSize: '1.8rem', fontWeight: 700, color: '#2980b9' }}>{formatCurrency(caja.saldo, showMontos)}</p>
-                        {userRol === 'ADMIN' && <button className="btn btn-ghost btn-sm" onClick={() => { setEditingSaldo(caja.tipo); setEditSaldoValue(String(caja.saldo)) }}>Ajustar saldo</button>}</>}
-                    {caja.tipo === 'mercado_pago' && userRol === 'ADMIN' && <div style={{ fontSize: '0.8rem' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={checkLiveMP}>Ver conexión MP</button>
-                        <EstadoAutomaticoMP onActualizado={() => { void mutate() }} /><DiagnosticoMercadoPago /><ConciliarReporteMP onConfirmado={() => { void mutate() }} />
-                    </div>}
-                </div></div>)}
+            {/* Cajas autorizadas, agrupadas visualmente por sede. */}
+            <div style={{ display: 'grid', gap: 20, marginBottom: 24 }}>
+                {cajasPorSucursal.map(grupo => (
+                    <section key={grupo.clave} style={{ padding: 18, border: '1px solid var(--color-gray-200)', borderRadius: 14, background: '#f8fafc' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <span aria-hidden="true" style={{ display: 'grid', placeItems: 'center', width: 42, height: 42, borderRadius: 12, background: grupo.tipo === 'LOCAL' ? '#ecfdf5' : '#eff6ff', fontSize: '1.25rem' }}>
+                                    {grupo.tipo === 'LOCAL' ? '📍' : grupo.tipo === 'FABRICA' ? '🏭' : '🏦'}
+                                </span>
+                                <div>
+                                    <div style={{ color: 'var(--color-gray-500)', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                        {grupo.tipo === 'LOCAL' ? 'Sucursal' : grupo.tipo === 'FABRICA' ? 'Administración y fábrica' : 'Cajas'}
+                                    </div>
+                                    <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{grupo.nombre}</h2>
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ color: 'var(--color-gray-500)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>Total de la sede</div>
+                                <strong style={{ color: '#0f766e', fontSize: '1.35rem' }}>{formatCurrency(grupo.total, showMontos)}</strong>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                            {grupo.cajas.map(caja => (
+                                <div key={caja.id} className="card" style={{ minWidth: 0, border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)' }}>
+                                    <div className="card-body" style={{ display: 'flex', minHeight: 168, flexDirection: 'column', padding: 18 }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                                            <strong style={{ fontSize: '0.95rem', lineHeight: 1.35 }}>{caja.nombre || caja.tipo}</strong>
+                                            {caja.recibeDepositos && <span className="badge" style={{ flexShrink: 0, background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', fontSize: '0.62rem' }}>Depósitos</span>}
+                                        </div>
+                                        {editingSaldo === caja.tipo ? (
+                                            <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
+                                                <input aria-label="Saldo" type="number" step="0.01" className="form-input" value={editSaldoValue} onChange={e => setEditSaldoValue(e.target.value)} />
+                                                <select aria-label="Motivo de ajuste" className="form-select" value={editMotivo} onChange={e => setEditMotivo(e.target.value)}><option value="ajuste">Ajuste</option><option value="arqueo">Arqueo</option></select>
+                                                <input aria-label="Detalle de ajuste" className="form-input" placeholder="Detalle" value={editDescripcion} onChange={e => setEditDescripcion(e.target.value)} />
+                                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                    <button className="btn btn-primary btn-sm" onClick={() => void updateSaldo(caja.tipo)}>Guardar ajuste</button>
+                                                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingSaldo(null)}>Cancelar</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ marginTop: 18, fontSize: '1.75rem', fontWeight: 800, color: caja.saldo < 0 ? '#dc2626' : '#2563eb', lineHeight: 1.1 }}>
+                                                    {formatCurrency(caja.saldo, showMontos)}
+                                                </div>
+                                                {userRol === 'ADMIN' && <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', marginTop: 'auto' }} onClick={() => { setEditingSaldo(caja.tipo); setEditSaldoValue(String(caja.saldo)) }}>Ajustar saldo</button>}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                ))}
             </div>
             {!loading && !cajasActivas.length && <p role="status">No hay cajas activas vinculadas a tu sede. Solicitá la vinculación a Administración.</p>}
 
@@ -1490,75 +1526,6 @@ export default function CajaPage() {
                 </div>
             )}
 
-            {/* Modal MP en Vivo */}
-            {showMPModal && (
-                <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={(e) => { if (e.target === e.currentTarget) setShowMPModal(false) }}>
-                    <div className="modal" style={{ maxWidth: '900px', width: '95%', backgroundColor: '#ffffff', padding: '2rem' }}>
-                        <h2 style={{ color: 'var(--color-text)' }}>Conexión en Vivo: Últimos 15 Pagos MP</h2>
-                        <p style={{ fontSize: '0.9rem', color: 'var(--color-gray-500)', marginBottom: '1.5rem' }}>
-                            Estos datos vienen <strong>directamente de la API de Mercado Pago</strong>, sin pasar por la base de datos local. Sirve para corroborar que tu cuenta está recibiendo fondos de manera efectiva.
-                        </p>
-                        {loadingMP ? (
-                            <div style={{ padding: '2rem', textAlign: 'center' }}>Conectando a servidores de Mercado Pago...</div>
-                        ) : (
-                            <div className="table-container" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                                <table className="table">
-                                    <thead>
-                                        <tr>
-                                            <th>ID MP</th>
-                                            <th>Pagador / Descripción</th>
-                                            <th>Fecha Aprobación</th>
-                                            <th>Estado</th>
-                                            <th>Monto Bruto</th>
-                                            <th>Bruto Neto</th>
-                                            <th>Método</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {liveMPData.length === 0 ? (
-                                            <tr><td colSpan={7} style={{ textAlign: 'center' }}>No se obtuvieron registros de la API.</td></tr>
-                                        ) : (liveMPData.map(p => {
-                                            const isEgreso = !p.collector_id || String(p.collector_id) !== '231378824';
-                                            const color = isEgreso ? '#dc2626' : '#16a34a';
-                                            const prefix = isEgreso ? '-' : '+';
-                                            const payerName = (p.payer?.first_name || p.payer?.last_name) 
-                                                ? `${p.payer.first_name ?? ''} ${p.payer.last_name ?? ''}`.trim()
-                                                : (p.payer?.email ? p.payer.email.split('@')[0] : 'Cliente MP');
-
-                                            return (
-                                                <tr key={p.id}>
-                                                    <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{p.id}</td>
-                                                    <td>
-                                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-primary)' }}>
-                                                            {payerName}
-                                                        </div>
-                                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', fontStyle: 'italic' }}>
-                                                            {p.description || '-'}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ fontSize: '0.8rem' }}>{p.date_approved ? new Date(p.date_approved).toLocaleString('es-AR') : p.date_created}</td>
-                                                    <td>
-                                                        <span className={`badge ${p.status === 'approved' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.7rem' }}>
-                                                            {p.status}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ fontWeight: 'bold', color }}>{prefix} ${p.transaction_amount}</td>
-                                                    <td style={{ color }}>{prefix} ${p.transaction_details?.net_received_amount ?? p.transaction_amount}</td>
-                                                    <td style={{ fontSize: '0.8rem', color: 'var(--color-gray-600)' }}>{p.payment_method_id || '-'}</td>
-                                                </tr>
-                                            );
-                                        }))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                        <div className="form-actions" style={{ marginTop: '1.5rem' }}>
-                            <button type="button" className="btn btn-ghost" onClick={() => setShowMPModal(false)}>Cerrar</button>
-                            <button type="button" className="btn btn-primary" onClick={checkLiveMP} disabled={loadingMP}>Actualizar Lista MP</button>
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* MODAL DE DEPOSITO RÁPIDO */}
             {showValidacionDeposito && userRol === 'ADMIN' && (() => {
                 const montoReal = Number(validacionDepositoForm.montoReal || 0)
