@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { evaluarFilaSheet, normalizarImporte, normalizarTexto, parsearCsvSheetCaja, parsearFechaArgentina } from './google-sheets-caja'
+import { evaluarFilaSheet, normalizarImporte, normalizarTexto, parsearCsvSheetCaja, parsearFechaArgentina, rangoDiaArgentinaSheet } from './google-sheets-caja'
 
 test('lee las columnas financieras aunque Producto tenga saltos de línea', () => {
     const csv = 'ID,Fecha/Hora,Nombre,Apellido,Teléfono,Dirección,Producto,Cantidad,Precio,Pago,Modalidad,Ubicación,Estado\n' +
@@ -19,6 +19,13 @@ test('normaliza textos e importes argentinos', () => {
     assert.equal(normalizarImporte('1.234,50'), 1234.5)
     assert.equal(normalizarImporte('16000'), 16000)
     assert.equal(parsearFechaArgentina('fecha inválida'), null)
+})
+
+test('el filtro por fecha cubre el día civil completo de Argentina', () => {
+    const rango = rangoDiaArgentinaSheet('2026-09-17')
+    assert.equal(rango.gte.toISOString(), '2026-09-17T03:00:00.000Z')
+    assert.equal(rango.lt.toISOString(), '2026-09-18T03:00:00.000Z')
+    assert.throws(() => rangoDiaArgentinaSheet('2026-02-31'), /fecha válida/)
 })
 
 test('sólo registra pedidos entregados desde la activación', () => {

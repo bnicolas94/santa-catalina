@@ -43,6 +43,20 @@ export function parsearFechaArgentina(valor: unknown): Date | null {
     return Number.isNaN(fecha.getTime()) ? null : fecha
 }
 
+export function rangoDiaArgentinaSheet(valor: string): { gte: Date; lt: Date } {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) throw new Error('Seleccioná una fecha válida.')
+    const [anio, mes, dia] = valor.split('-').map(Number)
+    const control = new Date(Date.UTC(anio, mes - 1, dia))
+    if (control.getUTCFullYear() !== anio || control.getUTCMonth() !== mes - 1 || control.getUTCDate() !== dia) {
+        throw new Error('Seleccioná una fecha válida.')
+    }
+    const siguiente = new Date(Date.UTC(anio, mes - 1, dia + 1)).toISOString().slice(0, 10)
+    return {
+        gte: new Date(`${valor}T00:00:00.000-03:00`),
+        lt: new Date(`${siguiente}T00:00:00.000-03:00`),
+    }
+}
+
 function encabezado(valor: unknown) {
     return normalizarTexto(valor).replace(/[^a-z0-9]/g, '')
 }

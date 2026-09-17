@@ -29,10 +29,12 @@ const claveFiltro = (valor: string) => valor.trim().toLocaleLowerCase('es-AR')
 export default function IntegracionGoogleSheetsPage() {
     const [filtroSucursal, setFiltroSucursal] = useState('')
     const [filtroPago, setFiltroPago] = useState('')
+    const [filtroFecha, setFiltroFecha] = useState('')
     const [pagina, setPagina] = useState(1)
     const parametros = new URLSearchParams({ pagina: String(pagina) })
     if (filtroSucursal) parametros.set('ubicacion', filtroSucursal)
     if (filtroPago) parametros.set('pago', filtroPago)
+    if (filtroFecha) parametros.set('fecha', filtroFecha)
     const { data, error: errorCarga, mutate, isLoading } = useSWR(`/api/caja/google-sheets?${parametros.toString()}`, cargar<Resumen>)
     const { data: cajas } = useSWR('/api/cajas', cargar<Caja[]>)
     const { data: sedes } = useSWR('/api/sedes', cargar<Sede[]>)
@@ -148,7 +150,11 @@ export default function IntegracionGoogleSheetsPage() {
                             {data.opcionesFiltros.pagos.map(pago => <option key={pago} value={pago}>{pago}</option>)}
                         </select>
                     </label>
-                    {(filtroSucursal || filtroPago) && <button type="button" className="btn btn-ghost" onClick={() => { setFiltroSucursal(''); setFiltroPago(''); setPagina(1) }}>Limpiar filtros</button>}
+                    <label style={{ display: 'grid', gap: 5, minWidth: 180, flex: '0 1 200px' }}>
+                        <span style={{ color: 'var(--color-gray-600)', fontSize: '0.75rem', fontWeight: 700 }}>Fecha</span>
+                        <input type="date" className="form-input" value={filtroFecha} onChange={e => { setFiltroFecha(e.target.value); setPagina(1) }} />
+                    </label>
+                    {(filtroSucursal || filtroPago || filtroFecha) && <button type="button" className="btn btn-ghost" onClick={() => { setFiltroSucursal(''); setFiltroPago(''); setFiltroFecha(''); setPagina(1) }}>Limpiar filtros</button>}
                     <div style={{ marginLeft: 'auto', color: 'var(--color-gray-500)', fontSize: '0.8rem', paddingBottom: 10 }}>
                         {totalMovimientos} {totalMovimientos === 1 ? 'movimiento' : 'movimientos'}
                     </div>

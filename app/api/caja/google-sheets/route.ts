@@ -21,6 +21,7 @@ export async function GET(request: Request) {
         porPagina: 10,
         ubicacion: searchParams.get('ubicacion') || '',
         pago: searchParams.get('pago') || '',
+        fecha: searchParams.get('fecha') || '',
     })) }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'No se pudo consultar la integración.' }, { status: 503 }) }
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { evaluarFilaSheet, normalizarTexto, parsearCsvSheetCaja, type FilaSheetCaja } from '@/lib/google-sheets-caja'
+import { evaluarFilaSheet, normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet, type FilaSheetCaja } from '@/lib/google-sheets-caja'
 import { CajaService } from '@/lib/services/caja.service'
 
 const CONFIG_KEY = 'google-sheets:caja:config:v1'
@@ -236,6 +236,7 @@ export interface FiltrosResumenSheetCaja {
     porPagina?: number
     ubicacion?: string
     pago?: string
+    fecha?: string
 }
 
 export async function resumenGoogleSheetsCaja(filtros: FiltrosResumenSheetCaja = {}) {
@@ -243,9 +244,12 @@ export async function resumenGoogleSheetsCaja(filtros: FiltrosResumenSheetCaja =
     const paginaSolicitada = Math.max(1, Math.trunc(filtros.pagina || 1))
     const ubicacion = String(filtros.ubicacion || '').trim().slice(0, 150)
     const pago = String(filtros.pago || '').trim().slice(0, 100)
+    const fecha = String(filtros.fecha || '').trim().slice(0, 10)
+    const rangoFecha = fecha ? rangoDiaArgentinaSheet(fecha) : null
     const where: Prisma.MovimientoSheetCajaWhereInput = {
         ...(ubicacion ? { ubicacion: { equals: ubicacion, mode: 'insensitive' } } : {}),
         ...(pago ? { pago: { equals: pago, mode: 'insensitive' } } : {}),
+        ...(rangoFecha ? { fechaExterna: rangoFecha } : {}),
     }
     const [config, estado, sucursales, total, totalesPorHoja, ubicaciones, pagos] = await Promise.all([
         obtenerConfiguracionSheetCaja(), obtenerEstadoSheetCaja(),
