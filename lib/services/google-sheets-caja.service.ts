@@ -231,12 +231,42 @@ export async function sincronizarGoogleSheetsCaja(forzar = false) {
     return estado
 }
 
-export async function resumenGoogleSheetsCaja() {
-    const [config, estado, sucursales, recientes, totalesPorHoja] = await Promise.all([
+export interface FiltrosResumenSheetCaja {
+    pagina?: number
+    porPagina?: number
+    ubicacion?: string
+    pago?: string
+}
+
+export async function resumenGoogleSheetsCaja(filtros: FiltrosResumenSheetCaja = {}) {
+    const porPagina = Math.max(1, Math.min(50, Math.trunc(filtros.porPagina || 10)))
+    const paginaSolicitada = Math.max(1, Math.trunc(filtros.pagina || 1))
+    const ubicacion = String(filtros.ubicacion || '').trim().slice(0, 150)
+    const pago = String(filtros.pago || '').trim().slice(0, 100)
+    const where: Prisma.MovimientoSheetCajaWhereInput = {
+        ...(ubicacion ? { ubicacion: { equals: ubicacion, mode: 'insensitive' } } : {}),
+        ...(pago ? { pago: { equals: pago, mode: 'insensitive' } } : {}),
+    }
+    const [config, estado, sucursales, total, totalesPorHoja, ubicaciones, pagos] = await Promise.all([
         obtenerConfiguracionSheetCaja(), obtenerEstadoSheetCaja(),
         prisma.integracionSheetSucursal.findMany({ include: { ubicacion: true, cajaEfectivo: true, cajaTransferencia: true }, orderBy: { ubicacionTexto: 'asc' } }),
-        prisma.movimientoSheetCaja.findMany({ include: { movimientoCaja: true }, orderBy: [{ hoja: 'asc' }, { fila: 'asc' }], take: 200 }),
+        prisma.movimientoSheetCaja.count({ where }),
         prisma.movimientoSheetCaja.groupBy({ by: ['hoja'], _count: { _all: true } }),
+        prisma.movimientoSheetCaja.findMany({ where: { ubicacion: { not: '' } }, distinct: ['ubicacion'], select: { ubicacion: true }, orderBy: { ubicacion: 'asc' } }),
+        prisma.movimientoSheetCaja.findMany({ where: { pago: { not: '' } }, distinct: ['pago'], select: { pago: true }, orderBy: { pago: 'asc' } }),
     ])
-    return { config, estado, sucursales, recientes, totalesPorHoja }
+    const totalPaginas = Math.max(1, Math.ceil(total / porPagina))
+    const pagina = Math.min(paginaSolicitada, totalPaginas)
+    const recientes = await prisma.movimientoSheetCaja.findMany({
+        where,
+        include: { movimientoCaja: true },
+        orderBy: [{ hoja: 'asc' }, { fila: 'asc' }],
+        skip: (pagina - 1) * porPagina,
+        take: porPagina,
+    })
+    return {
+        config, estado, sucursales, recientes, totalesPorHoja,
+        paginacion: { pagina, porPagina, total, totalPaginas },
+        opcionesFiltros: { ubicaciones: ubicaciones.map(item => item.ubicacion), pagos: pagos.map(item => item.pago) },
+    }
 }

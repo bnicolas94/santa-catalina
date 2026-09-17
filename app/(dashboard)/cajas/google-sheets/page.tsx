@@ -6,13 +6,15 @@ import useSWR from 'swr'
 
 interface Caja { id: string; tipo: string; nombre: string | null; activo: boolean; ubicacionId: string | null; ubicacion?: { nombre: string } | null }
 interface Sede { id: string; nombre: string; activo: boolean; tipo: string }
-interface Sucursal { id?: string; ubicacionTexto: string; ubicacionId: string; cajaEfectivoId: string | null; cajaTransferenciaId: string | null; activo: boolean }
+interface Sucursal { id?: string; ubicacionTexto: string; ubicacionId: string; cajaEfectivoId: string | null; cajaTransferenciaId: string | null; activo: boolean; ubicacion?: { nombre: string } | null }
 interface Resumen {
     config: { activo: boolean; spreadsheetId: string; intervaloMinutos: number; fechaInicio: string | null }
     estado: { ultimaSincronizacion?: string; filasLeidas: number; incorporados: number; pendientes: number; revisiones: number; error?: string }
     sucursales: Sucursal[]
     recientes: { id: string; externalId: string; hoja: string; precio: number; pago: string; ubicacion: string; estadoFuente: string; estadoProcesamiento: string; detalle: string | null; fechaExterna: string | null; updatedAt: string }[]
     totalesPorHoja: { hoja: string; _count: { _all: number } }[]
+    paginacion: { pagina: number; porPagina: number; total: number; totalPaginas: number }
+    opcionesFiltros: { ubicaciones: string[]; pagos: string[] }
 }
 
 async function cargar<T,>(url: string): Promise<T> {
@@ -22,8 +24,16 @@ async function cargar<T,>(url: string): Promise<T> {
     return data
 }
 
+const claveFiltro = (valor: string) => valor.trim().toLocaleLowerCase('es-AR')
+
 export default function IntegracionGoogleSheetsPage() {
-    const { data, error: errorCarga, mutate, isLoading } = useSWR('/api/caja/google-sheets', cargar<Resumen>)
+    const [filtroSucursal, setFiltroSucursal] = useState('')
+    const [filtroPago, setFiltroPago] = useState('')
+    const [pagina, setPagina] = useState(1)
+    const parametros = new URLSearchParams({ pagina: String(pagina) })
+    if (filtroSucursal) parametros.set('ubicacion', filtroSucursal)
+    if (filtroPago) parametros.set('pago', filtroPago)
+    const { data, error: errorCarga, mutate, isLoading } = useSWR(`/api/caja/google-sheets?${parametros.toString()}`, cargar<Resumen>)
     const { data: cajas } = useSWR('/api/cajas', cargar<Caja[]>)
     const { data: sedes } = useSWR('/api/sedes', cargar<Sede[]>)
     const [sucursales, setSucursales] = useState<Sucursal[]>([])
@@ -38,7 +48,7 @@ export default function IntegracionGoogleSheetsPage() {
             const response = await fetch('/api/caja/google-sheets', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sucursales }) })
             const resultado = await response.json()
             if (!response.ok) throw new Error(resultado.error || 'No se pudo guardar.')
-            await mutate(resultado); setMensaje('Destinos guardados.')
+            await mutate(); setMensaje('Destinos guardados.')
         } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar.') }
         finally { setOcupado(false) }
     }
@@ -52,7 +62,7 @@ export default function IntegracionGoogleSheetsPage() {
             const response = await fetch('/api/caja/google-sheets', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { ...data?.config, activo } }) })
             const resultado = await response.json()
             if (!response.ok) throw new Error(resultado.error || 'No se pudo cambiar el estado.')
-            await mutate(resultado); setMensaje(activo ? 'Integración activada. Sólo tomará pedidos entregados desde este momento.' : 'Integración pausada.')
+            await mutate(); setMensaje(activo ? 'Integración activada. Sólo tomará pedidos entregados desde este momento.' : 'Integración pausada.')
         } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo cambiar el estado.') }
         finally { setOcupado(false) }
     }
@@ -72,6 +82,15 @@ export default function IntegracionGoogleSheetsPage() {
         setSucursales(actuales => actuales.map((fila, i) => i === indice ? { ...fila, ...cambio } : fila))
     }
     const cajasActivas = (cajas || []).filter(c => c.activo)
+    const movimientosPagina = data?.recientes || []
+    const paginaActual = data?.paginacion.pagina || pagina
+    const totalPaginas = data?.paginacion.totalPaginas || 1
+    const totalMovimientos = data?.paginacion.total || 0
+    const porPagina = data?.paginacion.porPagina || 10
+    const indiceInicial = (paginaActual - 1) * porPagina
+    const nombreSucursal = (ubicacionTexto: string) => data?.sucursales.find(sucursal =>
+        claveFiltro(sucursal.ubicacionTexto) === claveFiltro(ubicacionTexto)
+    )?.ubicacion?.nombre || ubicacionTexto
     function resultadoVisible(fila: Resumen['recientes'][number]) {
         if (fila.estadoProcesamiento === 'REGISTRADO') return 'Incorporado en Caja'
         if (fila.estadoProcesamiento === 'PENDIENTE_DATOS') return 'Datos incompletos'
@@ -111,10 +130,44 @@ export default function IntegracionGoogleSheetsPage() {
                     <button className="btn btn-primary" disabled={ocupado || !sucursales.length} onClick={() => void guardar()}>Guardar destinos</button></div>
             </section>
 
-            <section style={{ marginTop: 28 }}><h2>Pedidos leídos</h2><p>{data.totalesPorHoja.map(t => `${t.hoja}: ${t._count._all}`).join(' · ')}. Se muestran también los pendientes y los anteriores a la activación.</p><div className="table-container"><table className="table"><thead><tr><th>Pedido</th><th>Hoja</th><th>Estado Sheet</th><th>Ubicación</th><th>Pago</th><th>Importe</th><th>Resultado</th></tr></thead><tbody>
-                {data.recientes.map(r => <tr key={r.id}><td>#{r.externalId}</td><td>{r.hoja}</td><td>{r.estadoFuente || '—'}</td><td>{r.ubicacion || '—'}</td><td>{r.pago || '—'}</td><td>{r.precio.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</td><td>{resultadoVisible(r)}{r.detalle && <small style={{ display: 'block' }}>{r.detalle}</small>}</td></tr>)}
-                {!data.recientes.length && <tr><td colSpan={7}>Todavía no hay movimientos procesados.</td></tr>}
-            </tbody></table></div></section>
+            <section style={{ marginTop: 28 }}>
+                <h2>Pedidos leídos</h2>
+                <p>{data.totalesPorHoja.map(t => `${t.hoja}: ${t._count._all}`).join(' · ')}. Se muestran también los pendientes y los anteriores a la activación.</p>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'end', flexWrap: 'wrap', padding: 14, marginBottom: 12, border: '1px solid var(--color-gray-200)', borderRadius: 12, background: '#f8fafc' }}>
+                    <label style={{ display: 'grid', gap: 5, minWidth: 220, flex: '1 1 220px' }}>
+                        <span style={{ color: 'var(--color-gray-600)', fontSize: '0.75rem', fontWeight: 700 }}>Sucursal</span>
+                        <select className="form-select" value={filtroSucursal} onChange={e => { setFiltroSucursal(e.target.value); setPagina(1) }}>
+                            <option value="">Todas las sucursales</option>
+                            {data.opcionesFiltros.ubicaciones.map(ubicacion => <option key={ubicacion} value={ubicacion}>{nombreSucursal(ubicacion)}</option>)}
+                        </select>
+                    </label>
+                    <label style={{ display: 'grid', gap: 5, minWidth: 200, flex: '1 1 200px' }}>
+                        <span style={{ color: 'var(--color-gray-600)', fontSize: '0.75rem', fontWeight: 700 }}>Tipo de pago</span>
+                        <select className="form-select" value={filtroPago} onChange={e => { setFiltroPago(e.target.value); setPagina(1) }}>
+                            <option value="">Todos los tipos de pago</option>
+                            {data.opcionesFiltros.pagos.map(pago => <option key={pago} value={pago}>{pago}</option>)}
+                        </select>
+                    </label>
+                    {(filtroSucursal || filtroPago) && <button type="button" className="btn btn-ghost" onClick={() => { setFiltroSucursal(''); setFiltroPago(''); setPagina(1) }}>Limpiar filtros</button>}
+                    <div style={{ marginLeft: 'auto', color: 'var(--color-gray-500)', fontSize: '0.8rem', paddingBottom: 10 }}>
+                        {totalMovimientos} {totalMovimientos === 1 ? 'movimiento' : 'movimientos'}
+                    </div>
+                </div>
+                <div className="table-container"><table className="table"><thead><tr><th>Pedido</th><th>Hoja</th><th>Estado Sheet</th><th>Ubicación</th><th>Pago</th><th>Importe</th><th>Resultado</th></tr></thead><tbody>
+                    {movimientosPagina.map(r => <tr key={r.id}><td>#{r.externalId}</td><td>{r.hoja}</td><td>{r.estadoFuente || '—'}</td><td>{nombreSucursal(r.ubicacion)}</td><td>{r.pago || '—'}</td><td>{r.precio.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</td><td>{resultadoVisible(r)}{r.detalle && <small style={{ display: 'block' }}>{r.detalle}</small>}</td></tr>)}
+                    {!movimientosPagina.length && <tr><td colSpan={7}>{data.totalesPorHoja.length ? 'No hay movimientos que coincidan con estos filtros.' : 'Todavía no hay movimientos procesados.'}</td></tr>}
+                </tbody></table></div>
+                {totalMovimientos > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+                    <span style={{ color: 'var(--color-gray-500)', fontSize: '0.8rem' }}>
+                        Mostrando {indiceInicial + 1}–{Math.min(indiceInicial + porPagina, totalMovimientos)} de {totalMovimientos}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button type="button" className="btn btn-secondary btn-sm" disabled={paginaActual === 1} onClick={() => setPagina(Math.max(1, paginaActual - 1))}>← Anterior</button>
+                        <span style={{ minWidth: 100, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700 }}>Página {paginaActual} de {totalPaginas}</span>
+                        <button type="button" className="btn btn-secondary btn-sm" disabled={paginaActual === totalPaginas} onClick={() => setPagina(Math.min(totalPaginas, paginaActual + 1))}>Siguiente →</button>
+                    </div>
+                </div>}
+            </section>
         </>}
     </div>
 }

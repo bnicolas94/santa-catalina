@@ -13,9 +13,15 @@ async function exigirAdmin() {
     return usuario as { id: string; rol: string }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     const usuario = await exigirAdmin(); if (usuario instanceof NextResponse) return usuario
-    try { return NextResponse.json(await resumenGoogleSheetsCaja()) }
+    const { searchParams } = new URL(request.url)
+    try { return NextResponse.json(await resumenGoogleSheetsCaja({
+        pagina: Number(searchParams.get('pagina') || 1),
+        porPagina: 10,
+        ubicacion: searchParams.get('ubicacion') || '',
+        pago: searchParams.get('pago') || '',
+    })) }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'No se pudo consultar la integración.' }, { status: 503 }) }
 }
 
