@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 
 import { authOptions } from '@/lib/auth'
+import { CredencialesAdministradorInvalidasError, validarCredencialesAdministrador } from '@/lib/auth/autorizacion-admin'
+import { requiereAutorizacionDeposito, SaldoDepositoInsuficienteError, validarMontoDeposito } from '@/lib/caja/depositos'
 import { exigirAccesoCaja } from '@/lib/services/cajas-catalogo.service'
 import { leerConfigDepositos } from '@/lib/caja/configDepositos'
 import { prisma } from '@/lib/prisma'
@@ -64,21 +66,35 @@ export async function POST(req: Request) {
 
         const cajaOrigen = esAdmin ? body.cajaOrigen : configUbicacion.cajaDepositoId
         const concepto = esAdmin ? body.concepto : configUbicacion.conceptoDeposito
-        try { await exigirAccesoCaja(user, cajaOrigen) }
+        let caja
+        try { caja = await exigirAccesoCaja(user, cajaOrigen) }
         catch { return NextResponse.json({ error: 'La caja no pertenece a tu sede o está inactiva.' }, { status: 403 }) }
+
+        const montoDeclarado = validarMontoDeposito(body.montoDeclarado)
+        const requiereAutorizacion = requiereAutorizacionDeposito(montoDeclarado, caja.saldo)
+        const autorizador = requiereAutorizacion
+            ? await validarCredencialesAdministrador(body.autorizacionAdmin)
+            : null
 
         const deposito = await CajaService.registrarDeposito({
             ubicacionCajaId: esAdmin ? undefined : user.ubicacionId || '__sin_sede__',
-            montoDeclarado: body.montoDeclarado,
+            montoDeclarado,
             cajaOrigen,
             concepto,
             declaradoPorId: user.id,
+            autorizadoExcesoPorId: autorizador?.id,
             ubicacionTipo,
             fecha: body.fecha,
         })
         return NextResponse.json(deposito, { status: 201 })
     } catch (error) {
         console.error('Error registrando depósito:', error)
+        if (error instanceof CredencialesAdministradorInvalidasError) {
+            return NextResponse.json({ error: error.message }, { status: 401 })
+        }
+        if (error instanceof SaldoDepositoInsuficienteError) {
+            return NextResponse.json({ error: error.message, requiereAutorizacion: true, saldoDisponible: error.saldoDisponible }, { status: 409 })
+        }
         return NextResponse.json({ error: error instanceof Error ? error.message : 'Error al registrar depósito' }, { status: 400 })
     }
 }

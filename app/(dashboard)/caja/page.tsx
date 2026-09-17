@@ -102,11 +102,22 @@ const etiquetasAuditoria: Record<string, string> = {
     descripcion: 'Descripción',
     fecha: 'Fecha',
     estado: 'Estado',
+    saldoDisponible: 'Saldo disponible',
+    montoDeclarado: 'Monto autorizado',
+    saldoResultante: 'Saldo resultante',
+}
+
+const accionesAuditoria: Record<string, string> = {
+    CREACION: 'Creación',
+    MODIFICACION: 'Modificación',
+    ANULACION: 'Anulación',
+    REASIGNACION: 'Reasignación',
+    AUTORIZACION_EXCESO_DEPOSITO: 'Autorización de depósito excedido',
 }
 
 function valorAuditoria(clave: string, valor: unknown) {
     if (valor === null || valor === undefined || valor === '') return '—'
-    if (clave === 'monto' && typeof valor === 'number') return formatCurrency(valor)
+    if (['monto', 'saldoDisponible', 'montoDeclarado', 'saldoResultante'].includes(clave) && typeof valor === 'number') return formatCurrency(valor)
     if (clave === 'fecha' && typeof valor === 'string') return new Date(valor).toLocaleString('es-AR')
     return String(valor)
 }
@@ -224,6 +235,7 @@ export default function CajaPage() {
     const [auditMov, setAuditMov] = useState<MovCaja | null>(null)
     const [showDepositModal, setShowDepositModal] = useState(false)
     const [depositAmount, setDepositAmount] = useState('')
+    const [depositAdminAuth, setDepositAdminAuth] = useState({ usuario: '', password: '' })
     const [showValidacionDeposito, setShowValidacionDeposito] = useState<DepositoCaja | null>(null)
     const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', observaciones: '', fecha: new Date().toISOString().split('T')[0] })
     const [depositConfig, setDepositConfig] = useState<any>(null)
@@ -233,6 +245,11 @@ export default function CajaPage() {
 
     const allowedBoxes = cajasActivas.map(c => c.tipo)
     const getBoxSaldo = (tipo: string) => cajasCatalogo.find(c => c.tipo === tipo)?.saldo ?? 0
+    const cajaDepositoSeleccionada = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig?.cajaDepositoId
+    const saldoDisponibleDeposito = cajaDepositoSeleccionada ? getBoxSaldo(cajaDepositoSeleccionada) : 0
+    const montoDeposito = Number(depositAmount)
+    const depositoRequiereAdmin = depositAmount !== '' && Number.isFinite(montoDeposito)
+        && montoDeposito > Math.max(0, saldoDisponibleDeposito)
     const defaultBox = allowedBoxes.find(k => k !== depositConfig?.cajaDepositoId) || allowedBoxes[0] || ''
 
     const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
@@ -574,6 +591,10 @@ export default function CajaPage() {
         e.preventDefault()
         if (!depositAmount || !depositConfig) return
         setError('')
+        if (depositoRequiereAdmin && (!depositAdminAuth.usuario.trim() || !depositAdminAuth.password)) {
+            setError('Ingresá el usuario y la contraseña de un administrador para autorizar el excedente.')
+            return
+        }
         try {
             const cajaOrigen = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig.cajaDepositoId
             const res = await fetch('/api/caja/depositos', {
@@ -583,11 +604,19 @@ export default function CajaPage() {
                     montoDeclarado: parseFloat(depositAmount),
                     cajaOrigen,
                     concepto: depositConfig.conceptoDeposito,
-                    fecha: new Date().toISOString().split('T')[0]
+                    fecha: new Date().toISOString().split('T')[0],
+                    autorizacionAdmin: depositoRequiereAdmin ? depositAdminAuth : undefined,
                 }),
             })
-            if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'Error al registrar el depósito') }
-            setSuccess(userRol === 'ADMIN' ? 'Depósito registrado; quedó pendiente de validación' : 'Depósito informado; un administrador debe validarlo')
+            if (!res.ok) {
+                const data = await res.json()
+                if (data.requiereAutorizacion) await fetchData()
+                throw new Error(data.error || 'Error al registrar el depósito')
+            }
+            setSuccess(userRol === 'ADMIN'
+                ? 'Depósito registrado; el efectivo quedó reservado hasta su validación'
+                : 'Depósito informado; el efectivo quedó reservado y un administrador debe validarlo')
+            setDepositAdminAuth({ usuario: '', password: '' })
             setShowDepositModal(false)
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
@@ -682,6 +711,7 @@ export default function CajaPage() {
                             style={{ backgroundColor: '#27AE60', color: 'white', border: 'none' }}
                             onClick={() => { 
                                 setDepositAmount(''); 
+                                setDepositAdminAuth({ usuario: '', password: '' });
                                 setSelectedDepositTarget(depositConfig?.cajaDepositoId || 'local');
                                 setShowDepositModal(true) 
                             }}>
@@ -1612,7 +1642,7 @@ export default function CajaPage() {
                             <div style={{ marginBottom: '1.5rem' }}>
                                 {userRol === 'ADMIN' ? (
                                     <div className="form-group" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
-                                        <label className="form-label" style={{ fontWeight: 600 }}>Caja Destino (Solo Admin)</label>
+                                        <label className="form-label" style={{ fontWeight: 600 }}>Caja de origen (Solo Admin)</label>
                                         <select 
                                             className="form-input" 
                                             value={selectedDepositTarget}
@@ -1626,12 +1656,15 @@ export default function CajaPage() {
                                     </div>
                                 ) : (
                                     <p style={{ color: 'var(--color-gray-600)', marginBottom: '1.5rem', textAlign: 'center' }}>
-                                        Confirmar depósito diario de {ubicacionTipo} hacia {getBoxLabel(depositConfig?.cajaDepositoId)}
+                                        El depósito se descontará de {getBoxLabel(depositConfig?.cajaDepositoId)} y quedará pendiente de validación
                                     </p>
                                 )}
                                 
                                 <div style={{ textAlign: 'center' }}>
                                     <label className="form-label" style={{ fontSize: '1.1rem', fontWeight: 600 }}>Importe declarado</label>
+                                    <p style={{ margin: '0.4rem 0 0.75rem', color: 'var(--color-gray-600)' }}>
+                                        Disponible en {getBoxLabel(cajaDepositoSeleccionada)}: <strong>{formatCurrency(Math.max(0, saldoDisponibleDeposito), showMontos)}</strong>
+                                    </p>
                                     <div style={{ position: 'relative', marginTop: '0.5rem' }}>
                                         <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', fontSize: '1.2rem' }}>$</span>
                                         <input 
@@ -1642,15 +1675,41 @@ export default function CajaPage() {
                                             value={depositAmount}
                                             onChange={(e) => setDepositAmount(e.target.value)}
                                             placeholder="0.00"
+                                            min="0.01"
                                             autoFocus
                                             required 
                                         />
                                     </div>
                                 </div>
+                                {depositoRequiereAdmin && (
+                                    <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: 10, background: '#fff7ed', border: '1px solid #fdba74', textAlign: 'left' }}>
+                                        <strong>Requiere autorización administrativa</strong>
+                                        <p style={{ margin: '0.35rem 0 0.9rem', color: '#9a3412' }}>
+                                            El importe supera el saldo disponible. Un administrador debe ingresar sus credenciales para continuar.
+                                        </p>
+                                        <label className="form-group">
+                                            <span className="form-label">Usuario administrador (email)</span>
+                                            <input type="email" className="form-input" autoComplete="username"
+                                                value={depositAdminAuth.usuario}
+                                                onChange={e => setDepositAdminAuth({ ...depositAdminAuth, usuario: e.target.value })}
+                                                required />
+                                        </label>
+                                        <label className="form-group">
+                                            <span className="form-label">Contraseña</span>
+                                            <input type="password" className="form-input" autoComplete="current-password"
+                                                value={depositAdminAuth.password}
+                                                onChange={e => setDepositAdminAuth({ ...depositAdminAuth, password: e.target.value })}
+                                                required />
+                                        </label>
+                                    </div>
+                                )}
                             </div>
                             <div className="form-actions">
                                 <button type="button" className="btn btn-ghost" onClick={() => setShowDepositModal(false)}>Cancelar</button>
-                                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#27AE60' }}>Informar depósito</button>
+                                <button type="submit" className="btn btn-primary" style={{ backgroundColor: '#27AE60' }}
+                                    disabled={!depositAmount || montoDeposito <= 0 || (depositoRequiereAdmin && (!depositAdminAuth.usuario.trim() || !depositAdminAuth.password))}>
+                                    Informar depósito
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -1679,7 +1738,7 @@ export default function CajaPage() {
                                 return (
                                     <div key={auditoria.id} style={{ border: '1px solid var(--color-gray-200)', borderRadius: 10, padding: '1rem', marginBottom: '0.75rem' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                                            <strong>{auditoria.accion}</strong>
+                                            <strong>{accionesAuditoria[auditoria.accion] || auditoria.accion}</strong>
                                             <span style={{ color: 'var(--color-gray-500)', fontSize: '0.8rem' }}>
                                                 {new Date(auditoria.createdAt).toLocaleString('es-AR')}
                                             </span>

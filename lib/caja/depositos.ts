@@ -14,6 +14,44 @@ export function calcularDiferenciaDeposito(montoDeclarado: number, montoReal: nu
     return redondearMonto(montoReal - montoDeclarado)
 }
 
+export class SaldoDepositoInsuficienteError extends Error {
+    constructor(public readonly saldoDisponible: number) {
+        super(`El depósito supera el saldo disponible de la caja ($${Math.max(0, saldoDisponible).toLocaleString('es-AR')}). Solicitá la autorización de un administrador.`)
+        this.name = 'SaldoDepositoInsuficienteError'
+    }
+}
+
+export function requiereAutorizacionDeposito(monto: number, saldoDisponible: number): boolean {
+    return redondearMonto(monto) > redondearMonto(Math.max(0, saldoDisponible))
+}
+
+export function exigirSaldoParaDeposito(monto: number, saldoDisponible: number, autorizadoPorAdmin: boolean) {
+    if (requiereAutorizacionDeposito(monto, saldoDisponible) && !autorizadoPorAdmin) {
+        throw new SaldoDepositoInsuficienteError(saldoDisponible)
+    }
+}
+
+export function planificarValidacionDeposito(
+    montoDeclarado: number,
+    montoReal: number,
+    tipoMovimientoDeclaracion: string,
+) {
+    const diferencia = calcularDiferenciaDeposito(montoDeclarado, montoReal)
+    const usaSaldoExistente = tipoMovimientoDeclaracion === 'egreso'
+    const tipoAjuste = diferencia === 0
+        ? null
+        : usaSaldoExistente
+            ? (diferencia > 0 ? 'egreso' : 'ingreso')
+            : (diferencia > 0 ? 'ingreso' : 'egreso')
+
+    return {
+        diferencia,
+        usaSaldoExistente,
+        tipoAjuste: tipoAjuste as 'ingreso' | 'egreso' | null,
+        transferirDesdeOrigenAlValidar: !usaSaldoExistente,
+    }
+}
+
 export function esDeclaracionDepositoConfigurada(input: {
     tipo: unknown
     concepto: unknown

@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { CajaService } from '@/lib/services/caja.service'
 import { esMovimientoGestionadoPorRRHH } from '@/lib/caja/movimientosProtegidos'
-import { esDeclaracionDepositoConfigurada } from '@/lib/caja/depositos'
+import { esDeclaracionDepositoConfigurada, SaldoDepositoInsuficienteError } from '@/lib/caja/depositos'
 import { leerConfigDepositos } from '@/lib/caja/configDepositos'
 import { exigirAccesoCaja, listarCajas } from '@/lib/services/cajas-catalogo.service'
 import type { UsuarioCajas } from '@/lib/caja/catalogo'
@@ -117,7 +117,6 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        console.log('[CAJA API] Recibido POST:', body)
         const { tipo, concepto, monto, medioPago, descripcion, pedidoId, gastoId, cajaOrigen, choferId, fecha } = body
 
         if (!tipo || !concepto || monto === undefined || monto === null || monto === '') {
@@ -199,6 +198,9 @@ export async function POST(request: Request) {
         console.log('[CAJA API] Movimiento creado exitosamente:', result.id)
         return NextResponse.json(result, { status: 201 })
     } catch (error) {
+        if (error instanceof SaldoDepositoInsuficienteError) {
+            return NextResponse.json({ error: error.message, requiereAutorizacion: true, saldoDisponible: error.saldoDisponible }, { status: 409 })
+        }
         console.error('[CAJA API] Error crítico creando movimiento:', error)
         return NextResponse.json({
             error: 'Error interno al registrar movimiento',

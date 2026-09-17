@@ -3,7 +3,10 @@ import test from 'node:test'
 
 import {
     calcularDiferenciaDeposito,
+    exigirSaldoParaDeposito,
     esDeclaracionDepositoConfigurada,
+    planificarValidacionDeposito,
+    requiereAutorizacionDeposito,
     validarMontoDeposito,
     validarObservacionesDiferencia,
 } from './depositos'
@@ -31,6 +34,29 @@ test('exige observación cuando existe una diferencia', () => {
     assert.equal(validarObservacionesDiferencia(0, ''), null)
     assert.equal(validarObservacionesDiferencia(-108_000, 'Faltante al contar'), 'Faltante al contar')
     assert.throws(() => validarObservacionesDiferencia(-1, ''), /observación/)
+})
+
+test('un depósito sólo puede usar el saldo disponible salvo autorización administrativa', () => {
+    assert.equal(requiereAutorizacionDeposito(500, 500), false)
+    assert.equal(requiereAutorizacionDeposito(600, 500), true)
+    assert.doesNotThrow(() => exigirSaldoParaDeposito(500, 500, false))
+    assert.doesNotThrow(() => exigirSaldoParaDeposito(600, 500, true))
+    assert.throws(() => exigirSaldoParaDeposito(600, 500, false), /autorización de un administrador/)
+})
+
+test('la validación nueva consume el saldo reservado y la histórica conserva su conciliación', () => {
+    assert.deepEqual(planificarValidacionDeposito(500, 450, 'egreso'), {
+        diferencia: -50,
+        usaSaldoExistente: true,
+        tipoAjuste: 'ingreso',
+        transferirDesdeOrigenAlValidar: false,
+    })
+    assert.deepEqual(planificarValidacionDeposito(500, 450, 'ingreso'), {
+        diferencia: -50,
+        usaSaldoExistente: false,
+        tipoAjuste: 'egreso',
+        transferirDesdeOrigenAlValidar: true,
+    })
 })
 
 test('reconoce el formulario antiguo como una declaración de depósito', () => {
