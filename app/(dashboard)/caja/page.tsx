@@ -139,9 +139,16 @@ function cambiosAuditoria(auditoria: AuditoriaCaja) {
         }))
 }
 
-const cajaFetcher = async ([_, fecha]: [string, string]) => {
+const cajaFetcher = async ([_, fecha, pagina, buscar, caja, tipo]: [string, string, number, string, string, string]) => {
+    const parametros = new URLSearchParams({
+        fecha,
+        pagina: String(pagina),
+        ...(buscar ? { buscar } : {}),
+        ...(caja !== 'todas' ? { caja } : {}),
+        ...(tipo !== 'todos' ? { tipo } : {}),
+    })
     const [cajaRes, rendRes, saldosRes, conceptosRes, empRes, depositosRes] = await Promise.all([
-        fetch(`/api/caja?fecha=${fecha}`),
+        fetch(`/api/caja?${parametros.toString()}`),
         fetch('/api/caja/rendiciones'),
         fetch('/api/caja/saldos'),
         fetch('/api/caja/conceptos'),
@@ -166,8 +173,23 @@ export default function CajaPage() {
     const ubicacionId = (session?.user as { ubicacionId?: string })?.ubicacionId
 
     const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0])
+    const [filtroTexto, setFiltroTexto] = useState('')
+    const [busquedaAplicada, setBusquedaAplicada] = useState('')
+    const [filtroCaja, setFiltroCaja] = useState('todas')
+    const [filtroTipo, setFiltroTipo] = useState('todos')
+    const [paginaMovimientos, setPaginaMovimientos] = useState(1)
 
-    const { data: swrData, isLoading: loading, mutate } = useSWR(['caja-data', fechaFiltro], cajaFetcher, {
+    useEffect(() => {
+        const temporizador = window.setTimeout(() => {
+            setBusquedaAplicada(filtroTexto.trim())
+            setPaginaMovimientos(1)
+        }, 300)
+        return () => window.clearTimeout(temporizador)
+    }, [filtroTexto])
+
+    const { data: swrData, isLoading: loading, mutate } = useSWR([
+        'caja-data', fechaFiltro, paginaMovimientos, busquedaAplicada, filtroCaja, filtroTipo,
+    ], cajaFetcher, {
         refreshInterval: 15000,
         revalidateOnFocus: true
     })
@@ -175,6 +197,7 @@ export default function CajaPage() {
 
     const movimientos = swrData?.cajaData?.movimientos || []
     const resumen = swrData?.cajaData?.resumen || { ingresosEfectivo: 0, ingresosTransferencia: 0, egresosTotal: 0, saldo: 0 }
+    const paginacion = swrData?.cajaData?.paginacion || { pagina: 1, porPagina: 10, total: 0, totalPaginas: 1 }
     
     const rendDataRaw = swrData?.rendicionesData
     const rendiciones = Array.isArray(rendDataRaw) ? rendDataRaw.filter((r: Rendicion) => r.montoEsperado > 0) : []
@@ -227,10 +250,6 @@ export default function CajaPage() {
     const [showValidacionDeposito, setShowValidacionDeposito] = useState<DepositoCaja | null>(null)
     const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', observaciones: '', fecha: new Date().toISOString().split('T')[0] })
     const [depositConfig, setDepositConfig] = useState<ConfigDeposito | null>(null)
-    const [filtroTexto, setFiltroTexto] = useState('')
-    const [filtroCaja, setFiltroCaja] = useState('todas')
-    const [filtroTipo, setFiltroTipo] = useState('todos')
-
     const allowedBoxes = cajasActivas.map(c => c.tipo)
     const operableBoxes = userRol === 'ADMIN'
         ? allowedBoxes
@@ -281,27 +300,6 @@ export default function CajaPage() {
     const depositoRequiereAdmin = depositAmount !== '' && Number.isFinite(montoDeposito)
         && montoDeposito > Math.max(0, saldoDisponibleDeposito)
     const defaultBox = operableBoxes[0] || ''
-
-    const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
-        // Filtro por Tipo
-        if (filtroTipo !== 'todos' && m.tipo !== filtroTipo) return false;
-
-        // Filtro por Caja
-        if (filtroCaja !== 'todas' && m.cajaOrigen !== filtroCaja) return false;
-
-        // Filtro por Texto (Concepto, Descripción, Chofer, Pedido)
-        if (filtroTexto.trim() !== '') {
-            const search = filtroTexto.toLowerCase();
-            const conceptoStr = (conceptos.find(c => c.clave === m.concepto)?.nombre || m.concepto || '').toLowerCase();
-            const descStr = (m.descripcion || '').toLowerCase();
-            const choferStr = (m.rendicion?.chofer?.nombre || '').toLowerCase();
-            const pedidoStr = (m.pedido?.cliente?.nombreComercial || '').toLowerCase();
-
-            return conceptoStr.includes(search) || descStr.includes(search) || choferStr.includes(search) || pedidoStr.includes(search);
-        }
-
-        return true;
-    });
 
     const cajasDisponiblesKey = operableBoxes.join('|')
     useEffect(() => {
@@ -725,7 +723,7 @@ export default function CajaPage() {
                 <h1>💰 Caja</h1>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                     <input type="date" className="form-input" value={fechaFiltro}
-                        onChange={(e) => setFechaFiltro(e.target.value)}
+                        onChange={(e) => { setFechaFiltro(e.target.value); setPaginaMovimientos(1) }}
                         onClick={(e) => e.currentTarget.showPicker?.()}
                         style={{ width: 170 }}
                     />
@@ -980,7 +978,7 @@ export default function CajaPage() {
                         <select 
                             className="form-select" 
                             value={filtroCaja}
-                            onChange={(e) => setFiltroCaja(e.target.value)}
+                            onChange={(e) => { setFiltroCaja(e.target.value); setPaginaMovimientos(1) }}
                             style={{ fontSize: '0.9rem' }}
                         >
                             <option value="todas">🏦 Todas las Cajas</option>
@@ -993,7 +991,7 @@ export default function CajaPage() {
                         <select 
                             className="form-select" 
                             value={filtroTipo}
-                            onChange={(e) => setFiltroTipo(e.target.value)}
+                            onChange={(e) => { setFiltroTipo(e.target.value); setPaginaMovimientos(1) }}
                             style={{ fontSize: '0.9rem' }}
                         >
                             <option value="todos">🎭 Todos los Tipos</option>
@@ -1004,14 +1002,14 @@ export default function CajaPage() {
                     {(filtroTexto || filtroCaja !== 'todas' || filtroTipo !== 'todos') && (
                         <button 
                             className="btn btn-ghost btn-sm" 
-                            onClick={() => { setFiltroTexto(''); setFiltroCaja('todas'); setFiltroTipo('todos'); }}
+                            onClick={() => { setFiltroTexto(''); setBusquedaAplicada(''); setFiltroCaja('todas'); setFiltroTipo('todos'); setPaginaMovimientos(1) }}
                             style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 600 }}
                         >
                             🧹 Limpiar Filtros
                         </button>
                     )}
                     <div style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>
-                        {movimientosFiltrados.length} resultados
+                        {paginacion.total} resultados
                     </div>
                 </div>
             </div>
@@ -1033,9 +1031,9 @@ export default function CajaPage() {
                         </tr>
                     </thead>
                     <tbody>
-                        {movimientosFiltrados.length === 0 ? (
+                        {movimientos.length === 0 ? (
                             <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-gray-400)' }}>No se encontraron movimientos con estos filtros</td></tr>
-                        ) : movimientosFiltrados.map((m: MovCaja) => (
+                        ) : movimientos.map((m: MovCaja) => (
                             <tr key={m.id} style={m.estado === 'anulado' ? { opacity: 0.65, backgroundColor: '#f8fafc' } : undefined}>
                                 <td>
                                     <span className="badge" style={{
@@ -1126,6 +1124,28 @@ export default function CajaPage() {
                     </tbody>
                 </table>
             </div>
+            {paginacion.total > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12, marginBottom: 'var(--space-6)' }}>
+                    <span style={{ color: 'var(--color-gray-500)', fontSize: '0.85rem' }}>
+                        Mostrando {(paginacion.pagina - 1) * paginacion.porPagina + 1}–{Math.min(paginacion.pagina * paginacion.porPagina, paginacion.total)} de {paginacion.total}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button type="button" className="btn btn-secondary btn-sm"
+                            disabled={paginacion.pagina <= 1}
+                            onClick={() => setPaginaMovimientos(Math.max(1, paginacion.pagina - 1))}>
+                            ← Anterior
+                        </button>
+                        <strong style={{ minWidth: 100, textAlign: 'center', fontSize: '0.85rem' }}>
+                            Página {paginacion.pagina} de {paginacion.totalPaginas}
+                        </strong>
+                        <button type="button" className="btn btn-secondary btn-sm"
+                            disabled={paginacion.pagina >= paginacion.totalPaginas}
+                            onClick={() => setPaginaMovimientos(Math.min(paginacion.totalPaginas, paginacion.pagina + 1))}>
+                            Siguiente →
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ═══ Modal Nuevo Movimiento ═══ */}
             {showModal && (

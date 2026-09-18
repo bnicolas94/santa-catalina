@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -8,6 +9,7 @@ import { esDeclaracionDepositoConfigurada, SaldoDepositoInsuficienteError } from
 import { leerConfigDepositos } from '@/lib/caja/configDepositos'
 import { exigirAccesoCaja, listarCajas } from '@/lib/services/cajas-catalogo.service'
 import type { UsuarioCajas } from '@/lib/caja/catalogo'
+import { MOVIMIENTOS_CAJA_POR_PAGINA, normalizarPaginacionCaja } from '@/lib/caja/paginacion'
 
 // ─── Helpers de Autorización ─────────────────────────────────────────────────
 
@@ -31,22 +33,60 @@ export async function GET(request: Request) {
 
         const { searchParams } = new URL(request.url)
         const fechaParam = searchParams.get('fecha')
+        const paginaParam = searchParams.get('pagina')
+        const cajaParam = searchParams.get('caja')
+        const tipoParam = searchParams.get('tipo')
+        const buscar = (searchParams.get('buscar') || '').trim().slice(0, 100)
 
         const dateToFilter = fechaParam ? new Date(fechaParam + 'T00:00:00') : new Date()
         const startOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 0, 0, 0, 0)
         const endOfDay = new Date(dateToFilter.getFullYear(), dateToFilter.getMonth(), dateToFilter.getDate(), 23, 59, 59, 999)
 
-        const ubicacionTipo = (session?.user as any)?.ubicacionTipo
         const allowedBoxes = userRol === 'ADMIN' ? undefined : (await listarCajas(session.user as UsuarioCajas, true)).map(c => c.tipo)
         const esAdmin = userRol === 'ADMIN'
+        if (cajaParam && cajaParam !== 'todas' && allowedBoxes && !allowedBoxes.includes(cajaParam)) {
+            return NextResponse.json({ error: 'No tenés permiso para consultar esa caja.' }, { status: 403 })
+        }
+        const baseWhere: Prisma.MovimientoCajaWhereInput = {
+            fecha: { gte: startOfDay, lte: endOfDay },
+            ...(!esAdmin && { estado: 'activo' }),
+            ...(allowedBoxes && { cajaOrigen: { in: allowedBoxes } }),
+        }
+        const conceptosCoincidentes = buscar
+            ? await prisma.conceptoCaja.findMany({
+                where: { nombre: { contains: buscar, mode: 'insensitive' } },
+                select: { clave: true },
+            })
+            : []
+        const filtrosWhere: Prisma.MovimientoCajaWhereInput = {
+            ...baseWhere,
+            ...(cajaParam && cajaParam !== 'todas' ? { cajaOrigen: cajaParam } : {}),
+            ...(tipoParam === 'ingreso' || tipoParam === 'egreso' ? { tipo: tipoParam } : {}),
+            ...(buscar ? {
+                OR: [
+                    { concepto: { contains: buscar, mode: 'insensitive' } },
+                    ...(conceptosCoincidentes.length ? [{ concepto: { in: conceptosCoincidentes.map(c => c.clave) } }] : []),
+                    { descripcion: { contains: buscar, mode: 'insensitive' } },
+                    { rendicion: { chofer: { nombre: { contains: buscar, mode: 'insensitive' } } } },
+                    { pedido: { cliente: { nombreComercial: { contains: buscar, mode: 'insensitive' } } } },
+                ],
+            } : {}),
+        }
 
+        const [total, resumenAgrupado] = await Promise.all([
+            prisma.movimientoCaja.count({ where: filtrosWhere }),
+            prisma.movimientoCaja.groupBy({
+                by: ['tipo', 'medioPago'],
+                where: { ...baseWhere, estado: 'activo' },
+                _sum: { monto: true },
+            }),
+        ])
+        const paginacion = normalizarPaginacionCaja(paginaParam, total)
         const movimientos = await prisma.movimientoCaja.findMany({
-            where: {
-                fecha: { gte: startOfDay, lte: endOfDay },
-                ...(!esAdmin && { estado: 'activo' }),
-                ...(allowedBoxes && { cajaOrigen: { in: allowedBoxes } })
-            },
-            orderBy: { fecha: 'desc' },
+            where: filtrosWhere,
+            skip: paginacion.skip,
+            take: MOVIMIENTOS_CAJA_POR_PAGINA,
+            orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
             include: {
                 pedido: { select: { id: true, totalImporte: true, cliente: { select: { nombreComercial: true } } } },
                 rendicion: { select: { id: true, chofer: { select: { nombre: true } } } },
@@ -70,15 +110,11 @@ export async function GET(request: Request) {
         let ingresosEfectivo = 0
         let ingresosTransferencia = 0
         let egresosTotal = 0
-
-        for (const m of movimientos) {
-            if (m.estado === 'anulado') continue
-            if (m.tipo === 'ingreso') {
-                if (m.medioPago === 'efectivo') ingresosEfectivo += m.monto
-                else ingresosTransferencia += m.monto
-            } else {
-                egresosTotal += m.monto
-            }
+        for (const grupo of resumenAgrupado) {
+            const monto = grupo._sum.monto || 0
+            if (grupo.tipo === 'egreso') egresosTotal += monto
+            else if (grupo.medioPago === 'efectivo') ingresosEfectivo += monto
+            else ingresosTransferencia += monto
         }
 
         return NextResponse.json({
@@ -99,7 +135,13 @@ export async function GET(request: Request) {
                 ingresosTransferencia,
                 egresosTotal,
                 saldo: ingresosEfectivo + ingresosTransferencia - egresosTotal,
-            }
+            },
+            paginacion: {
+                pagina: paginacion.pagina,
+                porPagina: paginacion.porPagina,
+                total: paginacion.total,
+                totalPaginas: paginacion.totalPaginas,
+            },
         })
     } catch (error) {
         console.error('Error obteniendo caja:', error)
