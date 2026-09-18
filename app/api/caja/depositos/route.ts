@@ -64,7 +64,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Los depósitos no están habilitados para tu ubicación' }, { status: 403 })
         }
 
-        const cajaOrigen = esAdmin ? body.cajaOrigen : configUbicacion.cajaDepositoId
+        const cajaOrigen = esAdmin ? body.cajaOrigen : configUbicacion.cajaOrigenId
         const concepto = esAdmin ? body.concepto : configUbicacion.conceptoDeposito
         let caja
         try { caja = await exigirAccesoCaja(user, cajaOrigen) }

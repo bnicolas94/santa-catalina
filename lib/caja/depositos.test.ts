@@ -49,13 +49,36 @@ test('la validación nueva consume el saldo reservado y la histórica conserva s
         diferencia: -50,
         usaSaldoExistente: true,
         tipoAjuste: 'ingreso',
+        tipoAjusteRecepcion: null,
         transferirDesdeOrigenAlValidar: false,
+        transferirDesdeCajaRecepcion: false,
     })
     assert.deepEqual(planificarValidacionDeposito(500, 450, 'ingreso'), {
         diferencia: -50,
         usaSaldoExistente: false,
         tipoAjuste: 'egreso',
+        tipoAjusteRecepcion: null,
         transferirDesdeOrigenAlValidar: true,
+        transferirDesdeCajaRecepcion: false,
+    })
+})
+
+test('el circuito por Caja Fuerte mantiene balanceadas ambas etapas', () => {
+    assert.deepEqual(planificarValidacionDeposito(500, 450, 'egreso', 'caja_fuerte'), {
+        diferencia: -50,
+        usaSaldoExistente: true,
+        tipoAjuste: 'ingreso',
+        tipoAjusteRecepcion: 'egreso',
+        transferirDesdeOrigenAlValidar: false,
+        transferirDesdeCajaRecepcion: true,
+    })
+    assert.deepEqual(planificarValidacionDeposito(500, 550, 'egreso', 'caja_fuerte'), {
+        diferencia: 50,
+        usaSaldoExistente: true,
+        tipoAjuste: 'egreso',
+        tipoAjusteRecepcion: 'ingreso',
+        transferirDesdeOrigenAlValidar: false,
+        transferirDesdeCajaRecepcion: true,
     })
 })
 
@@ -63,7 +86,7 @@ test('reconoce el formulario antiguo como una declaración de depósito', () => 
     const config = {
         habilitarDeposito: true,
         conceptoDeposito: 'Depósito Diario Local',
-        cajaDepositoId: 'local',
+        cajaOrigenId: 'local',
     }
 
     assert.equal(esDeclaracionDepositoConfigurada({

@@ -65,6 +65,7 @@ interface DepositoCaja {
     diferencia: number | null
     estado: string
     cajaOrigen: string
+    cajaRecepcion: string | null
     cajaDestino: string | null
     concepto: string
     observaciones: string | null
@@ -102,6 +103,13 @@ const etiquetasAuditoria: Record<string, string> = {
     saldoDisponible: 'Saldo disponible',
     montoDeclarado: 'Monto autorizado',
     saldoResultante: 'Saldo resultante',
+}
+
+interface ConfigDeposito {
+    cajaOrigenId: string
+    cajaRecepcionId: string
+    conceptoDeposito: string
+    habilitarDeposito: boolean
 }
 
 const accionesAuditoria: Record<string, string> = {
@@ -189,7 +197,7 @@ export default function CajaPage() {
     const [selectedDepositTarget, setSelectedDepositTarget] = useState('')
     const movimientosRef = useRef<MovCaja[]>([])
 
-    const getBoxLabel = (id: string | null) => {
+    const getBoxLabel = (id: string | null | undefined) => {
         if (!id) return '-';
         const caja = cajasCatalogo.find(c => c.tipo === id)
         return caja ? (caja.nombre || caja.tipo) + (caja.ubicacion ? ' · ' + caja.ubicacion.nombre : '') : id.replace(/_/g, ' ')
@@ -218,12 +226,17 @@ export default function CajaPage() {
     const [depositAdminAuth, setDepositAdminAuth] = useState({ usuario: '', password: '' })
     const [showValidacionDeposito, setShowValidacionDeposito] = useState<DepositoCaja | null>(null)
     const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', observaciones: '', fecha: new Date().toISOString().split('T')[0] })
-    const [depositConfig, setDepositConfig] = useState<any>(null)
+    const [depositConfig, setDepositConfig] = useState<ConfigDeposito | null>(null)
     const [filtroTexto, setFiltroTexto] = useState('')
     const [filtroCaja, setFiltroCaja] = useState('todas')
     const [filtroTipo, setFiltroTipo] = useState('todos')
 
     const allowedBoxes = cajasActivas.map(c => c.tipo)
+    const cajasOrigenDeposito = cajasActivas.filter(caja =>
+        Boolean(caja.ubicacionId)
+        && !caja.recibeDepositos
+        && cajasActivas.some(destino => destino.ubicacionId === caja.ubicacionId && destino.recibeDepositos)
+    )
     const cajasPorSucursal = [...cajasActivas.reduce((grupos, caja) => {
         const clave = caja.ubicacionId || '__sin_sede__'
         const grupo = grupos.get(clave) || {
@@ -254,12 +267,16 @@ export default function CajaPage() {
             return orden(a.tipo) - orden(b.tipo) || a.nombre.localeCompare(b.nombre, 'es')
         })
     const getBoxSaldo = (tipo: string) => cajasCatalogo.find(c => c.tipo === tipo)?.saldo ?? 0
-    const cajaDepositoSeleccionada = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig?.cajaDepositoId
+    const cajaDepositoSeleccionada = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig?.cajaOrigenId
+    const cajaOrigenSeleccionada = cajasActivas.find(caja => caja.tipo === cajaDepositoSeleccionada)
+    const cajaRecepcionSeleccionada = cajasActivas.find(caja =>
+        caja.recibeDepositos && caja.ubicacionId === cajaOrigenSeleccionada?.ubicacionId
+    )
     const saldoDisponibleDeposito = cajaDepositoSeleccionada ? getBoxSaldo(cajaDepositoSeleccionada) : 0
     const montoDeposito = Number(depositAmount)
     const depositoRequiereAdmin = depositAmount !== '' && Number.isFinite(montoDeposito)
         && montoDeposito > Math.max(0, saldoDisponibleDeposito)
-    const defaultBox = allowedBoxes.find(k => k !== depositConfig?.cajaDepositoId) || allowedBoxes[0] || ''
+    const defaultBox = allowedBoxes.find(k => k !== depositConfig?.cajaOrigenId) || allowedBoxes[0] || ''
 
     const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
         // Filtro por Tipo
@@ -605,7 +622,7 @@ export default function CajaPage() {
             return
         }
         try {
-            const cajaOrigen = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig.cajaDepositoId
+            const cajaOrigen = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig.cajaOrigenId
             const res = await fetch('/api/caja/depositos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -622,9 +639,7 @@ export default function CajaPage() {
                 if (data.requiereAutorizacion) await fetchData()
                 throw new Error(data.error || 'Error al registrar el depósito')
             }
-            setSuccess(userRol === 'ADMIN'
-                ? 'Depósito registrado; el efectivo quedó reservado hasta su validación'
-                : 'Depósito informado; el efectivo quedó reservado y un administrador debe validarlo')
+            setSuccess(`Depósito registrado: el efectivo pasó a ${getBoxLabel(cajaRecepcionSeleccionada?.tipo || depositConfig.cajaRecepcionId)} y quedó pendiente de validación`)
             setDepositAdminAuth({ usuario: '', password: '' })
             setShowDepositModal(false)
             fetchData()
@@ -633,7 +648,8 @@ export default function CajaPage() {
     }
 
     function abrirValidacionDeposito(deposito: DepositoCaja) {
-        const destinos = allowedBoxes.filter(box => box !== deposito.cajaOrigen)
+        const cajaQueEntrega = deposito.cajaRecepcion || deposito.cajaOrigen
+        const destinos = allowedBoxes.filter(box => box !== cajaQueEntrega)
         const destinoPreferido = destinos.includes('caja_chica') ? 'caja_chica' : (destinos[0] || '')
         setValidacionDepositoForm({
             montoReal: String(deposito.montoDeclarado),
@@ -721,7 +737,7 @@ export default function CajaPage() {
                             onClick={() => { 
                                 setDepositAmount(''); 
                                 setDepositAdminAuth({ usuario: '', password: '' });
-                                setSelectedDepositTarget(depositConfig?.cajaDepositoId || 'local');
+                                setSelectedDepositTarget(depositConfig?.cajaOrigenId || cajasOrigenDeposito[0]?.tipo || '');
                                 setShowDepositModal(true) 
                             }}>
                             💰 Depositar
@@ -837,6 +853,7 @@ export default function CajaPage() {
                                             <strong>{nombreUsuario(deposito.declaradoPor)}</strong>
                                             <div style={{ color: 'var(--color-gray-500)', fontSize: '0.8rem', marginTop: 3 }}>
                                                 {new Date(deposito.fecha).toLocaleString('es-AR')} · {getBoxLabel(deposito.cajaOrigen)}
+                                                {deposito.cajaRecepcion ? ` → ${getBoxLabel(deposito.cajaRecepcion)}` : ''}
                                             </div>
                                         </div>
                                         <span className="badge" style={{ backgroundColor: '#FFF7E6', color: '#B45309', border: '1px solid #F59E0B' }}>
@@ -1579,7 +1596,7 @@ export default function CajaPage() {
                                         <select className="form-select" value={validacionDepositoForm.cajaDestino}
                                             onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, cajaDestino: e.target.value })}
                                             disabled={montoReal === 0} required={montoReal > 0}>
-                                            {allowedBoxes.filter(box => box !== showValidacionDeposito.cajaOrigen).map(box => (
+                                            {allowedBoxes.filter(box => box !== (showValidacionDeposito.cajaRecepcion || showValidacionDeposito.cajaOrigen)).map(box => (
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
@@ -1620,21 +1637,22 @@ export default function CajaPage() {
                             <div style={{ marginBottom: '1.5rem' }}>
                                 {userRol === 'ADMIN' ? (
                                     <div className="form-group" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
-                                        <label className="form-label" style={{ fontWeight: 600 }}>Caja de origen (Solo Admin)</label>
+                                        <label className="form-label" style={{ fontWeight: 600 }}>Caja Chica de origen</label>
                                         <select 
                                             className="form-input" 
                                             value={selectedDepositTarget}
                                             onChange={(e) => setSelectedDepositTarget(e.target.value)}
                                             style={{ backgroundColor: '#f9f9f9', fontWeight: 600 }}
                                         >
-                                            {allowedBoxes.map(box => (
-                                                <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                            {cajasOrigenDeposito.map(caja => (
+                                                <option key={caja.tipo} value={caja.tipo}>{getBoxLabel(caja.tipo)}</option>
                                             ))}
                                         </select>
                                     </div>
                                 ) : (
                                     <p style={{ color: 'var(--color-gray-600)', marginBottom: '1.5rem', textAlign: 'center' }}>
-                                        El depósito se descontará de {getBoxLabel(depositConfig?.cajaDepositoId)} y quedará pendiente de validación
+                                        El depósito se descontará de {getBoxLabel(depositConfig?.cajaOrigenId)}
+                                        {' '}y pasará a {getBoxLabel(depositConfig?.cajaRecepcionId)} hasta su validación
                                     </p>
                                 )}
                                 
@@ -1643,6 +1661,11 @@ export default function CajaPage() {
                                     <p style={{ margin: '0.4rem 0 0.75rem', color: 'var(--color-gray-600)' }}>
                                         Disponible en {getBoxLabel(cajaDepositoSeleccionada)}: <strong>{formatCurrency(Math.max(0, saldoDisponibleDeposito), showMontos)}</strong>
                                     </p>
+                                    {cajaRecepcionSeleccionada && (
+                                        <p style={{ margin: '0 0 0.75rem', color: '#047857', fontWeight: 600 }}>
+                                            El sobre ingresará en {getBoxLabel(cajaRecepcionSeleccionada.tipo)}
+                                        </p>
+                                    )}
                                     <div style={{ position: 'relative', marginTop: '0.5rem' }}>
                                         <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 'bold', fontSize: '1.2rem' }}>$</span>
                                         <input 

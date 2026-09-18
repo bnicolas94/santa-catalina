@@ -662,7 +662,9 @@ model MovimientoCaja {
   anuladoPor                   Empleado?                 @relation("MovimientoCajaAnuladoPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
   auditorias                   AuditoriaMovimientoCaja[]
   depositoIngreso              DepositoCaja?             @relation("DepositoMovimientoIngreso")
+  depositoRecepcion            DepositoCaja?             @relation("DepositoMovimientoRecepcion")
   depositoAjuste               DepositoCaja?             @relation("DepositoMovimientoAjuste")
+  depositoAjusteRecepcion      DepositoCaja?             @relation("DepositoMovimientoAjusteRecepcion")
   depositoTransferenciaOrigen  DepositoCaja?             @relation("DepositoMovimientoTransferenciaOrigen")
   depositoTransferenciaDestino DepositoCaja?             @relation("DepositoMovimientoTransferenciaDestino")
   movimientoSheet              MovimientoSheetCaja?
@@ -682,6 +684,7 @@ model DepositoCaja {
   diferencia                       Float?
   estado                           String          @default("pendiente")
   cajaOrigen                       String          @map("caja_origen")
+  cajaRecepcion                    String?         @map("caja_recepcion")
   cajaDestino                      String?         @map("caja_destino")
   concepto                         String
   observaciones                    String?
@@ -691,13 +694,17 @@ model DepositoCaja {
   declaradoPorId                   String          @map("id_declarado_por")
   validadoPorId                    String?         @map("id_validado_por")
   movimientoIngresoId              String          @unique @map("id_movimiento_ingreso")
+  movimientoRecepcionId            String?         @unique @map("id_movimiento_recepcion")
   movimientoAjusteId               String?         @unique @map("id_movimiento_ajuste")
+  movimientoAjusteRecepcionId      String?         @unique @map("id_movimiento_ajuste_recepcion")
   movimientoTransferenciaOrigenId  String?         @unique @map("id_movimiento_transferencia_origen")
   movimientoTransferenciaDestinoId String?         @unique @map("id_movimiento_transferencia_destino")
   declaradoPor                     Empleado        @relation("DepositoCajaDeclaradoPor", fields: [declaradoPorId], references: [id], onDelete: Restrict)
   validadoPor                      Empleado?       @relation("DepositoCajaValidadoPor", fields: [validadoPorId], references: [id], onDelete: SetNull)
   movimientoIngreso                MovimientoCaja  @relation("DepositoMovimientoIngreso", fields: [movimientoIngresoId], references: [id], onDelete: Restrict)
+  movimientoRecepcion              MovimientoCaja? @relation("DepositoMovimientoRecepcion", fields: [movimientoRecepcionId], references: [id], onDelete: Restrict)
   movimientoAjuste                 MovimientoCaja? @relation("DepositoMovimientoAjuste", fields: [movimientoAjusteId], references: [id], onDelete: Restrict)
+  movimientoAjusteRecepcion        MovimientoCaja? @relation("DepositoMovimientoAjusteRecepcion", fields: [movimientoAjusteRecepcionId], references: [id], onDelete: Restrict)
   movimientoTransferenciaOrigen    MovimientoCaja? @relation("DepositoMovimientoTransferenciaOrigen", fields: [movimientoTransferenciaOrigenId], references: [id], onDelete: Restrict)
   movimientoTransferenciaDestino   MovimientoCaja? @relation("DepositoMovimientoTransferenciaDestino", fields: [movimientoTransferenciaDestinoId], references: [id], onDelete: Restrict)
 

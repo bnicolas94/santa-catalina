@@ -35,9 +35,11 @@ export function planificarValidacionDeposito(
     montoDeclarado: number,
     montoReal: number,
     tipoMovimientoDeclaracion: string,
+    cajaRecepcion?: string | null,
 ) {
     const diferencia = calcularDiferenciaDeposito(montoDeclarado, montoReal)
     const usaSaldoExistente = tipoMovimientoDeclaracion === 'egreso'
+    const usaCajaRecepcion = Boolean(cajaRecepcion)
     const tipoAjuste = diferencia === 0
         ? null
         : usaSaldoExistente
@@ -48,7 +50,11 @@ export function planificarValidacionDeposito(
         diferencia,
         usaSaldoExistente,
         tipoAjuste: tipoAjuste as 'ingreso' | 'egreso' | null,
-        transferirDesdeOrigenAlValidar: !usaSaldoExistente,
+        tipoAjusteRecepcion: diferencia === 0 || !usaCajaRecepcion
+            ? null
+            : (diferencia > 0 ? 'ingreso' : 'egreso') as 'ingreso' | 'egreso',
+        transferirDesdeOrigenAlValidar: !usaSaldoExistente && !usaCajaRecepcion,
+        transferirDesdeCajaRecepcion: usaCajaRecepcion,
     }
 }
 
@@ -60,14 +66,14 @@ export function esDeclaracionDepositoConfigurada(input: {
 }, config: {
     habilitarDeposito: boolean
     conceptoDeposito: string
-    cajaDepositoId: string
+    cajaOrigenId: string
 } | undefined): boolean {
     if (!config?.habilitarDeposito) return false
 
     return input.tipo === 'ingreso'
         && input.medioPago === 'efectivo'
         && input.concepto === config.conceptoDeposito
-        && input.cajaOrigen === config.cajaDepositoId
+        && input.cajaOrigen === config.cajaOrigenId
 }
 
 export function validarObservacionesDiferencia(diferencia: number, observaciones: unknown): string | null {

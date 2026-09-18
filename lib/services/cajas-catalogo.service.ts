@@ -26,7 +26,12 @@ export async function guardarCaja(input: unknown, usuarioId: string, id?: string
         }
         if (actual) {
             const historial = await tx.movimientoCaja.count({ where: { cajaOrigen: actual.tipo } })
-            const pendientes = await tx.depositoCaja.count({ where: { estado: 'pendiente', OR: [{ cajaOrigen: actual.tipo }, { cajaDestino: actual.tipo }] } })
+            const pendientes = await tx.depositoCaja.count({
+                where: {
+                    estado: 'pendiente',
+                    OR: [{ cajaOrigen: actual.tipo }, { cajaRecepcion: actual.tipo }, { cajaDestino: actual.tipo }],
+                },
+            })
             validarCambioCaja(actual, data, historial > 0, pendientes > 0)
         }
         const caja = actual ? await tx.saldoCaja.update({ where: { id }, data }) :

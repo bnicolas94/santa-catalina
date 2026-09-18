@@ -76,7 +76,9 @@ function snapshotMovimiento(movimiento: Record<string, unknown>): Prisma.InputJs
 function esMovimientoDeDeposito(movimiento: Record<string, unknown>): boolean {
     return Boolean(
         movimiento.depositoIngreso ||
+        movimiento.depositoRecepcion ||
         movimiento.depositoAjuste ||
+        movimiento.depositoAjusteRecepcion ||
         movimiento.depositoTransferenciaOrigen ||
         movimiento.depositoTransferenciaDestino
     )
@@ -220,7 +222,9 @@ export class CajaService {
                 where: { id },
                 include: {
                     depositoIngreso: { select: { id: true } },
+                    depositoRecepcion: { select: { id: true } },
                     depositoAjuste: { select: { id: true } },
+                    depositoAjusteRecepcion: { select: { id: true } },
                     depositoTransferenciaOrigen: { select: { id: true } },
                     depositoTransferenciaDestino: { select: { id: true } },
                 },
@@ -289,7 +293,9 @@ export class CajaService {
                 where: { id },
                 include: {
                     depositoIngreso: { select: { id: true } },
+                    depositoRecepcion: { select: { id: true } },
                     depositoAjuste: { select: { id: true } },
+                    depositoAjusteRecepcion: { select: { id: true } },
                     depositoTransferenciaOrigen: { select: { id: true } },
                     depositoTransferenciaDestino: { select: { id: true } },
                 },
@@ -534,6 +540,25 @@ export class CajaService {
             if (!caja?.activo || (input.ubicacionCajaId && caja.ubicacionId !== input.ubicacionCajaId)) {
                 throw new Error('La caja no existe, está inactiva o no pertenece a la sede.')
             }
+            if (!caja.ubicacionId) {
+                throw new Error('La caja de origen debe estar vinculada a una sede.')
+            }
+
+            const cajasRecepcion = await tx.$queryRaw<Array<{ tipo: string; conceptoDeposito: string }>>`
+                SELECT tipo, concepto_deposito AS "conceptoDeposito"
+                FROM saldos_caja
+                WHERE id_ubicacion = ${caja.ubicacionId}
+                  AND activo = true
+                  AND recibe_depositos = true
+                FOR UPDATE
+            `
+            const cajaRecepcion = cajasRecepcion[0]
+            if (!cajaRecepcion) {
+                throw new Error('La sede no tiene una Caja Fuerte activa configurada para recibir depósitos.')
+            }
+            if (cajaRecepcion.tipo === input.cajaOrigen) {
+                throw new Error('Seleccioná la Caja Chica de la sede; la Caja Fuerte es el destino del depósito.')
+            }
 
             let autorizador: { id: string } | null = null
             if (input.autorizadoExcesoPorId) {
@@ -549,12 +574,24 @@ export class CajaService {
             // reserva desde la caja de la sede para que no pueda declararse dos veces.
             const movimientoIngreso = await CajaService.createMovimiento({
                 tipo: 'egreso',
-                concepto: input.concepto,
+                concepto: cajaRecepcion.conceptoDeposito || input.concepto,
                 monto: montoDeclarado,
-                ubicacionCajaId: input.ubicacionCajaId,
+                ubicacionCajaId: caja.ubicacionId,
                 medioPago: 'efectivo',
                 cajaOrigen: input.cajaOrigen,
-                descripcion: `Depósito informado desde ${input.ubicacionTipo || 'ubicación no informada'} (efectivo reservado, pendiente de validación)`,
+                descripcion: `Depósito hacia ${cajaRecepcion.tipo} (sobre pendiente de validación)`,
+                usuarioId: input.declaradoPorId,
+                fecha: input.fecha,
+            }, tx)
+
+            const movimientoRecepcion = await CajaService.createMovimiento({
+                tipo: 'ingreso',
+                concepto: cajaRecepcion.conceptoDeposito || input.concepto,
+                monto: montoDeclarado,
+                ubicacionCajaId: caja.ubicacionId,
+                medioPago: 'efectivo',
+                cajaOrigen: cajaRecepcion.tipo,
+                descripcion: `Sobre recibido desde ${input.cajaOrigen}, pendiente de validación`,
                 usuarioId: input.declaradoPorId,
                 fecha: input.fecha,
             }, tx)
@@ -564,9 +601,11 @@ export class CajaService {
                     fecha: normalizeFecha(input.fecha),
                     montoDeclarado,
                     cajaOrigen: input.cajaOrigen,
-                    concepto: input.concepto,
+                    cajaRecepcion: cajaRecepcion.tipo,
+                    concepto: cajaRecepcion.conceptoDeposito || input.concepto,
                     declaradoPorId: input.declaradoPorId,
                     movimientoIngresoId: movimientoIngreso.id,
+                    movimientoRecepcionId: movimientoRecepcion.id,
                 },
                 include: {
                     declaradoPor: { select: { id: true, nombre: true, apellido: true } },
@@ -611,19 +650,26 @@ export class CajaService {
             if (!deposito) throw new Error('Depósito no encontrado.')
             if (deposito.estado !== 'pendiente') throw new Error('El depósito ya fue validado.')
             if (montoReal > 0 && !input.cajaDestino) throw new Error('Seleccioná la caja que recibe el dinero real.')
-            if (montoReal > 0 && deposito.cajaOrigen === input.cajaDestino) {
-                throw new Error('La caja de destino debe ser diferente de la caja donde se declaró el depósito.')
+            const cajaQueEntrega = deposito.cajaRecepcion || deposito.cajaOrigen
+            if (montoReal > 0 && cajaQueEntrega === input.cajaDestino) {
+                throw new Error('La caja de destino debe ser diferente de la Caja Fuerte que entrega el sobre.')
             }
             if (montoReal > 0) {
                 const cajaDestino = await (tx as any).saldoCaja.findUnique({ where: { tipo: input.cajaDestino } })
                 if (!cajaDestino) throw new Error('La caja de destino no existe.')
             }
 
-            const plan = planificarValidacionDeposito(deposito.montoDeclarado, montoReal, deposito.movimientoIngreso.tipo)
+            const plan = planificarValidacionDeposito(
+                deposito.montoDeclarado,
+                montoReal,
+                deposito.movimientoIngreso.tipo,
+                deposito.cajaRecepcion,
+            )
             const diferencia = plan.diferencia
             const observaciones = validarObservacionesDiferencia(diferencia, input.observaciones)
             const fechaValidacion = normalizeFecha(input.fecha)
             let movimientoAjusteId: string | null = null
+            let movimientoAjusteRecepcionId: string | null = null
             let movimientoTransferenciaOrigenId: string | null = null
             let movimientoTransferenciaDestinoId: string | null = null
 
@@ -639,14 +685,31 @@ export class CajaService {
                     fecha: fechaValidacion,
                 }, tx)
                 movimientoAjusteId = ajuste.id
+
+                if (plan.tipoAjusteRecepcion && deposito.cajaRecepcion) {
+                    const ajusteRecepcion = await CajaService.createMovimiento({
+                        tipo: plan.tipoAjusteRecepcion,
+                        concepto: 'diferencia_deposito',
+                        monto: Math.abs(diferencia),
+                        medioPago: 'efectivo',
+                        cajaOrigen: deposito.cajaRecepcion,
+                        descripcion: `Contrapartida en Caja Fuerte por ${diferencia > 0 ? 'sobrante' : 'faltante'} al contar el sobre: ${observaciones}`,
+                        usuarioId: input.validadoPorId,
+                        fecha: fechaValidacion,
+                    }, tx)
+                    movimientoAjusteRecepcionId = ajusteRecepcion.id
+                }
             }
 
             if (montoReal > 0) {
-                if (plan.transferirDesdeOrigenAlValidar) {
-                    const saldoRecord = await (tx as any).saldoCaja.findUnique({ where: { tipo: deposito.cajaOrigen } })
+                if (plan.transferirDesdeOrigenAlValidar || plan.transferirDesdeCajaRecepcion) {
+                    const origenTransferencia = plan.transferirDesdeCajaRecepcion
+                        ? deposito.cajaRecepcion
+                        : deposito.cajaOrigen
+                    const saldoRecord = await (tx as any).saldoCaja.findUnique({ where: { tipo: origenTransferencia } })
                     const saldoActual = saldoRecord?.saldo ?? 0
                     if (saldoActual < montoReal) {
-                        throw new Error(`Saldo insuficiente luego del ajuste. Disponible: $${saldoActual.toLocaleString('es-AR')}`)
+                        throw new Error(`La Caja Fuerte no tiene saldo suficiente luego del ajuste. Disponible: $${saldoActual.toLocaleString('es-AR')}`)
                     }
 
                     const egreso = await CajaService.createMovimiento({
@@ -654,7 +717,7 @@ export class CajaService {
                         concepto: 'transferencia_interna',
                         monto: montoReal,
                         medioPago: 'efectivo',
-                        cajaOrigen: deposito.cajaOrigen,
+                        cajaOrigen: origenTransferencia,
                         descripcion: `Validación de depósito: transferencia hacia ${input.cajaDestino}`,
                         usuarioId: input.validadoPorId,
                         fecha: fechaValidacion,
@@ -667,7 +730,7 @@ export class CajaService {
                     monto: montoReal,
                     medioPago: 'efectivo',
                     cajaOrigen: input.cajaDestino,
-                    descripcion: `Validación de depósito: transferencia desde ${deposito.cajaOrigen}`,
+                    descripcion: `Validación de depósito: transferencia desde ${cajaQueEntrega}`,
                     usuarioId: input.validadoPorId,
                     fecha: fechaValidacion,
                 }, tx)
@@ -685,6 +748,7 @@ export class CajaService {
                     validadoAt: new Date(),
                     validadoPorId: input.validadoPorId,
                     movimientoAjusteId,
+                    movimientoAjusteRecepcionId,
                     movimientoTransferenciaOrigenId,
                     movimientoTransferenciaDestinoId,
                 },

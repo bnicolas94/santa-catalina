@@ -151,7 +151,7 @@ export async function POST(request: Request) {
             const deposito = await CajaService.registrarDeposito({
                 ubicacionCajaId: (session.user as UsuarioCajas).ubicacionId || '__sin_sede__',
                 montoDeclarado: numericMonto,
-                cajaOrigen: configUbicacion.cajaDepositoId,
+                cajaOrigen: configUbicacion.cajaOrigenId,
                 concepto: configUbicacion.conceptoDeposito,
                 declaradoPorId: (session?.user as any)?.id,
                 ubicacionTipo,

@@ -42,7 +42,7 @@ Resuelve el problema de la trazabilidad del dinero mediante la separación del c
 3. **Transferencia de Fondos (Ej. Local a Caja Madre):**
    El usuario llena el formulario de transferencia -> El backend ejecuta una Tx de base de datos -> Resta al origen -> Suma al destino -> Crea referencias para el historial.
 4. **Depósito de un local:**
-   Al informarlo se reserva el importe desde el saldo disponible de la caja de esa sede y queda pendiente de validación. El local no puede declarar un importe mayor al disponible; la excepción exige el email y la contraseña de un ADMIN activo y deja una auditoría con el saldo, el monto y el administrador que autorizó. Al validar, se ajusta la diferencia contada y se acredita el efectivo en la caja destino. Los depósitos pendientes creados con el circuito anterior se reconocen por su movimiento de ingreso y mantienen su conciliación histórica.
+   Al informarlo, el importe sale de la Caja Chica y entra inmediatamente en la caja activa de la misma sede marcada como `recibeDepositos` (Caja Fuerte). El sobre queda pendiente de validación dentro de esa Caja Fuerte. El local no puede declarar un importe mayor al disponible en Caja Chica; la excepción exige el email y la contraseña de un ADMIN activo y deja una auditoría con el saldo, el monto y el administrador que autorizó. Al retirar y validar el sobre, cualquier diferencia se registra con contrapartidas en Caja Chica y Caja Fuerte; después el monto real sale de la Caja Fuerte y entra en la caja final elegida. Los depósitos históricos sin caja de recepción conservan su conciliación anterior.
 
 ---
 
