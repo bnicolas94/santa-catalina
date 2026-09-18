@@ -525,7 +525,7 @@ export class CajaService {
 
         return prisma.$transaction(async tx => {
             const cajas = await tx.$queryRaw<Array<{ id: string; saldo: number; activo: boolean; ubicacionId: string | null }>>`
-                SELECT id, saldo, activo, ubicacion_id AS "ubicacionId"
+                SELECT id, saldo, activo, id_ubicacion AS "ubicacionId"
                 FROM saldos_caja
                 WHERE tipo = ${input.cajaOrigen}
                 FOR UPDATE
