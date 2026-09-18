@@ -232,6 +232,9 @@ export default function CajaPage() {
     const [filtroTipo, setFiltroTipo] = useState('todos')
 
     const allowedBoxes = cajasActivas.map(c => c.tipo)
+    const operableBoxes = userRol === 'ADMIN'
+        ? allowedBoxes
+        : cajasActivas.filter(caja => !caja.recibeDepositos).map(caja => caja.tipo)
     const cajasOrigenDeposito = cajasActivas.filter(caja =>
         Boolean(caja.ubicacionId)
         && !caja.recibeDepositos
@@ -267,6 +270,7 @@ export default function CajaPage() {
             return orden(a.tipo) - orden(b.tipo) || a.nombre.localeCompare(b.nombre, 'es')
         })
     const getBoxSaldo = (tipo: string) => cajasCatalogo.find(c => c.tipo === tipo)?.saldo ?? 0
+    const esCajaFuerte = (tipo: string | null) => cajasCatalogo.some(caja => caja.tipo === tipo && caja.recibeDepositos)
     const cajaDepositoSeleccionada = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig?.cajaOrigenId
     const cajaOrigenSeleccionada = cajasActivas.find(caja => caja.tipo === cajaDepositoSeleccionada)
     const cajaRecepcionSeleccionada = cajasActivas.find(caja =>
@@ -276,7 +280,7 @@ export default function CajaPage() {
     const montoDeposito = Number(depositAmount)
     const depositoRequiereAdmin = depositAmount !== '' && Number.isFinite(montoDeposito)
         && montoDeposito > Math.max(0, saldoDisponibleDeposito)
-    const defaultBox = allowedBoxes.find(k => k !== depositConfig?.cajaOrigenId) || allowedBoxes[0] || ''
+    const defaultBox = operableBoxes[0] || ''
 
     const movimientosFiltrados = movimientos.filter((m: MovCaja) => {
         // Filtro por Tipo
@@ -299,7 +303,7 @@ export default function CajaPage() {
         return true;
     });
 
-    const cajasDisponiblesKey = allowedBoxes.join('|')
+    const cajasDisponiblesKey = operableBoxes.join('|')
     useEffect(() => {
         const cajas = cajasDisponiblesKey ? cajasDisponiblesKey.split('|') : []
         setForm(f => cajas.includes(f.cajaOrigen) ? f : { ...f, cajaOrigen: cajas[0] || '' })
@@ -730,7 +734,7 @@ export default function CajaPage() {
                         style={{ fontSize: '1.2rem' }}>
                         {showMontos ? '👁️' : '🙈'}
                     </button>
-                    <button className="btn btn-secondary" disabled={allowedBoxes.length < 2} onClick={() => setShowTransferModal(true)}>⇄ Transferir</button>
+                    <button className="btn btn-secondary" disabled={operableBoxes.length < 2} onClick={() => setShowTransferModal(true)}>⇄ Transferir</button>
                     {depositConfig?.habilitarDeposito && (
                         <button className="btn btn-accent" 
                             style={{ backgroundColor: '#27AE60', color: 'white', border: 'none' }}
@@ -746,7 +750,7 @@ export default function CajaPage() {
                     {userRol === 'ADMIN' && (
                         <Link className="btn btn-secondary" href="/cajas">Administrar cajas</Link>
                     )}
-                    <button className="btn btn-primary" disabled={!allowedBoxes.length} onClick={() => { 
+                    <button className="btn btn-primary" disabled={!operableBoxes.length} onClick={() => {
                         setEditingMov(null); 
                         setForm({ tipo: 'egreso', concepto: 'caja_chica', monto: '', medioPago: 'efectivo', descripcion: '', cajaOrigen: defaultBox, choferId: '', fecha: new Date().toISOString().split('T')[0] }); 
                         setShowModal(true) 
@@ -1105,7 +1109,11 @@ export default function CajaPage() {
                                             className="badge"
                                             title="Este movimiento se gestiona desde Empleados. Podés corregir su caja o anularlo desde RR. HH."
                                             style={{ color: '#175cd3', background: '#eff8ff', fontSize: '10px', whiteSpace: 'nowrap' }}
-                                        >🔒 RRHH</span> : <>
+                                        >🔒 RRHH</span> : userRol !== 'ADMIN' && esCajaFuerte(m.cajaOrigen) ? <span
+                                            className="badge"
+                                            title="Sólo un administrador puede modificar movimientos de Caja Fuerte."
+                                            style={{ color: '#475467', background: '#f2f4f7', fontSize: '10px', whiteSpace: 'nowrap' }}
+                                        >Sólo ADMIN</span> : <>
                                         <button className="btn btn-ghost btn-sm" title="Editar" style={{ fontSize: '0.8rem', padding: '2px 6px' }}
                                             onClick={() => startEdit(m)}>✏️</button>
                                         <button className="btn btn-ghost btn-sm" title="Anular" style={{ fontSize: '0.8rem', padding: '2px 6px', color: 'var(--color-danger)' }}
@@ -1157,7 +1165,7 @@ export default function CajaPage() {
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
                                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                        {allowedBoxes.map((boxKey) => {
+                                        {operableBoxes.map((boxKey) => {
                                             const boxColors: Record<string, string> = {
                                                 'caja_chica': '#E67E22',
                                                 'caja_chica_local': '#F39C12',
@@ -1513,7 +1521,7 @@ export default function CajaPage() {
                                     <div className="form-group">
                                         <label className="form-label">Desde</label>
                                         <select className="form-select" value={transfForm.origen} onChange={(e) => setTransfForm({ ...transfForm, origen: e.target.value })}>
-                                            {allowedBoxes.map(box => (
+                                            {operableBoxes.map(box => (
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>
@@ -1524,7 +1532,7 @@ export default function CajaPage() {
                                     <div className="form-group">
                                         <label className="form-label">Hacia</label>
                                         <select className="form-select" value={transfForm.destino} onChange={(e) => setTransfForm({ ...transfForm, destino: e.target.value })}>
-                                            {allowedBoxes.map(box => (
+                                            {operableBoxes.map(box => (
                                                 <option key={box} value={box}>{getBoxLabel(box)}</option>
                                             ))}
                                         </select>

@@ -52,7 +52,9 @@ export async function GET(request: Request) {
                 rendicion: { select: { id: true, chofer: { select: { nombre: true } } } },
                 movimientoMp: true,
                 depositoIngreso: { select: { id: true } },
+                depositoRecepcion: { select: { id: true } },
                 depositoAjuste: { select: { id: true } },
+                depositoAjusteRecepcion: { select: { id: true } },
                 depositoTransferenciaOrigen: { select: { id: true } },
                 depositoTransferenciaDestino: { select: { id: true } },
                 creadoPor: { select: { id: true, nombre: true, apellido: true } },
@@ -85,7 +87,9 @@ export async function GET(request: Request) {
                 gestionadoPorRRHH: esMovimientoGestionadoPorRRHH(movimiento),
                 gestionadoPorDeposito: Boolean(
                     movimiento.depositoIngreso ||
+                    movimiento.depositoRecepcion ||
                     movimiento.depositoAjuste ||
+                    movimiento.depositoAjusteRecepcion ||
                     movimiento.depositoTransferenciaOrigen ||
                     movimiento.depositoTransferenciaDestino
                 ),

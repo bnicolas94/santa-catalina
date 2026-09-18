@@ -1,10 +1,11 @@
 export interface UsuarioCajas { id?: string; rol?: string; ubicacionId?: string | null; ubicacionTipo?: string | null; permisos?: { permisoCaja?: boolean } }
-export interface CajaAcceso { tipo: string; activo: boolean; ubicacionId: string | null; ubicacion?: { activo: boolean } | null }
+export interface CajaAcceso { tipo: string; activo: boolean; ubicacionId: string | null; recibeDepositos?: boolean; ubicacion?: { activo: boolean } | null }
 export class CajaValidationError extends Error {}
 
 export function tieneAccesoCaja(usuario: UsuarioCajas, caja: CajaAcceso, escritura = true) {
     if (escritura && (!caja.activo || (caja.ubicacion && !caja.ubicacion.activo))) return false
     if (usuario.rol === 'ADMIN') return true
+    if (escritura && caja.recibeDepositos) return false
     return Boolean(usuario.ubicacionId && caja.ubicacionId === usuario.ubicacionId && caja.ubicacion?.activo &&
         (usuario.permisos?.permisoCaja || usuario.ubicacionTipo === 'LOCAL'))
 }

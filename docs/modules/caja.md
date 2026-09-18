@@ -43,6 +43,7 @@ Resuelve el problema de la trazabilidad del dinero mediante la separación del c
    El usuario llena el formulario de transferencia -> El backend ejecuta una Tx de base de datos -> Resta al origen -> Suma al destino -> Crea referencias para el historial.
 4. **Depósito de un local:**
    Al informarlo, el importe sale de la Caja Chica y entra inmediatamente en la caja activa de la misma sede marcada como `recibeDepositos` (Caja Fuerte). El sobre queda pendiente de validación dentro de esa Caja Fuerte. El local no puede declarar un importe mayor al disponible en Caja Chica; la excepción exige el email y la contraseña de un ADMIN activo y deja una auditoría con el saldo, el monto y el administrador que autorizó. Al retirar y validar el sobre, cualquier diferencia se registra con contrapartidas en Caja Chica y Caja Fuerte; después el monto real sale de la Caja Fuerte y entra en la caja final elegida. Los depósitos históricos sin caja de recepción conservan su conciliación anterior.
+   Los usuarios que no son ADMIN pueden consultar el saldo y los movimientos de la Caja Fuerte, pero no crear, editar, anular, ajustar ni transferir movimientos manuales en ella. Su única operación sobre esa caja es `Depositar`, que usa el circuito controlado anterior.
 
 ---
 

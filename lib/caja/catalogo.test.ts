@@ -22,6 +22,13 @@ test('una caja inactiva conserva historial pero no admite operaciones nuevas; se
     assert.equal(tieneAccesoCaja(local, { ...caja, ubicacion: { activo: false } }, false), false)
     assert.equal(tieneAccesoCaja({ rol: 'ADMIN' }, { ...caja, activo: false }), false)
 })
+test('sólo ADMIN puede registrar movimientos directos en una Caja Fuerte', () => {
+    const cajaFuerte = { ...caja, recibeDepositos: true }
+    assert.equal(tieneAccesoCaja(local, cajaFuerte), false)
+    assert.equal(tieneAccesoCaja(local, cajaFuerte, false), true)
+    assert.equal(tieneAccesoCaja({ rol: 'ADMIN' }, cajaFuerte), true)
+    assert.equal(tieneAccesoCaja(local, { ...caja, recibeDepositos: false }), true)
+})
 test('administrar cajas exige ADMIN incluso para personal del local con permisoCaja', () => {
     for (const ruta of ['/cajas', '/api/cajas']) {
         assert.equal(canAccessPath(ruta, { ...local, permisos: { permisoCaja: true } }), false)

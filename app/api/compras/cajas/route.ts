@@ -9,6 +9,8 @@ import type { UsuarioCajas } from '@/lib/caja/catalogo'
 export async function GET() {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: 'Sesión requerida.' }, { status: 401 })
-    const cajas = await listarCajas({ ...session.user as UsuarioCajas, permisos: { permisoCaja: true } })
-    return NextResponse.json(cajas.map(c => ({ tipo: c.tipo, nombre: `${c.nombre || c.tipo}${c.ubicacion ? ' · ' + c.ubicacion.nombre : ''}` })))
+    const usuario = session.user as UsuarioCajas
+    const cajas = await listarCajas({ ...usuario, permisos: { permisoCaja: true } })
+    const operables = usuario.rol === 'ADMIN' ? cajas : cajas.filter(caja => !caja.recibeDepositos)
+    return NextResponse.json(operables.map(c => ({ tipo: c.tipo, nombre: `${c.nombre || c.tipo}${c.ubicacion ? ' · ' + c.ubicacion.nombre : ''}` })))
 }
