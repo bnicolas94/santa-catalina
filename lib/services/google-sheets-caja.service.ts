@@ -103,7 +103,7 @@ export async function guardarSucursalesSheet(input: unknown, usuarioId: string) 
     }, { isolationLevel: 'Serializable' })
 }
 
-async function descargarHoja(spreadsheetId: string, gid: string) {
+export async function descargarHoja(spreadsheetId: string, gid: string) {
     const controlador = new AbortController()
     const timeout = setTimeout(() => controlador.abort(), 20000)
     try {

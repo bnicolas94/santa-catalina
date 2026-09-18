@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { MESES, GranularidadTemporal, RangoFechas, getDateRange } from '../utils/dateUtils'
 
 const InclusionToggleBorder = (active: boolean) => active ? '1px solid var(--color-warning)' : '1px solid var(--color-gray-200)'
@@ -98,6 +99,7 @@ export default function PeriodoSelector({
                 <h1 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>📊 Reportes de Gestión</h1>
 
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Link href="/reportes/pedidos-local" className="btn btn-secondary btn-sm">Pedidos de local</Link>
                     <select
                         className="form-select"
                         value={ubicacionId}

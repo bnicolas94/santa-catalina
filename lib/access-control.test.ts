@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath, getAccessRule } from './access-control'
+
+test('pedidos de local exige permiso de Reportes en página y API', () => {
+    for (const path of ['/reportes/pedidos-local', '/api/reportes/pedidos-local']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
 test('planificar horarios requiere acceso a Personal', () => {
     assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN' }), true)
     assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }), true)
