@@ -3,6 +3,9 @@
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { cantidadGastoOpcional } from '@/lib/compras/validacion'
+import { filtrarFacturasGasto, paginaFacturasGasto } from '@/lib/compras/listado-gastos'
+
+const FACTURAS_GASTO_POR_PAGINA = 10
 
 interface StockInsumoResumen { ubicacionId: string; cantidad: number }
 interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; activo: boolean; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
@@ -123,6 +126,9 @@ function ComprasContent() {
     const [cajas, setCajas] = useState<CajaCompra[]>([])
     const [categoriasGasto, setCategoriasGasto] = useState<CategoriaGasto[]>([])
     const [facturasGasto, setFacturasGasto] = useState<FacturaGastoResumen[]>([])
+    const [busquedaFacturasGasto, setBusquedaFacturasGasto] = useState('')
+    const [paginaGastos, setPaginaGastos] = useState(1)
+    const [conceptosGastoExpandidos, setConceptosGastoExpandidos] = useState<Record<string, boolean>>({})
     const [cuentaCorriente, setCuentaCorriente] = useState<CuentaCorriente | null>(null)
     const [cuentasExpandidas, setCuentasExpandidas] = useState<Record<string, boolean>>({})
     const [loading, setLoading] = useState(true)
@@ -567,6 +573,21 @@ function ComprasContent() {
         ...insumos.filter(insumo => !insumo.activo).map(insumo => insumo.nombre),
         ...facturasGasto.flatMap(factura => factura.gastos.map(gasto => gasto.descripcion)),
     ])].sort((a, b) => a.localeCompare(b, 'es-AR'))
+    const facturasGastoFiltradas = filtrarFacturasGasto(facturasGasto, busquedaFacturasGasto)
+    const totalPaginasGasto = Math.max(1, Math.ceil(facturasGastoFiltradas.length / FACTURAS_GASTO_POR_PAGINA))
+    const paginaGastosActual = Math.min(paginaGastos, totalPaginasGasto)
+    const facturasGastoVisibles = paginaFacturasGasto(
+        facturasGastoFiltradas,
+        paginaGastosActual,
+        FACTURAS_GASTO_POR_PAGINA,
+    )
+    const primerGastoVisible = facturasGastoFiltradas.length === 0
+        ? 0
+        : (paginaGastosActual - 1) * FACTURAS_GASTO_POR_PAGINA + 1
+    const ultimoGastoVisible = Math.min(
+        paginaGastosActual * FACTURAS_GASTO_POR_PAGINA,
+        facturasGastoFiltradas.length,
+    )
 
     // Calcular stock por vencimiento para el insumo filtrado o todos
     const stockPorVto = (() => {
@@ -866,11 +887,25 @@ function ComprasContent() {
 
             {facturasGasto.length > 0 && (
                 <section className="card" style={{ marginBottom: 'var(--space-6)', overflow: 'hidden' }}>
-                    <div style={{ padding: 'var(--space-4)', background: '#F4ECF7', borderBottom: '1px solid #D7BDE2' }}>
-                        <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧾 Facturas con gastos o servicios</h2>
-                        <p style={{ margin: '4px 0 0', color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>
-                            Estos conceptos impactan en Costos, pero no crean insumos ni modifican stock.
-                        </p>
+                    <div style={{ padding: 'var(--space-4)', background: '#F4ECF7', borderBottom: '1px solid #D7BDE2', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>🧾 Facturas con gastos o servicios</h2>
+                            <p style={{ margin: '4px 0 0', color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>
+                                Estos conceptos impactan en Costos, pero no crean insumos ni modifican stock.
+                            </p>
+                        </div>
+                        <label style={{ minWidth: 260, flex: '0 1 360px' }}>
+                            <span className="form-label" style={{ fontSize: 'var(--text-xs)' }}>Buscar factura o concepto</span>
+                            <input
+                                className="form-input"
+                                value={busquedaFacturasGasto}
+                                onChange={(event) => {
+                                    setBusquedaFacturasGasto(event.target.value)
+                                    setPaginaGastos(1)
+                                }}
+                                placeholder="Proveedor, factura, concepto o categoría"
+                            />
+                        </label>
                     </div>
                     <div className="table-container" style={{ border: 0, borderRadius: 0 }}>
                         <table className="table" style={{ margin: 0 }}>
@@ -886,9 +921,12 @@ function ComprasContent() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {facturasGasto.map(factura => {
+                                {facturasGastoVisibles.map(factura => {
                                     const saldo = Math.max(0, factura.costoTotal - factura.montoPagado)
                                     const esMixta = factura.movimientosStock.length > 0
+                                    const conceptosExpandidos = conceptosGastoExpandidos[factura.id] === true
+                                    const conceptosVisibles = conceptosExpandidos ? factura.gastos : factura.gastos.slice(0, 2)
+                                    const cantidadConceptosOcultos = factura.gastos.length - conceptosVisibles.length
                                     return (
                                         <tr key={factura.id}>
                                             <td>{new Date(factura.fechaFactura || factura.fechaMovimiento).toLocaleDateString('es-AR')}</td>
@@ -897,12 +935,22 @@ function ComprasContent() {
                                                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Fac. {factura.numeroFactura || 'S/N'} · {factura.ubicacion?.nombre || 'Sin sede'}</div>
                                             </td>
                                             <td>
-                                                {factura.gastos.map(gasto => (
+                                                {conceptosVisibles.map(gasto => (
                                                     <div key={gasto.id} style={{ marginBottom: '3px' }}>
                                                         {gasto.descripcion} <span style={{ color: gasto.categoria.color || '#7D3C98', fontSize: 'var(--text-xs)', fontWeight: 700 }}>({gasto.categoria.nombre})</span>
                                                         {gasto.cantidad != null && <small style={{ display: 'block' }}>Cantidad: {gasto.cantidad.toLocaleString('es-AR')}</small>}
                                                     </div>
                                                 ))}
+                                                {factura.gastos.length > 2 && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-ghost"
+                                                        style={{ padding: '2px 6px', color: '#7D3C98' }}
+                                                        onClick={() => setConceptosGastoExpandidos(actual => ({ ...actual, [factura.id]: !conceptosExpandidos }))}
+                                                    >
+                                                        {conceptosExpandidos ? 'Ver menos' : `+${cantidadConceptosOcultos} concepto${cantidadConceptosOcultos === 1 ? '' : 's'}`}
+                                                    </button>
+                                                )}
                                             </td>
                                             <td><span className="badge" style={{ background: esMixta ? '#F5EEF8' : '#FEF9E7', color: esMixta ? '#7D3C98' : '#9A7D0A' }}>{esMixta ? 'Mixta' : 'Sólo gasto'}</span></td>
                                             <td style={{ fontWeight: 700 }}>${factura.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
@@ -922,8 +970,27 @@ function ComprasContent() {
                                         </tr>
                                     )
                                 })}
+                                {facturasGastoVisibles.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-gray-500)' }}>
+                                            No encontramos facturas con ese criterio.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
+                    </div>
+                    <div style={{ padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid #E5E7E9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                        <span style={{ color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>
+                            Mostrando {primerGastoVisible}–{ultimoGastoVisible} de {facturasGastoFiltradas.length} factura{facturasGastoFiltradas.length === 1 ? '' : 's'}
+                        </span>
+                        {totalPaginasGasto > 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                <button type="button" className="btn btn-secondary btn-sm" disabled={paginaGastosActual === 1} onClick={() => setPaginaGastos(Math.max(1, paginaGastosActual - 1))}>← Anterior</button>
+                                <strong style={{ minWidth: 100, textAlign: 'center', fontSize: 'var(--text-sm)' }}>Página {paginaGastosActual} de {totalPaginasGasto}</strong>
+                                <button type="button" className="btn btn-secondary btn-sm" disabled={paginaGastosActual === totalPaginasGasto} onClick={() => setPaginaGastos(Math.min(totalPaginasGasto, paginaGastosActual + 1))}>Siguiente →</button>
+                            </div>
+                        )}
                     </div>
                 </section>
             )}

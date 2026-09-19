@@ -39,6 +39,9 @@ de stock y de los conceptos de gasto de la factura.
   guardada en `GastoOperativo.cantidad`. Es informativa: no afecta stock ni multiplica
   el costo total del renglón. Los históricos sin cantidad siguen sin especificar,
   incluso al abrir su edición.
+- El listado de facturas con gastos se muestra en páginas de diez, permite buscar por
+  proveedor, número, sede, descripción o categoría y resume los conceptos extensos.
+  La paginación es sólo visual y no altera la información ni el orden cronológico.
 - Los insumos inactivos pueden sugerirse como descripción de un gasto para
   conservar nombres habituales. Elegir esa sugerencia no vincula el concepto
   al inventario, no reactiva el insumo y no genera movimientos de stock.
