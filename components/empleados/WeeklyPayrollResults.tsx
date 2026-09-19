@@ -3,13 +3,15 @@
 import { Fragment, useState } from 'react'
 import { WeeklyPayrollAdditionals } from './WeeklyPayrollAdditionals'
 import { WeeklyPayrollDayCard } from './WeeklyPayrollDayCard'
-import type { ConceptoSalarialUI, DiaLiquidacionUI, EmpleadoLiquidable, ResultadoLiquidacionUI } from './weeklyPayroll.types'
+import type { CajaLiquidacionUI, ConceptoSalarialUI, DiaLiquidacionUI, EmpleadoLiquidable, ResultadoLiquidacionUI } from './weeklyPayroll.types'
 import { obtenerAlertasLiquidacion } from './weeklyPayroll.utils'
 
 interface Props {
     resultados: ResultadoLiquidacionUI[]
     empleados: EmpleadoLiquidable[]
     conceptos: ConceptoSalarialUI[]
+    cajas: CajaLiquidacionUI[]
+    cajasPorEmpleado: Record<string, string>
     updatingStatusDate: string | null
     getDiaStatus: (dia: DiaLiquidacionUI) => string
     onAjusteChange: (empleadoId: string, valor: string) => void
@@ -20,6 +22,7 @@ interface Props {
     onStatusChange: (empleadoId: string, fecha: string, estado: string) => void
     onAddAdicional: (empleadoId: string, conceptoId: string, monto: number) => void
     onRemoveAdicional: (empleadoId: string, index: number) => void
+    onCajaEmpleadoChange: (empleadoId: string, cajaId: string) => void
 }
 
 export function WeeklyPayrollResults(props: Props) {
@@ -39,6 +42,11 @@ export function WeeklyPayrollResults(props: Props) {
     const totalExtras = liquidables.reduce((total, resultado) => total + resultado.montoHorasExtras + resultado.montoHorasFeriado, 0)
     const totalDeducciones = liquidables.reduce((total, resultado) => total + resultado.descuentoPrestamos, 0)
     const ajustesManuales = props.resultados.reduce((total, resultado) => total + resultado.desglosePorDia.filter(dia => dia.ajusteManual).length, 0)
+    const resumenCajas = liquidables.reduce<Record<string, number>>((resumen, resultado) => {
+        const cajaId = props.cajasPorEmpleado[resultado.empleadoId]
+        if (cajaId) resumen[cajaId] = (resumen[cajaId] || 0) + resultado.totalNeto
+        return resumen
+    }, {})
     return <>
         {seguimientos.length > 0 && <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-info-bg)', color: 'var(--color-info)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
             Seguimiento mensual mixto: {seguimientos.length} empleado{seguimientos.length === 1 ? '' : 's'} · {totalSeguimiento.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })} devengados como referencia. No se incluyen en el total a pagar de esta semana.
@@ -60,10 +68,17 @@ export function WeeklyPayrollResults(props: Props) {
         {ajustesManuales > 0 && <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
             {ajustesManuales} jornada{ajustesManuales === 1 ? '' : 's'} con ajustes manuales. Revisalas antes de confirmar.
         </div>}
+        {Object.keys(resumenCajas).length > 0 && <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', background: 'var(--color-gray-50)' }}>
+            <div style={{ fontSize: 'var(--text-xs)', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-gray-500)', marginBottom: '6px' }}>Egresos por caja</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>{Object.entries(resumenCajas).map(([cajaId, monto]) => {
+                const caja = props.cajas.find(item => item.tipo === cajaId)
+                return <span key={cajaId} style={{ fontSize: 'var(--text-sm)' }}><strong>{caja?.nombre || cajaId}:</strong> ${monto.toLocaleString()}</span>
+            })}</div>
+        </div>}
         <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'white' }}>
         <table className="table table-sm">
             <thead style={{ backgroundColor: 'var(--color-gray-50)' }}><tr>
-                <th style={{ width: '30px' }}></th><th>Empleado</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '110px' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)' }}>Neto a Pagar</th>
+                <th style={{ width: '30px' }}></th><th>Empleado</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '110px' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ minWidth: '180px' }}>Caja de pago</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)' }}>Neto a Pagar</th>
             </tr></thead>
             <tbody>{resultadosVisibles.map(resultado => {
                 const alertas = obtenerAlertasLiquidacion(resultado)
@@ -84,7 +99,7 @@ export function WeeklyPayrollResults(props: Props) {
                         {errores > 0 && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{errores} BLOQUEO{errores === 1 ? '' : 'S'}</span>}
                         {advertencias > 0 && <span className="badge badge-warning" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{advertencias} REVISAR</span>}
                     </td>
-                    {resultado.error ? <td colSpan={7} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>Error: {resultado.error}</td> : <>
+                    {resultado.error ? <td colSpan={8} style={{ color: 'var(--color-danger)', fontSize: '12px', fontStyle: 'italic' }}>Error: {resultado.error}</td> : <>
                         <td style={{ textAlign: 'center' }}>{resultado.diasTrabajados}</td><td style={{ textAlign: 'right' }}>${resultado.sueldoBase.toLocaleString()}</td>
                         <td style={{ textAlign: 'center' }}>{resultado.esSeguimientoMensualMixto
                             ? <span title="Ajustá las horas dentro de cada día para conservar su fecha exacta.">Por día</span>
@@ -98,10 +113,17 @@ export function WeeklyPayrollResults(props: Props) {
                         </td>
                         <td style={{ textAlign: 'right' }}>{resultado.montoHorasFeriado > 0 && <span className="badge badge-warning" style={{ fontSize: '9px' }}>FER</span>}${resultado.montoHorasFeriado.toLocaleString()}</td>
                         <td style={{ textAlign: 'right', color: 'var(--color-danger)' }}>{resultado.descuentoPrestamos > 0 && <span style={{ fontSize: '10px' }}>Préstamos</span>}-${resultado.descuentoPrestamos.toLocaleString()}</td>
+                        <td onClick={evento => evento.stopPropagation()}>{resultado.esSeguimientoMensualMixto
+                            ? <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-xs)' }}>No genera egreso</span>
+                            : <select className="form-select" value={props.cajasPorEmpleado[resultado.empleadoId] || ''} onChange={evento => props.onCajaEmpleadoChange(resultado.empleadoId, evento.target.value)} style={{ minWidth: '170px', padding: '5px 8px', fontSize: 'var(--text-xs)' }}>
+                                <option value="">Seleccionar…</option>
+                                {props.cajas.map(caja => <option key={caja.tipo} value={caja.tipo}>{caja.nombre || caja.tipo}{caja.ubicacion?.nombre ? ` · ${caja.ubicacion.nombre}` : ''}</option>)}
+                            </select>}
+                        </td>
                         <td style={{ textAlign: 'right', fontWeight: 800 }}>${resultado.totalNeto.toLocaleString()}</td>
                     </>}
                 </tr>
-                {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={9} style={{ padding: 'var(--space-4)' }}>
+                {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={10} style={{ padding: 'var(--space-4)' }}>
                     {alertas.length > 0 && <div style={{ display: 'grid', gap: '6px', marginBottom: 'var(--space-3)' }}>{alertas.map((alerta, indice) => <div key={`${alerta.fecha || 'general'}-${indice}`} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: alerta.nivel === 'error' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', color: alerta.nivel === 'error' ? 'var(--color-danger)' : 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{alerta.fecha ? `${alerta.fecha}: ` : ''}{alerta.mensaje}</div>)}</div>}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>{resultado.desglosePorDia.map(dia => <WeeklyPayrollDayCard key={dia.fecha} dia={dia} empleadoId={resultado.empleadoId} actualizandoEstado={props.updatingStatusDate === `${resultado.empleadoId}-${dia.fecha}`} estado={props.getDiaStatus(dia)} onTimeChange={props.onTimeChange} onHoursChange={props.onHoursChange} onJustificar={props.onJustificar} onQuitarJustificacion={props.onQuitarJustificacion} onStatusChange={props.onStatusChange} />)}</div>
                     {resultado.esSeguimientoMensualMixto
@@ -112,8 +134,8 @@ export function WeeklyPayrollResults(props: Props) {
                 </td></tr>}
             </Fragment>})}</tbody>
             <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}>
-                <tr><td colSpan={8} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td><td style={{ textAlign: 'right', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
-                {seguimientos.length > 0 && <tr><td colSpan={8} style={{ textAlign: 'right', color: 'var(--color-info)' }}>SEGUIMIENTO MENSUAL MIXTO (NO SE PAGA AHORA):</td><td style={{ textAlign: 'right', color: 'var(--color-info)' }}>${totalSeguimiento.toLocaleString()}</td></tr>}
+                <tr><td colSpan={9} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td><td style={{ textAlign: 'right', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
+                {seguimientos.length > 0 && <tr><td colSpan={9} style={{ textAlign: 'right', color: 'var(--color-info)' }}>SEGUIMIENTO MENSUAL MIXTO (NO SE PAGA AHORA):</td><td style={{ textAlign: 'right', color: 'var(--color-info)' }}>${totalSeguimiento.toLocaleString()}</td></tr>}
             </tfoot>
         </table>
         </div>

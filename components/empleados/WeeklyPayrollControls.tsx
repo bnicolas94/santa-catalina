@@ -1,15 +1,17 @@
-import type { EmpleadoLiquidable } from './weeklyPayroll.types'
+import type { CajaLiquidacionUI, EmpleadoLiquidable } from './weeklyPayroll.types'
 
 interface Props {
     fechaInicio: string
     fechaFin: string
     cajaId: string
+    cajas: CajaLiquidacionUI[]
     loading: boolean
     empleadosExcluidos: EmpleadoLiquidable[]
     empleadosDeVacaciones: EmpleadoLiquidable[]
     onFechaInicioChange: (fecha: string) => void
     onFechaFinChange: (fecha: string) => void
     onCajaChange: (cajaId: string) => void
+    onAplicarCajaATodos: () => void
     onCalcular: () => void
 }
 
@@ -25,12 +27,16 @@ export function WeeklyPayrollControls(props: Props) {
                 <input type="date" className="form-input" value={props.fechaFin} onChange={e => props.onFechaFinChange(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Caja de Egreso</label>
+                <label className="form-label">Caja predeterminada</label>
                 <select className="form-select" value={props.cajaId} onChange={e => props.onCajaChange(e.target.value)}>
-                    <option value="caja_chica">Caja Chica</option>
-                    <option value="mercado_pago">Mercado Pago (MP)</option>
-                    <option value="caja_madre">Caja Madre</option>
+                    <option value="">Seleccionar caja…</option>
+                    {props.cajas.map(caja => <option key={caja.tipo} value={caja.tipo}>
+                        {caja.nombre || caja.tipo}{caja.ubicacion?.nombre ? ` · ${caja.ubicacion.nombre}` : ''}
+                    </option>)}
                 </select>
+                <button type="button" className="btn btn-ghost" onClick={props.onAplicarCajaATodos} disabled={!props.cajaId} style={{ marginTop: '6px', padding: '4px 8px', fontSize: 'var(--text-xs)' }}>
+                    Aplicar a todo el lote
+                </button>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                 <button className="btn btn-primary btn-block" onClick={props.onCalcular} disabled={props.loading}>

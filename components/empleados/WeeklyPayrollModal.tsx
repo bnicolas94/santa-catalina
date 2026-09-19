@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type {
     BorradorLiquidacionUI,
+    CajaLiquidacionUI,
     ConceptoSalarialUI,
     DiaLiquidacionUI,
     EmpleadoLiquidable,
@@ -14,6 +15,7 @@ import { WeeklyPayrollControls } from './WeeklyPayrollControls'
 import { WeeklyPayrollHeader } from './WeeklyPayrollHeader'
 import { WeeklyPayrollFooter } from './WeeklyPayrollFooter'
 import { WeeklyPayrollResults } from './WeeklyPayrollResults'
+import { cajaSugeridaParaEmpleado, cajasActivasParaLiquidacion } from '@/lib/payroll/cajasLiquidacion'
 
 interface WeeklyPayrollModalProps {
     empleados: EmpleadoLiquidable[]
@@ -34,7 +36,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         const diff = d.getDate() - day + (day === 0 ? 0 : 7) // Domingo
         return new Date(d.setDate(diff)).toISOString().split('T')[0]
     })
-    const [cajaId, setCajaId] = useState('caja_chica')
+    const [cajaId, setCajaId] = useState('')
+    const [cajas, setCajas] = useState<CajaLiquidacionUI[]>([])
+    const [cajasPorEmpleado, setCajasPorEmpleado] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(false)
     const [resultados, setResultados] = useState<ResultadoLiquidacionUI[]>([])
     const [periodoNombre, setPeriodoNombre] = useState('')
@@ -48,7 +52,34 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
 
     useEffect(() => {
         fetch('/api/conceptos').then(res => res.json()).then(setConceptos).catch(console.error)
+        fetch('/api/empleados/cajas-pago')
+            .then(async res => {
+                const data = await res.json()
+                if (!res.ok) throw new Error(data?.error || 'No se pudieron cargar las cajas.')
+                const activas = cajasActivasParaLiquidacion(Array.isArray(data) ? data : [])
+                setCajas(activas)
+                setCajaId(actual => actual || activas.find(caja => !caja.recibeDepositos)?.tipo || activas[0]?.tipo || '')
+            })
+            .catch(error => {
+                console.error(error)
+                setCajas([])
+            })
     }, [])
+
+    const asignarCajasSugeridas = (resultadosCalculados: ResultadoLiquidacionUI[]) => {
+        setCajasPorEmpleado(actual => {
+            const siguiente: Record<string, string> = {}
+            for (const resultado of resultadosCalculados) {
+                if (resultado.esSeguimientoMensualMixto) continue
+                const seleccionActual = actual[resultado.empleadoId]
+                const empleado = empleados.find(item => item.id === resultado.empleadoId)
+                siguiente[resultado.empleadoId] = seleccionActual && cajas.some(caja => caja.tipo === seleccionActual)
+                    ? seleccionActual
+                    : cajaSugeridaParaEmpleado(empleado, cajas, cajaId)
+            }
+            return siguiente
+        })
+    }
 
     useEffect(() => {
         const [sy, sm, sd] = fechaInicio.split('-').map(Number);
@@ -59,6 +90,10 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     }, [fechaInicio, fechaFin])
 
     const handleCalcular = async () => {
+        if (cajas.length === 0) {
+            alert('No hay cajas activas disponibles para registrar los pagos.')
+            return
+        }
         setLoading(true)
         setResultados([])
         setEmpleadosExcluidos([])
@@ -163,16 +198,23 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                             return { ...r, adicionales: [] };
                         })
                         setResultados(merged)
+                        asignarCajasSugeridas(merged)
                         setBorradorCargado(true)
                     } else {
-                        setResultados(dataLiquidable.map(r => ({ ...r, adicionales: [] })))
+                        const resultadosIniciales = dataLiquidable.map(r => ({ ...r, adicionales: [] }))
+                        setResultados(resultadosIniciales)
+                        asignarCajasSugeridas(resultadosIniciales)
                         setBorradorCargado(false)
                     }
                 } else {
-                    setResultados(dataLiquidable.map(r => ({ ...r, adicionales: [] })))
+                    const resultadosIniciales = dataLiquidable.map(r => ({ ...r, adicionales: [] }))
+                    setResultados(resultadosIniciales)
+                    asignarCajasSugeridas(resultadosIniciales)
                 }
             } catch {
-                setResultados(dataLiquidable.map(r => ({ ...r, adicionales: [] })))
+                const resultadosIniciales = dataLiquidable.map(r => ({ ...r, adicionales: [] }))
+                setResultados(resultadosIniciales)
+                asignarCajasSugeridas(resultadosIniciales)
             }
         } catch (error) {
             console.error(error)
@@ -197,7 +239,22 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             return
         }
 
-        if (!confirm(`¿Confirmas la liquidación final de ${validResults.length} empleados? Esto generará los egresos de caja.`)) return
+        const sinCaja = validResults.filter(resultado => !cajasPorEmpleado[resultado.empleadoId])
+        if (sinCaja.length > 0) {
+            alert(`Seleccioná la caja de pago para:\n\n${sinCaja.map(resultado => resultado.empleadoNombre).join('\n')}`)
+            return
+        }
+
+        const resumen = validResults.reduce<Record<string, number>>((acumulado, resultado) => {
+            const caja = cajasPorEmpleado[resultado.empleadoId]
+            acumulado[caja] = (acumulado[caja] || 0) + resultado.totalNeto
+            return acumulado
+        }, {})
+        const detalleCajas = Object.entries(resumen).map(([tipo, monto]) => {
+            const caja = cajas.find(item => item.tipo === tipo)
+            return `${caja?.nombre || tipo}: $${monto.toLocaleString()}`
+        }).join('\n')
+        if (!confirm(`¿Confirmás la liquidación final de ${validResults.length} empleados?\n\nEgresos por caja:\n${detalleCajas}`)) return
 
         setConfirmando(true)
         try {
@@ -210,7 +267,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         periodo: periodoNombre,
                         fechaInicio,
                         fechaFin,
-                        cajaId,
+                        cajaId: cajasPorEmpleado[result.empleadoId],
                         calculatedData: result,
                         adicionales: result.adicionales || []
                     })
@@ -502,18 +559,24 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         fechaInicio={fechaInicio}
                         fechaFin={fechaFin}
                         cajaId={cajaId}
+                        cajas={cajas}
                         loading={loading}
                         empleadosExcluidos={empleadosExcluidos}
                         empleadosDeVacaciones={empleadosDeVacaciones}
                         onFechaInicioChange={setFechaInicio}
                         onFechaFinChange={setFechaFin}
                         onCajaChange={setCajaId}
+                        onAplicarCajaATodos={() => setCajasPorEmpleado(Object.fromEntries(resultados
+                            .filter(resultado => !resultado.esSeguimientoMensualMixto)
+                            .map(resultado => [resultado.empleadoId, cajaId])))}
                         onCalcular={handleCalcular}
                     />
                     <WeeklyPayrollResults
                         resultados={resultados}
                         empleados={empleados}
                         conceptos={conceptos}
+                        cajas={cajas}
+                        cajasPorEmpleado={cajasPorEmpleado}
                         updatingStatusDate={updatingStatusDate}
                         getDiaStatus={getDiaStatus}
                         onAjusteChange={handleAjusteChange}
@@ -524,6 +587,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         onStatusChange={handleStatusChange}
                         onAddAdicional={handleAddAdicional}
                         onRemoveAdicional={handleRemoveAdicional}
+                        onCajaEmpleadoChange={(empleadoId, nuevaCajaId) => setCajasPorEmpleado(actual => ({ ...actual, [empleadoId]: nuevaCajaId }))}
                     />
                 </div>
                 <WeeklyPayrollFooter

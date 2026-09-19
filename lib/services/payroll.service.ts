@@ -862,8 +862,11 @@ export class PayrollService {
             }
 
             if (cajaId && neto > 0) {
-                const caja = await tx.saldoCaja.findUnique({ where: { tipo: cajaId } })
+                const caja = await tx.saldoCaja.findUnique({ where: { tipo: cajaId }, include: { ubicacion: true } })
                 if (!caja) throw new Error(`La caja '${cajaId}' no existe en el sistema.`)
+                if (!caja.activo || caja.ubicacion?.activo === false) {
+                    throw new Error(`La caja '${caja.nombre || cajaId}' no está activa y no puede utilizarse para pagar sueldos.`)
+                }
 
                 await CajaService.createMovimientoEnTx(tx, {
                     tipo: 'egreso',

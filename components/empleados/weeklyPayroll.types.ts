@@ -4,6 +4,17 @@ export interface EmpleadoLiquidable {
     apellido?: string | null
     activo: boolean
     modalidadPago?: string
+    ubicacionId?: string | null
+}
+
+export interface CajaLiquidacionUI {
+    tipo: string
+    nombre?: string | null
+    saldo?: number
+    activo: boolean
+    ubicacionId?: string | null
+    recibeDepositos?: boolean
+    ubicacion?: { nombre?: string | null; activo?: boolean } | null
 }
 
 export interface ConceptoSalarialUI {
