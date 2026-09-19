@@ -112,6 +112,13 @@ interface ConfigDeposito {
     habilitarDeposito: boolean
 }
 
+const TIPOS_CAJA_TRANSFERENCIA = new Set(['mercado_pago', 'mercado_pago_juani'])
+const COLORES_SEDE_CAJA = ['#C2410C', '#7C3AED', '#DC2626', '#0F766E', '#2563EB', '#B45309']
+const COLORES_CAJA_TRANSFERENCIA: Record<string, string> = {
+    mercado_pago: '#2980B9',
+    mercado_pago_juani: '#00A991',
+}
+
 const accionesAuditoria: Record<string, string> = {
     CREACION: 'Creación',
     MODIFICACION: 'Modificación',
@@ -288,6 +295,30 @@ export default function CajaPage() {
             const orden = (tipo: string) => tipo === 'FABRICA' ? 0 : tipo === 'LOCAL' ? 1 : 2
             return orden(a.tipo) - orden(b.tipo) || a.nombre.localeCompare(b.nombre, 'es')
         })
+    const cajasOperablesCatalogo = cajasActivas.filter(caja => operableBoxes.includes(caja.tipo))
+    const cajasTransferencia = cajasOperablesCatalogo.filter(caja => TIPOS_CAJA_TRANSFERENCIA.has(caja.tipo))
+    const cajasOperablesPorSede = [...cajasOperablesCatalogo
+        .filter(caja => !TIPOS_CAJA_TRANSFERENCIA.has(caja.tipo))
+        .reduce((grupos, caja) => {
+            const clave = caja.ubicacionId || '__sin_sede__'
+            const grupo = grupos.get(clave) || {
+                clave,
+                nombre: caja.ubicacion?.nombre || 'Sin sede',
+                tipo: caja.ubicacion?.tipo || 'OTRA',
+                cajasChicas: [] as CajaCatalogo[],
+                cajasFuertes: [] as CajaCatalogo[],
+            }
+            const destino = caja.recibeDepositos ? grupo.cajasFuertes : grupo.cajasChicas
+            destino.push(caja)
+            destino.sort((a, b) => (a.nombre || a.tipo).localeCompare(b.nombre || b.tipo, 'es'))
+            grupos.set(clave, grupo)
+            return grupos
+        }, new Map<string, { clave: string; nombre: string; tipo: string; cajasChicas: CajaCatalogo[]; cajasFuertes: CajaCatalogo[] }>()).values()]
+        .sort((a, b) => {
+            const orden = (tipo: string) => tipo === 'FABRICA' ? 0 : tipo === 'LOCAL' ? 1 : 2
+            return orden(a.tipo) - orden(b.tipo) || a.nombre.localeCompare(b.nombre, 'es')
+        })
+        .map((grupo, indice) => ({ ...grupo, color: COLORES_SEDE_CAJA[indice % COLORES_SEDE_CAJA.length] }))
     const getBoxSaldo = (tipo: string) => cajasCatalogo.find(c => c.tipo === tipo)?.saldo ?? 0
     const esCajaFuerte = (tipo: string | null) => cajasCatalogo.some(caja => caja.tipo === tipo && caja.recibeDepositos)
     const cajaDepositoSeleccionada = userRol === 'ADMIN' ? selectedDepositTarget : depositConfig?.cajaOrigenId
@@ -300,6 +331,38 @@ export default function CajaPage() {
     const depositoRequiereAdmin = depositAmount !== '' && Number.isFinite(montoDeposito)
         && montoDeposito > Math.max(0, saldoDisponibleDeposito)
     const defaultBox = operableBoxes[0] || ''
+
+    const seleccionarCajaMovimiento = (caja: CajaCatalogo) => {
+        const esTransferencia = TIPOS_CAJA_TRANSFERENCIA.has(caja.tipo)
+        setForm({
+            ...form,
+            cajaOrigen: caja.tipo,
+            medioPago: esTransferencia ? 'transferencia' : form.medioPago,
+        })
+    }
+
+    const renderBotonCajaMovimiento = (caja: CajaCatalogo, color: string) => {
+        const seleccionada = form.cajaOrigen === caja.tipo
+        return (
+            <button key={caja.tipo} type="button" className="btn btn-sm"
+                aria-pressed={seleccionada}
+                onClick={() => seleccionarCajaMovimiento(caja)}
+                style={{
+                    width: '100%',
+                    minHeight: 44,
+                    backgroundColor: seleccionada ? color : `${color}14`,
+                    color: seleccionada ? '#fff' : color,
+                    border: `2px solid ${color}`,
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    lineHeight: 1.2,
+                    padding: 'var(--space-2)',
+                    whiteSpace: 'normal',
+                }}>
+                {caja.nombre || caja.tipo}
+            </button>
+        )
+    }
 
     const cajasDisponiblesKey = operableBoxes.join('|')
     useEffect(() => {
@@ -1184,38 +1247,39 @@ export default function CajaPage() {
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Caja</label>
-                                    <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                        {operableBoxes.map((boxKey) => {
-                                            const boxColors: Record<string, string> = {
-                                                'caja_chica': '#E67E22',
-                                                'caja_chica_local': '#F39C12',
-                                                'mercado_pago': '#2980B9',
-                                                'mercado_pago_juani': '#00BFA5'
-                                            };
-                                            const color = boxColors[boxKey] || 'var(--color-primary)';
+                                    <div style={{ display: 'grid', gap: 10 }}>
+                                        {cajasOperablesPorSede.map(grupo => {
+                                            const cantidadFilas = Math.max(grupo.cajasChicas.length, grupo.cajasFuertes.length)
                                             return (
-                                                <button key={boxKey} type="button" className="btn btn-sm"
-                                                    onClick={() => {
-                                                        const isMP = boxKey === 'mercado_pago' || boxKey === 'mercado_pago_juani';
-                                                        setForm({ 
-                                                            ...form, 
-                                                            cajaOrigen: boxKey,
-                                                            medioPago: isMP ? 'transferencia' : form.medioPago
-                                                        });
-                                                    }}
-                                                    style={{ 
-                                                        flex: '1 1 120px', 
-                                                        backgroundColor: form.cajaOrigen === boxKey ? color : `${color}18`, 
-                                                        color: form.cajaOrigen === boxKey ? '#fff' : color, 
-                                                        border: `2px solid ${color}`, 
-                                                        fontWeight: 600, 
-                                                        fontSize: '0.8rem',
-                                                        padding: 'var(--space-2)'
-                                                    }}>
-                                                    {getBoxLabel(boxKey)}
-                                                </button>
-                                            );
+                                                <section key={grupo.clave} style={{ padding: 10, borderRadius: 10, border: `1px solid ${grupo.color}40`, background: `${grupo.color}08` }}>
+                                                    <div style={{ marginBottom: 7, color: grupo.color, fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                                        {grupo.nombre}
+                                                    </div>
+                                                    <div style={{ display: 'grid', gap: 8 }}>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8, color: 'var(--color-gray-500)', fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                            <span>{grupo.cajasChicas.length ? 'Caja chica' : ''}</span>
+                                                            <span>{grupo.cajasFuertes.length ? 'Caja fuerte' : ''}</span>
+                                                        </div>
+                                                        {Array.from({ length: cantidadFilas }, (_, indice) => (
+                                                            <div key={indice} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
+                                                                <div>{grupo.cajasChicas[indice] ? renderBotonCajaMovimiento(grupo.cajasChicas[indice], grupo.color) : null}</div>
+                                                                <div>{grupo.cajasFuertes[indice] ? renderBotonCajaMovimiento(grupo.cajasFuertes[indice], grupo.color) : null}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            )
                                         })}
+                                        {cajasTransferencia.length > 0 && (
+                                            <section style={{ paddingTop: 2 }}>
+                                                <div style={{ marginBottom: 7, color: 'var(--color-gray-500)', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                                    Transferencias
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                                                    {cajasTransferencia.map(caja => renderBotonCajaMovimiento(caja, COLORES_CAJA_TRANSFERENCIA[caja.tipo] || '#2563EB'))}
+                                                </div>
+                                            </section>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="form-group">
