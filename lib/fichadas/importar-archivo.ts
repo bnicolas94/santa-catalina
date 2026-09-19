@@ -9,11 +9,11 @@ export interface RegistroFichadaArchivo {
     tipo: TipoFichadaImportada
     originalStr: string
     nombreOrigen?: string
-    fuente: 'fabrica_txt' | 'local_xls'
+    fuente: 'fabrica_txt' | 'local_xls' | 'villa_elisa_xls'
 }
 
 export interface ResultadoParseoFichadas {
-    formato: 'Fichero de fábrica' | 'Reporte mensual del local'
+    formato: 'Fichero de fábrica' | 'Reporte mensual del local' | 'Eventos de Villa Elisa'
     registros: RegistroFichadaArchivo[]
     advertencias: string[]
 }
@@ -220,4 +220,95 @@ export function parsearReporteMensualLocal(filas: CeldaPlanilla[][]): ResultadoP
         registros,
         advertencias: advertenciasPorMarcas(registros),
     }
+}
+
+function fechaHoraEventoVillaElisa(valor: CeldaPlanilla): { fecha: string, hora: string } | null {
+    if (typeof valor === 'number' && Number.isFinite(valor)) {
+        // Excel usa 1899-12-30 como origen efectivo por su compatibilidad histórica.
+        const totalSegundos = Math.round(valor * 86_400)
+        const fecha = new Date(Date.UTC(1899, 11, 30) + totalSegundos * 1_000)
+        if (Number.isNaN(fecha.getTime())) return null
+        return {
+            fecha: fecha.toISOString().slice(0, 10),
+            hora: fecha.toISOString().slice(11, 19),
+        }
+    }
+
+    const coincidencia = textoCelda(valor).match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+    if (!coincidencia) return null
+    const fecha = `${coincidencia[1]}-${coincidencia[2]}-${coincidencia[3]}`
+    const hora = `${coincidencia[4].padStart(2, '0')}:${coincidencia[5]}:${coincidencia[6] || '00'}`
+    const instante = instanteRRHH(fecha, hora)
+    if (Number.isNaN(instante.getTime())) return null
+    return { fecha, hora }
+}
+
+/**
+ * El export resumido de Villa Elisa no conserva de forma confiable el sentido
+ * de las marcas del dispositivo biométrico: varias salidas también llegan como
+ * Registro 0. Por eso se ordenan por empleado y día y se alternan desde entrada.
+ * Las jornadas impares permanecen visibles en la revisión para corregirlas.
+ */
+export function parsearEventosVillaElisa(filas: CeldaPlanilla[][]): ResultadoParseoFichadas {
+    const cabecera = (filas[0] || []).map(valor => textoCelda(valor).toLocaleLowerCase())
+    const columnaId = cabecera.indexOf('id de usuario')
+    const columnaFecha = cabecera.indexOf('fecha/hora')
+    const columnaDispositivo = cabecera.indexOf('dispositivo nro.')
+    const columnaRegistro = cabecera.indexOf('registro')
+    if ([columnaId, columnaFecha, columnaDispositivo, columnaRegistro].some(indice => indice < 0)) {
+        throw new Error('El Excel no tiene el formato de eventos de Villa Elisa.')
+    }
+
+    const porEmpleadoDia = new Map<string, Array<{ codigo: string, fecha: string, hora: string, fila: number, dispositivo: string, registro: string }>>()
+    let filasInvalidas = 0
+    for (let indice = 1; indice < filas.length; indice++) {
+        const fila = filas[indice] || []
+        if (!fila.some(valor => textoCelda(valor))) continue
+        const codigoCrudo = textoCelda(fila[columnaId])
+        const fechaHora = fechaHoraEventoVillaElisa(fila[columnaFecha])
+        if (!/^\d+$/.test(codigoCrudo) || !fechaHora) {
+            filasInvalidas++
+            continue
+        }
+        const codigo = Number.parseInt(codigoCrudo, 10).toString()
+        const key = `${codigo}|${fechaHora.fecha}`
+        const marcas = porEmpleadoDia.get(key) || []
+        marcas.push({
+            codigo,
+            fecha: fechaHora.fecha,
+            hora: fechaHora.hora,
+            fila: indice + 1,
+            dispositivo: textoCelda(fila[columnaDispositivo]),
+            registro: textoCelda(fila[columnaRegistro]),
+        })
+        porEmpleadoDia.set(key, marcas)
+    }
+
+    const registros: RegistroFichadaArchivo[] = []
+    for (const marcas of porEmpleadoDia.values()) {
+        marcas.sort((a, b) => a.hora.localeCompare(b.hora) || a.fila - b.fila)
+        marcas.forEach((marca, indice) => {
+            const tipo: TipoFichadaImportada = indice % 2 === 0 ? 'entrada' : 'salida'
+            const fechaHora = instanteRRHH(marca.fecha, marca.hora).toISOString()
+            registros.push({
+                idTemp: identificadorRegistro('villa_elisa_xls', marca.codigo, fechaHora, tipo, marca.fila),
+                codigoBiometrico: marca.codigo,
+                fechaHora,
+                tipo,
+                originalStr: `${marca.fecha} ${marca.hora.slice(0, 5)} · dispositivo ${marca.dispositivo || 'S/D'} · registro ${marca.registro || 'S/D'}`,
+                fuente: 'villa_elisa_xls',
+            })
+        })
+    }
+    registros.sort((a, b) => a.codigoBiometrico.localeCompare(b.codigoBiometrico) || a.fechaHora.localeCompare(b.fechaHora))
+    const advertencias = advertenciasPorMarcas(registros)
+    if (filasInvalidas) advertencias.unshift(`${filasInvalidas} fila(s) no se pudieron interpretar y fueron omitidas.`)
+    return { formato: 'Eventos de Villa Elisa', registros, advertencias }
+}
+
+export function parsearPlanillaLocal(filas: CeldaPlanilla[][]): ResultadoParseoFichadas {
+    const cabecera = (filas[0] || []).map(valor => textoCelda(valor).toLocaleLowerCase())
+    return cabecera.includes('id de usuario') && cabecera.includes('fecha/hora')
+        ? parsearEventosVillaElisa(filas)
+        : parsearReporteMensualLocal(filas)
 }

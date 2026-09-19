@@ -5,6 +5,7 @@ import DocumentosTab from './DocumentosTab'
 import EvaluacionesTab from './EvaluacionesTab'
 import LiquidacionFinalModal from './LiquidacionFinalModal'
 import styles from './EmpleadoDialog.module.css'
+import { ETIQUETAS_RELOJ, ORIGENES_RELOJ, type OrigenReloj } from '@/lib/rrhh/relojes'
 
 interface EmployeeRole {
     id: string
@@ -57,6 +58,7 @@ interface EmployeeDialogEmployee {
     areaId?: string | null
     puestoId?: string | null
     turnoId?: string | null
+    codigosReloj?: Array<{ origen: string; codigo: string }>
 }
 
 interface EmployeeFormData {
@@ -86,6 +88,7 @@ interface EmployeeFormData {
     areaId: string
     puestoId: string
     turnoId: string
+    codigosReloj: Array<{ origen: OrigenReloj; codigo: string }>
 }
 
 interface LocationOption { id: string; nombre: string; tipo: string }
@@ -155,6 +158,10 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         areaId: empleado?.areaId || '',
         puestoId: empleado?.puestoId || '',
         turnoId: empleado?.turnoId || '',
+        codigosReloj: ORIGENES_RELOJ.map(origen => ({
+            origen,
+            codigo: empleado?.codigosReloj?.find(vinculo => vinculo.origen === origen)?.codigo || '',
+        })),
     })
 
     useEffect(() => {
@@ -784,8 +791,31 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                     <p style={{ fontSize: 'var(--text-sm)', color: '#1E40AF', marginTop: 'var(--space-1)' }}>Ingrese el código interno que tiene asignado este empleado en el dispositivo de fichada. Este código se usará para emparejar automáticamente la importación de horas semanales.</p>
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Código Biométrico (ID en Reloj)</label>
+                                    <label className="form-label">Código anterior (compatibilidad)</label>
                                     <input type="text" name="codigoBiometrico" value={formData.codigoBiometrico} onChange={handleChange} placeholder="Ej: 001, 1044, etc" className="form-input" />
+                                    <small style={{ color: 'var(--color-gray-500)' }}>Se conserva para archivos antiguos. Las nuevas importaciones priorizan el ID específico de cada reloj.</small>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--space-4)' }}>
+                                    {ORIGENES_RELOJ.map(origen => {
+                                        const vinculo = formData.codigosReloj.find(item => item.origen === origen)!
+                                        return <div className="form-group" key={origen}>
+                                            <label className="form-label">ID en {ETIQUETAS_RELOJ[origen]}</label>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={vinculo.codigo}
+                                                onChange={event => setFormData(actual => ({
+                                                    ...actual,
+                                                    codigosReloj: actual.codigosReloj.map(item => item.origen === origen ? { ...item, codigo: event.target.value } : item),
+                                                }))}
+                                                placeholder={`ID asignado en ${ETIQUETAS_RELOJ[origen]}`}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                    })}
+                                </div>
+                                <div style={{ padding: 'var(--space-3)', background: '#f8fafc', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)' }}>
+                                    Un mismo empleado puede tener números distintos. El mismo número también puede existir en relojes diferentes sin generar cruces.
                                 </div>
                             </div>
                         )}

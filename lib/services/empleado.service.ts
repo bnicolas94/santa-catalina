@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
 import bcrypt from 'bcryptjs'
 import { cambioSalarialRelevante, configuracionSalarialEfectiva } from '@/lib/rrhh/historialSalarial'
+import { normalizarCodigoReloj, ORIGENES_RELOJ, type OrigenReloj } from '@/lib/rrhh/relojes'
+
+export interface CodigoRelojInput { origen: OrigenReloj; codigo: string }
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +35,7 @@ export interface CreateEmpleadoInput {
     areaId?: string | null
     puestoId?: string | null
     turnoId?: string | null
+    codigosReloj?: CodigoRelojInput[]
 }
 
 export interface UpdateEmpleadoInput {
@@ -62,6 +66,7 @@ export interface UpdateEmpleadoInput {
     puestoId?: string | null
     turnoId?: string | null
     activo?: boolean
+    codigosReloj?: CodigoRelojInput[]
 }
 
 export interface EmpleadoFilters {
@@ -70,6 +75,18 @@ export interface EmpleadoFilters {
     ubicacionId?: string
     areaId?: string
     search?: string
+}
+
+function validarCodigosReloj(codigos: CodigoRelojInput[] | undefined) {
+    if (codigos === undefined) return undefined
+    const normalizados = codigos.map(vinculo => {
+        if (!ORIGENES_RELOJ.includes(vinculo.origen)) throw new EmpleadoValidationError('El reloj seleccionado no es válido.')
+        return { origen: vinculo.origen, codigo: normalizarCodigoReloj(vinculo.codigo) }
+    }).filter(vinculo => vinculo.codigo)
+    if (new Set(normalizados.map(vinculo => vinculo.origen)).size !== normalizados.length) {
+        throw new EmpleadoValidationError('Hay relojes repetidos en la vinculación.')
+    }
+    return normalizados
 }
 
 // ─── Select por defecto para consultas ───────────────────────────────────────
@@ -108,6 +125,7 @@ const EMPLEADO_SELECT = {
     area: { select: { id: true, nombre: true, color: true } },
     puesto: { select: { id: true, nombre: true } },
     turno: { select: { id: true, nombre: true, horaInicio: true, horaFin: true, toleranciaMinutos: true } },
+    codigosReloj: { select: { id: true, origen: true, codigo: true }, orderBy: { origen: 'asc' as const } },
 } as const
 
 // ─── Servicio ────────────────────────────────────────────────────────────────
@@ -232,8 +250,9 @@ export class EmpleadoService {
             hashedPassword = await bcrypt.hash(input.password, 10)
         }
 
-        const empleado = await prisma.empleado.create({
-            data: {
+        const codigosReloj = validarCodigosReloj(input.codigosReloj) || []
+        const empleado = await prisma.$transaction(async tx => {
+            const creado = await tx.empleado.create({ data: {
                 nombre: input.nombre,
                 apellido: input.apellido || null,
                 dni: (input.dni && input.dni.trim() !== '') ? input.dni : null,
@@ -262,15 +281,20 @@ export class EmpleadoService {
                 areaId: input.areaId || null,
                 puestoId: input.puestoId || null,
                 turnoId: input.turnoId || null,
-            },
+            }, select: { id: true } })
+            if (codigosReloj.length) {
+                await tx.codigoRelojEmpleado.createMany({
+                    data: codigosReloj.map(vinculo => ({ empleadoId: creado.id, ...vinculo })),
+                })
+            }
+            return tx.empleado.findUniqueOrThrow({ where: { id: creado.id }, select: EMPLEADO_SELECT })
         })
 
         // Evento de dominio
         eventBus.emit('empleado:created', { empleadoId: empleado.id, nombre: empleado.nombre })
 
         // Devolver sin password
-        const { password: _, ...empleadoSinPassword } = empleado
-        return empleadoSinPassword
+        return empleado
     }
 
     // ─── Actualizar Empleado ─────────────────────────────────────────────────
@@ -279,6 +303,7 @@ export class EmpleadoService {
      * (undefined = no tocar, null = limpiar, valor = actualizar).
      */
     static async update(id: string, input: UpdateEmpleadoInput, registradoPorId?: string | null) {
+        const codigosReloj = validarCodigosReloj(input.codigosReloj)
         // Robustecimiento de fecha de ingreso
         let validatedFechaIngreso = undefined as Date | null | undefined
         if (input.fechaIngreso !== undefined) {
@@ -358,6 +383,15 @@ export class EmpleadoService {
                 select: EMPLEADO_SELECT,
             })
 
+            if (codigosReloj !== undefined) {
+                await tx.codigoRelojEmpleado.deleteMany({ where: { empleadoId: id } })
+                if (codigosReloj.length) {
+                    await tx.codigoRelojEmpleado.createMany({
+                        data: codigosReloj.map(vinculo => ({ empleadoId: id, ...vinculo })),
+                    })
+                }
+            }
+
             const configuracionAnterior = configuracionSalarialEfectiva(anterior)
             const configuracionNueva = configuracionSalarialEfectiva(actualizado)
             if (cambioSalarialRelevante(configuracionAnterior, configuracionNueva)) {
@@ -379,7 +413,9 @@ export class EmpleadoService {
                 })
             }
 
-            return actualizado
+            return codigosReloj === undefined
+                ? actualizado
+                : tx.empleado.findUniqueOrThrow({ where: { id }, select: EMPLEADO_SELECT })
         })
 
         // Evento de dominio

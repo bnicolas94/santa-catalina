@@ -28,10 +28,13 @@ import { PlanillaUniformesModal } from '@/components/empleados/PlanillaUniformes
 import { HistorialSalarialModal } from '@/components/empleados/HistorialSalarialModal'
 import {
     parsearFicheroFabrica,
-    parsearReporteMensualLocal,
+    parsearPlanillaLocal,
     type RegistroFichadaArchivo,
 } from '@/lib/fichadas/importar-archivo'
 import Link from 'next/link'
+import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
+
+type EmpleadoConRelojes = Empleado & { codigosReloj?: Array<{ origen: string; codigo: string }> }
 
 export default function EmpleadosPage() {
     return (
@@ -45,11 +48,11 @@ function EmpleadosContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const openParam = searchParams.get('open')
-    const [empleados, setEmpleados] = useState<Empleado[]>([])
+    const [empleados, setEmpleados] = useState<EmpleadoConRelojes[]>([])
     const [loading, setLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [dialogOpen, setDialogOpen] = useState(false)
-    const [selectedEmpleado, setSelectedEmpleado] = useState<Empleado | null>(null)
+    const [selectedEmpleado, setSelectedEmpleado] = useState<EmpleadoConRelojes | null>(null)
     const [showRolesModal, setShowRolesModal] = useState(false)
     const [showLicenciasModal, setShowLicenciasModal] = useState(false)
     const [showReportePagos, setShowReportePagos] = useState(false)
@@ -274,8 +277,8 @@ function EmpleadosContent() {
                     defval: null,
                     raw: true,
                 })
-                resultado = parsearReporteMensualLocal(
-                    filas as Parameters<typeof parsearReporteMensualLocal>[0],
+                resultado = parsearPlanillaLocal(
+                    filas as Parameters<typeof parsearPlanillaLocal>[0],
                 )
             } else {
                 throw new Error('Formato no compatible. Usá el TXT de fábrica o el XLS/XLSX del local.')
@@ -734,7 +737,7 @@ function EmpleadosContent() {
 
 function ReviewImportModal({ registros, empleados, formato, confirmando, onClose, onConfirm }: {
     registros: RegistroFichadaArchivo[]
-    empleados: Empleado[]
+    empleados: EmpleadoConRelojes[]
     formato: string
     confirmando: boolean
     onClose: () => void
@@ -777,8 +780,12 @@ function ReviewImportModal({ registros, empleados, formato, confirmando, onClose
     // Agrupar por empleado y día para visualizar inconsistencias
     const agrupados: Record<string, RegistroFichadaArchivo[]> = {}
     localRegistros.forEach(r => {
-        const codigoNormalizado = String(r.codigoBiometrico).replace(/^0+/, '') || '0'
-        const emp = empleados.find(e => (String(e.codigoBiometrico || '').replace(/^0+/, '') || '0') === codigoNormalizado)
+        const codigoNormalizado = normalizarCodigoReloj(r.codigoBiometrico)
+        const origen = origenRelojDesdeFuente(r.fuente)
+        const empEspecifico = empleados.find(e => e.codigosReloj?.some(vinculo => vinculo.origen === origen && vinculo.codigo === codigoNormalizado))
+        const emp = empEspecifico || (origen !== 'VILLA_ELISA'
+            ? empleados.find(e => normalizarCodigoReloj(e.codigoBiometrico) === codigoNormalizado)
+            : undefined)
         const nombre = emp ? `${emp.nombre} ${emp.apellido || ''}` : `Código ${r.codigoBiometrico} (No vinculado)`
         const fecha = new Date(r.fechaHora).toLocaleDateString()
         const nombreArchivo = r.nombreOrigen && r.nombreOrigen.toLocaleLowerCase() !== nombre.trim().toLocaleLowerCase()
@@ -793,6 +800,11 @@ function ReviewImportModal({ registros, empleados, formato, confirmando, onClose
         return ordenadas.length % 2 !== 0 || ordenadas.some((marca, indice) =>
             marca.tipo !== (indice % 2 === 0 ? 'entrada' : 'salida'))
     }).length
+    const idsVillaElisaSinVincular = [...new Set(localRegistros
+        .filter(registro => registro.fuente === 'villa_elisa_xls' && !empleados.some(empleado => empleado.codigosReloj?.some(vinculo =>
+            vinculo.origen === 'VILLA_ELISA' && vinculo.codigo === normalizarCodigoReloj(registro.codigoBiometrico),
+        )))
+        .map(registro => registro.codigoBiometrico))]
 
     return (
         <div className="modal-overlay" onClick={confirmando ? undefined : onClose}>
@@ -816,6 +828,11 @@ function ReviewImportModal({ registros, empleados, formato, confirmando, onClose
                         {cantidadConflictos > 0 && (
                             <div style={{ marginTop: '6px', color: '#9a3412', fontSize: 'var(--text-xs)' }}>
                                 {cantidadConflictos} jornada(s) necesitan revisión porque falta o está desordenada alguna marca.
+                            </div>
+                        )}
+                        {idsVillaElisaSinVincular.length > 0 && (
+                            <div style={{ marginTop: '6px', color: '#991b1b', fontSize: 'var(--text-xs)' }}>
+                                Falta vincular los IDs de Villa Elisa: {idsVillaElisaSinVincular.join(', ')}. No se puede importar hasta definir a qué empleado corresponde cada uno.
                             </div>
                         )}
                     </div>
@@ -876,7 +893,7 @@ function ReviewImportModal({ registros, empleados, formato, confirmando, onClose
                     <button
                         className="btn btn-primary"
                         onClick={() => onConfirm(localRegistros)}
-                        disabled={confirmando}
+                        disabled={confirmando || idsVillaElisaSinVincular.length > 0}
                     >
                         {confirmando ? 'Importando fichadas…' : `Confirmar e Importar (${localRegistros.length})`}
                     </button>

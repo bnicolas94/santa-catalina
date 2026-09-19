@@ -3,6 +3,7 @@ import { eventBus } from '@/lib/events'
 import { SancionService } from './sancion.service'
 import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
 import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
+import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
 import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, sumarDiasRRHH } from '@/lib/rrhh/fechas'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -11,7 +12,7 @@ export interface ImportarFichadaInput {
     codigoBiometrico: string
     fechaHora: string
     tipo: 'entrada' | 'salida'
-    fuente?: 'fabrica_txt' | 'local_xls'
+    fuente?: 'fabrica_txt' | 'local_xls' | 'villa_elisa_xls'
 }
 
 export interface ImportResult {
@@ -51,16 +52,24 @@ export class AsistenciaService {
 
         // Obtener mapa de código biométrico → empleado completo (con turno)
         const empleadosData = await prisma.empleado.findMany({
-            where: { codigoBiometrico: { not: null } },
-            include: { turno: true }
+            where: {
+                OR: [
+                    { codigoBiometrico: { not: null } },
+                    { codigosReloj: { some: {} } },
+                ],
+            },
+            include: { turno: true, codigosReloj: true }
         })
  
         // Normalizamos: "00011" -> "11"
         const mapEmpleados = new Map(empleadosData.map(e => {
             const raw = e.codigoBiometrico || ""
-            const normalized = raw.replace(/^0+/, '')
+            const normalized = raw.replace(/^0+(?=\d)/, '')
             return [normalized, e]
         }))
+        const mapPorReloj = new Map(empleadosData.flatMap(empleado =>
+            empleado.codigosReloj.map(vinculo => [`${vinculo.origen}|${vinculo.codigo}`, empleado] as const),
+        ))
  
         const registrosResueltos: Array<{
             empleadoId: string
@@ -72,11 +81,24 @@ export class AsistenciaService {
 
         for (const reg of registros) {
             const regRaw = reg.codigoBiometrico?.toString() || ""
-            const regNormalized = regRaw.replace(/^0+/, '')
-            const emp = mapEmpleados.get(regNormalized)
+            let regNormalized = ''
+            try {
+                regNormalized = normalizarCodigoReloj(regRaw)
+            } catch {
+                errores.push(`Código de reloj inválido: ${regRaw}`)
+                continue
+            }
+            const origen = origenRelojDesdeFuente(reg.fuente)
+            // El vínculo específico siempre prevalece. El campo histórico queda
+            // como respaldo en formatos anteriores, pero nunca en Villa Elisa,
+            // donde los números se repiten en otros dispositivos.
+            const emp = (origen ? mapPorReloj.get(`${origen}|${regNormalized}`) : undefined)
+                || (origen !== 'VILLA_ELISA' ? mapEmpleados.get(regNormalized) : undefined)
 
             if (!emp) {
-                errores.push(`No se encontró empleado con código biométrico: ${regRaw} (Normalizado: ${regNormalized})`)
+                errores.push(reg.fuente === 'villa_elisa_xls'
+                    ? `El ID ${regRaw} del reloj de Villa Elisa todavía no está vinculado a un empleado.`
+                    : `No se encontró empleado con código biométrico: ${regRaw} (Normalizado: ${regNormalized})`)
                 continue
             }
 
@@ -224,7 +246,7 @@ export class AsistenciaService {
             // AUTO-DETECCIÓN DE AUSENCIAS PARA LOS DÍAS IMPORTADOS (SOLO DÍAS PASADOS)
             // El reporte del local abarca sólo su propio reloj, por lo que no debe inferir
             // ausencias del resto del personal a partir de una nómina parcial.
-            const esReporteLocal = registros.some(registro => registro.fuente === 'local_xls')
+            const esReporteLocal = registros.some(registro => registro.fuente === 'local_xls' || registro.fuente === 'villa_elisa_xls')
             try {
                 const fechasUnicas = [...new Set(registros.map(r => r.fechaHora.split('T')[0]))]
                 const hoyStr = fechaClaveRRHH(new Date())

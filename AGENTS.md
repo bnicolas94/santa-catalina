@@ -109,7 +109,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 ### Importaciones y operaciones destructivas
 
 - Las importaciones siguen el patrón **preview → validación → confirmación**. No saltar la vista previa ni confiar en datos de Excel sin normalizarlos.
-- La importación de fichadas admite el TXT lineal de fábrica y el reporte mensual XLS/XLSX del local. Ambos se normalizan a marcas por código biométrico y se confirman como lote idempotente. El reporte del local es una nómina parcial y nunca debe disparar por sí solo la detección global de ausencias.
+- La importación de fichadas admite el TXT lineal de fábrica, el reporte mensual XLS/XLSX de Gutiérrez y la tabla de eventos XLS de Villa Elisa. `CodigoRelojEmpleado` vincula empleado + origen + código; un número puede repetirse en relojes distintos, pero es único dentro de cada origen. El campo histórico `Empleado.codigoBiometrico` queda sólo como respaldo para Fábrica/Gutiérrez; Villa Elisa exige vínculo explícito. Todos los formatos se normalizan y confirman como lote idempotente. En Villa Elisa, `Registro` no distingue confiablemente entradas y salidas del dispositivo; el parser ordena cada empleado/día y alterna desde entrada, dejando jornadas impares en la revisión manual. Los reportes de locales son nóminas parciales y nunca deben disparar por sí solos la detección global de ausencias.
 - No usar scripts de `scratch/` o `tmp/` sobre datos reales sin leerlos completos y comprobar explícitamente la base de destino.
 - Para borrados o correcciones masivas, crear respaldo, acotar el conjunto afectado y ofrecer primero una verificación de sólo lectura.
 
