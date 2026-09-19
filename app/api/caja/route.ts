@@ -10,6 +10,7 @@ import { leerConfigDepositos } from '@/lib/caja/configDepositos'
 import { exigirAccesoCaja, listarCajas } from '@/lib/services/cajas-catalogo.service'
 import type { UsuarioCajas } from '@/lib/caja/catalogo'
 import { MOVIMIENTOS_CAJA_POR_PAGINA, normalizarPaginacionCaja } from '@/lib/caja/paginacion'
+import { calcularResumenCajaExterno } from '@/lib/caja/resumen'
 
 // ─── Helpers de Autorización ─────────────────────────────────────────────────
 
@@ -73,12 +74,22 @@ export async function GET(request: Request) {
             } : {}),
         }
 
-        const [total, resumenAgrupado] = await Promise.all([
+        const [total, movimientosResumen] = await Promise.all([
             prisma.movimientoCaja.count({ where: filtrosWhere }),
-            prisma.movimientoCaja.groupBy({
-                by: ['tipo', 'medioPago'],
+            prisma.movimientoCaja.findMany({
                 where: { ...baseWhere, estado: 'activo' },
-                _sum: { monto: true },
+                select: {
+                    tipo: true,
+                    concepto: true,
+                    monto: true,
+                    medioPago: true,
+                    depositoIngreso: { select: { id: true } },
+                    depositoRecepcion: { select: { id: true } },
+                    depositoAjuste: { select: { id: true } },
+                    depositoAjusteRecepcion: { select: { id: true } },
+                    depositoTransferenciaOrigen: { select: { id: true } },
+                    depositoTransferenciaDestino: { select: { id: true } },
+                },
             }),
         ])
         const paginacion = normalizarPaginacionCaja(paginaParam, total)
@@ -107,15 +118,7 @@ export async function GET(request: Request) {
             },
         })
 
-        let ingresosEfectivo = 0
-        let ingresosTransferencia = 0
-        let egresosTotal = 0
-        for (const grupo of resumenAgrupado) {
-            const monto = grupo._sum.monto || 0
-            if (grupo.tipo === 'egreso') egresosTotal += monto
-            else if (grupo.medioPago === 'efectivo') ingresosEfectivo += monto
-            else ingresosTransferencia += monto
-        }
+        const resumen = calcularResumenCajaExterno(movimientosResumen)
 
         return NextResponse.json({
             movimientos: movimientos.map(movimiento => ({
@@ -130,12 +133,7 @@ export async function GET(request: Request) {
                     movimiento.depositoTransferenciaDestino
                 ),
             })),
-            resumen: {
-                ingresosEfectivo,
-                ingresosTransferencia,
-                egresosTotal,
-                saldo: ingresosEfectivo + ingresosTransferencia - egresosTotal,
-            },
+            resumen,
             paginacion: {
                 pagina: paginacion.pagina,
                 porPagina: paginacion.porPagina,
