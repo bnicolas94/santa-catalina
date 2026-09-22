@@ -22,12 +22,15 @@ export function fechaValida(value: unknown): string {
 
 export function validarRegistro(input: unknown) {
     const data = objeto(input)
+    if (data.solucionado !== undefined && typeof data.solucionado !== 'boolean') throw new DiarioError('Indicá si el incidente se pudo solucionar')
     return {
         fecha: fechaValida(data.fecha),
         areaId: texto(data.areaId, 'Área', 100),
         error: texto(data.error, 'Error', 4000),
         responsable: texto(data.responsable, 'Responsable', 150),
         solucion: texto(data.solucion, 'Solución brindada', 4000, true),
+        // Los clientes anteriores pueden omitir el campo; una edición conserva su estado.
+        ...(data.solucionado !== undefined ? { solucionado: data.solucionado as boolean } : {}),
     }
 }
 
@@ -51,7 +54,23 @@ export function filtrosDiario(params: URLSearchParams) {
     }
 }
 
-export function diarioCSV(registros: { fecha: string; area: { nombre: string }; error: string; responsable: string; solucion: string; creadoPorNombre: string }[]) {
+export function resumirIncidentes(grupos: { solucionado: boolean | null; _count: { _all: number } }[]) {
+    const resumen = { total: 0, solucionados: 0, noSolucionados: 0, sinConfirmar: 0 }
+    for (const grupo of grupos) {
+        const cantidad = grupo._count._all
+        resumen.total += cantidad
+        if (grupo.solucionado === true) resumen.solucionados += cantidad
+        else if (grupo.solucionado === false) resumen.noSolucionados += cantidad
+        else resumen.sinConfirmar += cantidad
+    }
+    return resumen
+}
+
+export function estadoSolucion(solucionado: boolean | null | undefined) {
+    return solucionado === true ? 'Solucionado' : solucionado === false ? 'No solucionado' : 'Sin confirmar'
+}
+
+export function diarioCSV(registros: { fecha: string; area: { nombre: string }; error: string; responsable: string; solucion: string; solucionado?: boolean | null; creadoPorNombre: string }[]) {
     const celda = (valor: string) => `"${(/^[\s]*[=+@-]/.test(valor) ? "'" + valor : valor).replace(/"/g, '""')}"`
-    return '\uFEFF' + [['Fecha', 'Área', 'Error', 'Responsable', 'Solución brindada', 'Registrado por'], ...registros.map(r => [r.fecha, r.area.nombre, r.error, r.responsable, r.solucion, r.creadoPorNombre])].map(row => row.map(celda).join(';')).join('\r\n')
+    return '\uFEFF' + [['Fecha', 'Área', 'Error', 'Responsable', 'Solución brindada', 'Estado de solución', 'Registrado por'], ...registros.map(r => [r.fecha, r.area.nombre, r.error, r.responsable, r.solucion, estadoSolucion(r.solucionado), r.creadoPorNombre])].map(row => row.map(celda).join(';')).join('\r\n')
 }

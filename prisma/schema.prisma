@@ -1522,6 +1522,7 @@ model RegistroError {
   error String
   responsable String
   solucion String @default("")
+  solucionado Boolean?
   creadoPorId String
   creadoPorNombre String
   createdAt DateTime @default(now())

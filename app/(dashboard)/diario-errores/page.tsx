@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import useSWR from 'swr'
+import { estadoSolucion } from '@/lib/diario-errores'
 import styles from './page.module.css'
 
 type Area = { id: string; nombre: string; activa: boolean }
-type Registro = { id: string; fecha: string; areaId: string; area: Area; error: string; responsable: string; solucion: string; creadoPorId: string; creadoPorNombre: string; updatedAt: string }
-type Formulario = { fecha: string; areaId: string; error: string; responsable: string; solucion: string }
-type Listado = { registros: Registro[]; total: number; pagina: number }
+type Registro = { id: string; fecha: string; areaId: string; area: Area; error: string; responsable: string; solucion: string; solucionado: boolean | null; creadoPorId: string; creadoPorNombre: string; updatedAt: string }
+type Formulario = { fecha: string; areaId: string; error: string; responsable: string; solucion: string; solucionado: boolean }
+type Listado = { registros: Registro[]; total: number; pagina: number; resumen: { total: number; solucionados: number; noSolucionados: number; sinConfirmar: number } }
 const hoy = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
-const inicial = (): Formulario => ({ fecha: hoy(), areaId: '', error: '', responsable: '', solucion: '' })
+const inicial = (): Formulario => ({ fecha: hoy(), areaId: '', error: '', responsable: '', solucion: '', solucionado: false })
 const mostrarFecha = (fecha: string) => new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${fecha}T12:00:00Z`))
 async function cargar<T,>(url: string): Promise<T> {
     const res = await fetch(url)
@@ -49,7 +50,7 @@ export default function DiarioErroresPage() {
     }
     function abrir(registro?: Registro) {
         if (form && !window.confirm('¿Descartar el formulario actual?')) return
-        setEditando(registro || null); setForm(registro ? { fecha: registro.fecha, areaId: registro.areaId, error: registro.error, responsable: registro.responsable, solucion: registro.solucion } : inicial())
+        setEditando(registro || null); setForm(registro ? { fecha: registro.fecha, areaId: registro.areaId, error: registro.error, responsable: registro.responsable, solucion: registro.solucion, solucionado: registro.solucionado === true } : inicial())
         setVista('diario'); setError(''); setMensaje('')
         setTimeout(() => { editor.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); editor.current?.querySelector('input')?.focus() }, 50)
     }
@@ -91,11 +92,22 @@ export default function DiarioErroresPage() {
     }
 
     const activas = (areas || []).filter(a => a.activa)
+    const resumen = !errorCarga && !isLoading ? data?.resumen : undefined
     return <div className={styles.page}>
         <header className={styles.header}>
             <div><span className={styles.eyebrow}>MEJORA CONTINUA · SANTA CATALINA</span><h1>Diario de errores<span>.</span></h1><p>Lo registramos hoy. Lo hacemos mejor mañana.</p></div>
             <div className={styles.actions}><button className={styles.secondary} disabled={exportando || !data?.total || !!errorCarga || isLoading} onClick={exportar}>{exportando ? 'Preparando…' : '↓ Descargar reporte'}</button><button className={styles.primary} disabled={guardando} onClick={() => abrir()}>+ Registrar error</button></div>
         </header>
+        <section className={styles.summary} aria-label="Conteo de incidentes" aria-busy={isLoading}>
+            <div className={styles.summaryHeading}><h2>Incidentes de un vistazo</h2><p>{Object.values(filtros).some(Boolean) ? 'Según los filtros del diario · todas las páginas' : 'Todo el historial del diario'}</p></div>
+            <dl className={styles.stats}>
+                <div className={styles.stat}><dt><span aria-hidden="true">▤</span>Total de incidentes</dt><dd>{resumen?.total.toLocaleString('es-AR') ?? '—'}</dd><p>Incidentes registrados</p></div>
+                <div className={`${styles.stat} ${styles.statSolved}`}><dt><span aria-hidden="true">✓</span>Solucionados</dt><dd>{resumen?.solucionados.toLocaleString('es-AR') ?? '—'}</dd><p>Se pudo resolver el incidente</p></div>
+                <div className={`${styles.stat} ${styles.statUnsolved}`}><dt><span aria-hidden="true">○</span>No solucionados</dt><dd>{resumen?.noSolucionados.toLocaleString('es-AR') ?? '—'}</dd><p>No se pudo resolver el incidente</p></div>
+                {!!resumen?.sinConfirmar && <div className={`${styles.stat} ${styles.statUnknown}`}><dt><span aria-hidden="true">?</span>Sin confirmar</dt><dd>{resumen.sinConfirmar.toLocaleString('es-AR')}</dd><p>Registros anteriores sin estado</p></div>}
+            </dl>
+            {!!resumen?.sinConfirmar && <p className={styles.summaryNote}>Los registros anteriores quedan sin confirmar. Editalos para indicar si se pudieron solucionar.</p>}
+        </section>
         <div className={styles.intro}><span className={styles.book} aria-hidden="true">↗</span><div><strong>Cada error es una oportunidad de mejorar</strong><p>Contá qué pasó, quién estuvo involucrado y cómo se resolvió. Un registro claro ayuda a evitar que vuelva a ocurrir.</p></div><span className={styles.introTag}>Un día a la vez</span></div>
         <nav className={styles.tabs} aria-label="Secciones del diario"><button aria-current={vista === 'diario' ? 'page' : undefined} onClick={() => setVista('diario')}>Diario <span>{data?.total ?? '—'}</span></button>{admin && <button disabled={guardando} aria-current={vista === 'areas' ? 'page' : undefined} onClick={() => { if (form) { if (!window.confirm('¿Descartar el formulario para configurar las áreas?')) return; setForm(null); setEditando(null) } setError(''); setVista('areas') }}>Configurar áreas</button>}</nav>
         {(error || errorCarga || errorAreas) && <div className={styles.alert} role="alert">{error || errorCarga?.message || errorAreas?.message}{(errorCarga || errorAreas) && <button onClick={() => { void mutate(); void recargarAreas() }}>Reintentar</button>}</div>}
@@ -114,7 +126,7 @@ export default function DiarioErroresPage() {
                     {data.registros.map((r, i) => <div key={r.id}>
                         {(i === 0 || data.registros[i - 1].fecha !== r.fecha) && <h2 className={styles.day}>{r.fecha === hoy() && <span>HOY</span>}{mostrarFecha(r.fecha)}</h2>}
                         <article className={styles.card}>
-                            <div className={styles.cardTop}><span className={styles.badge}>{r.area.nombre}</span><span className={r.solucion ? styles.solved : styles.pending}>{r.solucion ? '✓ Con solución registrada' : '○ Sin solución registrada'}</span></div>
+                            <div className={styles.cardTop}><span className={styles.badge}>{r.area.nombre}</span><span className={r.solucionado === true ? styles.solved : r.solucionado === false ? styles.unsolved : styles.pending}>{r.solucionado === true ? '✓' : r.solucionado === false ? '○' : '?'} {estadoSolucion(r.solucionado)}</span></div>
                             <h3>Qué ocurrió</h3><p className={styles.description}>{r.error}</p>
                             <div className={styles.person}><span aria-hidden="true">{r.responsable.charAt(0).toUpperCase()}</span><div><small>Responsable</small><strong>{r.responsable}</strong></div></div>
                             <div className={styles.solution}><h3>Solución brindada</h3><p>{r.solucion || 'Todavía no se registró una solución. Podés completarla al editar.'}</p></div>
@@ -132,6 +144,8 @@ export default function DiarioErroresPage() {
                         {!activas.length && <p className={styles.hint}>{admin ? 'Creá o activá un área desde Configurar áreas.' : 'Pedile a un administrador que configure las áreas.'}</p>}
                         <label>¿Qué ocurrió? *<textarea required maxLength={4000} rows={4} placeholder="Ej.: No se agendó correctamente el pedido en Excel." value={form.error} onChange={e => setForm({ ...form, error: e.target.value })} /></label>
                         <label>Responsable *<input required maxLength={150} placeholder="Ej.: Karen" value={form.responsable} onChange={e => setForm({ ...form, responsable: e.target.value })} /></label>
+                        <label className={`${styles.resolutionCheck} ${form.solucionado ? styles.resolutionChecked : ''}`}><input type="checkbox" checked={form.solucionado} onChange={e => setForm({ ...form, solucionado: e.target.checked })} aria-describedby="ayuda-solucionado" /><span><strong>Se pudo solucionar</strong><small id="ayuda-solucionado">{form.solucionado ? 'Se contará como solucionado.' : 'Sin marcar, se contará como no solucionado.'}</small></span></label>
+                        {editando?.solucionado === null && <p className={styles.hint}>Este registro no tenía un estado confirmado. Al guardar se registrará la opción que elijas.</p>}
                         <label>Solución brindada <small>Opcional</small><textarea maxLength={4000} rows={4} placeholder="Ej.: Se le ofreció llevarle el paquete a domicilio." value={form.solucion} onChange={e => setForm({ ...form, solucion: e.target.value })} /></label>
                         <p className={styles.hint}>Si todavía no hay una solución, podés agregarla más adelante.</p>
                         {error && <p role="alert" className={styles.inlineError}>{error}</p>}

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { autorizarDiario, errorDiario } from '@/lib/diario-errores-api'
-import { DiarioError, filtrosDiario, objeto, texto, validarRegistro } from '@/lib/diario-errores'
+import { DiarioError, filtrosDiario, objeto, resumirIncidentes, texto, validarRegistro } from '@/lib/diario-errores'
 
 export async function GET(request: Request) {
     const auth = await autorizarDiario()
@@ -12,11 +12,13 @@ export async function GET(request: Request) {
         const page = Number(params.get('pagina') || 1)
         if (!Number.isSafeInteger(page) || page < 1 || page > 100000) throw new DiarioError('Página inválida')
         const where = filtrosDiario(params)
-        const [registros, total] = await prisma.$transaction([
-            prisma.registroError.findMany({ where, include: { area: true }, orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * 20, take: 20 }),
-            prisma.registroError.count({ where }),
-        ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
-        return NextResponse.json({ registros, total, pagina: page })
+        const { registros, grupos } = await prisma.$transaction(async tx => {
+            const registros = await tx.registroError.findMany({ where, include: { area: true }, orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * 20, take: 20 })
+            const grupos = await tx.registroError.groupBy({ by: ['solucionado'], where, _count: { _all: true } })
+            return { registros, grupos }
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+        const resumen = resumirIncidentes(grupos)
+        return NextResponse.json({ registros, total: resumen.total, resumen, pagina: page })
     } catch (error) { return errorDiario(error) }
 }
 

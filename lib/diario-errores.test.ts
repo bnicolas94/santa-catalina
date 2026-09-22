@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { diarioCSV, fechaValida, filtrosDiario, validarArea, validarRegistro } from './diario-errores'
+import { diarioCSV, estadoSolucion, fechaValida, filtrosDiario, resumirIncidentes, validarArea, validarRegistro } from './diario-errores'
 import { canAccessPath } from './access-control'
 
 const ejemplo = { fecha: '2026-09-22', areaId: 'atencion', error: ' No se agendó el pedido en Excel ', responsable: ' Karen ', solucion: ' Se ofreció llevar el paquete ' }
@@ -12,6 +12,36 @@ test('normaliza los campos libres y permite completar la solución más adelante
     assert.throws(() => validarRegistro(null))
     assert.throws(() => validarRegistro({ ...ejemplo, responsable: 12 }))
     assert.throws(() => validarRegistro({ ...ejemplo, error: 'a'.repeat(4001) }))
+})
+
+test('el check confirma la resolución independientemente del texto de solución', () => {
+    assert.equal(validarRegistro({ ...ejemplo, solucionado: true, solucion: '' }).solucionado, true)
+    assert.equal(validarRegistro({ ...ejemplo, solucionado: false }).solucionado, false)
+    for (const value of ['true', 'false', 1, 0, null, {}]) assert.throws(() => validarRegistro({ ...ejemplo, solucionado: value }))
+    // Una pestaña antigua que omite el check no debe sobrescribir el estado al editar.
+    assert.equal(Object.hasOwn(validarRegistro(ejemplo), 'solucionado'), false)
+    assert.equal(estadoSolucion(true), 'Solucionado')
+    assert.equal(estadoSolucion(false), 'No solucionado')
+    assert.equal(estadoSolucion(null), 'Sin confirmar')
+})
+
+test('el resumen cuenta todos los incidentes agregados y separa los históricos sin confirmar', () => {
+    assert.deepEqual(resumirIncidentes([
+        { solucionado: true, _count: { _all: 31 } },
+        { solucionado: false, _count: { _all: 22 } },
+        { solucionado: null, _count: { _all: 7 } },
+    ]), { total: 60, solucionados: 31, noSolucionados: 22, sinConfirmar: 7 })
+    assert.deepEqual(resumirIncidentes([]), { total: 0, solucionados: 0, noSolucionados: 0, sinConfirmar: 0 })
+    assert.deepEqual(resumirIncidentes([{ solucionado: false, _count: { _all: 4 } }]), { total: 4, solucionados: 0, noSolucionados: 4, sinConfirmar: 0 })
+})
+
+test('el CSV informa el estado explícito y conserva la incertidumbre histórica', () => {
+    const registros = [true, false, null].map(solucionado => ({ ...ejemplo, solucionado, area: { nombre: 'Atención' }, creadoPorNombre: 'Ana' }))
+    const csv = diarioCSV(registros).split('\r\n')
+    assert.ok(csv[0].includes('"Estado de solución"'))
+    assert.ok(csv[1].includes('"Solucionado"'))
+    assert.ok(csv[2].includes('"No solucionado"'))
+    assert.ok(csv[3].includes('"Sin confirmar"'))
 })
 
 test('conserva el día local y rechaza fechas inexistentes o rangos invertidos', () => {
