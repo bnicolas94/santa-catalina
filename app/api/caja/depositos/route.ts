@@ -107,11 +107,13 @@ export async function PUT(req: Request) {
         if (!user?.id) return NextResponse.json({ error: 'Administrador no identificado' }, { status: 400 })
 
         const body = await req.json()
-        if (Number(body.montoReal) > 0) await exigirAccesoCaja(user, body.cajaDestino)
+        const mantenerEnCajaFuerte = body.mantenerEnCajaFuerte === true
+        if (!mantenerEnCajaFuerte && Number(body.montoReal) > 0) await exigirAccesoCaja(user, body.cajaDestino)
         const deposito = await CajaService.validarDeposito({
             depositoId: body.id,
             montoReal: body.montoReal,
             cajaDestino: body.cajaDestino,
+            mantenerEnCajaFuerte,
             observaciones: body.observaciones,
             validadoPorId: user.id,
             fecha: body.fecha,

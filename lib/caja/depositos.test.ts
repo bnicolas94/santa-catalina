@@ -7,6 +7,7 @@ import {
     esDeclaracionDepositoConfigurada,
     planificarValidacionDeposito,
     requiereAutorizacionDeposito,
+    resolverDestinoValidacionDeposito,
     validarMontoDeposito,
     validarObservacionesDiferencia,
 } from './depositos'
@@ -79,6 +80,43 @@ test('el circuito por Caja Fuerte mantiene balanceadas ambas etapas', () => {
         tipoAjusteRecepcion: 'ingreso',
         transferirDesdeOrigenAlValidar: false,
         transferirDesdeCajaRecepcion: true,
+    })
+})
+
+test('validar y dejar en Caja Fuerte conserva el destino sin crear una segunda transferencia', () => {
+    assert.deepEqual(resolverDestinoValidacionDeposito({
+        montoReal: 450,
+        cajaOrigen: 'caja_chica',
+        cajaRecepcion: 'caja_fuerte',
+        cajaDestino: 'mercado_pago',
+        mantenerEnCajaFuerte: true,
+    }), {
+        cajaDestinoFinal: 'caja_fuerte',
+        debeTransferir: false,
+        cajaQueEntrega: 'caja_fuerte',
+    })
+    assert.equal(500 + planificarValidacionDeposito(500, 450, 'egreso', 'caja_fuerte').diferencia, 450)
+})
+
+test('validar y transferir exige otra caja, y un depósito histórico no puede quedarse en una fuerte inexistente', () => {
+    assert.deepEqual(resolverDestinoValidacionDeposito({
+        montoReal: 450,
+        cajaOrigen: 'caja_chica',
+        cajaRecepcion: 'caja_fuerte',
+        cajaDestino: 'mercado_pago',
+    }), {
+        cajaDestinoFinal: 'mercado_pago',
+        debeTransferir: true,
+        cajaQueEntrega: 'caja_fuerte',
+    })
+    assert.throws(() => resolverDestinoValidacionDeposito({
+        montoReal: 450, cajaOrigen: 'caja_chica', cajaRecepcion: 'caja_fuerte', cajaDestino: 'caja_fuerte',
+    }), /diferente/)
+    assert.throws(() => resolverDestinoValidacionDeposito({
+        montoReal: 450, cajaOrigen: 'caja_chica', mantenerEnCajaFuerte: true,
+    }), /histórico/)
+    assert.deepEqual(resolverDestinoValidacionDeposito({ montoReal: 0, cajaOrigen: 'caja_chica', cajaRecepcion: 'caja_fuerte' }), {
+        cajaDestinoFinal: null, debeTransferir: false, cajaQueEntrega: 'caja_fuerte',
     })
 })
 

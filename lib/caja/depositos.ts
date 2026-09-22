@@ -58,6 +58,28 @@ export function planificarValidacionDeposito(
     }
 }
 
+export function resolverDestinoValidacionDeposito(input: {
+    montoReal: number
+    cajaOrigen: string
+    cajaRecepcion?: string | null
+    cajaDestino?: string | null
+    mantenerEnCajaFuerte?: boolean
+}) {
+    const cajaQueEntrega = input.cajaRecepcion || input.cajaOrigen
+    if (input.mantenerEnCajaFuerte && !input.cajaRecepcion) {
+        throw new Error('Este depósito histórico no tiene una Caja Fuerte vinculada; seleccioná una caja de destino.')
+    }
+    if (input.montoReal === 0) return { cajaDestinoFinal: null, debeTransferir: false, cajaQueEntrega }
+    if (input.mantenerEnCajaFuerte) {
+        return { cajaDestinoFinal: input.cajaRecepcion!, debeTransferir: false, cajaQueEntrega }
+    }
+    if (!input.cajaDestino) throw new Error('Seleccioná la caja que recibe el dinero real.')
+    if (input.cajaDestino === cajaQueEntrega) {
+        throw new Error('La caja de destino debe ser diferente de la Caja Fuerte que entrega el sobre.')
+    }
+    return { cajaDestinoFinal: input.cajaDestino, debeTransferir: true, cajaQueEntrega }
+}
+
 export function esDeclaracionDepositoConfigurada(input: {
     tipo: unknown
     concepto: unknown

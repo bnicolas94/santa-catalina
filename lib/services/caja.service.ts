@@ -3,7 +3,7 @@ import type { PrismaClient, Prisma } from '@prisma/client'
 
 import { esMovimientoGestionadoPorRRHH, validarMotivoReasignacionCaja } from '@/lib/caja/movimientosProtegidos'
 import { validarMotivoAnulacionCaja } from '@/lib/caja/auditoria'
-import { exigirSaldoParaDeposito, planificarValidacionDeposito, validarMontoDeposito, validarObservacionesDiferencia } from '@/lib/caja/depositos'
+import { exigirSaldoParaDeposito, planificarValidacionDeposito, resolverDestinoValidacionDeposito, validarMontoDeposito, validarObservacionesDiferencia } from '@/lib/caja/depositos'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
@@ -630,7 +630,8 @@ export class CajaService {
     static async validarDeposito(input: {
         depositoId: string
         montoReal: number
-        cajaDestino: string
+        cajaDestino?: string | null
+        mantenerEnCajaFuerte?: boolean
         observaciones?: string | null
         validadoPorId: string
         fecha?: Date | string | null
@@ -649,13 +650,15 @@ export class CajaService {
             })
             if (!deposito) throw new Error('Depósito no encontrado.')
             if (deposito.estado !== 'pendiente') throw new Error('El depósito ya fue validado.')
-            if (montoReal > 0 && !input.cajaDestino) throw new Error('Seleccioná la caja que recibe el dinero real.')
-            const cajaQueEntrega = deposito.cajaRecepcion || deposito.cajaOrigen
-            if (montoReal > 0 && cajaQueEntrega === input.cajaDestino) {
-                throw new Error('La caja de destino debe ser diferente de la Caja Fuerte que entrega el sobre.')
-            }
-            if (montoReal > 0) {
-                const cajaDestino = await (tx as any).saldoCaja.findUnique({ where: { tipo: input.cajaDestino } })
+            const destinoValidacion = resolverDestinoValidacionDeposito({
+                montoReal,
+                cajaOrigen: deposito.cajaOrigen,
+                cajaRecepcion: deposito.cajaRecepcion,
+                cajaDestino: input.cajaDestino,
+                mantenerEnCajaFuerte: input.mantenerEnCajaFuerte,
+            })
+            if (destinoValidacion.debeTransferir) {
+                const cajaDestino = await (tx as any).saldoCaja.findUnique({ where: { tipo: destinoValidacion.cajaDestinoFinal } })
                 if (!cajaDestino) throw new Error('La caja de destino no existe.')
             }
 
@@ -701,7 +704,7 @@ export class CajaService {
                 }
             }
 
-            if (montoReal > 0) {
+            if (destinoValidacion.debeTransferir) {
                 if (plan.transferirDesdeOrigenAlValidar || plan.transferirDesdeCajaRecepcion) {
                     const origenTransferencia = plan.transferirDesdeCajaRecepcion
                         ? deposito.cajaRecepcion
@@ -718,7 +721,7 @@ export class CajaService {
                         monto: montoReal,
                         medioPago: 'efectivo',
                         cajaOrigen: origenTransferencia,
-                        descripcion: `Validación de depósito: transferencia hacia ${input.cajaDestino}`,
+                        descripcion: `Validación de depósito: transferencia hacia ${destinoValidacion.cajaDestinoFinal}`,
                         usuarioId: input.validadoPorId,
                         fecha: fechaValidacion,
                     }, tx)
@@ -729,8 +732,8 @@ export class CajaService {
                     concepto: 'transferencia_interna',
                     monto: montoReal,
                     medioPago: 'efectivo',
-                    cajaOrigen: input.cajaDestino,
-                    descripcion: `Validación de depósito: transferencia desde ${cajaQueEntrega}`,
+                    cajaOrigen: destinoValidacion.cajaDestinoFinal!,
+                    descripcion: `Validación de depósito: transferencia desde ${destinoValidacion.cajaQueEntrega}`,
                     usuarioId: input.validadoPorId,
                     fecha: fechaValidacion,
                 }, tx)
@@ -743,7 +746,7 @@ export class CajaService {
                     montoReal,
                     diferencia,
                     estado: 'validado',
-                    cajaDestino: montoReal > 0 ? input.cajaDestino : null,
+                    cajaDestino: destinoValidacion.cajaDestinoFinal,
                     observaciones,
                     validadoAt: new Date(),
                     validadoPorId: input.validadoPorId,

@@ -255,7 +255,7 @@ export default function CajaPage() {
     const [depositAmount, setDepositAmount] = useState('')
     const [depositAdminAuth, setDepositAdminAuth] = useState({ usuario: '', password: '' })
     const [showValidacionDeposito, setShowValidacionDeposito] = useState<DepositoCaja | null>(null)
-    const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', observaciones: '', fecha: new Date().toISOString().split('T')[0] })
+    const [validacionDepositoForm, setValidacionDepositoForm] = useState({ montoReal: '', cajaDestino: 'caja_chica', mantenerEnCajaFuerte: false, observaciones: '', fecha: new Date().toISOString().split('T')[0] })
     const [depositConfig, setDepositConfig] = useState<ConfigDeposito | null>(null)
     const allowedBoxes = cajasActivas.map(c => c.tipo)
     const operableBoxes = userRol === 'ADMIN'
@@ -719,6 +719,7 @@ export default function CajaPage() {
         setValidacionDepositoForm({
             montoReal: String(deposito.montoDeclarado),
             cajaDestino: destinoPreferido,
+            mantenerEnCajaFuerte: false,
             observaciones: '',
             fecha: new Date().toISOString().split('T')[0],
         })
@@ -736,7 +737,8 @@ export default function CajaPage() {
                 body: JSON.stringify({
                     id: showValidacionDeposito.id,
                     montoReal: Number(validacionDepositoForm.montoReal),
-                    cajaDestino: validacionDepositoForm.cajaDestino,
+                    cajaDestino: validacionDepositoForm.mantenerEnCajaFuerte ? null : validacionDepositoForm.cajaDestino,
+                    mantenerEnCajaFuerte: validacionDepositoForm.mantenerEnCajaFuerte,
                     observaciones: validacionDepositoForm.observaciones,
                     fecha: validacionDepositoForm.fecha,
                 }),
@@ -744,9 +746,14 @@ export default function CajaPage() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Error al validar el depósito')
             const diferencia = Number(data.diferencia || 0)
+            const resultado = Number(validacionDepositoForm.montoReal) === 0
+                ? 'Depósito validado sin transferencia'
+                : validacionDepositoForm.mantenerEnCajaFuerte
+                    ? 'Depósito validado y conservado en Caja Fuerte'
+                    : 'Depósito validado y transferido'
             setSuccess(diferencia === 0
-                ? 'Depósito validado y transferido sin diferencias'
-                : `Depósito validado: ${diferencia < 0 ? 'faltante' : 'sobrante'} de ${formatCurrency(Math.abs(diferencia))}`)
+                ? `${resultado} sin diferencias`
+                : `${resultado}: ${diferencia < 0 ? 'faltante' : 'sobrante'} de ${formatCurrency(Math.abs(diferencia))}`)
             setShowValidacionDeposito(null)
             fetchData()
             setTimeout(() => setSuccess(''), 5000)
@@ -929,7 +936,7 @@ export default function CajaPage() {
                                     <div style={{ fontSize: '1.65rem', fontWeight: 700 }}>{formatCurrency(deposito.montoDeclarado, showMontos)}</div>
                                     {userRol === 'ADMIN' && (
                                         <button type="button" className="btn btn-primary" style={{ width: '100%', marginTop: 'var(--space-4)' }} onClick={() => abrirValidacionDeposito(deposito)}>
-                                            Validar y transferir
+                                            Validar depósito
                                         </button>
                                     )}
                                 </div>
@@ -1683,18 +1690,40 @@ export default function CajaPage() {
                                             onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, montoReal: e.target.value })}
                                             style={{ fontSize: '1.35rem', textAlign: 'center', fontWeight: 700 }} autoFocus required />
                                     </div>
+                                    {montoReal > 0 && showValidacionDeposito.cajaRecepcion && (
+                                        <div className="form-group">
+                                            <label className="form-label">Después de validar</label>
+                                            <div style={{ display: 'grid', gap: 8 }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                                    <input type="radio" name="destino-validacion" checked={!validacionDepositoForm.mantenerEnCajaFuerte}
+                                                        onChange={() => setValidacionDepositoForm({ ...validacionDepositoForm, mantenerEnCajaFuerte: false })} />
+                                                    Validar y transferir a otra caja
+                                                </label>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                                                    <input type="radio" name="destino-validacion" checked={validacionDepositoForm.mantenerEnCajaFuerte}
+                                                        onChange={() => setValidacionDepositoForm({ ...validacionDepositoForm, mantenerEnCajaFuerte: true })} />
+                                                    Validar y dejar en {getBoxLabel(showValidacionDeposito.cajaRecepcion)}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {montoReal > 0 && !validacionDepositoForm.mantenerEnCajaFuerte ? (
+                                        <div className="form-group">
+                                            <label className="form-label">Transferir el monto real hacia</label>
+                                            <select className="form-select" value={validacionDepositoForm.cajaDestino}
+                                                onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, cajaDestino: e.target.value })} required>
+                                                {allowedBoxes.filter(box => box !== (showValidacionDeposito.cajaRecepcion || showValidacionDeposito.cajaOrigen)).map(box => (
+                                                    <option key={box} value={box}>{getBoxLabel(box)}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    ) : montoReal > 0 && showValidacionDeposito.cajaRecepcion ? (
+                                        <p style={{ color: 'var(--color-gray-500)', fontSize: '0.85rem', marginBottom: 'var(--space-4)' }}>
+                                            El dinero ya está en la Caja Fuerte. La validación no sumará otro ingreso; sólo registrará la diferencia si la hubiera.
+                                        </p>
+                                    ) : null}
                                     <div className="form-group">
-                                        <label className="form-label">Transferir el monto real hacia</label>
-                                        <select className="form-select" value={validacionDepositoForm.cajaDestino}
-                                            onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, cajaDestino: e.target.value })}
-                                            disabled={montoReal === 0} required={montoReal > 0}>
-                                            {allowedBoxes.filter(box => box !== (showValidacionDeposito.cajaRecepcion || showValidacionDeposito.cajaOrigen)).map(box => (
-                                                <option key={box} value={box}>{getBoxLabel(box)}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label">Fecha del retiro</label>
+                                        <label className="form-label">Fecha de validación</label>
                                         <input type="date" className="form-input" value={validacionDepositoForm.fecha}
                                             onChange={e => setValidacionDepositoForm({ ...validacionDepositoForm, fecha: e.target.value })} required />
                                     </div>
@@ -1708,8 +1737,12 @@ export default function CajaPage() {
                                 </div>
                                 <div className="modal-footer">
                                     <button type="button" className="btn btn-ghost" onClick={() => setShowValidacionDeposito(null)}>Cancelar</button>
-                                    <button type="submit" className="btn btn-primary" disabled={montoReal < 0 || (montoReal > 0 && !validacionDepositoForm.cajaDestino)}>
-                                        {montoReal > 0 ? `Validar y transferir ${formatCurrency(montoReal)}` : 'Validar sin transferencia'}
+                                    <button type="submit" className="btn btn-primary" disabled={montoReal < 0 || (montoReal > 0 && !validacionDepositoForm.mantenerEnCajaFuerte && !validacionDepositoForm.cajaDestino)}>
+                                        {montoReal > 0
+                                            ? validacionDepositoForm.mantenerEnCajaFuerte
+                                                ? `Validar y dejar ${formatCurrency(montoReal)} en Caja Fuerte`
+                                                : `Validar y transferir ${formatCurrency(montoReal)}`
+                                            : 'Validar sin transferencia'}
                                     </button>
                                 </div>
                             </form>
