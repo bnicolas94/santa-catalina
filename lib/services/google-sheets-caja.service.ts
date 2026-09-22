@@ -264,7 +264,12 @@ export async function resumenGoogleSheetsCaja(filtros: FiltrosResumenSheetCaja =
     const recientes = await prisma.movimientoSheetCaja.findMany({
         where,
         include: { movimientoCaja: true },
-        orderBy: [{ hoja: 'asc' }, { fila: 'asc' }],
+        orderBy: [
+            { fechaExterna: { sort: 'desc', nulls: 'last' } },
+            { fila: 'desc' },
+            { updatedAt: 'desc' },
+            { id: 'desc' },
+        ],
         skip: (pagina - 1) * porPagina,
         take: porPagina,
     })
