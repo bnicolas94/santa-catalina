@@ -17,6 +17,7 @@ test('construye todos los permisos dinámicos desde el tipo de empleado', () => 
         permisoLogistica: false,
         permisoFlota: true,
         permisoReportes: false,
+        permisoDiarioErrores: false,
         permisoAtencion: true,
         permisoAtencionAdmin: false,
     })
@@ -37,6 +38,7 @@ test('el acceso operativo del local agrega Caja sin perder permisos del tipo', (
         permisoLogistica: false,
         permisoFlota: false,
         permisoReportes: false,
+        permisoDiarioErrores: false,
         permisoAtencion: false,
         permisoAtencionAdmin: false,
     })

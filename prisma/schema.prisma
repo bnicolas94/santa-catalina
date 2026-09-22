@@ -1143,6 +1143,7 @@ model RolEmpleado {
   permisoPedidos       Boolean    @default(false) @map("permiso_pedidos")
   permisoLogistica     Boolean    @default(false) @map("permiso_logistica")
   permisoFlota         Boolean    @default(false) @map("permiso_flota")
+  permisoDiarioErrores Boolean @default(false) @map("permiso_diario_errores")
   permisoReportes      Boolean    @default(false) @map("permiso_reportes")
   permisoAtencion      Boolean    @default(false) @map("permiso_atencion")
   permisoAtencionAdmin Boolean    @default(false) @map("permiso_atencion_admin")
@@ -1503,4 +1504,29 @@ model EntregaUniforme {
   empleado      Empleado @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@map("entregas_uniforme")
+}
+
+model AreaError {
+  id String @id @default(uuid())
+  nombre String
+  clave String @unique
+  activa Boolean @default(true)
+  registros RegistroError[]
+  @@map("areas_error")
+}
+model RegistroError {
+  id String @id @default(uuid())
+  fecha String @db.VarChar(10)
+  areaId String
+  area AreaError @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  error String
+  responsable String
+  solucion String @default("")
+  creadoPorId String
+  creadoPorNombre String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([fecha, createdAt])
+  @@index([areaId, fecha])
+  @@map("registros_error")
 }

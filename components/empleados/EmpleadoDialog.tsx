@@ -24,6 +24,7 @@ interface EmployeeRole {
     permisoLogistica: boolean
     permisoFlota: boolean
     permisoReportes: boolean
+    permisoDiarioErrores: boolean
     permisoAtencion: boolean
     permisoAtencionAdmin: boolean
     jornal: number
@@ -109,6 +110,7 @@ const ROLE_PERMISSIONS: Array<{ key: keyof EmployeeRole; label: string }> = [
     { key: 'permisoProduccion', label: 'Producción' },
     { key: 'permisoCostos', label: 'Costos' },
     { key: 'permisoReportes', label: 'Reportes' },
+    { key: 'permisoDiarioErrores', label: 'Diario de errores' },
     { key: 'permisoAtencion', label: 'Atención' },
     { key: 'permisoAtencionAdmin', label: 'Supervisión de atención' },
 ]

@@ -18,6 +18,7 @@ export interface RolEmpleadoInput {
     permisoLogistica?: unknown
     permisoFlota?: unknown
     permisoReportes?: unknown
+    permisoDiarioErrores?: unknown
     permisoAtencion?: unknown
     permisoAtencionAdmin?: unknown
     jornal?: unknown
@@ -66,6 +67,7 @@ export function normalizarRolEmpleado(input: RolEmpleadoInput) {
         permisoLogistica: input.permisoLogistica === true,
         permisoFlota: input.permisoFlota === true,
         permisoReportes: input.permisoReportes === true,
+        permisoDiarioErrores: input.permisoDiarioErrores === true,
         permisoAtencion: input.permisoAtencion === true,
         permisoAtencionAdmin: input.permisoAtencionAdmin === true,
         jornal: montoNoNegativo(input.jornal, 'El monto base'),

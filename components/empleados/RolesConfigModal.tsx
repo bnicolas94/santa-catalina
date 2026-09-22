@@ -16,6 +16,7 @@ type PermissionKey =
     | 'permisoLogistica'
     | 'permisoFlota'
     | 'permisoReportes'
+    | 'permisoDiarioErrores'
     | 'permisoAtencion'
     | 'permisoAtencionAdmin'
 
@@ -36,6 +37,7 @@ interface Role {
     permisoLogistica: boolean
     permisoFlota: boolean
     permisoReportes: boolean
+    permisoDiarioErrores: boolean
     permisoAtencion: boolean
     permisoAtencionAdmin: boolean
     jornal: number
@@ -62,6 +64,7 @@ const PERMISSIONS: Array<{ id: PermissionKey; title: string; description: string
     { id: 'permisoProduccion', title: 'Producción', description: 'Lotes, recetas y operación diaria.', icon: '△' },
     { id: 'permisoCostos', title: 'Costos', description: 'Costeo, rentabilidad y reportes.', icon: '%' },
     { id: 'permisoReportes', title: 'Reportes', description: 'Indicadores y reportes generales de gestión.', icon: '▤' },
+    { id: 'permisoDiarioErrores', title: 'Diario de errores', description: 'Registrar, consultar y reportar errores diarios.', icon: '▤' },
     { id: 'permisoAtencion', title: 'Atención', description: 'Bandeja, conversaciones y respuesta a clientes.', icon: '@' },
     { id: 'permisoAtencionAdmin', title: 'Supervisión de atención', description: 'Configuración, reasignaciones y métricas del equipo.', icon: '★' },
 ]
@@ -82,6 +85,7 @@ const EMPTY_ROLE: Partial<Role> = {
     permisoLogistica: false,
     permisoFlota: false,
     permisoReportes: false,
+    permisoDiarioErrores: false,
     permisoAtencion: false,
     permisoAtencionAdmin: false,
     jornal: 0,

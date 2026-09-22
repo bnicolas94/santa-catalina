@@ -11,6 +11,7 @@ export type PermissionKey =
     | 'permisoLogistica'
     | 'permisoFlota'
     | 'permisoReportes'
+    | 'permisoDiarioErrores'
     | 'permisoAtencion'
     | 'permisoAtencionAdmin'
 
@@ -28,6 +29,8 @@ type AccessRule = {
 
 // Las reglas más específicas deben declararse primero.
 const accessRules: AccessRule[] = [
+    { path: '/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
+    { path: '/api/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/caja/google-sheets', legacyRoles: ['ADMIN'] },
     { path: '/cajas', legacyRoles: ['ADMIN'] },
     { path: '/api/cajas', legacyRoles: ['ADMIN'] },

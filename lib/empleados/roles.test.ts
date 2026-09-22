@@ -30,6 +30,7 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         permisoLogistica: false,
         permisoFlota: true,
         permisoReportes: false,
+        permisoDiarioErrores: false,
         permisoAtencion: true,
         permisoAtencionAdmin: false,
         jornal: 150000.13,

@@ -56,6 +56,7 @@ Alias TypeScript: `@/*` apunta a la raíz. El `tsconfig.json` raíz excluye `app
 |---|---|---|---|
 | Acceso y permisos | `app/(auth)/login`, layouts, `components/layout` | `lib/auth.ts`, `middleware.ts`, `lib/access-control.ts`, `lib/auth/` | `Empleado`, `RolEmpleado`, `Ubicacion` |
 | Sedes | `app/(dashboard)/sedes` | `app/api/sedes`, `lib/sedes.ts` | `Ubicacion`; administración exclusiva de ADMIN, baja lógica y reactivación. No se cambia el tipo con registros asociados. |
+| Diario de errores | `app/(dashboard)/diario-errores` | `app/api/diario-errores`, `lib/diario-errores.ts`, `lib/diario-errores-api.ts` | `AreaError`, `RegistroError`; permiso propio `permisoDiarioErrores`, reportes CSV y áreas configurables. |
 | Producción | `app/(dashboard)/produccion*`, `components/produccion` | `app/api/produccion`, `app/api/lotes`, `lib/produccion`, `lib/services/produccion-insumos.ts`, `planificacion.service.ts` | `Producto`, `Presentacion`, `FichaTecnica`, `Lote`, `RequerimientoProduccion`, `docs/modules/produccion.md` |
 | Stock e insumos | `insumos`, `conteos-insumos`, `productos` | APIs homónimas, `lib/insumos`, `lib/pedidos/stockPedido.ts` | `Insumo`, `InsumoProveedor`, `StockInsumo`, `MovimientoStock`, `StockProducto`, `MovimientoProducto`, `docs/modules/insumos.md` |
 | Compras | `app/(dashboard)/compras` | `app/api/compras`, `lib/services/compras.service.ts`, `lib/compras` | `Compra`, `MovimientoStock`, `docs/modules/compras.md` |
@@ -84,6 +85,8 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - `/sedes` y `/api/sedes` administran fábricas y locales, exclusivamente para ADMIN. `/api/ubicaciones` conserva la consulta operativa de activas; sus escrituras requieren ADMIN y DELETE desactiva sin borrar relaciones. La desactivación conserva historial y asignaciones existentes; no cancela operaciones pendientes. El tipo no puede cambiar cuando existen registros asociados.
 
 ### Datos y migraciones
+
+- El diario `/diario-errores` y sus APIs requieren `permisoDiarioErrores` o ADMIN. Los usuarios habilitados consultan y reportan todo el diario; sólo el autor o ADMIN puede editar un registro, con control de versión. Sólo ADMIN configura áreas (nombre y estado); desactivarlas conserva el historial. Los registros guardan fecha local `YYYY-MM-DD`, responsable libre y autor de la carga. La solución es opcional; su ausencia indica que todavía no se registró una solución, no un estado operativo. El CSV respeta los filtros y neutraliza fórmulas; rechaza exportaciones de más de 10.000 registros para solicitar un rango menor.
 
 - La base vigente es PostgreSQL, no SQLite.
 - `prisma/schema.prisma` y las migraciones son la fuente de verdad estructural. No editar una migración ya desplegada.

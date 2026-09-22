@@ -17,6 +17,7 @@ export function permisosDesdeRol(rol: RolConPermisos): Record<PermissionKey, boo
         permisoLogistica: rol.permisoLogistica === true,
         permisoFlota: rol.permisoFlota === true,
         permisoReportes: rol.permisoReportes === true,
+        permisoDiarioErrores: rol.permisoDiarioErrores === true,
         permisoAtencion: rol.permisoAtencion === true,
         permisoAtencionAdmin: rol.permisoAtencionAdmin === true,
     }
@@ -40,6 +41,7 @@ export function aplicarAccesosOperativos(
         permisoLogistica: permisos?.permisoLogistica === true,
         permisoFlota: permisos?.permisoFlota === true,
         permisoReportes: permisos?.permisoReportes === true,
+        permisoDiarioErrores: permisos?.permisoDiarioErrores === true,
         permisoAtencion: permisos?.permisoAtencion === true,
         permisoAtencionAdmin: permisos?.permisoAtencionAdmin === true,
     }

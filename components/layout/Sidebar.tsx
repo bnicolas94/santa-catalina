@@ -17,6 +17,7 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
+    { label: 'Diario de errores', href: '/diario-errores', icon: '📓', roles: ['ADMIN'], permissionKey: 'permisoDiarioErrores' },
     { label: 'Sedes', href: '/sedes', icon: '📍', roles: ['ADMIN'] },
     { label: 'Cajas por sede', href: '/cajas', icon: '💰', roles: ['ADMIN'] },
     {
