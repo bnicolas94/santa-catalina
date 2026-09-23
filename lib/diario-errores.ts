@@ -28,6 +28,7 @@ export function validarRegistro(input: unknown) {
         areaId: texto(data.areaId, 'Área', 100),
         error: texto(data.error, 'Error', 4000),
         responsable: texto(data.responsable, 'Responsable', 150),
+        ...(data.nombreCliente !== undefined ? { nombreCliente: texto(data.nombreCliente, 'Nombre del cliente', 150, true) || null } : {}),
         solucion: texto(data.solucion, 'Solución brindada', 4000, true),
         // Los clientes anteriores pueden omitir el campo; una edición conserva su estado.
         ...(data.solucionado !== undefined ? { solucionado: data.solucionado as boolean } : {}),
@@ -50,7 +51,7 @@ export function filtrosDiario(params: URLSearchParams) {
     return {
         ...(desde || hasta ? { fecha: { gte: desde, lte: hasta } } : {}),
         ...(areaId ? { areaId } : {}),
-        ...(q ? { OR: ['error', 'responsable', 'solucion'].map(campo => ({ [campo]: { contains: q, mode: 'insensitive' as const } })) } : {}),
+        ...(q ? { OR: ['error', 'responsable', 'solucion', 'nombreCliente'].map(campo => ({ [campo]: { contains: q, mode: 'insensitive' as const } })) } : {}),
     }
 }
 
@@ -70,7 +71,7 @@ export function estadoSolucion(solucionado: boolean | null | undefined) {
     return solucionado === true ? 'Solucionado' : solucionado === false ? 'No solucionado' : 'Sin confirmar'
 }
 
-export function diarioCSV(registros: { fecha: string; area: { nombre: string }; error: string; responsable: string; solucion: string; solucionado?: boolean | null; creadoPorNombre: string }[]) {
+export function diarioCSV(registros: { fecha: string; area: { nombre: string }; error: string; responsable: string; solucion: string; solucionado?: boolean | null; nombreCliente?: string | null; creadoPorNombre: string }[]) {
     const celda = (valor: string) => `"${(/^[\s]*[=+@-]/.test(valor) ? "'" + valor : valor).replace(/"/g, '""')}"`
-    return '\uFEFF' + [['Fecha', 'Área', 'Error', 'Responsable', 'Solución brindada', 'Estado de solución', 'Registrado por'], ...registros.map(r => [r.fecha, r.area.nombre, r.error, r.responsable, r.solucion, estadoSolucion(r.solucionado), r.creadoPorNombre])].map(row => row.map(celda).join(';')).join('\r\n')
+    return '\uFEFF' + [['Fecha', 'Área', 'Cliente', 'Error', 'Responsable', 'Solución brindada', 'Estado de solución', 'Registrado por'], ...registros.map(r => [r.fecha, r.area.nombre, r.nombreCliente || '', r.error, r.responsable, r.solucion, estadoSolucion(r.solucionado), r.creadoPorNombre])].map(row => row.map(celda).join(';')).join('\r\n')
 }

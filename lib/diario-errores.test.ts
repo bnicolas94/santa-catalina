@@ -5,6 +5,19 @@ import { canAccessPath } from './access-control'
 
 const ejemplo = { fecha: '2026-09-22', areaId: 'atencion', error: ' No se agendó el pedido en Excel ', responsable: ' Karen ', solucion: ' Se ofreció llevar el paquete ' }
 
+test('el nombre del cliente es opcional, se valida y no se pierde con clientes anteriores', () => {
+    assert.equal(validarRegistro({ ...ejemplo, nombreCliente: ' María González ' }).nombreCliente, 'María González')
+    assert.equal(validarRegistro({ ...ejemplo, nombreCliente: ' ' }).nombreCliente, null)
+    assert.equal(validarRegistro({ ...ejemplo, nombreCliente: null }).nombreCliente, null)
+    assert.equal(Object.hasOwn(validarRegistro(ejemplo), 'nombreCliente'), false)
+    assert.throws(() => validarRegistro({ ...ejemplo, nombreCliente: 123 }))
+    assert.throws(() => validarRegistro({ ...ejemplo, nombreCliente: 'a'.repeat(151) }))
+    assert.ok(filtrosDiario(new URLSearchParams({ q: 'María' })).OR?.some(filtro => 'nombreCliente' in filtro))
+    const csv = diarioCSV([{ ...ejemplo, nombreCliente: '=1+1', area: { nombre: 'Atención' }, creadoPorNombre: 'Ana' }])
+    assert.ok(csv.includes('"Cliente"'))
+    assert.ok(csv.includes('"\'=1+1"'))
+})
+
 test('normaliza los campos libres y permite completar la solución más adelante', () => {
     assert.deepEqual(validarRegistro(ejemplo), { ...ejemplo, error: ejemplo.error.trim(), responsable: 'Karen', solucion: ejemplo.solucion.trim() })
     assert.equal(validarRegistro({ ...ejemplo, solucion: '' }).solucion, '')

@@ -1523,6 +1523,7 @@ model RegistroError {
   responsable String
   solucion String @default("")
   solucionado Boolean?
+  nombreCliente String? @db.VarChar(150)
   creadoPorId String
   creadoPorNombre String
   createdAt DateTime @default(now())
