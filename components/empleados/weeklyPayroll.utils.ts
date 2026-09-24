@@ -1,4 +1,5 @@
 import type { AdicionalLiquidacionUI, DiaLiquidacionUI, ResultadoLiquidacionUI } from './weeklyPayroll.types'
+import { normalizarHorasAMinuto } from '@/utils/horas'
 
 export interface AlertaLiquidacionUI {
     nivel: 'error' | 'warning'
@@ -12,10 +13,10 @@ export function recalcularDiaPorHoras(
     horasJornada: number,
     valorHoraExtra: number,
 ): DiaLiquidacionUI {
-    const horas = Math.max(0, Math.min(24, horasTrabajadas))
+    const horas = normalizarHorasAMinuto(Math.max(0, Math.min(24, horasTrabajadas)))
     const jornada = horasJornada > 0 ? horasJornada : 8
     const horasNormales = Math.min(horas, jornada)
-    const horasExtras = Math.round(Math.max(0, horas - jornada) * 2) / 2
+    const horasExtras = normalizarHorasAMinuto(Math.max(0, horas - jornada))
     const multiplicadorJornal = Math.min(1, horasNormales / jornada)
     const valorDiaBase = Math.round(dia.jornalBase * multiplicadorJornal)
     const valorExtra = Math.round(horasExtras * valorHoraExtra)

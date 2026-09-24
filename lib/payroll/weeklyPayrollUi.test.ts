@@ -65,6 +65,19 @@ test('al editar horas reales prorratea el jornal y marca el día como ajustado',
     assert.equal(ajustado.ajusteManual, true)
 })
 
+test('al editar una jornada paga cada minuto extra sin redondear a media hora', () => {
+    const ajustado = recalcularDiaPorHoras({
+        fecha: '2026-07-20', diaSemana: 'Lunes', esFeriado: false,
+        horasTrabajadas: 9, horasExtras: 0, entrada: '08:00', salida: '17:00',
+        jornalBase: 10_000, valorDiaBase: 10_000, multiplicadorJornal: 1,
+        valorExtra: 0, valorFeriado: 0, totalDia: 10_000, esJustificado: false,
+    }, 9 + 17 / 60, 9, 2_000)
+
+    assert.equal(ajustado.horasExtras, 17 / 60)
+    assert.equal(ajustado.valorExtra, 567)
+    assert.equal(ajustado.totalDia, 10_567)
+})
+
 test('un ajuste diario actualiza los totales sin incorporar deudas de otras semanas', () => {
     const dia = recalcularDiaPorHoras({
         fecha: '2026-07-20', diaSemana: 'Lunes', esFeriado: false,

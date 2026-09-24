@@ -105,7 +105,7 @@ export function WeeklyPayrollResults(props: Props) {
                             ? <span title="Ajustá las horas dentro de cada día para conservar su fecha exacta.">Por día</span>
                             : <input type="number" step="0.5" className="form-input" title="Ingresá horas omitidas o adeudadas. Se identificarán por separado en el recibo." style={{ padding: '2px 5px', fontSize: '11px', textAlign: 'center', height: '24px' }} value={resultado.ajusteHorasExtras || ''} onChange={evento => props.onAjusteChange(resultado.empleadoId, evento.target.value)} onClick={evento => evento.stopPropagation()} placeholder="0" />}</td>
                         <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>
-                            <span style={{ fontSize: '10px', display: 'block' }}>Semana: {resultado.horasExtras} h</span>
+                            <span style={{ fontSize: '10px', display: 'block' }}>Semana: {Number(resultado.horasExtras.toFixed(2))} h</span>
                             <strong>${montoExtrasSemana.toLocaleString()}</strong>
                             {horasAdeudadas !== 0 && <span style={{ fontSize: '10px', display: 'block', marginTop: '2px', color: horasAdeudadas > 0 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
                                 Ajuste/adeudadas: {horasAdeudadas > 0 ? '+' : ''}{horasAdeudadas} h · {montoHorasAdeudadas > 0 ? '+' : '-'}${Math.abs(montoHorasAdeudadas).toLocaleString()}

@@ -56,6 +56,12 @@ export function calcularProporcionJornal(horasTrabajadas: number, horasJornada: 
     return Math.min(1, Math.max(0, horasTrabajadas / horasJornada));
 }
 
+/** Normaliza una cantidad de horas al minuto más cercano. */
+export function normalizarHorasAMinuto(horas: number): number {
+    if (!Number.isFinite(horas)) return 0;
+    return Math.round(horas * 60) / 60;
+}
+
 /**
  * Calcula el resumen de un día basado en sus marcas.
  * Asume que las marcas están ordenadas cronológicamente.
@@ -100,12 +106,12 @@ export function calcularResumenDia(
         }
     }
 
-    const horasTrabajadas = milisegundosTrabajados / (1000 * 60 * 60);
-    const horasExtras = Math.max(0, horasTrabajadas - horasJornada);
+    const horasTrabajadas = normalizarHorasAMinuto(milisegundosTrabajados / (1000 * 60 * 60));
+    const horasExtras = normalizarHorasAMinuto(Math.max(0, horasTrabajadas - horasJornada));
 
     return {
-        horasTrabajadas: parseFloat(horasTrabajadas.toFixed(2)),
-        horasExtras: parseFloat(horasExtras.toFixed(2)),
+        horasTrabajadas,
+        horasExtras,
         esAusencia: false,
         marcas: marcasOrdenadas
     };

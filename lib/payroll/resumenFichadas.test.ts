@@ -65,6 +65,18 @@ test('mantiene como extra el tiempo posterior a la jornada aunque la entrada hay
     assert.equal(resultado.horasExtras, 1)
 })
 
+test('conserva los minutos reales trabajados como horas extra', () => {
+    const marcas: Marca[] = [
+        { tipo: 'entrada', fechaHora: fechaLocal(2026, 7, 20, 8) },
+        { tipo: 'salida', fechaHora: fechaLocal(2026, 7, 20, 17, 17) },
+    ]
+
+    const resultado = calcularResumenDia(marcas, 9)
+
+    assert.equal(resultado.horasTrabajadas, 9 + 17 / 60)
+    assert.equal(resultado.horasExtras, 17 / 60)
+})
+
 test('ordena las fichadas antes de emparejar entradas y salidas', () => {
     const entrada: Marca = { tipo: 'entrada', fechaHora: fechaLocal(2026, 7, 20, 8) }
     const salida: Marca = { tipo: 'salida', fechaHora: fechaLocal(2026, 7, 20, 16) }

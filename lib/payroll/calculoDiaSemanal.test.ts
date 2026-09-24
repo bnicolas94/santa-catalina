@@ -37,9 +37,11 @@ test('limita el jornal al día completo y paga el excedente como horas extra', (
     assert.equal(resultado.totalDia, 12_000)
 })
 
-test('redondea las horas extra al medio punto más cercano', () => {
-    assert.equal(calcularDiaSemanal({ ...base, horasExtras: 0.74 }).horasExtras, 0.5)
-    assert.equal(calcularDiaSemanal({ ...base, horasExtras: 0.76 }).horasExtras, 1)
+test('paga las horas extra proporcionalmente por minuto', () => {
+    const resultado = calcularDiaSemanal({ ...base, horasExtras: 17 / 60 })
+
+    assert.equal(resultado.horasExtras, 17 / 60)
+    assert.equal(Math.round(resultado.valorExtra), 567)
 })
 
 test('cuatro horas de domingo completan un jornal normal', () => {

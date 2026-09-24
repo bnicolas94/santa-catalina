@@ -38,7 +38,7 @@ export function WeeklyPayrollDayCard(props: Props) {
                     <label style={{ color: 'var(--color-gray-500)', display: 'flex', alignItems: 'center', gap: '3px' }}>Hs reales:
                         <input type="number" disabled={esVacaciones} min="0" max="24" step="0.25" className="form-input" style={{ width: '54px', padding: '0 4px', fontSize: '10px', height: '22px', textAlign: 'center', fontWeight: 700 }} value={dia.horasTrabajadas} onChange={e => props.onHoursChange(empleadoId, dia.fecha, e.target.value)} title="Editar horas reales; recalcula automáticamente el jornal del día" />
                     </label>
-                    {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>+{dia.horasExtras} h extra</span>}
+                    {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>+{Number(dia.horasExtras.toFixed(2))} h extra</span>}
                 </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

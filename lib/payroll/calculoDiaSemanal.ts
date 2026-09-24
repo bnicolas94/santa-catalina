@@ -1,4 +1,4 @@
-import { calcularProporcionJornal } from '@/utils/horas'
+import { calcularProporcionJornal, normalizarHorasAMinuto } from '@/utils/horas'
 
 export interface CalculoDiaSemanalInput {
     horasTrabajadas: number
@@ -26,7 +26,7 @@ export interface CalculoDiaSemanalResultado {
  * Mantiene separadas las horas normales del jornal y las horas extras.
  */
 export function calcularDiaSemanal(input: CalculoDiaSemanalInput): CalculoDiaSemanalResultado {
-    const horasExtras = Math.round(Math.max(0, input.horasExtras) * 2) / 2
+    const horasExtras = normalizarHorasAMinuto(Math.max(0, input.horasExtras))
     let multiplicadorJornal = 0
 
     if (input.tieneMarcas) {

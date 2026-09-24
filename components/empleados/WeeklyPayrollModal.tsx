@@ -511,10 +511,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 if (entradaMins !== null && salidaMins !== null) {
                     let diffMins = salidaMins - entradaMins
                     if (diffMins < 0) diffMins += 24 * 60 // Cruce de medianoche
-                    newHorasTrabajadas = parseFloat((diffMins / 60).toFixed(2))
-                    
-                    // Determinar jornada esperada desde el jornal
-                    // Redondear extras al 0.5 más cercano
+                    newHorasTrabajadas = diffMins / 60
                 }
 
                 return recalcularDiaPorHoras({
