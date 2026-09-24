@@ -58,6 +58,24 @@ test('encadena el stock libre de cada día futuro sin inventar producción', () 
     assert.equal(dias[2].columnas[0].libre, 26)
 })
 
+test('un traslado cubre pedidos del día antes de descontar el excedente para venta espontánea', () => {
+    const demanda = leerDemandaPaqTotales(filas(), '2026-09-24')
+    const inicial = { 'JQ:48': 64 }
+    const producido = { 'JQ:48': 6 }
+    const cubierto = calcularDisponibilidad(inicial, producido, demanda, {
+        salidas: { 'JQ:48': 20 }, entradas: {},
+    })[0]
+    assert.equal(cubierto.agendado, 33)
+    assert.equal(cubierto.pedidosCubiertos, 20)
+    assert.equal(cubierto.libre, 37)
+
+    const excedente = calcularDisponibilidad(inicial, producido, demanda, {
+        salidas: { 'JQ:48': 40 }, entradas: { 'JQ:48': 2 },
+    })[0]
+    assert.equal(excedente.pedidosCubiertos, 33)
+    assert.equal(excedente.libre, 32)
+})
+
 test('oculta cada turno a las 13, 16 y 21 sin alterar el total reservado', () => {
     assert.deepEqual(turnosVisibles(9 * 60), ['Mañana', 'Siesta', 'Tarde'])
     assert.deepEqual(turnosVisibles(13 * 60 - 1), ['Mañana', 'Siesta', 'Tarde'])
@@ -101,6 +119,20 @@ test('si la foto se tomó tarde, descuenta de la base los lotes ya incluidos', (
     )
     assert.equal(inicial.jq48, 32)
     assert.equal(producido.jq48, 13)
+})
+
+test('reconstruye los traslados anteriores a la foto sin descontarlos dos veces', () => {
+    const movimientos = [
+        { presentacionId: 'jq48', tipo: 'traslado', signo: 'salida', cantidad: 10, fecha: new Date('2026-09-24T17:00:00Z') },
+        { presentacionId: 'jq48', tipo: 'traslado', signo: 'salida', cantidad: 5, fecha: new Date('2026-09-24T19:00:00Z') },
+        { presentacionId: 'jq48', tipo: 'traslado', signo: 'entrada', cantidad: 2, fecha: new Date('2026-09-24T19:10:00Z') },
+    ]
+    const { inicial, traslados } = calcularStockDesdeFoto(
+        { tomadoAt: '2026-09-24T18:00:00Z', cantidades: { jq48: 90 } }, movimientos,
+    )
+    assert.equal(inicial.jq48, 100)
+    assert.equal(traslados.salidas.jq48, 15)
+    assert.equal(traslados.entradas.jq48, 2)
 })
 
 test('una columna movida o una fecha duplicada detiene el cálculo', () => {

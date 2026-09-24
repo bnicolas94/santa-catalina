@@ -146,20 +146,25 @@ async function obtenerPantallaStockProduccionUnaVez() {
             fecha: { gte: new Date(`${fecha}T09:00:00-03:00`), lte: ahora },
             OR: [
                 { tipo: 'ajuste' },
+                { tipo: 'traslado' },
                 { loteId: { not: null }, tipo: { in: ['produccion', 'ajuste_produccion', 'anulacion_produccion'] } },
             ],
         },
         select: { presentacionId: true, signo: true, cantidad: true, tipo: true, fecha: true },
     })
-    const { inicial: inicialPorId, producido: producidoPorId, ultimoAjuste } = calcularStockDesdeFoto(foto, movimientos)
+    const { inicial: inicialPorId, producido: producidoPorId, traslados: trasladosPorId, ultimoAjuste } = calcularStockDesdeFoto(foto, movimientos)
     const inicial: CantidadesPantalla = {}
     const producido: CantidadesPantalla = {}
+    const salidas: CantidadesPantalla = {}
+    const entradas: CantidadesPantalla = {}
     for (const columna of COLUMNAS_PANTALLA) {
         const id = porClave.get(columna.clave)!
         inicial[columna.clave] = inicialPorId[id] ?? 0
         producido[columna.clave] = producidoPorId[id] ?? 0
+        salidas[columna.clave] = trasladosPorId.salidas[id] ?? 0
+        entradas[columna.clave] = trasladosPorId.entradas[id] ?? 0
     }
-    const dias = calcularProyeccionDias(inicial, producido, excel.demandas)
+    const dias = calcularProyeccionDias(inicial, producido, excel.demandas, { salidas, entradas })
         .map((dia, indice) => ({
             ...dia,
             turnosVisibles: indice === 0 ? turnosVisibles(minutos) : [...TURNOS_PANTALLA],

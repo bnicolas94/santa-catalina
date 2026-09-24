@@ -12,7 +12,10 @@ type Columna = {
     subtitulo: string
     stockInicial: number
     produccion: number
+    recibido: number
+    enviado: number
     agendado: number
+    pedidosCubiertos: number
     libre: number
 }
 type DiaPantalla = {
@@ -80,6 +83,8 @@ export default function PantallaStockProduccion() {
     const dia = datos?.estado === 'listo'
         ? datos.dias.find(item => item.fecha === fechaSeleccionada) ?? datos.dias[0]
         : null
+    const hayEntradas = dia?.columnas.some(columna => columna.recibido > 0) ?? false
+    const haySalidas = dia?.columnas.some(columna => columna.enviado > 0) ?? false
     const esHoy = datos?.estado === 'listo' && dia?.fecha === datos.fecha
     const fechaVisible = dia
         ? fechaLocal(dia.fecha, { weekday: 'long', day: 'numeric', month: 'long' })
@@ -151,12 +156,21 @@ export default function PantallaStockProduccion() {
                         <tr className={styles.produccion}><th scope="row">+ Producido {esHoy ? 'hoy' : 'registrado'}</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>{columna.produccion}</td>)}
                         </tr>
+                        {hayEntradas && <tr className={styles.turno}><th scope="row">+ Recibido en fábrica</th>
+                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.recibido}</td>)}
+                        </tr>}
+                        {haySalidas && <tr className={styles.turno}><th scope="row">− Enviado a Local</th>
+                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.enviado}</td>)}
+                        </tr>}
                         {dia.turnosVisibles.map(turno => <tr key={turno} className={styles.turno}>
                             <th scope="row">− Pedidos {turno.toLowerCase()}</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>
                                 {dia.demanda[turno][columna.clave] ?? 0}
                             </td>)}
                         </tr>)}
+                        {haySalidas && <tr className={styles.produccion}><th scope="row">+ Pedidos ya enviados</th>
+                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.pedidosCubiertos}</td>)}
+                        </tr>}
                     </tbody>
                     <tfoot><tr><th scope="row">Stock libre para demanda</th>
                         {dia.columnas.map(columna => <td key={columna.clave} className={columna.libre < 0 ? styles.faltante : ''}>
@@ -174,10 +188,15 @@ export default function PantallaStockProduccion() {
                     <dl className={styles.detalle}>
                         <div><dt>Stock inicial</dt><dd>{columna.stockInicial}</dd></div>
                         <div className={styles.detalleProduccion}><dt>+ Producido {esHoy ? 'hoy' : 'registrado'}</dt><dd>{columna.produccion}</dd></div>
+                        {hayEntradas && <div><dt>+ Recibido en fábrica</dt><dd>{columna.recibido}</dd></div>}
+                        {haySalidas && <div><dt>− Enviado a Local</dt><dd>{columna.enviado}</dd></div>}
                         {dia.turnosVisibles.map(turno => <div key={turno}>
                             <dt>− Pedidos {turno.toLowerCase()}</dt>
                             <dd>{dia.demanda[turno][columna.clave] ?? 0}</dd>
                         </div>)}
+                        {haySalidas && <div className={styles.detalleProduccion}>
+                            <dt>+ Pedidos ya enviados</dt><dd>{columna.pedidosCubiertos}</dd>
+                        </div>}
                     </dl>
                     <div className={`${styles.libre} ${columna.libre < 0 ? styles.libreNegativo : ''}`}>
                         <span>Stock libre para demanda</span>
@@ -186,7 +205,9 @@ export default function PantallaStockProduccion() {
                 </article>)}
             </section>
             <p className={styles.nota}>{esHoy
-                ? 'El stock libre descuenta los pedidos de los tres turnos, incluso cuando un turno ya no aparece en la pantalla.'
+                ? haySalidas
+                    ? 'Los envíos a Local cubren primero los pedidos del Excel de hoy. Sólo el excedente para venta espontánea reduce más el stock libre.'
+                    : 'El stock libre descuenta los pedidos de los tres turnos, incluso cuando un turno ya no aparece en la pantalla.'
                 : 'Proyección con pedidos agendados. La producción futura se suma cuando se registre en el ERP.'}</p>
         </>}
     </main>

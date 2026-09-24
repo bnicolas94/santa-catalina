@@ -17,6 +17,7 @@ export const HORARIOS_TURNOS_PANTALLA: Record<TurnoPantalla, { inicio: number; f
 export type CantidadesPantalla = Record<string, number>
 export type DemandaPantalla = Record<TurnoPantalla, CantidadesPantalla>
 export type DemandaPorFecha = { fecha: string; demanda: DemandaPantalla }
+export type TrasladosPantalla = { salidas: CantidadesPantalla; entradas: CantidadesPantalla }
 
 function fechaDeCelda(valor: unknown): string | null {
     if (typeof valor === 'number') {
@@ -86,12 +87,19 @@ export function calcularDisponibilidad(
     inicial: CantidadesPantalla,
     producido: CantidadesPantalla,
     demanda: DemandaPantalla,
+    traslados: TrasladosPantalla = { salidas: {}, entradas: {} },
 ) {
     return COLUMNAS_PANTALLA.map(columna => {
         const agendado = TURNOS_PANTALLA.reduce((total, turno) => total + (demanda[turno][columna.clave] ?? 0), 0)
         const stockInicial = inicial[columna.clave] ?? 0
         const produccion = producido[columna.clave] ?? 0
-        return { ...columna, stockInicial, produccion, agendado, libre: stockInicial + produccion - agendado }
+        const enviado = traslados.salidas[columna.clave] ?? 0
+        const recibido = traslados.entradas[columna.clave] ?? 0
+        const pedidosCubiertos = Math.min(agendado, enviado)
+        return {
+            ...columna, stockInicial, produccion, recibido, enviado, agendado, pedidosCubiertos,
+            libre: stockInicial + produccion + recibido - enviado - agendado + pedidosCubiertos,
+        }
     })
 }
 
@@ -99,10 +107,14 @@ export function calcularProyeccionDias(
     inicialHoy: CantidadesPantalla,
     producidoHoy: CantidadesPantalla,
     demandas: DemandaPorFecha[],
+    trasladosHoy: TrasladosPantalla = { salidas: {}, entradas: {} },
 ) {
     let inicial = inicialHoy
     return demandas.map(({ fecha, demanda }, indice) => {
-        const columnas = calcularDisponibilidad(inicial, indice === 0 ? producidoHoy : {}, demanda)
+        const columnas = calcularDisponibilidad(
+            inicial, indice === 0 ? producidoHoy : {}, demanda,
+            indice === 0 ? trasladosHoy : { salidas: {}, entradas: {} },
+        )
         inicial = Object.fromEntries(columnas.map(columna => [columna.clave, columna.libre]))
         return { fecha, columnas, demanda }
     })
@@ -118,6 +130,8 @@ export function calcularStockDesdeFoto(foto: { tomadoAt: string; cantidades: Can
     const producido: CantidadesPantalla = {}
     const ajustes: CantidadesPantalla = {}
     const producidoAntesDeFoto: CantidadesPantalla = {}
+    const trasladoNetoAntesDeFoto: CantidadesPantalla = {}
+    const traslados: TrasladosPantalla = { salidas: {}, entradas: {} }
     const presentacionesCorregidas = new Set<string>()
     const tomadoAt = new Date(foto.tomadoAt)
     let ultimoAjuste: Date | null = null
@@ -131,6 +145,13 @@ export function calcularStockDesdeFoto(foto: { tomadoAt: string; cantidades: Can
             ajustes[movimiento.presentacionId] = (ajustes[movimiento.presentacionId] ?? 0) + cantidad
             presentacionesCorregidas.add(movimiento.presentacionId)
             if (!ultimoAjuste || movimiento.fecha > ultimoAjuste) ultimoAjuste = movimiento.fecha
+        } else if (movimiento.tipo === 'traslado') {
+            const destino = movimiento.signo === 'salida' ? traslados.salidas : traslados.entradas
+            destino[movimiento.presentacionId] = (destino[movimiento.presentacionId] ?? 0) + movimiento.cantidad
+            if (movimiento.fecha <= tomadoAt) {
+                trasladoNetoAntesDeFoto[movimiento.presentacionId] =
+                    (trasladoNetoAntesDeFoto[movimiento.presentacionId] ?? 0) + cantidad
+            }
         } else {
             producido[movimiento.presentacionId] = (producido[movimiento.presentacionId] ?? 0) + cantidad
             if (movimiento.fecha <= tomadoAt) {
@@ -140,11 +161,15 @@ export function calcularStockDesdeFoto(foto: { tomadoAt: string; cantidades: Can
         }
     }
     const inicial: CantidadesPantalla = {}
-    for (const id of new Set([...Object.keys(foto.cantidades), ...Object.keys(producido), ...Object.keys(ajustes)])) {
+    for (const id of new Set([
+        ...Object.keys(foto.cantidades), ...Object.keys(producido),
+        ...Object.keys(ajustes), ...Object.keys(trasladoNetoAntesDeFoto),
+    ])) {
         inicial[id] = (foto.cantidades[id] ?? 0) + (ajustes[id] ?? 0)
             - (presentacionesCorregidas.has(id) ? 0 : producidoAntesDeFoto[id] ?? 0)
+            - (trasladoNetoAntesDeFoto[id] ?? 0)
     }
-    return { inicial, producido, ultimoAjuste }
+    return { inicial, producido, traslados, ultimoAjuste }
 }
 
 export function turnosVisibles(minutosActuales: number) {
