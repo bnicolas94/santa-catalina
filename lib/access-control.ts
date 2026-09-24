@@ -4,6 +4,7 @@ export type PermissionKey =
     | 'permisoCaja'
     | 'permisoPersonal'
     | 'permisoProduccion'
+    | 'permisoPantallaProduccion'
     | 'permisoCostos'
     | 'permisoCompras'
     | 'permisoClientes'
@@ -63,6 +64,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/costos/mermas', permissions: ['permisoCostos'], legacyRoles: ['ADMIN'] },
 
     // Producción. El descuento de planificación puede ser operado también desde Stock.
+    { path: '/api/produccion/pantalla-stock', permissions: ['permisoPantallaProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO', 'PRODUCCION', 'ADMIN_OPS'] },
     { path: '/api/produccion/planificacion/descontar', permissions: ['permisoProduccion', 'permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD'] },
     { path: '/api/produccion/planificacion/importar', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD'] },
     { path: '/api/produccion/planificacion/manual', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD'] },
@@ -118,11 +120,12 @@ const accessRules: AccessRule[] = [
     { path: '/api/prestamos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/api/puestos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/api/turnos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/uniformes', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/uniformes', legacyRoles: ['ADMIN'] },
 
     // Páginas protegidas existentes.
     { path: '/empleados', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/produccion-v2', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO'] },
+    { path: '/produccion/pantalla', permissions: ['permisoPantallaProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO', 'PRODUCCION', 'ADMIN_OPS'] },
     { path: '/produccion', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO'] },
     { path: '/productos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
@@ -145,6 +148,12 @@ function isPathWithin(pathname: string, prefix: string) {
 }
 
 export function getAccessRule(pathname: string): AccessRule | undefined {
+    if (/^\/api\/empleados\/[^/]+\/uniformes(?:\/|$)/.test(pathname)) {
+        return { path: pathname, legacyRoles: ['ADMIN'] }
+    }
+    if (/^\/empleados\/[^/]+\/uniformes(?:\/|$)/.test(pathname)) {
+        return { path: pathname, legacyRoles: ['ADMIN'] }
+    }
     return accessRules.find((rule) => isPathWithin(pathname, rule.path))
 }
 

@@ -11,6 +11,7 @@ export interface RolEmpleadoInput {
     permisoCaja?: unknown
     permisoPersonal?: unknown
     permisoProduccion?: unknown
+    permisoPantallaProduccion?: unknown
     permisoCostos?: unknown
     permisoCompras?: unknown
     permisoClientes?: unknown
@@ -60,6 +61,7 @@ export function normalizarRolEmpleado(input: RolEmpleadoInput) {
         permisoCaja: input.permisoCaja === true,
         permisoPersonal: input.permisoPersonal === true,
         permisoProduccion: input.permisoProduccion === true,
+        permisoPantallaProduccion: input.permisoPantallaProduccion === true,
         permisoCostos: input.permisoCostos === true,
         permisoCompras: input.permisoCompras === true,
         permisoClientes: input.permisoClientes === true,

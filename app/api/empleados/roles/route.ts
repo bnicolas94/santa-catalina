@@ -12,11 +12,11 @@ export async function GET() {
         // Si no hay roles, podríamos sembrar los básicos
         if (roles.length === 0) {
             const basicRoles = [
-                { nombre: 'ADMIN' },
-                { nombre: 'COORD_PROD', permisoDashboard: true, permisoStock: true, permisoCompras: true, permisoProduccion: true },
-                { nombre: 'OPERARIO', permisoProduccion: true },
+                { nombre: 'ADMIN', permisoPantallaProduccion: true },
+                { nombre: 'COORD_PROD', permisoDashboard: true, permisoStock: true, permisoCompras: true, permisoProduccion: true, permisoPantallaProduccion: true },
+                { nombre: 'OPERARIO', permisoProduccion: true, permisoPantallaProduccion: true },
                 { nombre: 'LOGISTICA', permisoLogistica: true, permisoFlota: true },
-                { nombre: 'ADMIN_OPS', permisoDashboard: true, permisoStock: true, permisoCompras: true, permisoClientes: true, permisoPedidos: true },
+                { nombre: 'ADMIN_OPS', permisoDashboard: true, permisoStock: true, permisoCompras: true, permisoClientes: true, permisoPedidos: true, permisoPantallaProduccion: true },
             ]
             await Promise.all(
                 basicRoles.map(rol =>

@@ -14,6 +14,7 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         permisoCaja: true,
         permisoFlota: true,
         permisoAtencion: true,
+        permisoPantallaProduccion: true,
     }), {
         nombre: 'ADMINISTRACIÓN_GENERAL',
         descripcion: 'Gestión interna',
@@ -23,6 +24,7 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         permisoCaja: true,
         permisoPersonal: false,
         permisoProduccion: false,
+        permisoPantallaProduccion: true,
         permisoCostos: false,
         permisoCompras: false,
         permisoClientes: false,

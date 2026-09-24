@@ -1,210 +1,118 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { UniformesTab } from './UniformesTab'
+import { ConfiguracionUniformes } from './ConfiguracionUniformes'
 
-interface Empleado {
-    id: string
-    nombre: string
-    apellido: string | null
-    talleUniforme?: {
-        remera: string | null
-        buzo: string | null
-        impreso: boolean
-    } | null
+type Empleado = { id: string; nombre: string; apellido: string | null; ubicacionId: string | null }
+type Stock = { id: string; prenda: 'REMERA' | 'BUZO'; talle: string; cantidad: number }
+type Movimiento = {
+    id: string; tipo: string; delta: number; saldoPosterior: number; motivo: string | null; createdAt: string
+    stock: { prenda: 'REMERA' | 'BUZO'; talle: string }
+    registradoPor: { nombre: string; apellido: string | null }
+    entrega: { id: string; empleado: { nombre: string; apellido: string | null } } | null
 }
 
-interface RowState {
-    remeraTalle: string
-    buzoTalle: string
-    remeraCant: number
-    buzoCant: number
-}
-
-interface Props {
-    onClose: () => void
-}
-
-export function PlanillaUniformesModal({ onClose }: Props) {
+export function PlanillaUniformesModal({ onClose }: { onClose: () => void }) {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const [empleados, setEmpleados] = useState<Empleado[]>([])
+    const [stock, setStock] = useState<Stock[]>([])
+    const [movimientos, setMovimientos] = useState<Movimiento[]>([])
+    const [busqueda, setBusqueda] = useState('')
+    const [empleadoId, setEmpleadoId] = useState('')
+    const [pestana, setPestana] = useState<'entregas' | 'stock' | 'configuracion'>('entregas')
     const [loading, setLoading] = useState(true)
-    const [rows, setRows] = useState<Record<string, RowState>>({})
-    const [processingId, setProcessingId] = useState<string | null>(null)
+    const [guardando, setGuardando] = useState(false)
+    const [error, setError] = useState('')
+    const [prenda, setPrenda] = useState<'REMERA' | 'BUZO'>('REMERA')
+    const [talle, setTalle] = useState('')
+    const [delta, setDelta] = useState(1)
+    const [motivo, setMotivo] = useState('')
 
-    useEffect(() => {
-        fetchData()
-    }, [])
-
-    const fetchData = async () => {
+    const cargar = useCallback(async () => {
         setLoading(true)
+        setError('')
         try {
-            const res = await fetch('/api/uniformes')
-            const data = await res.json()
-            if (Array.isArray(data)) {
-                setEmpleados(data)
-                
-                // Init row state
-                const initialRows: Record<string, RowState> = {}
-                data.forEach(emp => {
-                    initialRows[emp.id] = {
-                        remeraTalle: emp.talleUniforme?.remera || '',
-                        buzoTalle: emp.talleUniforme?.buzo || '',
-                        remeraCant: 0,
-                        buzoCant: 0
-                    }
-                })
-                setRows(initialRows)
-            }
-        } catch (error) {
-            console.error('Error fetching uniformes:', error)
+            const respuestas = await Promise.all([
+                fetch('/api/uniformes'), fetch('/api/uniformes/stock'), fetch('/api/uniformes/movimientos'),
+            ])
+            if (respuestas.some(respuesta => !respuesta.ok)) throw new Error('No se pudo cargar la ropa de trabajo.')
+            const [datosEmpleados, datosStock, datosMovimientos] = await Promise.all(respuestas.map(respuesta => respuesta.json()))
+            setEmpleados(datosEmpleados)
+            setStock(datosStock)
+            setMovimientos(datosMovimientos)
+        } catch (fallo) {
+            setError(fallo instanceof Error ? fallo.message : 'No se pudo cargar la ropa de trabajo.')
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
-    const handleRowChange = (empId: string, field: keyof RowState, value: string | number) => {
-        setRows(prev => ({
-            ...prev,
-            [empId]: {
-                ...prev[empId],
-                [field]: value
-            }
-        }))
-    }
+    useEffect(() => { void cargar() }, [cargar])
 
-    const handleImprimir = async (emp: Empleado) => {
-        const state = rows[emp.id]
-        if (state.remeraCant === 0 && state.buzoCant === 0) {
-            alert('Debes ingresar al menos 1 cantidad a entregar para poder imprimir el recibo.')
-            return
-        }
+    const empleadosFiltrados = useMemo(() => empleados.filter(empleado =>
+        `${empleado.nombre} ${empleado.apellido || ''}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')),
+    ), [empleados, busqueda])
 
-        setProcessingId(emp.id)
+    async function registrarMovimiento(evento: React.FormEvent) {
+        evento.preventDefault()
+        setGuardando(true)
+        setError('')
         try {
-            const res = await fetch('/api/uniformes/imprimir', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    empleadoId: emp.id,
-                    ...state
-                })
+            const respuesta = await fetch('/api/uniformes/stock', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prenda, talle, delta, motivo }),
             })
-            
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'Error al imprimir')
-            
-            // Open print tab
-            window.open(`/empleados/${emp.id}/uniformes/imprimir/${data.entregaId}`, '_blank')
-            
-            // Refresh data to show impreso = true
-            await fetchData()
-        } catch (error: any) {
-            alert(error.message)
+            const datos = await respuesta.json()
+            if (!respuesta.ok) throw new Error(datos.error || 'No se pudo actualizar el stock.')
+            setTalle('')
+            setDelta(1)
+            setMotivo('')
+            await cargar()
+        } catch (fallo) {
+            setError(fallo instanceof Error ? fallo.message : 'No se pudo actualizar el stock.')
         } finally {
-            setProcessingId(null)
+            setGuardando(false)
         }
     }
 
-    return (
-        <div className="modal-overlay">
-            <div className="modal" style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-                <div className="modal-header">
-                    <h2>👕 Planilla Centralizada de Uniformes</h2>
-                    <button onClick={onClose} className="btn-close">&times;</button>
-                </div>
-
-                <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: 0 }}>
-                        {loading ? (
-                            <div className="p-10 text-center">Cargando planilla...</div>
-                        ) : (
-                            <table className="table" style={{ width: '100%' }}>
-                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-bg)', zIndex: 10 }}>
-                                    <tr>
-                                        <th>Empleado</th>
-                                        <th>Talle Remera</th>
-                                        <th>Cant. Remera</th>
-                                        <th>Talle Buzo</th>
-                                        <th>Cant. Buzo</th>
-                                        <th style={{ textAlign: 'center' }}>Impreso</th>
-                                        <th style={{ textAlign: 'right' }}>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {empleados.map(emp => {
-                                        const state = rows[emp.id]
-                                        if (!state) return null
-                                        
-                                        const fueImpreso = emp.talleUniforme?.impreso || false
-
-                                        return (
-                                            <tr key={emp.id}>
-                                                <td style={{ fontWeight: 600 }}>
-                                                    {emp.nombre} {emp.apellido}
-                                                </td>
-                                                <td>
-                                                    <input 
-                                                        type="text" 
-                                                        className="form-input" 
-                                                        style={{ width: '80px', minHeight: '36px', padding: '4px 8px', fontSize: '14px' }}
-                                                        placeholder="Talle"
-                                                        value={state.remeraTalle}
-                                                        onChange={(e) => handleRowChange(emp.id, 'remeraTalle', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input 
-                                                        type="number" 
-                                                        className="form-input" 
-                                                        style={{ width: '70px', minHeight: '36px', padding: '4px 8px', fontSize: '14px', textAlign: 'center' }}
-                                                        min="0"
-                                                        value={state.remeraCant}
-                                                        onChange={(e) => handleRowChange(emp.id, 'remeraCant', parseInt(e.target.value) || 0)}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input 
-                                                        type="text" 
-                                                        className="form-input" 
-                                                        style={{ width: '80px', minHeight: '36px', padding: '4px 8px', fontSize: '14px' }}
-                                                        placeholder="Talle"
-                                                        value={state.buzoTalle}
-                                                        onChange={(e) => handleRowChange(emp.id, 'buzoTalle', e.target.value)}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <input 
-                                                        type="number" 
-                                                        className="form-input" 
-                                                        style={{ width: '70px', minHeight: '36px', padding: '4px 8px', fontSize: '14px', textAlign: 'center' }}
-                                                        min="0"
-                                                        value={state.buzoCant}
-                                                        onChange={(e) => handleRowChange(emp.id, 'buzoCant', parseInt(e.target.value) || 0)}
-                                                    />
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={fueImpreso}
-                                                        readOnly
-                                                        style={{ width: '20px', height: '20px', cursor: 'default', accentColor: 'var(--color-primary)' }}
-                                                    />
-                                                </td>
-                                                <td style={{ textAlign: 'right' }}>
-                                                    <button 
-                                                        className="btn btn-primary btn-sm"
-                                                        onClick={() => handleImprimir(emp)}
-                                                        disabled={processingId === emp.id}
-                                                    >
-                                                        {processingId === emp.id ? '...' : '🖨️ Imprimir'}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        )}
-                </div>
+    return <div className="modal-overlay" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-label="Ropa de trabajo" style={{ maxWidth: 1100, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-header"><h2>Ropa de trabajo</h2><button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar">×</button></div>
+        <div className="modal-body" style={{ overflow: 'auto' }}>
+            {error && <div role="alert" className="alert alert-error">{error}</div>}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                <button type="button" className={`btn ${pestana === 'entregas' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setPestana('entregas')}>Entregas</button>
+                <button type="button" className={`btn ${pestana === 'stock' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setPestana('stock'); void cargar() }}>Stock y movimientos</button>
+                <button type="button" className={`btn ${pestana === 'configuracion' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setPestana('configuracion')}>Configuración 299/11</button>
             </div>
+            {loading ? <p>Cargando ropa de trabajo...</p> : pestana === 'configuracion' ? <ConfiguracionUniformes /> : pestana === 'entregas' ? <div style={{ display: 'grid', gap: 16 }}>
+                <label className="form-control"><span className="label">Buscar empleado</span><input className="input" value={busqueda} onChange={evento => setBusqueda(evento.target.value)} placeholder="Nombre o apellido" /></label>
+                <label className="form-control"><span className="label">Empleado</span><select className="input" value={empleadoId} onChange={evento => setEmpleadoId(evento.target.value)}>
+                    <option value="">Seleccionar empleado</option>
+                    {empleadosFiltrados.map(empleado => <option key={empleado.id} value={empleado.id}>{empleado.nombre} {empleado.apellido}</option>)}
+                </select></label>
+                {empleadoId ? <UniformesTab key={empleadoId} empleadoId={empleadoId} /> : <p>Seleccioná un empleado para consultar o registrar sus entregas.</p>}
+            </div> : <div style={{ display: 'grid', gap: 24 }}>
+                {esAdmin && <form onSubmit={registrarMovimiento} className="card"><div className="card-body" style={{ display: 'grid', gap: 12 }}>
+                    <h3>Ingreso o ajuste de stock</h3>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        <label className="form-control"><span className="label">Prenda</span><select className="input" value={prenda} onChange={evento => setPrenda(evento.target.value as 'REMERA' | 'BUZO')}><option value="REMERA">Remera</option><option value="BUZO">Buzo</option></select></label>
+                        <label className="form-control"><span className="label">Talle</span><input className="input" required maxLength={20} value={talle} onChange={evento => setTalle(evento.target.value)} placeholder="M, L, XL..." /></label>
+                        <label className="form-control"><span className="label">Cambio en unidades</span><input className="input" type="number" required step={1} value={delta} onChange={evento => setDelta(Number(evento.target.value))} title="Positivo para ingresar, negativo para descontar" /></label>
+                    </div>
+                    <label className="form-control"><span className="label">Motivo</span><input className="input" required maxLength={500} value={motivo} onChange={evento => setMotivo(evento.target.value)} placeholder="Compra, conteo físico, corrección..." /></label>
+                    <p>Usá un número positivo para ingresar prendas y negativo para ajustar una diferencia.</p>
+                    <div><button type="submit" className="btn btn-primary" disabled={guardando}>{guardando ? 'Guardando...' : 'Registrar movimiento'}</button></div>
+                </div></form>}
+                <section><h3>Existencias</h3>{stock.length === 0 ? <p>Todavía no hay prendas cargadas.</p> : <div className="table-container"><table className="table"><thead><tr><th>Prenda</th><th>Talle</th><th>Disponible</th></tr></thead><tbody>{stock.map(item => <tr key={item.id}><td>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'}</td><td>{item.talle}</td><td>{item.cantidad}</td></tr>)}</tbody></table></div>}</section>
+                <section><h3>Últimos movimientos</h3>{movimientos.length === 0 ? <p>No hay movimientos.</p> : <div className="table-container"><table className="table"><thead><tr><th>Fecha</th><th>Prenda</th><th>Movimiento</th><th>Saldo</th><th>Responsable</th><th>Motivo</th></tr></thead><tbody>{movimientos.map(item => <tr key={item.id}>
+                    <td>{new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Buenos_Aires' }).format(new Date(item.createdAt))}</td>
+                    <td>{item.stock.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.stock.talle}</td><td>{item.tipo} ({item.delta > 0 ? '+' : ''}{item.delta})</td><td>{item.saldoPosterior}</td>
+                    <td>{item.registradoPor.nombre} {item.registradoPor.apellido}</td><td>{item.motivo || (item.entrega ? `Entrega a ${item.entrega.empleado.nombre} ${item.entrega.empleado.apellido || ''}` : '—')}</td>
+                </tr>)}</tbody></table></div>}</section>
+            </div>}
         </div>
-    )
+    </section></div>
 }

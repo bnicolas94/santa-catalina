@@ -95,6 +95,8 @@ export default function DashboardPage() {
                     router.replace('/caja')
                 } else if (permisos.permisoProduccion || (!usaPermisosDinamicos && (rol === 'COORD_PROD' || rol === 'OPERARIO'))) {
                     router.replace('/produccion')
+                } else if (permisos.permisoPantallaProduccion) {
+                    router.replace('/produccion/pantalla')
                 } else if (permisos.permisoCompras) {
                     router.replace('/compras')
                 } else if (permisos.permisoStock) {

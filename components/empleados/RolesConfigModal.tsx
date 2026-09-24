@@ -9,6 +9,7 @@ type PermissionKey =
     | 'permisoCaja'
     | 'permisoPersonal'
     | 'permisoProduccion'
+    | 'permisoPantallaProduccion'
     | 'permisoCostos'
     | 'permisoCompras'
     | 'permisoClientes'
@@ -30,6 +31,7 @@ interface Role {
     permisoCaja: boolean
     permisoPersonal: boolean
     permisoProduccion: boolean
+    permisoPantallaProduccion: boolean
     permisoCostos: boolean
     permisoCompras: boolean
     permisoClientes: boolean
@@ -62,6 +64,7 @@ const PERMISSIONS: Array<{ id: PermissionKey; title: string; description: string
     { id: 'permisoCaja', title: 'Caja', description: 'Saldos, movimientos y rendiciones.', icon: '$' },
     { id: 'permisoPersonal', title: 'Personal', description: 'Legajos, asistencia y liquidaciones.', icon: '●' },
     { id: 'permisoProduccion', title: 'Producción', description: 'Lotes, recetas y operación diaria.', icon: '△' },
+    { id: 'permisoPantallaProduccion', title: 'Pantalla de stock', description: 'Consulta de stock, producción y pedidos por turno.', icon: '▣' },
     { id: 'permisoCostos', title: 'Costos', description: 'Costeo, rentabilidad y reportes.', icon: '%' },
     { id: 'permisoReportes', title: 'Reportes', description: 'Indicadores y reportes generales de gestión.', icon: '▤' },
     { id: 'permisoDiarioErrores', title: 'Diario de errores', description: 'Registrar, consultar y reportar errores diarios.', icon: '▤' },
@@ -78,6 +81,7 @@ const EMPTY_ROLE: Partial<Role> = {
     permisoCaja: false,
     permisoPersonal: false,
     permisoProduccion: false,
+    permisoPantallaProduccion: false,
     permisoCostos: false,
     permisoCompras: false,
     permisoClientes: false,

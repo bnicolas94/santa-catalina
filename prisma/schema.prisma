@@ -79,6 +79,9 @@ model Empleado {
   sanciones                 Sancion[]
   talleUniforme             TalleUniforme?
   entregasUniforme          EntregaUniforme[]         @relation("EmpleadoEntregasUniforme")
+  entregasUniformeCreadas   EntregaUniforme[]         @relation("EntregaUniformeRegistradaPor")
+  entregasUniformeAnuladas  EntregaUniforme[]         @relation("EntregaUniformeAnuladaPor")
+  movimientosUniforme       MovimientoUniforme[]     @relation("MovimientoUniformeRegistradoPor")
   conteosInsumo             ConteoInsumo[]            @relation("ResponsableConteoInsumo")
   plantillasHorario         PlantillaHorarioEmpleado[]
   excepcionesHorario        ExcepcionHorarioEmpleado[]
@@ -1136,6 +1139,7 @@ model RolEmpleado {
   permisoCostos        Boolean    @default(false)
   permisoPersonal      Boolean    @default(false)
   permisoProduccion    Boolean    @default(false)
+  permisoPantallaProduccion Boolean @default(false) @map("permiso_pantalla_produccion")
   permisoStock         Boolean    @default(false)
   permisoDashboard     Boolean    @default(false)
   permisoCompras       Boolean    @default(false) @map("permiso_compras")
@@ -1492,6 +1496,27 @@ model TalleUniforme {
   @@map("talles_uniforme")
 }
 
+enum PrendaUniforme {
+  REMERA
+  BUZO
+}
+
+model StockUniforme {
+  id          String               @id @default(uuid())
+  prenda      PrendaUniforme
+  talle       String
+  cantidad    Int                  @default(0)
+  tipoModelo  String?              @map("tipo_modelo")
+  marca       String?
+  certificado Boolean?
+  updatedAt   DateTime             @updatedAt
+  detalles    EntregaUniformeDetalle[]
+  movimientos MovimientoUniforme[]
+
+  @@unique([prenda, talle])
+  @@map("stock_uniformes")
+}
+
 model EntregaUniforme {
   id            String   @id @default(uuid())
   empleadoId    String   @map("id_empleado")
@@ -1499,11 +1524,61 @@ model EntregaUniforme {
   remera        Int      @default(0)
   buzo          Int      @default(0)
   observaciones String?
+  nombreEmpleado String? @map("nombre_empleado")
+  dniEmpleado String? @map("dni_empleado")
+  rolEmpleado String? @map("rol_empleado")
+  estado        String   @default("ACTIVA")
+  registradoPorId String? @map("id_registrado_por")
+  anuladaPorId String? @map("id_anulada_por")
+  anuladaAt DateTime? @map("anulada_at")
+  motivoAnulacion String? @map("motivo_anulacion")
+  claveIdempotencia String? @unique @map("clave_idempotencia")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   empleado      Empleado @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
+  registradoPor Empleado? @relation("EntregaUniformeRegistradaPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  anuladaPor Empleado? @relation("EntregaUniformeAnuladaPor", fields: [anuladaPorId], references: [id], onDelete: SetNull)
+  detalles EntregaUniformeDetalle[]
+  movimientos MovimientoUniforme[]
 
+  @@index([empleadoId, fecha])
   @@map("entregas_uniforme")
+}
+
+model EntregaUniformeDetalle {
+  id        String @id @default(uuid())
+  entregaId String @map("id_entrega")
+  stockId   String @map("id_stock")
+  prenda    PrendaUniforme
+  talle     String
+  cantidad  Int
+  tipoModelo String? @map("tipo_modelo")
+  marca String?
+  certificado Boolean?
+  entrega   EntregaUniforme @relation(fields: [entregaId], references: [id], onDelete: Restrict)
+  stock     StockUniforme @relation(fields: [stockId], references: [id], onDelete: Restrict)
+
+  @@unique([entregaId, prenda, talle])
+  @@map("entregas_uniforme_detalle")
+}
+
+model MovimientoUniforme {
+  id              String @id @default(uuid())
+  stockId         String @map("id_stock")
+  entregaId       String? @map("id_entrega")
+  registradoPorId String @map("id_registrado_por")
+  tipo            String
+  delta           Int
+  saldoPosterior  Int @map("saldo_posterior")
+  motivo          String?
+  createdAt       DateTime @default(now())
+  stock           StockUniforme @relation(fields: [stockId], references: [id], onDelete: Restrict)
+  entrega         EntregaUniforme? @relation(fields: [entregaId], references: [id], onDelete: Restrict)
+  registradoPor   Empleado @relation("MovimientoUniformeRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+
+  @@index([stockId, createdAt])
+  @@index([entregaId])
+  @@map("movimientos_uniforme")
 }
 
 model AreaError {

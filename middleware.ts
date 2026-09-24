@@ -56,6 +56,12 @@ export default withAuth(
             return NextResponse.redirect(new URL('/', req.url))
         }
 
+        // Los enlaces históricos por entrega abren ahora la constancia única del trabajador.
+        if (/^\/empleados\/[^/]+\/uniformes\/imprimir\/[^/]+$/.test(authorizationPathname)) {
+            url.pathname = authorizationPathname.replace(/\/[^/]+$/, '')
+            return NextResponse.redirect(url)
+        }
+
         return shouldRewrite ? NextResponse.rewrite(url) : NextResponse.next()
     },
     {

@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { FichadasTab } from '@/components/empleados/FichadasTab'
 import { PrestamosTab } from '@/components/empleados/PrestamosTab'
@@ -11,6 +12,8 @@ import { LiquidacionesTab } from '@/components/empleados/LiquidacionesTab'
 import { UniformesTab } from '@/components/empleados/UniformesTab'
 
 export default function EmpleadoDetailPage() {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const params = useParams()
     const [empleado, setEmpleado] = useState<any>(null)
     const [loading, setLoading] = useState(true)
@@ -153,7 +156,7 @@ export default function EmpleadoDetailPage() {
                 >
                     Recibos de Sueldo
                 </button>
-                <button
+                {esAdmin && <button
                     onClick={() => setActiveTab('uniformes')}
                     style={{
                         padding: 'var(--space-3) var(--space-6)',
@@ -168,8 +171,8 @@ export default function EmpleadoDetailPage() {
                         cursor: 'pointer'
                     }}
                 >
-                    Uniformes
-                </button>
+                    Ropa de trabajo
+                </button>}
             </div>
 
             {/* Contenido de Tabs */}
@@ -227,7 +230,7 @@ export default function EmpleadoDetailPage() {
                         <LiquidacionesTab empleadoId={empleado.id} empleadoDatos={empleado} />
                     )}
 
-                    {activeTab === 'uniformes' && (
+                    {esAdmin && activeTab === 'uniformes' && (
                         <UniformesTab empleadoId={empleado.id} />
                     )}
                 </div>

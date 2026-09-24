@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Empleado } from '@prisma/client'
 import { EmpleadoDialog } from '@/components/empleados/EmpleadoDialog'
 import RolesConfigModal from '@/components/empleados/RolesConfigModal'
@@ -45,6 +46,8 @@ export default function EmpleadosPage() {
 }
 
 function EmpleadosContent() {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const searchParams = useSearchParams()
     const router = useRouter()
     const openParam = searchParams.get('open')
@@ -728,7 +731,7 @@ function EmpleadosContent() {
                     onSuccess={() => fetchEmpleados()}
                 />
             )}
-            {showUniformesModal && (
+            {showUniformesModal && esAdmin && (
                 <PlanillaUniformesModal onClose={closeModal} />
             )}
         </div>

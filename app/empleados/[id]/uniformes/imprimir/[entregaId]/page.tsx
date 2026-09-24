@@ -2,132 +2,84 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { fechaClaveRRHH } from '@/lib/rrhh/fechas'
+
+type Entrega = {
+    id: string
+    fecha: string
+    estado: string
+    observaciones: string | null
+    remera: number
+    buzo: number
+    nombreEmpleado: string | null
+    dniEmpleado: string | null
+    rolEmpleado: string | null
+    detalles: { prenda: 'REMERA' | 'BUZO'; talle: string; cantidad: number }[]
+    empleado: { nombre: string; apellido: string | null; dni: string | null; rol: string }
+}
 
 export default function ImprimirReciboUniforme() {
     const params = useParams()
-    const [entrega, setEntrega] = useState<any>(null)
+    const [entrega, setEntrega] = useState<Entrega | null>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
 
     useEffect(() => {
-        fetch(`/api/empleados/${params.id}/uniformes/entregas/${params.entregaId}`)
-            .then(res => res.json())
-            .then(data => {
-                setEntrega(data)
-                setLoading(false)
-                // Auto print after render
-                setTimeout(() => {
-                    window.print()
-                }, 500)
-            })
-            .catch(err => {
-                console.error(err)
-                setLoading(false)
-            })
+        const controlador = new AbortController()
+        async function cargar() {
+            try {
+                const respuesta = await fetch(`/api/empleados/${params.id}/uniformes/entregas/${params.entregaId}`, { signal: controlador.signal })
+                const datos = await respuesta.json()
+                if (!respuesta.ok) throw new Error(datos.error || 'Entrega no encontrada.')
+                setEntrega(datos)
+            } catch (fallo) {
+                if (!controlador.signal.aborted) setError(fallo instanceof Error ? fallo.message : 'No se pudo cargar el comprobante.')
+            } finally {
+                if (!controlador.signal.aborted) setLoading(false)
+            }
+        }
+        void cargar()
+        return () => controlador.abort()
     }, [params.id, params.entregaId])
 
-    if (loading) return <div style={{ padding: 20 }}>Cargando...</div>
-    if (!entrega || entrega.error) return <div style={{ padding: 20 }}>Entrega no encontrada</div>
+    if (loading) return <div style={{ padding: 20 }}>Cargando comprobante...</div>
+    if (error || !entrega) return <div role="alert" style={{ padding: 20 }}>{error || 'Entrega no encontrada.'}</div>
+    if (entrega.estado === 'ANULADA') return <div role="alert" style={{ padding: 20 }}>Esta entrega fue anulada y no tiene comprobante vigente.</div>
 
-    const empleado = entrega.empleado
-    const talles = empleado.talleUniforme || {}
+    const [anio, mes, dia] = fechaClaveRRHH(entrega.fecha).split('-')
+    const detalles = entrega.detalles.length ? entrega.detalles : [
+        ...(entrega.remera > 0 ? [{ prenda: 'REMERA' as const, talle: 'No consta', cantidad: entrega.remera }] : []),
+        ...(entrega.buzo > 0 ? [{ prenda: 'BUZO' as const, talle: 'No consta', cantidad: entrega.buzo }] : []),
+    ]
 
-    return (
-        <div style={{
-            fontFamily: 'sans-serif',
-            padding: '40px',
-            maxWidth: '800px',
-            margin: '0 auto',
-            color: '#000'
-        }}>
-            {/* Styles for print */}
-            <style dangerouslySetInnerHTML={{__html: `
-                @media print {
-                    @page { margin: 15mm; }
-                    body { background: white; -webkit-print-color-adjust: exact; }
-                    .no-print { display: none !important; }
-                }
-            `}} />
-
-            <div className="no-print" style={{ marginBottom: 20, textAlign: 'right' }}>
-                <button onClick={() => window.print()} style={{ padding: '8px 16px', background: '#000', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                    Imprimir
-                </button>
-            </div>
-
-            <div style={{ border: '2px solid #000', padding: '30px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '20px', marginBottom: '20px' }}>
-                    <div>
-                        <h1 style={{ margin: 0, fontSize: '24px', textTransform: 'uppercase' }}>Fábrica de Sándwiches</h1>
-                        <h2 style={{ margin: '5px 0 0 0', fontSize: '18px', color: '#555' }}>Recibo de Entrega de Uniforme</h2>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <p style={{ margin: 0, fontWeight: 'bold' }}>Fecha de Entrega:</p>
-                        <p style={{ margin: '5px 0 0 0' }}>{new Date(entrega.fecha).toLocaleDateString('es-AR')}</p>
-                    </div>
-                </div>
-
-                <div style={{ marginBottom: '30px' }}>
-                    <p><strong>Empleado:</strong> {empleado.nombre} {empleado.apellido}</p>
-                    <p><strong>DNI:</strong> {empleado.dni || '-'}</p>
-                    <p><strong>Puesto/Rol:</strong> {empleado.rol}</p>
-                </div>
-
-                <div style={{ marginBottom: '40px' }}>
-                    <h3 style={{ borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>Detalle de Prendas Entregadas</h3>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-                        <thead>
-                            <tr>
-                                <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'left' }}>Prenda</th>
-                                <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Talle</th>
-                                <th style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>Cantidad</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {entrega.remera > 0 && (
-                                <tr>
-                                    <td style={{ border: '1px solid #000', padding: '8px' }}>Remera</td>
-                                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>{talles.remera || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>{entrega.remera}</td>
-                                </tr>
-                            )}
-                            {entrega.buzo > 0 && (
-                                <tr>
-                                    <td style={{ border: '1px solid #000', padding: '8px' }}>Buzo</td>
-                                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>{talles.buzo || '-'}</td>
-                                    <td style={{ border: '1px solid #000', padding: '8px', textAlign: 'center' }}>{entrega.buzo}</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {entrega.observaciones && (
-                    <div style={{ marginBottom: '30px' }}>
-                        <p><strong>Observaciones:</strong> {entrega.observaciones}</p>
-                    </div>
-                )}
-
-                <div style={{ marginTop: '60px', marginBottom: '20px' }}>
-                    <p style={{ textAlign: 'justify', fontSize: '14px', lineHeight: '1.5' }}>
-                        Por la presente acuso recibo de las prendas arriba detalladas, las cuales son provistas por la empresa para uso exclusivo durante la jornada laboral. Me comprometo a cuidarlas y mantenerlas en buen estado.
-                    </p>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '80px', padding: '0 40px' }}>
-                    <div style={{ textAlign: 'center', width: '200px' }}>
-                        <div style={{ borderBottom: '1px solid #000', height: '40px' }}></div>
-                        <p style={{ marginTop: '10px' }}>Firma Empleado</p>
-                    </div>
-                    <div style={{ textAlign: 'center', width: '200px' }}>
-                        <div style={{ borderBottom: '1px solid #000', height: '40px' }}></div>
-                        <p style={{ marginTop: '10px' }}>Aclaración</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div style={{ marginTop: '20px', textAlign: 'center', color: '#666', fontSize: '12px' }} className="no-print">
-                <p>Este comprobante es generado automáticamente por el sistema de RRHH.</p>
-            </div>
+    return <main style={{ fontFamily: 'sans-serif', padding: 40, maxWidth: 800, margin: '0 auto', color: '#000' }}>
+        <style>{`@media print { @page { margin: 15mm; } body { background: white; } .no-print { display: none !important; } }`}</style>
+        <div className="no-print" style={{ textAlign: 'right', marginBottom: 20 }}>
+            <button type="button" onClick={() => window.location.assign(`/empleados/${params.id}/uniformes/imprimir`)} style={{ padding: '8px 16px' }}>Abrir constancia SRT 299/11</button>
         </div>
-    )
+        <section style={{ border: '2px solid #000', padding: 30 }}>
+            <header style={{ display: 'flex', justifyContent: 'space-between', gap: 20, borderBottom: '2px solid #000', paddingBottom: 20 }}>
+                <div><h1 style={{ margin: 0, fontSize: 24 }}>Fábrica de Sándwiches</h1><h2 style={{ fontSize: 18 }}>Recibo de entrega de ropa de trabajo</h2></div>
+                <div><strong>Fecha de entrega</strong><p>{dia}/{mes}/{anio}</p></div>
+            </header>
+            <p><strong>Empleado:</strong> {entrega.nombreEmpleado || `${entrega.empleado.nombre} ${entrega.empleado.apellido || ''}`}</p>
+            <p><strong>DNI:</strong> {entrega.nombreEmpleado ? (entrega.dniEmpleado || '—') : (entrega.empleado.dni || '—')}</p>
+            <p><strong>Puesto/Rol:</strong> {entrega.rolEmpleado || entrega.empleado.rol}</p>
+            <h3>Prendas entregadas</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr><th style={{ border: '1px solid #000', padding: 8 }}>Prenda</th><th style={{ border: '1px solid #000', padding: 8 }}>Talle</th><th style={{ border: '1px solid #000', padding: 8 }}>Cantidad</th></tr></thead>
+                <tbody>{detalles.map((item, indice) => <tr key={indice}>
+                    <td style={{ border: '1px solid #000', padding: 8 }}>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'}</td>
+                    <td style={{ border: '1px solid #000', padding: 8 }}>{item.talle}</td>
+                    <td style={{ border: '1px solid #000', padding: 8 }}>{item.cantidad}</td>
+                </tr>)}</tbody>
+            </table>
+            {entrega.observaciones && <p><strong>Observaciones:</strong> {entrega.observaciones}</p>}
+            <p style={{ marginTop: 45, lineHeight: 1.5 }}>Acuso recibo de las prendas detalladas, provistas para su uso durante la jornada laboral.</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 50, marginTop: 80 }}>
+                <div style={{ width: 220, textAlign: 'center', borderTop: '1px solid #000', paddingTop: 8 }}>Firma del empleado</div>
+                <div style={{ width: 220, textAlign: 'center', borderTop: '1px solid #000', paddingTop: 8 }}>Aclaración</div>
+            </div>
+        </section>
+    </main>
 }

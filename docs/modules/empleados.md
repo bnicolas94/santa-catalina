@@ -100,6 +100,16 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 
 ---
 
+## Ropa de trabajo
+
+El stock de remeras y buzos es general y se identifica por prenda y talle. Sólo `ADMIN` accede a sus pantallas y APIs. Cada ingreso o ajuste requiere un motivo y produce un `MovimientoUniforme` con responsable y saldo posterior.
+
+Una entrega registra al empleado, la fecha local de Argentina, el administrador y el detalle de prendas y talles. En una transacción se comprueba el saldo, se descuentan las unidades y se escriben los movimientos. La anulación conserva la entrega, exige motivo y restituye únicamente las unidades de las entregas creadas con el nuevo circuito. Las entregas anteriores permanecen sin talle histórico ni impacto retroactivo sobre el stock.
+
+La constancia imprimible sigue los campos del Anexo I de la Resolución SRT 299/11: una hoja por trabajador con renglones de entrega y firma manuscrita por renglón. Razón social y CUIT, domicilio por sede y EPP necesarios por puesto se configuran en el módulo. Modelo, marca y certificación se configuran por prenda/talle y se fotografían al entregar. La impresión es de sólo lectura y se bloquea cuando faltan datos exigidos. Las entregas anteriores sin detalle permanecen en el historial y no se inventan como renglones de la nueva constancia.
+
+Fuente oficial: https://www.argentina.gob.ar/normativa/nacional/norma-180669/texto
+
 ## 8. 🚀 Posibles mejoras
 
 * **Notificaciones Push/Email**: Avisar al administrador cuando un documento de empleado (ej. Carnet de conducir) esté por vencer.

@@ -1,9 +1,9 @@
 'use client'
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import styles from './EmpleadoSidebar.module.css'
 
 interface MenuItem {
@@ -75,7 +75,7 @@ const menuItems: MenuItem[] = [
         openModal: 'liquidacion-final'
     },
     {
-        label: 'Planilla Uniformes',
+        label: 'Ropa de trabajo',
         href: '/empleados?open=uniformes',
         icon: '👕',
         openModal: 'uniformes'
@@ -113,6 +113,8 @@ const menuItems: MenuItem[] = [
 ]
 
 export default function EmpleadoSidebar() {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [collapsed, setCollapsed] = useState(false)
@@ -140,6 +142,7 @@ export default function EmpleadoSidebar() {
 
             <nav className={styles.nav}>
                 {menuItems.map((item) => {
+                    if (item.openModal === 'uniformes' && !esAdmin) return null
                     const hasSubItems = item.subItems && item.subItems.length > 0
                     const isExpanded = expandedGroups.includes(item.label)
                     const isActive = !hasSubItems && (

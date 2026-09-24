@@ -51,6 +51,12 @@ test('la administración de sedes está reservada a ADMIN', () => {
 
 test('ADMIN puede acceder a cualquier ruta protegida', () => {
     assert.equal(canAccessPath('/api/empleados/roles', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/api/uniformes/stock', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/api/uniformes/configuracion', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/api/empleados/abc/uniformes/entregas', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/api/empleados/abc/uniformes/constancia', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/empleados/abc/uniformes/imprimir', { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath('/empleados/abc/uniformes/imprimir/xyz', { rol: 'ADMIN' }), true)
 })
 
 test('permisoPersonal habilita las API de RR. HH.', () => {
@@ -58,12 +64,19 @@ test('permisoPersonal habilita las API de RR. HH.', () => {
     assert.equal(canAccessPath('/api/empleados/abc', token), true)
     assert.equal(canAccessPath('/api/documentos-empleado', token), true)
     assert.equal(canAccessPath('/api/liquidaciones/final', token), true)
+    assert.equal(canAccessPath('/api/uniformes/stock', token), false)
+    assert.equal(canAccessPath('/api/uniformes/configuracion', token), false)
+    assert.equal(canAccessPath('/api/empleados/abc/uniformes/entregas', token), false)
+    assert.equal(canAccessPath('/api/empleados/abc/uniformes/constancia', token), false)
+    assert.equal(canAccessPath('/empleados/abc/uniformes/imprimir', token), false)
+    assert.equal(canAccessPath('/empleados/abc/uniformes/imprimir/xyz', token), false)
 })
 
 test('una sesión sin permisoPersonal no puede invocar RR. HH.', () => {
     const token = { rol: 'OPERARIO', permisos: { permisoProduccion: true } }
     assert.equal(canAccessPath('/api/empleados', token), false)
     assert.equal(canAccessPath('/api/reportes/rrhh', token), false)
+    assert.equal(canAccessPath('/api/uniformes/stock', token), false)
 })
 
 test('sólo ADMIN puede administrar roles, incluso con permisoPersonal', () => {

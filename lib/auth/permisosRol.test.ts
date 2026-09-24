@@ -4,12 +4,13 @@ import test from 'node:test'
 import { aplicarAccesosOperativos, permisosDesdeRol } from './permisosRol'
 
 test('construye todos los permisos dinámicos desde el tipo de empleado', () => {
-    assert.deepEqual(permisosDesdeRol({ permisoStock: true, permisoCaja: true, permisoProduccion: true, permisoFlota: true, permisoAtencion: true }), {
+    assert.deepEqual(permisosDesdeRol({ permisoStock: true, permisoCaja: true, permisoProduccion: true, permisoPantallaProduccion: true, permisoFlota: true, permisoAtencion: true }), {
         permisoDashboard: false,
         permisoStock: true,
         permisoCaja: true,
         permisoPersonal: false,
         permisoProduccion: true,
+        permisoPantallaProduccion: true,
         permisoCostos: false,
         permisoCompras: false,
         permisoClientes: false,
@@ -24,13 +25,14 @@ test('construye todos los permisos dinámicos desde el tipo de empleado', () => 
 })
 
 test('el acceso operativo del local agrega Caja sin perder permisos del tipo', () => {
-    const permisos = permisosDesdeRol({ permisoStock: true, permisoProduccion: true })
+    const permisos = permisosDesdeRol({ permisoStock: true, permisoProduccion: true, permisoPantallaProduccion: true })
     assert.deepEqual(aplicarAccesosOperativos(permisos, 'LOCAL'), {
         permisoDashboard: false,
         permisoStock: true,
         permisoCaja: true,
         permisoPersonal: false,
         permisoProduccion: true,
+        permisoPantallaProduccion: true,
         permisoCostos: false,
         permisoCompras: false,
         permisoClientes: false,

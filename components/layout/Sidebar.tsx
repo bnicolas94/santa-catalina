@@ -35,6 +35,13 @@ const menuItems: MenuItem[] = [
         permissionKey: 'permisoProduccion',
     },
     {
+        label: 'Pantalla de stock',
+        href: '/produccion/pantalla',
+        icon: '📺',
+        roles: ['ADMIN', 'COORD_PROD', 'OPERARIO', 'PRODUCCION', 'ADMIN_OPS'],
+        permissionKey: 'permisoPantallaProduccion',
+    },
+    {
         label: 'Posicionamiento',
         href: '/produccion/posicionamiento',
         icon: '📍',
@@ -186,8 +193,8 @@ export default function Sidebar() {
         if (userRol === 'ADMIN') return true
 
         if (ubicacionTipo === 'LOCAL') {
-            // La vista operativa de Producción pertenece exclusivamente a Fábrica.
-            if (item.href === '/produccion' || item.href.startsWith('/produccion/')) return false
+            // Las operaciones de Producción pertenecen a Fábrica; la pantalla de stock es de consulta.
+            if (item.href !== '/produccion/pantalla' && (item.href === '/produccion' || item.href.startsWith('/produccion/'))) return false
 
             // En el local Caja siempre debe estar disponible para registrar depósitos.
             if (item.href === '/caja') return true
