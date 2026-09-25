@@ -29,7 +29,14 @@ function descargarExcel(url: URL, cookies = new Map<string, Map<string, string>>
     return new Promise((resolve, reject) => {
         const propios = cookies.get(url.hostname)
         const cookie = propios ? [...propios].map(([nombre, valor]) => `${nombre}=${valor}`).join('; ') : ''
-        const peticion = https.get(url, { headers: cookie ? { Cookie: cookie } : {}, timeout: 20_000 }, respuesta => {
+        const peticion = https.get(url, {
+            headers: {
+                Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'User-Agent': 'Mozilla/5.0 (compatible; SantaCatalinaProduccion/1.0)',
+                ...(cookie ? { Cookie: cookie } : {}),
+            },
+            timeout: 20_000,
+        }, respuesta => {
             for (const encabezado of respuesta.headers['set-cookie'] ?? []) {
                 const par = encabezado.split(';', 1)[0]
                 const separador = par.indexOf('=')
@@ -78,11 +85,24 @@ function descargarExcel(url: URL, cookies = new Map<string, Map<string, string>>
     })
 }
 
+async function descargarExcelConReintento(url: URL) {
+    try {
+        return await descargarExcel(url)
+    } catch (error) {
+        const mensaje = error instanceof Error ? error.message : ''
+        const codigo = (error as { code?: string } | null)?.code
+        if (!/OneDrive respondió (429|500|502|503|504)\.|OneDrive no respondió a tiempo\./.test(mensaje)
+            && !['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN'].includes(codigo ?? '')) throw error
+        await new Promise(resolve => setTimeout(resolve, 1_000))
+        return descargarExcel(url)
+    }
+}
+
 async function obtenerDemanda(fecha: string): Promise<LecturaExcel> {
     const url = urlExcel()
     const clave = `${url.toString()}|${fecha}`
     if (!cache || cache.clave !== clave || cache.vence <= Date.now()) {
-        const promesa = descargarExcel(url).then(archivo => {
+        const promesa = descargarExcelConReintento(url).then(archivo => {
             const libro = XLSX.read(archivo, { type: 'buffer' })
             const hoja = libro.Sheets['Paq. Totales']
             if (!hoja) throw new Error('El Excel no contiene la pestaña Paq. Totales.')
