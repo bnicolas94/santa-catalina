@@ -9,11 +9,16 @@ function detalleLecturaExcel(error: unknown) {
     const codigo = (error as { code?: string } | null)?.code
     if (/^OneDrive respondió \d{3}\.$/.test(mensaje)) return mensaje
     if (/^OneDrive (no respondió a tiempo|no devolvió un archivo Excel|redirigió fuera de los dominios permitidos)\.$/.test(mensaje)) return mensaje
+    if (mensaje === 'Falta configurar PRODUCCION_PEDIDOS_EXCEL_URL.') return mensaje
+    if (mensaje === 'La URL de OneDrive no es válida.') return mensaje
     if (/^El Excel (no contiene la pestaña Paq\. Totales|supera el límite de 10 MB)\.$/.test(mensaje)) return mensaje
     if (/^Se esperaban los totales de una sola fila para \d{4}-\d{2}-\d{2}\.$/.test(mensaje)) return mensaje
+    if (/^Cantidad inválida en /.test(mensaje)) return mensaje
     if (/^Cambió (el encabezado|la columna) /.test(mensaje)) return 'Cambió la estructura de Paq. Totales.'
     if (['ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN'].includes(codigo ?? '')) return `Falló la conexión con OneDrive (${codigo}).`
-    return 'Error de lectura sin clasificar; consultar el registro del servidor.'
+    return mensaje
+        ? mensaje.replace(/https?:\/\/\S+/g, '[enlace]').replace(/[A-Za-z]:\\\S+/g, '[ruta]').slice(0, 180)
+        : 'Error de lectura sin mensaje; consultar el registro del servidor.'
 }
 
 export async function GET() {
