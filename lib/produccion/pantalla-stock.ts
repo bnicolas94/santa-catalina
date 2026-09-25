@@ -19,6 +19,17 @@ export type DemandaPantalla = Record<TurnoPantalla, CantidadesPantalla>
 export type DemandaPorFecha = { fecha: string; demanda: DemandaPantalla }
 export type TrasladosPantalla = { salidas: CantidadesPantalla; entradas: CantidadesPantalla }
 
+export function calcularPaquetesEnProduccion(lotes: Array<{ unidadesProducidas: number; distribucion: unknown }>): CantidadesPantalla {
+    const cantidades: CantidadesPantalla = {}
+    for (const lote of lotes) {
+        const distribucion = Array.isArray(lote.distribucion) ? lote.distribucion : []
+        const id = distribucion[0]?.presentacionId
+        if (typeof id !== 'string' || !Number.isInteger(lote.unidadesProducidas) || lote.unidadesProducidas < 0) continue
+        cantidades[id] = (cantidades[id] ?? 0) + lote.unidadesProducidas
+    }
+    return cantidades
+}
+
 function fechaDeCelda(valor: unknown): string | null {
     if (typeof valor === 'number') {
         const partes = XLSX.SSF.parse_date_code(valor)

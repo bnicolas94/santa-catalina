@@ -2,7 +2,7 @@ import https from 'node:https'
 import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import {
-    calcularProyeccionDias, calcularStockDesdeFoto, COLUMNAS_PANTALLA, HORARIOS_TURNOS_PANTALLA,
+    calcularPaquetesEnProduccion, calcularProyeccionDias, calcularStockDesdeFoto, COLUMNAS_PANTALLA, HORARIOS_TURNOS_PANTALLA,
     leerDemandasPaqTotales, TURNOS_PANTALLA, turnosVisibles, type CantidadesPantalla, type DemandaPorFecha,
 } from '@/lib/produccion/pantalla-stock'
 
@@ -160,19 +160,31 @@ async function obtenerPantallaStockProduccionUnaVez() {
     }
     const ids = [...porClave.values()]
     const foto = await obtenerFotoInicial(fecha, ids)
-    const movimientos = await prisma.movimientoProducto.findMany({
-        where: {
-            presentacionId: { in: ids }, ubicacion: { tipo: 'FABRICA' },
-            fecha: { gte: new Date(`${fecha}T09:00:00-03:00`), lte: ahora },
-            OR: [
-                { tipo: 'ajuste' },
-                { tipo: 'traslado' },
-                { loteId: { not: null }, tipo: { in: ['produccion', 'ajuste_produccion', 'anulacion_produccion'] } },
-            ],
-        },
-        select: { presentacionId: true, signo: true, cantidad: true, tipo: true, fecha: true },
-    })
+    const finDia = new Date(`${fecha}T00:00:00Z`)
+    finDia.setUTCDate(finDia.getUTCDate() + 1)
+    const [movimientos, lotesEnProduccion] = await Promise.all([
+        prisma.movimientoProducto.findMany({
+            where: {
+                presentacionId: { in: ids }, ubicacion: { tipo: 'FABRICA' },
+                fecha: { gte: new Date(`${fecha}T09:00:00-03:00`), lte: ahora },
+                OR: [
+                    { tipo: 'ajuste' },
+                    { tipo: 'traslado' },
+                    { loteId: { not: null }, tipo: { in: ['produccion', 'ajuste_produccion', 'anulacion_produccion'] } },
+                ],
+            },
+            select: { presentacionId: true, signo: true, cantidad: true, tipo: true, fecha: true },
+        }),
+        prisma.lote.findMany({
+            where: {
+                estado: 'en_produccion', ubicacion: { tipo: 'FABRICA' },
+                fechaProduccion: { gte: new Date(`${fecha}T00:00:00Z`), lt: finDia },
+            },
+            select: { unidadesProducidas: true, distribucion: true },
+        }),
+    ])
     const { inicial: inicialPorId, producido: producidoPorId, traslados: trasladosPorId, ultimoAjuste } = calcularStockDesdeFoto(foto, movimientos)
+    const enProduccionPorId = calcularPaquetesEnProduccion(lotesEnProduccion)
     const inicial: CantidadesPantalla = {}
     const producido: CantidadesPantalla = {}
     const salidas: CantidadesPantalla = {}
@@ -187,6 +199,10 @@ async function obtenerPantallaStockProduccionUnaVez() {
     const dias = calcularProyeccionDias(inicial, producido, excel.demandas, { salidas, entradas })
         .map((dia, indice) => ({
             ...dia,
+            columnas: dia.columnas.map(columna => ({
+                ...columna,
+                enProduccion: indice === 0 ? enProduccionPorId[porClave.get(columna.clave)!] ?? 0 : 0,
+            })),
             turnosVisibles: indice === 0 ? turnosVisibles(minutos) : [...TURNOS_PANTALLA],
         }))
     return {

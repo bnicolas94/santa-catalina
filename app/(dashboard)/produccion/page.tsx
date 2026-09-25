@@ -1337,7 +1337,7 @@ export default function ProduccionPage() {
                 <div className="card" style={{ cursor: 'pointer', border: filterEstado === '' ? '2px solid var(--color-primary)' : undefined }} onClick={() => setFilterEstado('')}>
                     <div className="card-body" style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
                         <div style={{ fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-heading)' }}>{stats.totalPaquetes.toLocaleString()}</div>
-                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontFamily: 'var(--font-ui)', textTransform: 'uppercase' }}>Paquetes producidos</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontFamily: 'var(--font-ui)', textTransform: 'uppercase' }}>Paquetes en lotes · incluye en producción</div>
                     </div>
                 </div>
                 {ESTADOS_LOTE.slice(0, 3).map((est) => {

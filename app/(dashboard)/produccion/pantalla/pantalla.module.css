@@ -27,6 +27,7 @@
 .tabla td { text-align: center; font-weight: 800; }
 .inicial { background: #19313b; }
 .produccion { background: #143d3c; color: #a8f0ca; }
+.enProduccion { background: #46391f; color: #ffe0a3; }
 .pedidosDia { background: #263d49; }
 .desgloseTitulo { background: #27404a; color: #b8cad1; }
 .tabla .desgloseTitulo th { font-size: clamp(14px, 1.2vw, 18px); font-weight: 700; text-align: left; }
@@ -46,6 +47,7 @@
 .detalle dt { color: #dce7eb; font-size: clamp(14px, 2.6vw, 17px); font-weight: 600; }
 .detalle dd { margin: 0; font-size: clamp(22px, 4vw, 28px); font-weight: 800; line-height: 1; }
 .detalleProduccion dd { color: #a8f0ca; }
+.detalleEnProduccion dt, .detalleEnProduccion dd { color: #ffe0a3; }
 .detallePedidos { color: #fff; }
 .detallePedidos dt, .detallePedidos dd { font-weight: 800; }
 .libre { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 70px; padding: 10px 16px; background: #0f574b; }

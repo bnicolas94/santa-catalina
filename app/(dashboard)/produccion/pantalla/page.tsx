@@ -12,6 +12,7 @@ type Columna = {
     subtitulo: string
     stockInicial: number
     produccion: number
+    enProduccion: number
     recibido: number
     enviado: number
     agendado: number
@@ -85,6 +86,7 @@ export default function PantallaStockProduccion() {
         ? datos.dias.find(item => item.fecha === fechaSeleccionada) ?? datos.dias[0]
         : null
     const hayEntradas = dia?.columnas.some(columna => columna.recibido > 0) ?? false
+    const hayLotesAbiertos = dia?.columnas.some(columna => columna.enProduccion > 0) ?? false
     const haySalidas = dia?.columnas.some(columna => columna.enviado > 0) ?? false
     const hayEnviosExtra = dia?.columnas.some(columna => columna.enviadoExtra > 0) ?? false
     const esHoy = datos?.estado === 'listo' && dia?.fecha === datos.fecha
@@ -158,6 +160,9 @@ export default function PantallaStockProduccion() {
                         <tr className={styles.produccion}><th scope="row">+ Producido {esHoy ? 'hoy' : 'registrado'}</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>{columna.produccion}</td>)}
                         </tr>
+                        {hayLotesAbiertos && <tr className={styles.enProduccion}><th scope="row">En producción · aún no disponible</th>
+                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.enProduccion}</td>)}
+                        </tr>}
                         {hayEntradas && <tr className={styles.turno}><th scope="row">+ Recibido en fábrica</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>{columna.recibido}</td>)}
                         </tr>}
@@ -197,6 +202,9 @@ export default function PantallaStockProduccion() {
                     <dl className={styles.detalle}>
                         <div><dt>Stock inicial</dt><dd>{columna.stockInicial}</dd></div>
                         <div className={styles.detalleProduccion}><dt>+ Producido {esHoy ? 'hoy' : 'registrado'}</dt><dd>{columna.produccion}</dd></div>
+                        {columna.enProduccion > 0 && <div className={styles.detalleEnProduccion}>
+                            <dt>En producción · no disponible</dt><dd>{columna.enProduccion}</dd>
+                        </div>}
                         {hayEntradas && <div><dt>+ Recibido en fábrica</dt><dd>{columna.recibido}</dd></div>}
                         <div className={styles.detallePedidos}><dt>− Pedidos del día</dt><dd>{columna.agendado}</dd></div>
                         {hayEnviosExtra && <div><dt>− Extra enviado al local</dt><dd>{columna.enviadoExtra}</dd></div>}
@@ -229,6 +237,9 @@ export default function PantallaStockProduccion() {
                     ? 'El total de pedidos incluye los tres turnos. Lo enviado al local para esos pedidos ya está incluido; sólo los paquetes extra se restan aparte.'
                     : 'El total de pedidos incluye los tres turnos, incluso cuando uno ya no aparece en el detalle.'
                 : 'Proyección con pedidos agendados. La producción futura se suma cuando se registre en el ERP.'}</p>
+            {hayLotesAbiertos && <p className={styles.nota}>
+                Los paquetes en producción son de lotes abiertos: se suman al stock libre cuando se cierran e ingresan a stock.
+            </p>}
         </>}
     </main>
 }

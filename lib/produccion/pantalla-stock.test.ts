@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath } from '../access-control'
-import { calcularDisponibilidad, calcularProyeccionDias, calcularStockDesdeFoto, leerDemandaPaqTotales, leerDemandasPaqTotales, turnosVisibles } from './pantalla-stock'
+import { calcularDisponibilidad, calcularPaquetesEnProduccion, calcularProyeccionDias, calcularStockDesdeFoto, leerDemandaPaqTotales, leerDemandasPaqTotales, turnosVisibles } from './pantalla-stock'
 
 function filas() {
     const encabezados = Array(18).fill('')
@@ -76,6 +76,19 @@ test('un traslado cubre pedidos del día antes de descontar el excedente para ve
     assert.equal(excedente.pedidosCubiertos, 33)
     assert.equal(excedente.enviadoExtra, 7)
     assert.equal(excedente.libre, 32)
+})
+
+test('muestra los lotes abiertos por presentación sin sumarlos al stock libre', () => {
+    const enProduccion = calcularPaquetesEnProduccion([
+        { unidadesProducidas: 14, distribucion: [{ presentacionId: 'jq48', cantidad: 14 }] },
+        { unidadesProducidas: 28, distribucion: [{ presentacionId: 'jq48', cantidad: 14 }] },
+        { unidadesProducidas: 7, distribucion: [{ presentacionId: 'esp48', cantidad: 7 }] },
+    ])
+    assert.deepEqual(enProduccion, { jq48: 42, esp48: 7 })
+    const demanda = leerDemandaPaqTotales(filas(), '2026-09-24')
+    const [jq48] = calcularDisponibilidad({ 'JQ:48': 46 }, {}, demanda)
+    assert.equal(jq48.produccion, 0)
+    assert.equal(jq48.libre, 13)
 })
 
 test('oculta cada turno a las 13, 16 y 21 sin alterar el total reservado', () => {
