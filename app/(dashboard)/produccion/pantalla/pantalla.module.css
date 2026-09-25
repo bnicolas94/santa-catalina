@@ -27,10 +27,13 @@
 .tabla td { text-align: center; font-weight: 800; }
 .inicial { background: #19313b; }
 .produccion { background: #143d3c; color: #a8f0ca; }
+.pedidosDia { background: #263d49; }
+.desgloseTitulo { background: #27404a; color: #b8cad1; }
+.tabla .desgloseTitulo th { font-size: clamp(14px, 1.2vw, 18px); font-weight: 700; text-align: left; }
 .turno { background: #102631; }
 .turno:nth-child(odd) { background: #142d38; }
 .tabla tfoot tr { background: #0f574b; color: #fff; }
-.tabla tfoot th, .tabla tfoot td { border-bottom: 0; }
+.tabla tfoot th, .tabla tfoot td { position: sticky; bottom: 0; z-index: 2; border-bottom: 0; background: #0f574b; box-shadow: 0 -4px 16px #0005; }
 .tabla .faltante { color: #ffc2b8; background: #8d2d2d; }
 .tarjetas { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; }
 .tarjeta { min-width: 0; overflow: hidden; border: 1px solid #31515b; border-radius: 16px; background: #19313b; box-shadow: 0 12px 30px #0003; }
@@ -43,16 +46,28 @@
 .detalle dt { color: #dce7eb; font-size: clamp(14px, 2.6vw, 17px); font-weight: 600; }
 .detalle dd { margin: 0; font-size: clamp(22px, 4vw, 28px); font-weight: 800; line-height: 1; }
 .detalleProduccion dd { color: #a8f0ca; }
+.detallePedidos { color: #fff; }
+.detallePedidos dt, .detallePedidos dd { font-weight: 800; }
 .libre { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 70px; padding: 10px 16px; background: #0f574b; }
 .libre span { max-width: 13ch; font-size: clamp(14px, 2.6vw, 18px); font-weight: 800; line-height: 1.15; }
 .libre strong { font-size: clamp(35px, 7vw, 48px); line-height: 1; font-variant-numeric: tabular-nums; }
 .libreNegativo { background: #8d2d2d; color: #fff; }
+.desgloseTarjeta { padding-top: 8px; background: #142d38; }
+.desgloseTarjeta p { margin: 0; padding: 0 16px; color: #b8cad1; font-size: 13px; font-weight: 700; }
+.desgloseTarjeta .detalle > div { min-height: 39px; }
+.trasladoNota { margin: 0; padding: 11px 16px; color: #b8cad1; font-size: 13px; border-top: 1px solid #38505a; }
+.traslados { display: none; color: #b8cad1; font-size: 13px; }
+.traslados summary { width: fit-content; cursor: pointer; }
+.trasladosLista { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.trasladosLista p { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 8px; border: 1px solid #31515b; border-radius: 8px; }
+.trasladosLista strong { color: #fff; }
 .nota { margin-top: 10px; color: #b8cad1; font-size: clamp(12px, 1vw, 14px); }
 @media (min-width: 600px) { .tarjetas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 980px) {
     .pantalla { overflow: hidden; }
     .tarjetas { display: none; }
     .tablaScroll { display: block; flex: 1; min-height: 0; overflow: auto; border: 1px solid #31515b; border-radius: 18px; box-shadow: 0 22px 60px #0005; }
+    .traslados { display: block; margin-top: 8px; }
     .tabla { height: 100%; }
     .tabla th, .tabla td { padding: clamp(7px, 1.3vh, 16px) clamp(8px, 1vw, 16px); }
     .tabla thead th { font-size: clamp(19px, min(2.2vw, 4vh), 34px); }

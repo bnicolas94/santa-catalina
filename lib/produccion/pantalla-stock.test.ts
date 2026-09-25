@@ -67,12 +67,14 @@ test('un traslado cubre pedidos del día antes de descontar el excedente para ve
     })[0]
     assert.equal(cubierto.agendado, 33)
     assert.equal(cubierto.pedidosCubiertos, 20)
+    assert.equal(cubierto.enviadoExtra, 0)
     assert.equal(cubierto.libre, 37)
 
     const excedente = calcularDisponibilidad(inicial, producido, demanda, {
         salidas: { 'JQ:48': 40 }, entradas: { 'JQ:48': 2 },
     })[0]
     assert.equal(excedente.pedidosCubiertos, 33)
+    assert.equal(excedente.enviadoExtra, 7)
     assert.equal(excedente.libre, 32)
 })
 

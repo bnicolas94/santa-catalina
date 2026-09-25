@@ -16,6 +16,7 @@ type Columna = {
     enviado: number
     agendado: number
     pedidosCubiertos: number
+    enviadoExtra: number
     libre: number
 }
 type DiaPantalla = {
@@ -85,6 +86,7 @@ export default function PantallaStockProduccion() {
         : null
     const hayEntradas = dia?.columnas.some(columna => columna.recibido > 0) ?? false
     const haySalidas = dia?.columnas.some(columna => columna.enviado > 0) ?? false
+    const hayEnviosExtra = dia?.columnas.some(columna => columna.enviadoExtra > 0) ?? false
     const esHoy = datos?.estado === 'listo' && dia?.fecha === datos.fecha
     const fechaVisible = dia
         ? fechaLocal(dia.fecha, { weekday: 'long', day: 'numeric', month: 'long' })
@@ -159,18 +161,21 @@ export default function PantallaStockProduccion() {
                         {hayEntradas && <tr className={styles.turno}><th scope="row">+ Recibido en fábrica</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>{columna.recibido}</td>)}
                         </tr>}
-                        {haySalidas && <tr className={styles.turno}><th scope="row">− Enviado a Local</th>
-                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.enviado}</td>)}
+                        <tr className={styles.pedidosDia}><th scope="row">− Pedidos del día</th>
+                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.agendado}</td>)}
+                        </tr>
+                        {hayEnviosExtra && <tr className={styles.turno}><th scope="row">− Extra enviado al local</th>
+                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.enviadoExtra}</td>)}
+                        </tr>}
+                        {dia.turnosVisibles.length > 0 && <tr className={styles.desgloseTitulo}>
+                            <th colSpan={dia.columnas.length + 1}>Detalle de pedidos por turno (incluido en «Pedidos del día»)</th>
                         </tr>}
                         {dia.turnosVisibles.map(turno => <tr key={turno} className={styles.turno}>
-                            <th scope="row">− Pedidos {turno.toLowerCase()}</th>
+                            <th scope="row">{turno}</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>
                                 {dia.demanda[turno][columna.clave] ?? 0}
                             </td>)}
                         </tr>)}
-                        {haySalidas && <tr className={styles.produccion}><th scope="row">+ Pedidos ya enviados</th>
-                            {dia.columnas.map(columna => <td key={columna.clave}>{columna.pedidosCubiertos}</td>)}
-                        </tr>}
                     </tbody>
                     <tfoot><tr><th scope="row">Stock libre para demanda</th>
                         {dia.columnas.map(columna => <td key={columna.clave} className={columna.libre < 0 ? styles.faltante : ''}>
@@ -185,29 +190,44 @@ export default function PantallaStockProduccion() {
                         <h2>{columna.titulo}</h2>
                         <span>{columna.subtitulo}</span>
                     </header>
-                    <dl className={styles.detalle}>
-                        <div><dt>Stock inicial</dt><dd>{columna.stockInicial}</dd></div>
-                        <div className={styles.detalleProduccion}><dt>+ Producido {esHoy ? 'hoy' : 'registrado'}</dt><dd>{columna.produccion}</dd></div>
-                        {hayEntradas && <div><dt>+ Recibido en fábrica</dt><dd>{columna.recibido}</dd></div>}
-                        {haySalidas && <div><dt>− Enviado a Local</dt><dd>{columna.enviado}</dd></div>}
-                        {dia.turnosVisibles.map(turno => <div key={turno}>
-                            <dt>− Pedidos {turno.toLowerCase()}</dt>
-                            <dd>{dia.demanda[turno][columna.clave] ?? 0}</dd>
-                        </div>)}
-                        {haySalidas && <div className={styles.detalleProduccion}>
-                            <dt>+ Pedidos ya enviados</dt><dd>{columna.pedidosCubiertos}</dd>
-                        </div>}
-                    </dl>
                     <div className={`${styles.libre} ${columna.libre < 0 ? styles.libreNegativo : ''}`}>
                         <span>Stock libre para demanda</span>
                         <strong>{columna.libre}</strong>
                     </div>
+                    <dl className={styles.detalle}>
+                        <div><dt>Stock inicial</dt><dd>{columna.stockInicial}</dd></div>
+                        <div className={styles.detalleProduccion}><dt>+ Producido {esHoy ? 'hoy' : 'registrado'}</dt><dd>{columna.produccion}</dd></div>
+                        {hayEntradas && <div><dt>+ Recibido en fábrica</dt><dd>{columna.recibido}</dd></div>}
+                        <div className={styles.detallePedidos}><dt>− Pedidos del día</dt><dd>{columna.agendado}</dd></div>
+                        {hayEnviosExtra && <div><dt>− Extra enviado al local</dt><dd>{columna.enviadoExtra}</dd></div>}
+                    </dl>
+                    {dia.turnosVisibles.length > 0 && <div className={styles.desgloseTarjeta}>
+                        <p>Pedidos por turno · incluidos arriba</p>
+                        <dl className={styles.detalle}>
+                            {dia.turnosVisibles.map(turno => <div key={turno}>
+                                <dt>{turno}</dt>
+                                <dd>{dia.demanda[turno][columna.clave] ?? 0}</dd>
+                            </div>)}
+                        </dl>
+                    </div>}
+                    {columna.enviado > 0 && <p className={styles.trasladoNota}>
+                        Al local salieron {columna.enviado}: {columna.pedidosCubiertos} para pedidos de hoy y {columna.enviadoExtra} extra.
+                    </p>}
                 </article>)}
             </section>
+            {haySalidas && <details className={styles.traslados}>
+                <summary>Ver envíos al local</summary>
+                <div className={styles.trasladosLista}>
+                    {dia.columnas.map(columna => <p key={columna.clave}>
+                        <strong>{columna.titulo} {columna.subtitulo}</strong>
+                        <span>{columna.enviado} enviados · {columna.pedidosCubiertos} para pedidos · {columna.enviadoExtra} extra</span>
+                    </p>)}
+                </div>
+            </details>}
             <p className={styles.nota}>{esHoy
                 ? haySalidas
-                    ? 'Los envíos a Local cubren primero los pedidos del Excel de hoy. Sólo el excedente para venta espontánea reduce más el stock libre.'
-                    : 'El stock libre descuenta los pedidos de los tres turnos, incluso cuando un turno ya no aparece en la pantalla.'
+                    ? 'El total de pedidos incluye los tres turnos. Lo enviado al local para esos pedidos ya está incluido; sólo los paquetes extra se restan aparte.'
+                    : 'El total de pedidos incluye los tres turnos, incluso cuando uno ya no aparece en el detalle.'
                 : 'Proyección con pedidos agendados. La producción futura se suma cuando se registre en el ERP.'}</p>
         </>}
     </main>

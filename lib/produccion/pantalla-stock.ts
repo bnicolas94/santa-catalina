@@ -96,9 +96,10 @@ export function calcularDisponibilidad(
         const enviado = traslados.salidas[columna.clave] ?? 0
         const recibido = traslados.entradas[columna.clave] ?? 0
         const pedidosCubiertos = Math.min(agendado, enviado)
+        const enviadoExtra = enviado - pedidosCubiertos
         return {
-            ...columna, stockInicial, produccion, recibido, enviado, agendado, pedidosCubiertos,
-            libre: stockInicial + produccion + recibido - enviado - agendado + pedidosCubiertos,
+            ...columna, stockInicial, produccion, recibido, enviado, agendado, pedidosCubiertos, enviadoExtra,
+            libre: stockInicial + produccion + recibido - agendado - enviadoExtra,
         }
     })
 }
