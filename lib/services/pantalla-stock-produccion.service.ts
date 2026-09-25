@@ -124,6 +124,9 @@ async function obtenerFotoInicial(fecha: string, idsPresentacion: string[]) {
 async function obtenerPantallaStockProduccionUnaVez() {
     const ahora = new Date()
     const { fecha, minutos } = horaArgentina(ahora)
+    if (minutos < HORARIOS_TURNOS_PANTALLA.Mañana.inicio) {
+        return { estado: 'esperando_inicio' as const, fecha }
+    }
     const [excel, presentaciones] = await Promise.all([
         obtenerDemanda(fecha),
         prisma.presentacion.findMany({
@@ -134,9 +137,6 @@ async function obtenerPantallaStockProduccionUnaVez() {
     const porClave = new Map(presentaciones.map(p => [`${p.producto.codigoInterno}:${p.cantidad}`, p.id]))
     for (const columna of COLUMNAS_PANTALLA) {
         if (!porClave.has(columna.clave)) throw new Error(`Falta configurar la presentación ${columna.encabezado} en el ERP.`)
-    }
-    if (minutos < HORARIOS_TURNOS_PANTALLA.Mañana.inicio) {
-        return { estado: 'esperando_inicio' as const, fecha, actualizadoExcel: excel.actualizado }
     }
     const ids = [...porClave.values()]
     const foto = await obtenerFotoInicial(fecha, ids)

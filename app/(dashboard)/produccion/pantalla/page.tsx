@@ -31,7 +31,7 @@ type Pantalla = {
     stockTomadoAt: string
     stockAjustadoAt: string | null
     dias: DiaPantalla[]
-} | { estado: 'esperando_inicio'; fecha: string; actualizadoExcel: string }
+} | { estado: 'esperando_inicio'; fecha: string }
 
 const hora = (valor: string) => new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
