@@ -99,6 +99,7 @@ export function calcularDisponibilidad(
     producido: CantidadesPantalla,
     demanda: DemandaPantalla,
     traslados: TrasladosPantalla = { salidas: {}, entradas: {} },
+    enProduccion: CantidadesPantalla = {},
 ) {
     return COLUMNAS_PANTALLA.map(columna => {
         const agendado = TURNOS_PANTALLA.reduce((total, turno) => total + (demanda[turno][columna.clave] ?? 0), 0)
@@ -108,9 +109,11 @@ export function calcularDisponibilidad(
         const recibido = traslados.entradas[columna.clave] ?? 0
         const pedidosCubiertos = Math.min(agendado, enviado)
         const enviadoExtra = enviado - pedidosCubiertos
+        const libre = stockInicial + produccion + recibido - agendado - enviadoExtra
+        const lotesAbiertos = enProduccion[columna.clave] ?? 0
         return {
             ...columna, stockInicial, produccion, recibido, enviado, agendado, pedidosCubiertos, enviadoExtra,
-            libre: stockInicial + produccion + recibido - agendado - enviadoExtra,
+            enProduccion: lotesAbiertos, libre, stockTeorico: libre + lotesAbiertos,
         }
     })
 }
@@ -120,12 +123,14 @@ export function calcularProyeccionDias(
     producidoHoy: CantidadesPantalla,
     demandas: DemandaPorFecha[],
     trasladosHoy: TrasladosPantalla = { salidas: {}, entradas: {} },
+    enProduccionHoy: CantidadesPantalla = {},
 ) {
     let inicial = inicialHoy
     return demandas.map(({ fecha, demanda }, indice) => {
         const columnas = calcularDisponibilidad(
             inicial, indice === 0 ? producidoHoy : {}, demanda,
             indice === 0 ? trasladosHoy : { salidas: {}, entradas: {} },
+            indice === 0 ? enProduccionHoy : {},
         )
         inicial = Object.fromEntries(columnas.map(columna => [columna.clave, columna.libre]))
         return { fecha, columnas, demanda }

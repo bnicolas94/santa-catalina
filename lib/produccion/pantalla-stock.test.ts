@@ -49,10 +49,15 @@ test('encadena el stock libre de cada día futuro sin inventar producción', () 
 
     const demandas = leerDemandasPaqTotales(matriz, '2026-09-24')
     assert.deepEqual(demandas.map(dia => dia.fecha), ['2026-09-24', '2026-09-25', '2026-09-26'])
-    const dias = calcularProyeccionDias({ 'JQ:48': 64 }, { 'JQ:48': 6 }, demandas)
+    const dias = calcularProyeccionDias(
+        { 'JQ:48': 64 }, { 'JQ:48': 6 }, demandas,
+        { salidas: {}, entradas: {} }, { 'JQ:48': 10 },
+    )
     assert.equal(dias[0].columnas[0].libre, 37)
+    assert.equal(dias[0].columnas[0].stockTeorico, 47)
     assert.equal(dias[1].columnas[0].stockInicial, 37)
     assert.equal(dias[1].columnas[0].produccion, 0)
+    assert.equal(dias[1].columnas[0].enProduccion, 0)
     assert.equal(dias[1].columnas[0].libre, 29)
     assert.equal(dias[2].columnas[0].stockInicial, 29)
     assert.equal(dias[2].columnas[0].libre, 26)
@@ -86,9 +91,13 @@ test('muestra los lotes abiertos por presentación sin sumarlos al stock libre',
     ])
     assert.deepEqual(enProduccion, { jq48: 42, esp48: 7 })
     const demanda = leerDemandaPaqTotales(filas(), '2026-09-24')
-    const [jq48] = calcularDisponibilidad({ 'JQ:48': 46 }, {}, demanda)
+    const [jq48] = calcularDisponibilidad(
+        { 'JQ:48': 46 }, {}, demanda, { salidas: {}, entradas: {} }, { 'JQ:48': enProduccion.jq48 },
+    )
     assert.equal(jq48.produccion, 0)
+    assert.equal(jq48.enProduccion, 42)
     assert.equal(jq48.libre, 13)
+    assert.equal(jq48.stockTeorico, 55)
 })
 
 test('oculta cada turno a las 13, 16 y 21 sin alterar el total reservado', () => {

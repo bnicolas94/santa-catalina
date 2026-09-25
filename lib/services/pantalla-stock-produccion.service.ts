@@ -187,22 +187,20 @@ async function obtenerPantallaStockProduccionUnaVez() {
     const enProduccionPorId = calcularPaquetesEnProduccion(lotesEnProduccion)
     const inicial: CantidadesPantalla = {}
     const producido: CantidadesPantalla = {}
+    const enProduccion: CantidadesPantalla = {}
     const salidas: CantidadesPantalla = {}
     const entradas: CantidadesPantalla = {}
     for (const columna of COLUMNAS_PANTALLA) {
         const id = porClave.get(columna.clave)!
         inicial[columna.clave] = inicialPorId[id] ?? 0
         producido[columna.clave] = producidoPorId[id] ?? 0
+        enProduccion[columna.clave] = enProduccionPorId[id] ?? 0
         salidas[columna.clave] = trasladosPorId.salidas[id] ?? 0
         entradas[columna.clave] = trasladosPorId.entradas[id] ?? 0
     }
-    const dias = calcularProyeccionDias(inicial, producido, excel.demandas, { salidas, entradas })
+    const dias = calcularProyeccionDias(inicial, producido, excel.demandas, { salidas, entradas }, enProduccion)
         .map((dia, indice) => ({
             ...dia,
-            columnas: dia.columnas.map(columna => ({
-                ...columna,
-                enProduccion: indice === 0 ? enProduccionPorId[porClave.get(columna.clave)!] ?? 0 : 0,
-            })),
             turnosVisibles: indice === 0 ? turnosVisibles(minutos) : [...TURNOS_PANTALLA],
         }))
     return {

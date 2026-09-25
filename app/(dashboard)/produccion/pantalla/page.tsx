@@ -13,6 +13,7 @@ type Columna = {
     stockInicial: number
     produccion: number
     enProduccion: number
+    stockTeorico: number
     recibido: number
     enviado: number
     agendado: number
@@ -182,11 +183,17 @@ export default function PantallaStockProduccion() {
                             </td>)}
                         </tr>)}
                     </tbody>
-                    <tfoot><tr><th scope="row">Stock libre para demanda</th>
+                    <tfoot><tr className={hayLotesAbiertos ? styles.libreConTeorico : ''}><th scope="row">Stock libre para demanda</th>
                         {dia.columnas.map(columna => <td key={columna.clave} className={columna.libre < 0 ? styles.faltante : ''}>
                             {columna.libre}
                         </td>)}
-                    </tr></tfoot>
+                    </tr>
+                        {hayLotesAbiertos && <tr className={styles.filaTeorica}><th scope="row">Teórico con lotes</th>
+                            {dia.columnas.map(columna => <td key={columna.clave} className={columna.stockTeorico < 0 ? styles.teoricoFaltante : ''}>
+                                {columna.stockTeorico}
+                            </td>)}
+                        </tr>}
+                    </tfoot>
                 </table>
             </div>
             <section className={styles.tarjetas} aria-label="Stock por producto">
@@ -199,6 +206,9 @@ export default function PantallaStockProduccion() {
                         <span>Stock libre para demanda</span>
                         <strong>{columna.libre}</strong>
                     </div>
+                    {hayLotesAbiertos && <div className={`${styles.teoricoTarjeta} ${columna.stockTeorico < 0 ? styles.teoricoTarjetaFaltante : ''}`}>
+                        <span>Teórico con lotes</span><strong>{columna.stockTeorico}</strong>
+                    </div>}
                     <dl className={styles.detalle}>
                         <div><dt>Stock inicial</dt><dd>{columna.stockInicial}</dd></div>
                         <div className={styles.detalleProduccion}><dt>+ Producido {esHoy ? 'hoy' : 'registrado'}</dt><dd>{columna.produccion}</dd></div>
@@ -238,7 +248,7 @@ export default function PantallaStockProduccion() {
                     : 'El total de pedidos incluye los tres turnos, incluso cuando uno ya no aparece en el detalle.'
                 : 'Proyección con pedidos agendados. La producción futura se suma cuando se registre en el ERP.'}</p>
             {hayLotesAbiertos && <p className={styles.nota}>
-                Los paquetes en producción son de lotes abiertos: se suman al stock libre cuando se cierran e ingresan a stock.
+                Teórico = stock libre + paquetes en producción. Es una estimación: puede variar por rechazos o cambios de presentación al cerrar los lotes.
             </p>}
         </>}
     </main>

@@ -35,6 +35,10 @@
 .turno:nth-child(odd) { background: #142d38; }
 .tabla tfoot tr { background: #0f574b; color: #fff; }
 .tabla tfoot th, .tabla tfoot td { position: sticky; bottom: 0; z-index: 2; border-bottom: 0; background: #0f574b; box-shadow: 0 -4px 16px #0005; }
+.tabla tfoot .libreConTeorico th, .tabla tfoot .libreConTeorico td { bottom: 44px; }
+.tabla tfoot .filaTeorica { height: 44px; color: #ffe0a3; }
+.tabla tfoot .filaTeorica th, .tabla tfoot .filaTeorica td { height: 44px; padding: 4px 8px; border-top: 1px solid #416b60; background: #174237; box-shadow: none; font-size: clamp(16px, 1.7vw, 22px); }
+.tabla tfoot .filaTeorica .teoricoFaltante { color: #ffc2b8; background: #66302e; }
 .tabla .faltante { color: #ffc2b8; background: #8d2d2d; }
 .tarjetas { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; }
 .tarjeta { min-width: 0; overflow: hidden; border: 1px solid #31515b; border-radius: 16px; background: #19313b; box-shadow: 0 12px 30px #0003; }
@@ -54,6 +58,9 @@
 .libre span { max-width: 13ch; font-size: clamp(14px, 2.6vw, 18px); font-weight: 800; line-height: 1.15; }
 .libre strong { font-size: clamp(35px, 7vw, 48px); line-height: 1; font-variant-numeric: tabular-nums; }
 .libreNegativo { background: #8d2d2d; color: #fff; }
+.teoricoTarjeta { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding: 6px 16px; background: #174237; color: #ffe0a3; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.teoricoTarjeta strong { font-size: 24px; }
+.teoricoTarjetaFaltante { color: #ffc2b8; background: #66302e; }
 .desgloseTarjeta { padding-top: 8px; background: #142d38; }
 .desgloseTarjeta p { margin: 0; padding: 0 16px; color: #b8cad1; font-size: 13px; font-weight: 700; }
 .desgloseTarjeta .detalle > div { min-height: 39px; }
