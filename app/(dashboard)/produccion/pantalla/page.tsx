@@ -155,7 +155,7 @@ export default function PantallaStockProduccion() {
                         </th>)}
                     </tr></thead>
                     <tbody>
-                        <tr className={styles.inicial}><th scope="row">Stock inicial</th>
+                        <tr className={styles.inicial}><th scope="row">Stock inicial · fábrica y sucursales</th>
                             {dia.columnas.map(columna => <td key={columna.clave}>{columna.stockInicial}</td>)}
                         </tr>
                         <tr className={styles.produccion}><th scope="row">+ Producido {esHoy ? 'hoy' : 'registrado'}</th>
@@ -210,7 +210,7 @@ export default function PantallaStockProduccion() {
                         <span>Teórico con lotes</span><strong>{columna.stockTeorico}</strong>
                     </div>}
                     <dl className={styles.detalle}>
-                        <div><dt>Stock inicial</dt><dd>{columna.stockInicial}</dd></div>
+                        <div><dt>Stock inicial · fábrica y sucursales</dt><dd>{columna.stockInicial}</dd></div>
                         <div className={styles.detalleProduccion}><dt>+ Producido {esHoy ? 'hoy' : 'registrado'}</dt><dd>{columna.produccion}</dd></div>
                         {columna.enProduccion > 0 && <div className={styles.detalleEnProduccion}>
                             <dt>En producción · no disponible</dt><dd>{columna.enProduccion}</dd>

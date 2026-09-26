@@ -3,7 +3,8 @@ import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import {
     calcularPaquetesEnProduccion, calcularProyeccionDias, calcularStockDesdeFoto, COLUMNAS_PANTALLA, HORARIOS_TURNOS_PANTALLA,
-    leerDemandasPaqTotales, TURNOS_PANTALLA, turnosVisibles, type CantidadesPantalla, type DemandaPorFecha,
+    leerDemandasPaqTotales, reconstruirCantidadesAlTomarFoto, TURNOS_PANTALLA, turnosVisibles,
+    type CantidadesPantalla, type DemandaPorFecha,
 } from '@/lib/produccion/pantalla-stock'
 
 const DURACION_CACHE_MS = 120_000
@@ -127,18 +128,41 @@ function horaArgentina(ahora: Date) {
 async function obtenerFotoInicial(fecha: string, idsPresentacion: string[]) {
     const clave = `produccion:pantalla:stock-inicial:${fecha}`
     const existente = await prisma.configuracionGlobal.findUnique({ where: { clave } })
-    if (existente) return JSON.parse(existente.valor) as { tomadoAt: string; cantidades: CantidadesPantalla }
+    if (existente) return JSON.parse(existente.valor) as { tomadoAt: string; cantidades: CantidadesPantalla; alcance?: string }
     const stocks = await prisma.stockProducto.findMany({
-        where: { presentacionId: { in: idsPresentacion }, ubicacion: { tipo: 'FABRICA' } },
+        where: { presentacionId: { in: idsPresentacion }, ubicacion: { tipo: { in: ['FABRICA', 'LOCAL'] } } },
         select: { presentacionId: true, cantidad: true },
     })
     const cantidades: CantidadesPantalla = {}
     for (const stock of stocks) cantidades[stock.presentacionId] = (cantidades[stock.presentacionId] ?? 0) + stock.cantidad
-    const valor = JSON.stringify({ tomadoAt: new Date().toISOString(), cantidades })
+    const valor = JSON.stringify({ tomadoAt: new Date().toISOString(), cantidades, alcance: 'FABRICA_LOCAL' })
     const guardado = await prisma.configuracionGlobal.upsert({
         where: { clave }, create: { clave, valor }, update: {},
     })
-    return JSON.parse(guardado.valor) as { tomadoAt: string; cantidades: CantidadesPantalla }
+    return JSON.parse(guardado.valor) as { tomadoAt: string; cantidades: CantidadesPantalla; alcance?: string }
+}
+
+async function incluirSucursalesEnFoto(foto: { tomadoAt: string; cantidades: CantidadesPantalla; alcance?: string }, ids: string[]) {
+    if (foto.alcance === 'FABRICA_LOCAL') return foto
+    const [stocks, movimientos] = await prisma.$transaction(async tx => {
+        const stocksLocal = await tx.stockProducto.findMany({
+            where: { presentacionId: { in: ids }, ubicacion: { tipo: 'LOCAL' } },
+            select: { presentacionId: true, cantidad: true },
+        })
+        const movimientosLocal = await tx.movimientoProducto.findMany({
+            where: { presentacionId: { in: ids }, ubicacion: { tipo: 'LOCAL' }, fecha: { gt: new Date(foto.tomadoAt) } },
+            select: { presentacionId: true, signo: true, cantidad: true },
+        })
+        return [stocksLocal, movimientosLocal] as const
+    }, { isolationLevel: 'RepeatableRead' })
+    const actual: CantidadesPantalla = {}
+    for (const stock of stocks) actual[stock.presentacionId] = (actual[stock.presentacionId] ?? 0) + stock.cantidad
+    const sucursalesAlTomarFoto = reconstruirCantidadesAlTomarFoto(actual, movimientos)
+    const cantidades = { ...foto.cantidades }
+    for (const [id, cantidad] of Object.entries(sucursalesAlTomarFoto)) {
+        cantidades[id] = (cantidades[id] ?? 0) + cantidad
+    }
+    return { ...foto, cantidades, alcance: 'FABRICA_LOCAL' }
 }
 
 async function obtenerPantallaStockProduccionUnaVez() {
@@ -159,21 +183,26 @@ async function obtenerPantallaStockProduccionUnaVez() {
         if (!porClave.has(columna.clave)) throw new Error(`Falta configurar la presentación ${columna.encabezado} en el ERP.`)
     }
     const ids = [...porClave.values()]
-    const foto = await obtenerFotoInicial(fecha, ids)
+    const foto = await incluirSucursalesEnFoto(await obtenerFotoInicial(fecha, ids), ids)
     const finDia = new Date(`${fecha}T00:00:00Z`)
     finDia.setUTCDate(finDia.getUTCDate() + 1)
     const [movimientos, lotesEnProduccion] = await Promise.all([
         prisma.movimientoProducto.findMany({
             where: {
-                presentacionId: { in: ids }, ubicacion: { tipo: 'FABRICA' },
+                presentacionId: { in: ids },
                 fecha: { gte: new Date(`${fecha}T09:00:00-03:00`), lte: ahora },
                 OR: [
-                    { tipo: 'ajuste' },
-                    { tipo: 'traslado' },
-                    { loteId: { not: null }, tipo: { in: ['produccion', 'ajuste_produccion', 'anulacion_produccion'] } },
+                    { ubicacion: { tipo: 'FABRICA' }, OR: [
+                        { tipo: 'ajuste' }, { tipo: 'traslado' },
+                        { loteId: { not: null }, tipo: { in: ['produccion', 'ajuste_produccion', 'anulacion_produccion'] } },
+                    ] },
+                    { ubicacion: { tipo: 'LOCAL' }, tipo: 'ajuste' },
                 ],
             },
-            select: { presentacionId: true, signo: true, cantidad: true, tipo: true, fecha: true },
+            select: {
+                presentacionId: true, signo: true, cantidad: true, tipo: true, fecha: true,
+                ubicacion: { select: { tipo: true } },
+            },
         }),
         prisma.lote.findMany({
             where: {
@@ -183,22 +212,23 @@ async function obtenerPantallaStockProduccionUnaVez() {
             select: { unidadesProducidas: true, distribucion: true },
         }),
     ])
-    const { inicial: inicialPorId, producido: producidoPorId, traslados: trasladosPorId, ultimoAjuste } = calcularStockDesdeFoto(foto, movimientos)
+    const { inicial: inicialPorId, producido: producidoPorId, traslados: trasladosPorId, ultimoAjuste } = calcularStockDesdeFoto(
+        foto, movimientos.map(movimiento => ({ ...movimiento, ubicacionTipo: movimiento.ubicacion.tipo })),
+        { reconstruirTrasladosPrevios: false },
+    )
     const enProduccionPorId = calcularPaquetesEnProduccion(lotesEnProduccion)
     const inicial: CantidadesPantalla = {}
     const producido: CantidadesPantalla = {}
     const enProduccion: CantidadesPantalla = {}
     const salidas: CantidadesPantalla = {}
-    const entradas: CantidadesPantalla = {}
     for (const columna of COLUMNAS_PANTALLA) {
         const id = porClave.get(columna.clave)!
         inicial[columna.clave] = inicialPorId[id] ?? 0
         producido[columna.clave] = producidoPorId[id] ?? 0
         enProduccion[columna.clave] = enProduccionPorId[id] ?? 0
         salidas[columna.clave] = trasladosPorId.salidas[id] ?? 0
-        entradas[columna.clave] = trasladosPorId.entradas[id] ?? 0
     }
-    const dias = calcularProyeccionDias(inicial, producido, excel.demandas, { salidas, entradas }, enProduccion)
+    const dias = calcularProyeccionDias(inicial, producido, excel.demandas, { salidas, entradas: {} }, enProduccion)
         .map((dia, indice) => ({
             ...dia,
             turnosVisibles: indice === 0 ? turnosVisibles(minutos) : [...TURNOS_PANTALLA],

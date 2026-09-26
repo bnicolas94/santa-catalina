@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath } from '../access-control'
-import { calcularDisponibilidad, calcularPaquetesEnProduccion, calcularProyeccionDias, calcularStockDesdeFoto, leerDemandaPaqTotales, leerDemandasPaqTotales, turnosVisibles } from './pantalla-stock'
+import { calcularDisponibilidad, calcularPaquetesEnProduccion, calcularProyeccionDias, calcularStockDesdeFoto, leerDemandaPaqTotales, leerDemandasPaqTotales, reconstruirCantidadesAlTomarFoto, turnosVisibles } from './pantalla-stock'
 
 function filas() {
     const encabezados = Array(18).fill('')
@@ -157,6 +157,39 @@ test('reconstruye los traslados anteriores a la foto sin descontarlos dos veces'
     assert.equal(inicial.jq48, 100)
     assert.equal(traslados.salidas.jq48, 15)
     assert.equal(traslados.entradas.jq48, 2)
+})
+
+test('reconstruye el stock de sucursales a la hora de una foto antigua', () => {
+    const sucursalAlTomarFoto = reconstruirCantidadesAlTomarFoto(
+        { jq48: 24, cla48: 16 },
+        [
+            { presentacionId: 'jq48', signo: 'entrada', cantidad: 10 },
+            { presentacionId: 'jq48', signo: 'salida', cantidad: 4 },
+            { presentacionId: 'cla48', signo: 'salida', cantidad: 3 },
+        ],
+    )
+    assert.deepEqual(sucursalAlTomarFoto, { jq48: 18, cla48: 19 })
+})
+
+test('el stock conjunto conserva los traslados internos y suma ajustes de sucursal', () => {
+    const movimientos = [
+        { presentacionId: 'jq48', tipo: 'produccion', signo: 'entrada', cantidad: 8, fecha: new Date('2026-09-26T12:05:00Z'), ubicacionTipo: 'FABRICA' },
+        { presentacionId: 'jq48', tipo: 'traslado', signo: 'salida', cantidad: 10, fecha: new Date('2026-09-26T12:10:00Z'), ubicacionTipo: 'FABRICA' },
+        { presentacionId: 'jq48', tipo: 'ajuste', signo: 'salida', cantidad: 2, fecha: new Date('2026-09-26T12:25:00Z'), ubicacionTipo: 'LOCAL' },
+    ]
+    const { inicial, producido, traslados } = calcularStockDesdeFoto(
+        { tomadoAt: '2026-09-26T12:20:00Z', cantidades: { jq48: 100 } },
+        movimientos, { reconstruirTrasladosPrevios: false },
+    )
+    assert.equal(inicial.jq48, 90)
+    assert.equal(producido.jq48, 8)
+    assert.equal(traslados.salidas.jq48, 10)
+    const demanda = leerDemandaPaqTotales(filas(), '2026-09-24')
+    const [columna] = calcularDisponibilidad(
+        { 'JQ:48': inicial.jq48 }, { 'JQ:48': producido.jq48 }, demanda,
+        { salidas: { 'JQ:48': 10 }, entradas: {} },
+    )
+    assert.equal(columna.libre, 65)
 })
 
 test('una columna movida o una fecha duplicada detiene el cálculo', () => {

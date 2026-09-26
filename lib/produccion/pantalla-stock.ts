@@ -19,6 +19,21 @@ export type DemandaPantalla = Record<TurnoPantalla, CantidadesPantalla>
 export type DemandaPorFecha = { fecha: string; demanda: DemandaPantalla }
 export type TrasladosPantalla = { salidas: CantidadesPantalla; entradas: CantidadesPantalla }
 
+export function reconstruirCantidadesAlTomarFoto(
+    actuales: CantidadesPantalla,
+    movimientosPosteriores: Array<{ presentacionId: string; signo: string; cantidad: number }>,
+): CantidadesPantalla {
+    const alTomarFoto = { ...actuales }
+    for (const movimiento of movimientosPosteriores) {
+        if (movimiento.signo !== 'entrada' && movimiento.signo !== 'salida') {
+            throw new Error(`Signo de movimiento de producto inválido: ${movimiento.signo}.`)
+        }
+        const cambio = movimiento.signo === 'entrada' ? movimiento.cantidad : -movimiento.cantidad
+        alTomarFoto[movimiento.presentacionId] = (alTomarFoto[movimiento.presentacionId] ?? 0) - cambio
+    }
+    return alTomarFoto
+}
+
 export function calcularPaquetesEnProduccion(lotes: Array<{ unidadesProducidas: number; distribucion: unknown }>): CantidadesPantalla {
     const cantidades: CantidadesPantalla = {}
     for (const lote of lotes) {
@@ -143,7 +158,8 @@ export function calcularStockDesdeFoto(foto: { tomadoAt: string; cantidades: Can
     signo: string
     cantidad: number
     fecha: Date
-}>) {
+    ubicacionTipo?: string
+}>, opciones: { reconstruirTrasladosPrevios?: boolean } = {}) {
     const producido: CantidadesPantalla = {}
     const ajustes: CantidadesPantalla = {}
     const producidoAntesDeFoto: CantidadesPantalla = {}
@@ -160,12 +176,12 @@ export function calcularStockDesdeFoto(foto: { tomadoAt: string; cantidades: Can
         if (movimiento.tipo === 'ajuste') {
             if (movimiento.fecha <= tomadoAt) continue
             ajustes[movimiento.presentacionId] = (ajustes[movimiento.presentacionId] ?? 0) + cantidad
-            presentacionesCorregidas.add(movimiento.presentacionId)
+            if (movimiento.ubicacionTipo !== 'LOCAL') presentacionesCorregidas.add(movimiento.presentacionId)
             if (!ultimoAjuste || movimiento.fecha > ultimoAjuste) ultimoAjuste = movimiento.fecha
         } else if (movimiento.tipo === 'traslado') {
             const destino = movimiento.signo === 'salida' ? traslados.salidas : traslados.entradas
             destino[movimiento.presentacionId] = (destino[movimiento.presentacionId] ?? 0) + movimiento.cantidad
-            if (movimiento.fecha <= tomadoAt) {
+            if (movimiento.fecha <= tomadoAt && opciones.reconstruirTrasladosPrevios !== false) {
                 trasladoNetoAntesDeFoto[movimiento.presentacionId] =
                     (trasladoNetoAntesDeFoto[movimiento.presentacionId] ?? 0) + cantidad
             }
