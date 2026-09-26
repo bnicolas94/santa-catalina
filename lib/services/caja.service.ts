@@ -400,8 +400,11 @@ export class CajaService {
             if (movimiento.cajaOrigen === input.cajaNueva) {
                 throw new Error('La nueva caja debe ser diferente de la caja actual.')
             }
-            const caja = await tx.saldoCaja.findUnique({ where: { tipo: input.cajaNueva } })
+            const caja = await tx.saldoCaja.findUnique({ where: { tipo: input.cajaNueva }, include: { ubicacion: true } })
             if (!caja) throw new Error(`La caja '${input.cajaNueva}' no existe.`)
+            if (!caja.activo || caja.ubicacion?.activo === false) {
+                throw new Error(`La caja '${caja.nombre || input.cajaNueva}' no está activa.`)
+            }
 
             const cajaAnterior = movimiento.cajaOrigen
             const medioAnterior = movimiento.medioPago

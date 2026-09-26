@@ -1,6 +1,7 @@
 export interface CajaLiquidacion {
     tipo: string
     nombre?: string | null
+    saldo?: number
     activo: boolean
     ubicacionId?: string | null
     recibeDepositos?: boolean
@@ -36,4 +37,3 @@ export function cajaSugeridaParaEmpleado(
     if (cajaPredeterminada && activas.some(caja => caja.tipo === cajaPredeterminada)) return cajaPredeterminada
     return [...activas].sort((a, b) => prioridadCaja(a) - prioridadCaja(b))[0]?.tipo || ''
 }
-

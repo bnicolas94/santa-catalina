@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { cajasActivasParaLiquidacion, type CajaLiquidacion } from '@/lib/payroll/cajasLiquidacion'
 
 interface Caja {
     id: string
@@ -41,14 +42,14 @@ export function CambiarCajaPagoButton({ movimientoId, cajaActual, onSuccess, lab
             const respuesta = await fetch('/api/caja/saldos')
             const data = await respuesta.json()
             if (!respuesta.ok) throw new Error(data.error || 'No se pudieron cargar las cajas.')
-            const disponibles = [
-                { id: 'caja_madre', nombre: 'Caja Fuerte Oficina', saldo: data.cajaMadre?.saldo || 0 },
-                { id: 'caja_chica', nombre: 'Caja Chica (Fábrica)', saldo: data.cajaChica?.saldo || 0 },
-                { id: 'local', nombre: 'Caja Fuerte Local', saldo: data.local?.saldo || 0 },
-                { id: 'caja_chica_local', nombre: 'Caja Chica Local', saldo: data.cajaChicaLocal?.saldo || 0 },
-                { id: 'mercado_pago', nombre: 'Mercado Pago', saldo: data.mercadoPago?.saldo || 0 },
-                { id: 'mercado_pago_juani', nombre: 'MP Juani', saldo: data.mercadoPagoJuani?.saldo || 0 },
-            ].filter(caja => caja.id !== cajaActual)
+            const catalogo = Array.isArray(data.cajas) ? data.cajas as Array<CajaLiquidacion & { saldo?: number }> : []
+            const disponibles = cajasActivasParaLiquidacion(catalogo)
+                .filter(caja => caja.tipo !== cajaActual)
+                .map(caja => ({
+                    id: caja.tipo,
+                    nombre: `${caja.nombre || caja.tipo}${caja.ubicacion?.nombre ? ` · ${caja.ubicacion.nombre}` : ''}`,
+                    saldo: Number(caja.saldo) || 0,
+                }))
             setCajas(disponibles)
             setCajaNueva(disponibles[0]?.id || '')
         } catch (fetchError) {
@@ -97,7 +98,11 @@ export function CambiarCajaPagoButton({ movimientoId, cajaActual, onSuccess, lab
                     <div className="form-group">
                         <label className="form-label">Nueva caja de origen</label>
                         <select className="form-select" value={cajaNueva} onChange={evento => setCajaNueva(evento.target.value)} disabled={cargando || guardando}>
-                            {cargando ? <option>Cargando…</option> : cajas.map(caja => <option value={caja.id} key={caja.id}>{caja.nombre} · {dinero(caja.saldo)}</option>)}
+                            {cargando
+                                ? <option>Cargando…</option>
+                                : cajas.length > 0
+                                    ? cajas.map(caja => <option value={caja.id} key={caja.id}>{caja.nombre} · {dinero(caja.saldo)}</option>)
+                                    : <option value="">No hay otra caja activa disponible</option>}
                         </select>
                     </div>
                     <div className="form-group">
