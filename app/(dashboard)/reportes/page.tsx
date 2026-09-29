@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import {
     Chart as ChartJS, CategoryScale, LinearScale, BarElement,
     LineElement, PointElement, Title, Tooltip, Legend, ArcElement, Filler
@@ -300,6 +301,7 @@ export default function ReportesPage() {
     // --- Render ---
     return (
         <div className="fade-in">
+            <div style={{ padding: '12px 20px' }}><Link href="/reportes/whatsapp">Ver estadísticas de WhatsApp →</Link></div>
             <PeriodoSelector
                 granularidad={granularidad} rango={rangoFechas} ubicacionId={ubicacionId}
                 activeSection={activeSection} loading={loading}

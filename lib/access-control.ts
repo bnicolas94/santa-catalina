@@ -91,6 +91,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/reportes/caja', permissions: ['permisoCaja', 'permisoReportes'], legacyRoles: ['ADMIN'] },
     { path: '/api/reportes/costos', permissions: ['permisoCostos', 'permisoReportes'], legacyRoles: ['ADMIN'] },
     { path: '/api/reportes/rrhh', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/reportes/whatsapp/conexiones', legacyRoles: ['ADMIN'] },
     { path: '/api/reportes', permissions: ['permisoReportes'], legacyRoles: ['ADMIN'] },
 
     // Clientes, pedidos e importaciones comerciales.

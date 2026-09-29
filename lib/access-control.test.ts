@@ -2,6 +2,18 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath, getAccessRule } from './access-control'
 
+test('WhatsApp exige Reportes y sólo ADMIN administra las conexiones', () => {
+    for (const path of ['/reportes/whatsapp', '/api/reportes/whatsapp']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+    for (const path of ['/api/reportes/whatsapp/conexiones', '/api/reportes/whatsapp/conexiones/pc']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), false)
+    }
+})
+
 test('pedidos de local exige permiso de Reportes en página y API', () => {
     for (const path of ['/reportes/pedidos-local', '/api/reportes/pedidos-local']) {
         assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)

@@ -792,6 +792,44 @@ model SaldoCaja {
   @@map("saldos_caja")
 }
 
+model WhatsappStatsSource {
+  id         String               @id @default(uuid())
+  nombre     String
+  tokenHash  String               @unique @map("token_hash")
+  activo     Boolean              @default(true)
+  createdAt  DateTime             @default(now()) @map("created_at")
+  lastSeenAt DateTime?            @map("last_seen_at")
+  days       WhatsappStatsDaily[]
+  links      WhatsappStatsChatLink[]
+
+  @@map("whatsapp_stats_sources")
+}
+
+model WhatsappStatsDaily {
+  sourceId   String              @map("source_id")
+  date       String
+  snapshot   Json
+  receivedAt DateTime            @default(now()) @map("received_at")
+  source     WhatsappStatsSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([sourceId, date])
+  @@index([date])
+  @@map("whatsapp_stats_daily")
+}
+
+model WhatsappStatsChatLink {
+  sourceId   String              @map("source_id")
+  chatId     String              @map("chat_id")
+  phoneE164  String              @map("phone_e164")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  source     WhatsappStatsSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([sourceId, chatId])
+  @@index([phoneE164])
+  @@map("whatsapp_stats_chat_links")
+}
+
 model CodigoRelojEmpleado {
   id         String   @id @default(uuid())
   empleadoId String   @map("id_empleado")
