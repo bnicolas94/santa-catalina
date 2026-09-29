@@ -133,6 +133,11 @@ test('permisoCompras habilita compras y proveedores sin abrir Caja', () => {
     assert.equal(canAccessPath('/api/compras/cuenta-corriente', token), true)
     assert.equal(canAccessPath('/proveedores', token), true)
     assert.equal(canAccessPath('/api/proveedores', token), true)
+    for (const path of ['/proveedores/proveedor-1', '/api/proveedores/proveedor-1']) {
+        assert.equal(canAccessPath(path, token), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
     assert.equal(canAccessPath('/caja', token), false)
 })
 

@@ -1,5 +1,16 @@
 import { prisma } from '@/lib/prisma'
 import { NextResponse } from 'next/server'
+import { construirHistorialProveedor, resumirHistorialProveedor } from '@/lib/proveedores/historial'
+
+const pagosSelect = {
+    id: true, fecha: true, monto: true, medioPago: true, cajaOrigen: true,
+    tipo: true, estado: true, movimientoReversaDeId: true,
+} as const
+const sedeSelect = { id: true, nombre: true } as const
+const stockSelect = {
+    id: true, cantidad: true, costoTotal: true,
+    insumo: { select: { nombre: true, unidadMedida: true } },
+} as const
 
 // GET /api/proveedores/[id]
 export async function GET(
@@ -16,14 +27,6 @@ export async function GET(
                         familia: true
                     }
                 },
-                movimientosStock: {
-                    orderBy: { fecha: 'desc' },
-                    take: 50,
-                    include: {
-                        insumo: true,
-                        ubicacion: true
-                    }
-                },
                 _count: {
                     select: {
                         insumos: true,
@@ -38,15 +41,47 @@ export async function GET(
             return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 })
         }
 
-        const comprasHistoricas = await prisma.movimientoStock.count({
-            where: { proveedorId: id, tipo: 'entrada', compraId: null }
+        const [compras, historicos] = await Promise.all([
+            prisma.compra.findMany({
+                where: { proveedorId: id },
+                select: {
+                    id: true, numeroFactura: true, fechaFactura: true, fechaMovimiento: true,
+                    costoTotal: true, montoPagado: true, observaciones: true,
+                    ubicacion: { select: sedeSelect },
+                    movimientosStock: { where: { tipo: 'entrada' }, select: stockSelect },
+                    gastos: { select: {
+                        id: true, descripcion: true, monto: true, cantidad: true, tipoRegistro: true,
+                        categoria: { select: { nombre: true } }, movimientosCaja: { select: pagosSelect },
+                    } },
+                },
+            }),
+            prisma.movimientoStock.findMany({
+                where: { proveedorId: id, tipo: 'entrada', compraId: null },
+                select: {
+                    ...stockSelect, numeroFactura: true, fechaFactura: true, fecha: true,
+                    montoPagado: true, estadoPago: true, observaciones: true,
+                    ubicacion: { select: sedeSelect },
+                    gasto: { select: { id: true, movimientosCaja: { select: pagosSelect } } },
+                },
+            }),
+        ])
+        const tiposCaja = [...new Set([
+            ...compras.flatMap(compra => compra.gastos.flatMap(gasto => gasto.movimientosCaja)),
+            ...historicos.flatMap(mov => mov.gasto?.movimientosCaja || []),
+        ].flatMap(mov => mov.cajaOrigen ? [mov.cajaOrigen] : []))]
+        const cajas = await prisma.saldoCaja.findMany({
+            where: { tipo: { in: tiposCaja } },
+            select: { tipo: true, nombre: true, ubicacion: { select: { nombre: true } } },
         })
+        const facturas = construirHistorialProveedor(compras, historicos, cajas)
 
         return NextResponse.json({
             ...proveedor,
+            facturas,
+            resumen: resumirHistorialProveedor(facturas),
             _count: {
                 ...proveedor._count,
-                compras: proveedor._count.compras + comprasHistoricas
+                compras: facturas.length
             }
         })
     } catch (error) {

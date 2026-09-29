@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, useCallback, use } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import HistorialProveedor from '@/components/proveedores/HistorialProveedor'
+import type { FacturaProveedor } from '@/lib/proveedores/historial'
+import styles from './page.module.css'
 
 interface Insumo {
     id: string
@@ -11,17 +13,6 @@ interface Insumo {
     stockActual: number
     precioUnitario: number
     familia: { nombre: string } | null
-}
-
-interface MovimientoStock {
-    id: string
-    tipo: string
-    cantidad: number
-    fecha: string
-    costoTotal: number | null
-    numeroFactura: string | null
-    insumo: { nombre: string }
-    ubicacion: { nombre: string } | null
 }
 
 interface Proveedor {
@@ -34,7 +25,14 @@ interface Proveedor {
     categoria: string | null
     activo: boolean
     insumos: Insumo[]
-    movimientosStock: MovimientoStock[]
+    facturas: FacturaProveedor[]
+    resumen: {
+        cantidadFacturas: number
+        totalFacturado: number
+        totalPagado: number
+        totalPendiente: number
+        sinDetallePago: number
+    }
     _count: {
         insumos: number
         movimientosStock: number
@@ -44,7 +42,6 @@ interface Proveedor {
 
 export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params)
-    const router = useRouter()
     const [proveedor, setProveedor] = useState<Proveedor | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -59,15 +56,12 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
         activo: true
     })
 
-    useEffect(() => {
-        fetchProveedor()
-    }, [id])
-
-    async function fetchProveedor() {
+    const fetchProveedor = useCallback(async (signal?: AbortSignal) => {
         try {
-            const res = await fetch(`/api/proveedores/${id}`)
+            const res = await fetch(`/api/proveedores/${id}`, { signal })
             if (!res.ok) throw new Error('No se pudo cargar el proveedor')
-            const data = await res.json()
+            const data: Proveedor = await res.json()
+            if (signal?.aborted) return
             setProveedor(data)
             setForm({
                 nombre: data.nombre,
@@ -78,12 +72,18 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
                 categoria: data.categoria || '',
                 activo: data.activo
             })
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err: unknown) {
+            if (!signal?.aborted) setError(err instanceof Error ? err.message : 'No se pudo cargar el proveedor')
         } finally {
-            setLoading(false)
+            if (!signal?.aborted) setLoading(false)
         }
-    }
+    }, [id])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        void fetchProveedor(controller.signal)
+        return () => { controller.abort() }
+    }, [fetchProveedor])
 
     async function handleUpdate(e: React.FormEvent) {
         e.preventDefault()
@@ -96,8 +96,8 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
             if (!res.ok) throw new Error('Error al actualizar')
             setIsEditing(false)
             fetchProveedor()
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al actualizar')
         }
     }
 
@@ -110,16 +110,14 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
             })
             if (!res.ok) throw new Error('Error al cambiar estado')
             fetchProveedor()
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al cambiar estado')
         }
     }
 
     if (loading) return <div className="p-8 text-center"><div className="spinner" /><p>Cargando perfil...</p></div>
     if (error) return <div className="p-8 text-center text-error">{error}</div>
     if (!proveedor) return <div className="p-8 text-center">Proveedor no encontrado</div>
-
-    const totalComprado = proveedor.movimientosStock.reduce((acc, mov) => acc + (mov.costoTotal || 0), 0)
 
     return (
         <div className="animate-in fade-in duration-500">
@@ -146,8 +144,23 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
-                {/* Sidebar: Datos y Stats */}
+            <div className={styles.resumen}>
+                {[
+                    { nombre: 'Total facturado', valor: proveedor.resumen.totalFacturado, dinero: true },
+                    { nombre: 'Total pagado', valor: proveedor.resumen.totalPagado, dinero: true },
+                    { nombre: 'Saldo pendiente', valor: proveedor.resumen.totalPendiente, dinero: true },
+                    { nombre: 'Facturas / compras', valor: proveedor.resumen.cantidadFacturas, dinero: false },
+                ].map(dato => <div key={dato.nombre} className="card"><div className="card-body">
+                    <span className="text-muted small">{dato.nombre}</span>
+                    <p className={styles.importe}>{dato.dinero ? dato.valor.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }) : dato.valor}</p>
+                    <span className="text-muted small">Todo el historial</span>
+                </div></div>)}
+            </div>
+            {proveedor.resumen.sinDetallePago > 0 && <p className={styles.aviso}>{proveedor.resumen.sinDetallePago} {proveedor.resumen.sinDetallePago === 1 ? 'factura tiene' : 'facturas tienen'} pagos sin detalle completo de medio, caja o fecha. Consultá el aviso en cada factura.</p>}
+            <HistorialProveedor key={proveedor.id} facturas={proveedor.facturas} />
+
+            <div className={styles.informacion}>
+                {/* Datos de contacto */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                     <div className="card">
                         <div className="card-header">
@@ -210,68 +223,10 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
                         )}
                     </div>
 
-                    <div className="card" style={{ background: 'var(--surface-variant)' }}>
-                        <div className="card-body">
-                            <div style={{ marginBottom: 'var(--space-4)' }}>
-                                <label className="text-muted small uppercase">Total Histórico Comprado</label>
-                                <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
-                                    ${totalComprado.toLocaleString('es-AR')}
-                                </p>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-                                <div>
-                                    <label className="text-muted small uppercase">Insumos</label>
-                                    <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>{proveedor._count.insumos}</p>
-                                </div>
-                                <div>
-                                    <label className="text-muted small uppercase">Compras</label>
-                                    <p style={{ fontSize: '1.2rem', fontWeight: 600 }}>{proveedor._count.compras}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-                {/* Main Content: Tabs/Lists */}
+                {/* Insumos vinculados */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                    {/* Historial de Compras */}
-                    <div className="card">
-                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3>Historial de Compras</h3>
-                            <span className="text-muted small">Últimos 50 movimientos</span>
-                        </div>
-                        <div className="table-container">
-                            <table className="table">
-                                <thead>
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Insumo</th>
-                                        <th>Cantidad</th>
-                                        <th>Factura</th>
-                                        <th>Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {proveedor.movimientosStock.length === 0 ? (
-                                        <tr><td colSpan={5} className="text-center p-4">Sin historial de compras</td></tr>
-                                    ) : (
-                                        proveedor.movimientosStock.map(mov => (
-                                            <tr key={mov.id}>
-                                                <td>{new Date(mov.fecha).toLocaleDateString()}</td>
-                                                <td style={{ fontWeight: 500 }}>{mov.insumo.nombre}</td>
-                                                <td>{mov.cantidad}</td>
-                                                <td>{mov.numeroFactura || 'S/N'}</td>
-                                                <td style={{ fontWeight: 600 }}>
-                                                    {mov.costoTotal ? `$${mov.costoTotal.toLocaleString('es-AR')}` : '—'}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
                     {/* Insumos Suministrados */}
                     <div className="card">
                         <div className="card-header">

@@ -27,6 +27,11 @@ Su propósito fundamental es centralizar la información de contacto de los prov
 
 ### 3. Interfaz de Usuario (Frontend)
 *   **`app/(dashboard)/proveedores/page.tsx`**: Dashboard principal que muestra la tabla de proveedores y el formulario (modal) para altas.
+*   **`app/(dashboard)/proveedores/[id]/page.tsx`**: Perfil con totales de todo el historial (facturado, pagado, pendiente y cantidad de facturas), información de contacto e insumos.
+*   **`components/proveedores/HistorialProveedor.tsx`**: Historial por factura, filtrable por búsqueda, sede de destino, estado de pago y fecha de factura, con páginas de diez. El detalle muestra insumos/servicios, observaciones y cada pago con fecha, importe, medio, caja y sede de la caja.
+*   **`lib/proveedores/historial.ts`**: Normaliza las cabeceras `Compra` y las entradas antiguas sin `compraId`. Los totales modernos usan exclusivamente la cabecera; los gastos de pago no se suman al costo. Los históricos con número se agrupan por número, fecha local y sede; sin número, sólo se agrupan cuando comparten gasto, fecha y sede. El estado histórico explícito `pagado` confirma el total aun cuando el circuito anterior dejó `montoPagado` en cero.
+
+El detalle de pagos usa únicamente egresos activos vinculados, excluye reversas y deduplica por ID. Si un pago está compartido entre facturas históricas distintas, o el importe pagado no tiene movimientos completos, aparece un aviso y no se inventan medio, caja ni fecha. La sede de destino de la compra es independiente de la sede de la caja que pagó. Los nombres de cajas incluyen las inactivas; no se consultan ni exponen sus saldos. Los totales corresponden a todo el historial, sin el antiguo recorte de 50 movimientos y sin depender de los filtros del listado.
 
 ---
 
@@ -84,10 +89,7 @@ Su propósito fundamental es centralizar la información de contacto de los prov
 
 ## 🚀 Posibles mejoras
 
-*   **Perfil de Proveedor**: Crear una vista detallada que muestre el historial de facturas, productos suministrados y saldo pendiente (si se implementan cuentas corrientes).
-*   **Borrado Lógico**: Implementar el toggle de `activo` en la interfaz de usuario.
 *   **Precios por Proveedor**: Registrar el último precio de compra por cada insumo vinculado al proveedor para análisis de costos.
-*   **Categorización**: Clasificar proveedores (ej: Materia Prima, Servicios, Mantenimiento).
 
 ---
 

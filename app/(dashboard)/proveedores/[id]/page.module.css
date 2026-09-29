@@ -1,0 +1,8 @@
+.resumen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-6) 0; }
+.importe { font-size: 1.5rem; font-weight: 700; color: var(--color-secondary); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.informacion { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); gap: var(--space-6); margin-top: var(--space-6); }
+.informacion > div { min-width: 0; }
+.aviso { margin-bottom: var(--space-4); color: var(--color-warning-dark, #8a5600); }
+@media (max-width: 1000px) { .resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 768px) { .informacion { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .resumen { grid-template-columns: 1fr; } }
