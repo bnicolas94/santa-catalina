@@ -40,6 +40,10 @@ export async function PATCH(request: Request) {
 
 export async function POST() {
     const usuario = await exigirAdmin(); if (usuario instanceof NextResponse) return usuario
-    try { return NextResponse.json(await sincronizarGoogleSheetsCaja(true)) }
+    try {
+        const resultado = await sincronizarGoogleSheetsCaja(true)
+        if (resultado.error) return NextResponse.json({ error: resultado.error }, { status: 502 })
+        return NextResponse.json(resultado)
+    }
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'No se pudo sincronizar.' }, { status: 502 }) }
 }

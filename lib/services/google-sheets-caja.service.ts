@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { evaluarFilaSheet, normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet, type FilaSheetCaja } from '@/lib/google-sheets-caja'
+import { construirUrlDescargaSheet, evaluarFilaSheet, normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet, type FilaSheetCaja } from '@/lib/google-sheets-caja'
 import { CajaService } from '@/lib/services/caja.service'
 
 const CONFIG_KEY = 'google-sheets:caja:config:v1'
@@ -107,7 +107,7 @@ export async function descargarHoja(spreadsheetId: string, gid: string) {
     const controlador = new AbortController()
     const timeout = setTimeout(() => controlador.abort(), 20000)
     try {
-        const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gid)}`
+        const url = construirUrlDescargaSheet(spreadsheetId, gid)
         const respuesta = await fetch(url, { cache: 'no-store', signal: controlador.signal })
         if (!respuesta.ok) throw new Error(`Google Sheets respondió ${respuesta.status}. Verificá que el archivo permita lectura mediante enlace.`)
         const texto = await respuesta.text()

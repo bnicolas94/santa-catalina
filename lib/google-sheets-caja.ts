@@ -57,6 +57,10 @@ export function rangoDiaArgentinaSheet(valor: string): { gte: Date; lt: Date } {
     }
 }
 
+export function construirUrlDescargaSheet(spreadsheetId: string, gid: string, cacheBuster = Date.now()) {
+    return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv&gid=${encodeURIComponent(gid)}&_=${cacheBuster}`
+}
+
 function encabezado(valor: unknown) {
     return normalizarTexto(valor).replace(/[^a-z0-9]/g, '')
 }

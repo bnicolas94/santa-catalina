@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { evaluarFilaSheet, normalizarImporte, normalizarTexto, parsearCsvSheetCaja, parsearFechaArgentina, rangoDiaArgentinaSheet } from './google-sheets-caja'
+import { construirUrlDescargaSheet, evaluarFilaSheet, normalizarImporte, normalizarTexto, parsearCsvSheetCaja, parsearFechaArgentina, rangoDiaArgentinaSheet } from './google-sheets-caja'
+
+test('descarga el CSV compacto y evita respuestas cacheadas de Google', () => {
+    assert.equal(
+        construirUrlDescargaSheet('sheet con espacios', 'gid/1', 1234),
+        'https://docs.google.com/spreadsheets/d/sheet%20con%20espacios/export?format=csv&gid=gid%2F1&_=1234',
+    )
+})
 
 test('lee las columnas financieras aunque Producto tenga saltos de línea', () => {
     const csv = 'ID,Fecha/Hora,Nombre,Apellido,Teléfono,Dirección,Producto,Cantidad,Precio,Pago,Modalidad,Ubicación,Estado\n' +
