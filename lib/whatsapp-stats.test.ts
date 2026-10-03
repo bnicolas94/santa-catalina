@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseStatsUpload, summarizeDailySnapshots } from './whatsapp-stats'
+import { comparisonRange, daysInRange, parseStatsUpload, summarizeDailySnapshots } from './whatsapp-stats'
 
 const snapshot = {
     date: '2026-09-26', incomingMessages: 1, outgoingMessages: 0,
@@ -22,4 +22,18 @@ test('sólo admite estadísticas coherentes y descarta campos extra', () => {
     assert.throws(() => parseStatsUpload({ snapshots: [{ ...snapshot, incomingMessages: 2 }], links: [] }))
     assert.throws(() => parseStatsUpload({ snapshots: [snapshot], links: [
         { chatId: 'a'.repeat(64), phoneE164: '+123' }] }))
+})
+
+test('compara el rango seleccionado con el período anterior, la semana y el mes anterior', () => {
+    assert.deepEqual(comparisonRange('2026-10-03', '2026-10-03', 'previous'),
+        { desde: '2026-10-02', hasta: '2026-10-02' })
+    assert.deepEqual(comparisonRange('2026-10-01', '2026-10-07', 'previous'),
+        { desde: '2026-09-24', hasta: '2026-09-30' })
+    assert.deepEqual(comparisonRange('2026-10-01', '2026-10-07', 'week'),
+        { desde: '2026-09-24', hasta: '2026-09-30' })
+    assert.deepEqual(comparisonRange('2026-03-01', '2026-03-31', 'month'),
+        { desde: '2026-02-01', hasta: '2026-02-28' })
+    assert.deepEqual(comparisonRange('2024-03-31', '2024-03-31', 'month'),
+        { desde: '2024-02-29', hasta: '2024-02-29' })
+    assert.equal(daysInRange('2026-09-24', '2026-09-30'), 7)
 })

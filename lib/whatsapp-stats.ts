@@ -19,9 +19,45 @@ export type DailySnapshot = {
 }
 
 export type ChatLink = { chatId: string; phoneE164: string }
+export type ComparisonMode = 'previous' | 'week' | 'month'
 
 const hashPattern = /^[a-f0-9]{64}$/
 const phonePattern = /^\+[1-9]\d{7,14}$/
+
+function dateUtc(value: string): Date {
+    return new Date(`${value}T00:00:00Z`)
+}
+
+function dateKey(value: Date): string {
+    return value.toISOString().slice(0, 10)
+}
+
+function shiftDays(value: string, offset: number): string {
+    const date = dateUtc(value)
+    date.setUTCDate(date.getUTCDate() + offset)
+    return dateKey(date)
+}
+
+function previousMonth(value: string): string {
+    const date = dateUtc(value)
+    const year = date.getUTCFullYear()
+    const month = date.getUTCMonth()
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+    return dateKey(new Date(Date.UTC(year, month - 1, Math.min(date.getUTCDate(), lastDay))))
+}
+
+export function comparisonRange(desde: string, hasta: string, mode: ComparisonMode) {
+    if (!validDate(desde) || !validDate(hasta) || desde > hasta) throw new Error('Rango inválido')
+    if (mode === 'month') return { desde: previousMonth(desde), hasta: previousMonth(hasta) }
+    const offset = mode === 'week' ? -7 : mode === 'previous'
+        ? -(Math.round((dateUtc(hasta).getTime() - dateUtc(desde).getTime()) / 86400000) + 1) : null
+    if (offset === null) throw new Error('Comparación inválida')
+    return { desde: shiftDays(desde, offset), hasta: shiftDays(hasta, offset) }
+}
+
+export function daysInRange(desde: string, hasta: string): number {
+    return Math.round((dateUtc(hasta).getTime() - dateUtc(desde).getTime()) / 86400000) + 1
+}
 
 function nonNegativeInteger(value: unknown): value is number {
     return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= 1_000_000_000

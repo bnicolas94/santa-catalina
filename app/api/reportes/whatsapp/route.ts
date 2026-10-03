@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { tienePermisoEnSesion } from '@/lib/auth/permisosSesion'
 import { prisma } from '@/lib/prisma'
 import { matchCustomersByPhone } from '@/lib/crm/customerPhoneMatch'
-import { parseStatsUpload, summarizeDailySnapshots, type DailySnapshot } from '@/lib/whatsapp-stats'
+import { comparisonRange, daysInRange, parseStatsUpload, summarizeDailySnapshots,
+    type ComparisonMode, type DailySnapshot } from '@/lib/whatsapp-stats'
 
 export async function GET(request: Request) {
     const session = await getServerSession(authOptions)
@@ -23,24 +24,40 @@ export async function GET(request: Request) {
     }).format(value)
     const hasta = params.get('hasta') || formatDate(new Date())
     const desde = params.get('desde') || formatDate(new Date(Date.now() - 6 * 86400000))
+    const compareParam = params.get('comparar')
+    const comparisonMode: ComparisonMode | null = compareParam === 'previous' || compareParam === 'week' || compareParam === 'month'
+        ? compareParam : null
     const start = Date.parse(`${desde}T00:00:00Z`)
     const end = Date.parse(`${hasta}T00:00:00Z`)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta) ||
-        !Number.isFinite(start) || !Number.isFinite(end) || desde > hasta || end - start > 365 * 86400000) {
+        !Number.isFinite(start) || !Number.isFinite(end) || desde > hasta || end - start > 365 * 86400000 ||
+        (compareParam !== null && compareParam !== 'none' && !comparisonMode)) {
         return NextResponse.json({ error: 'Elegí un rango de hasta 366 días' }, { status: 400 })
     }
     if (!source) return NextResponse.json({ sources, sourceId: null, desde, hasta,
         totals: null, days: [], matches: [], matching: null })
 
-    const rows = await prisma.whatsappStatsDaily.findMany({
-        where: { sourceId: source.id, date: { gte: desde, lte: hasta } }, orderBy: { date: 'asc' },
-    })
-    const days: DailySnapshot[] = []
-    for (const row of rows) {
-        try { days.push(parseStatsUpload({ snapshots: [row.snapshot], links: [] }).snapshots[0]) }
-        catch { /* un formato futuro no se atribuye a una métrica actual */ }
+    const loadDays = async (startDate: string, endDate: string): Promise<DailySnapshot[]> => {
+        const rows = await prisma.whatsappStatsDaily.findMany({
+            where: { sourceId: source.id, date: { gte: startDate, lte: endDate } }, orderBy: { date: 'asc' },
+        })
+        const result: DailySnapshot[] = []
+        for (const row of rows) {
+            try { result.push(parseStatsUpload({ snapshots: [row.snapshot], links: [] }).snapshots[0]) }
+            catch { /* un formato futuro no se atribuye a una métrica actual */ }
+        }
+        return result
     }
+    const comparedRange = comparisonMode ? comparisonRange(desde, hasta, comparisonMode) : null
+    const [days, comparedDays] = await Promise.all([
+        loadDays(desde, hasta), comparedRange ? loadDays(comparedRange.desde, comparedRange.hasta) : Promise.resolve([]),
+    ])
     const totals = summarizeDailySnapshots(days)
+    const comparison = comparedRange ? {
+        mode: comparisonMode, ...comparedRange, totals: summarizeDailySnapshots(comparedDays),
+        observedDays: comparedDays.length, expectedDays: daysInRange(comparedRange.desde, comparedRange.hasta),
+        days: comparedDays.map(({ uniqueChatIds, ...day }) => ({ ...day, uniqueChats: uniqueChatIds.length })),
+    } : null
     const canSeeClients = (session.user as { rol?: string }).rol === 'ADMIN' ||
         tienePermisoEnSesion(session, 'permisoClientes')
     const activeChats = new Set(days.flatMap((day) => day.uniqueChatIds))
@@ -69,5 +86,6 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ sources, sourceId: source.id, desde, hasta, totals,
         days: days.map(({ uniqueChatIds, ...day }) => ({ ...day, uniqueChats: uniqueChatIds.length })),
+        observedDays: days.length, expectedDays: daysInRange(desde, hasta), comparison,
         matches, matching }, { headers: { 'Cache-Control': 'private, no-store' } })
 }
