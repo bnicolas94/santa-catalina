@@ -34,6 +34,10 @@ interface ReporteFila {
     esMixtoEfectivo?: boolean
 }
 
+const formatearHoras = (horas: number) => horas.toLocaleString('es-AR', {
+    maximumFractionDigits: 2,
+})
+
 export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     const [fechaDesde, setFechaDesde] = useState(new Date().toISOString().split('T')[0])
     const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
@@ -149,8 +153,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 <td>${i + 1}</td>
                                 <td>${row.empleado}</td>
                                 <td>${row.periodo}</td>
-                                <td class="number">${row.horasExtras}</td>
-                                <td class="number">${row.ajusteHorasExtras || '-'}</td>
+                                <td class="number">${formatearHoras(row.horasExtras)}</td>
+                                <td class="number">${row.ajusteHorasExtras ? formatearHoras(row.ajusteHorasExtras) : '-'}</td>
                                 <td class="number">${row.montoHorasExtras.toLocaleString('es-AR')}</td>
                                 <td class="number">${row.totalBruto.toLocaleString('es-AR')}</td>
                                 <td class="number">${row.descuentos.toLocaleString('es-AR')}</td>
@@ -309,8 +313,8 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                     </div>
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
-                                                    {d.horasExtras !== 0 && <div>{d.horasExtras} h semana · ${(d.montoHorasExtras - (d.montoAjusteHorasExtras || 0)).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div>}
-                                                    {d.ajusteHorasExtras !== 0 && <div style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{d.ajusteHorasExtras} h ajuste/adeudadas · {(d.montoAjusteHorasExtras || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div>}
+                                                    {d.horasExtras !== 0 && <div>{formatearHoras(d.horasExtras)} h semana · ${(d.montoHorasExtras - (d.montoAjusteHorasExtras || 0)).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div>}
+                                                    {d.ajusteHorasExtras !== 0 && <div style={{ color: 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{formatearHoras(d.ajusteHorasExtras)} h ajuste/adeudadas · {(d.montoAjusteHorasExtras || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}</div>}
                                                     {d.horasExtras === 0 && d.ajusteHorasExtras === 0 && '-'}
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>${d.totalBruto.toLocaleString('es-AR')}</td>
