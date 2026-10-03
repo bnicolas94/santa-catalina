@@ -100,6 +100,7 @@ export default function WhatsappReportPage() {
     const referenceDays = new Map(comparison?.days.map((day) => [day.date, day]) || [])
     const dailyMetric = (day: Day | undefined) => day ? day[chartMetric] : Number.NaN
     const metricLabel = chartMetric === 'incomingMessages' ? 'Mensajes entrantes' : 'Clientes atendidos'
+    const dailyChartType = selectedDates.length < 2 || currentDays.size < 2 || referenceDays.size < 2 ? 'bar' : 'line'
     return <div style={{ padding: 24, display: 'grid', gap: 20 }}>
         <div><Link href="/reportes">← Reportes</Link><h1>WhatsApp · Estadísticas</h1>
             <p>Datos observados por la extensión. La cobertura depende de que WhatsApp Web y la computadora permanezcan activos.</p></div>
@@ -153,14 +154,17 @@ export default function WhatsappReportPage() {
                         <option value="incomingMessages">Mensajes entrantes</option>
                         <option value="uniqueChats">Clientes atendidos</option>
                     </select></p>
-                    <TrendChart title={`${metricLabel} por día · días alineados desde el inicio de cada rango`}
-                        labels={selectedDates.map((date, index) => `${shortDate(date)} / ${shortDate(referenceDates[index] || '')}`)}
-                        datasets={[
-                            { label: `Seleccionado (${report.desde} a ${report.hasta})`,
-                                data: selectedDates.map((date) => dailyMetric(currentDays.get(date))), color: '#f97316' },
-                            { label: `Referencia (${comparison.desde} a ${comparison.hasta})`,
-                                data: selectedDates.map((_, index) => dailyMetric(referenceDays.get(referenceDates[index]))), color: '#2563eb' },
-                        ]} type="line" height={260} />
+                    {dailyChartType === 'bar' && <p>Hay menos de dos días con datos en al menos un período; se muestran barras para que los valores diarios sean visibles.</p>}
+                    <div style={{ maxWidth: dailyChartType === 'bar' && selectedDates.length === 1 ? 440 : undefined }}>
+                        <TrendChart title={`${metricLabel} por día · días alineados desde el inicio de cada rango`}
+                            labels={selectedDates.map((date, index) => `${shortDate(date)} / ${shortDate(referenceDates[index] || '')}`)}
+                            datasets={[
+                                { label: `Seleccionado (${report.desde} a ${report.hasta})`,
+                                    data: selectedDates.map((date) => dailyMetric(currentDays.get(date))), color: '#f97316' },
+                                { label: `Referencia (${comparison.desde} a ${comparison.hasta})`,
+                                    data: selectedDates.map((_, index) => dailyMetric(referenceDays.get(referenceDates[index]))), color: '#2563eb' },
+                            ]} type={dailyChartType} height={260} />
+                    </div>
                     <TrendChart title={`${metricLabel} por hora · total de cada franja en el rango`}
                         labels={Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')} hs`)}
                         datasets={[
