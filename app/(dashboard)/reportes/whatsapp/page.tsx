@@ -56,8 +56,8 @@ export default function WhatsappReportPage() {
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
-    const load = useCallback(async () => {
-        setLoading(true)
+    const load = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true)
         try {
             const query = new URLSearchParams()
             if (sourceId) query.set('sourceId', sourceId)
@@ -70,9 +70,18 @@ export default function WhatsappReportPage() {
             setReport(body)
             setError('')
         } catch (caught) { setError(caught instanceof Error ? caught.message : 'Error de consulta') }
-        finally { setLoading(false) }
+        finally { if (!silent) setLoading(false) }
     }, [sourceId, desde, hasta, compareMode])
     useEffect(() => { void load() }, [load])
+    useEffect(() => {
+        const refresh = () => { if (document.visibilityState === 'visible') void load(true) }
+        const timer = window.setInterval(refresh, 60000)
+        document.addEventListener('visibilitychange', refresh)
+        return () => {
+            window.clearInterval(timer)
+            document.removeEventListener('visibilitychange', refresh)
+        }
+    }, [load])
 
     async function createSource() {
         setError('')
@@ -118,6 +127,7 @@ export default function WhatsappReportPage() {
                 <option value="month">Mes anterior (−1 mes)</option>
             </select></label>
             <button onClick={() => void load()} disabled={loading}>Actualizar</button>
+            <small>Se actualiza automáticamente cada minuto.</small>
             <span>{loading ? 'Cargando…' : report?.sources.find((source) => source.id === report.sourceId)?.lastSeenAt
                 ? `Última conexión: ${new Date(report.sources.find((source) => source.id === report.sourceId)!.lastSeenAt!).toLocaleString('es-AR')}` : 'Sin sincronización'}</span>
         </div>
