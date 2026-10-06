@@ -42,6 +42,9 @@ de stock y de los conceptos de gasto de la factura.
 - El listado de facturas con gastos se muestra en páginas de diez, permite buscar por
   proveedor, número, sede, descripción o categoría y resume los conceptos extensos.
   La paginación es sólo visual y no altera la información ni el orden cronológico.
+- El detalle desplegable de la cuenta corriente identifica la sede de destino de cada
+  factura. Las facturas históricas del mismo proveedor y número no se agrupan si
+  pertenecen a sedes distintas.
 - Los insumos inactivos pueden sugerirse como descripción de un gasto para
   conservar nombres habituales. Elegir esa sugerencia no vincula el concepto
   al inventario, no reactiva el insumo y no genera movimientos de stock.

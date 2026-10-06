@@ -2,6 +2,8 @@ export type FacturaCuentaCorriente = {
     id: string
     proveedorId: string | null
     proveedorNombre: string
+    ubicacionId: string | null
+    ubicacionNombre: string
     numeroFactura: string | null
     fecha: Date
     costoTotal: number
@@ -18,7 +20,7 @@ export function agruparMovimientosHistoricos(movimientos: MovimientoHistoricoCue
     for (const movimiento of movimientos) {
         const numero = movimiento.numeroFactura?.trim() || null
         const clave = numero
-            ? `${movimiento.proveedorId || 'sin-proveedor'}:${numero.toLocaleLowerCase('es-AR')}`
+            ? `${movimiento.proveedorId || 'sin-proveedor'}:${movimiento.ubicacionId || movimiento.ubicacionNombre}:${numero.toLocaleLowerCase('es-AR')}`
             : `movimiento:${movimiento.id}`
         const existente = grupos.get(clave)
         if (existente) {

@@ -4,19 +4,28 @@ import { agruparMovimientosHistoricos, resumirCuentaCorriente } from './cuenta-c
 
 test('agrupa los renglones históricos de una misma factura sin duplicarla', () => {
     const facturas = agruparMovimientosHistoricos([
-        { id: 'a', proveedorId: 'p1', proveedorNombre: 'Proveedor', numeroFactura: '100', fecha: new Date('2026-01-01'), costoTotal: 300, montoPagado: 50 },
-        { id: 'b', proveedorId: 'p1', proveedorNombre: 'Proveedor', numeroFactura: '100', fecha: new Date('2026-01-01'), costoTotal: 700, montoPagado: 150 },
+        { id: 'a', proveedorId: 'p1', proveedorNombre: 'Proveedor', ubicacionId: 'u1', ubicacionNombre: 'Central', numeroFactura: '100', fecha: new Date('2026-01-01'), costoTotal: 300, montoPagado: 50 },
+        { id: 'b', proveedorId: 'p1', proveedorNombre: 'Proveedor', ubicacionId: 'u1', ubicacionNombre: 'Central', numeroFactura: '100', fecha: new Date('2026-01-01'), costoTotal: 700, montoPagado: 150 },
     ])
     assert.equal(facturas.length, 1)
     assert.equal(facturas[0].costoTotal, 1000)
     assert.equal(facturas[0].montoPagado, 200)
 })
 
+test('no mezcla facturas históricas del mismo proveedor y número si pertenecen a sedes distintas', () => {
+    const facturas = agruparMovimientosHistoricos([
+        { id: 'a', proveedorId: 'p1', proveedorNombre: 'Proveedor', ubicacionId: 'u1', ubicacionNombre: 'Central', numeroFactura: '100', fecha: new Date('2026-01-01'), costoTotal: 300, montoPagado: 0 },
+        { id: 'b', proveedorId: 'p1', proveedorNombre: 'Proveedor', ubicacionId: 'u2', ubicacionNombre: 'Villa Elisa', numeroFactura: '100', fecha: new Date('2026-01-01'), costoTotal: 700, montoPagado: 0 },
+    ])
+    assert.equal(facturas.length, 2)
+    assert.deepEqual(facturas.map(factura => factura.ubicacionNombre), ['Central', 'Villa Elisa'])
+})
+
 test('calcula el saldo real por proveedor y excluye facturas canceladas', () => {
     const resumen = resumirCuentaCorriente([
-        { id: 'a', proveedorId: 'p1', proveedorNombre: 'Uno', numeroFactura: '1', fecha: new Date('2026-01-01'), costoTotal: 1000, montoPagado: 250, origen: 'compra' },
-        { id: 'b', proveedorId: 'p1', proveedorNombre: 'Uno', numeroFactura: '2', fecha: new Date('2026-01-02'), costoTotal: 500, montoPagado: 500, origen: 'compra' },
-        { id: 'c', proveedorId: 'p2', proveedorNombre: 'Dos', numeroFactura: '3', fecha: new Date('2026-01-03'), costoTotal: 200, montoPagado: 0, origen: 'historico' },
+        { id: 'a', proveedorId: 'p1', proveedorNombre: 'Uno', ubicacionId: 'u1', ubicacionNombre: 'Central', numeroFactura: '1', fecha: new Date('2026-01-01'), costoTotal: 1000, montoPagado: 250, origen: 'compra' },
+        { id: 'b', proveedorId: 'p1', proveedorNombre: 'Uno', ubicacionId: 'u1', ubicacionNombre: 'Central', numeroFactura: '2', fecha: new Date('2026-01-02'), costoTotal: 500, montoPagado: 500, origen: 'compra' },
+        { id: 'c', proveedorId: 'p2', proveedorNombre: 'Dos', ubicacionId: 'u2', ubicacionNombre: 'Villa Elisa', numeroFactura: '3', fecha: new Date('2026-01-03'), costoTotal: 200, montoPagado: 0, origen: 'historico' },
     ])
     assert.equal(resumen.cantidadFacturas, 2)
     assert.equal(resumen.totalPendiente, 950)

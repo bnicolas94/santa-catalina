@@ -92,6 +92,7 @@ interface Movimiento {
 interface CuentaCorrienteFactura {
     id: string
     numeroFactura: string | null
+    ubicacionNombre: string
     fecha: string
     costoTotal: number
     montoPagado: number
@@ -845,8 +846,11 @@ function ComprasContent() {
                                                         <td colSpan={7} style={{ padding: 'var(--space-3) var(--space-5)' }}>
                                                             <div style={{ display: 'grid', gap: '8px' }}>
                                                                 {proveedor.facturas.map(factura => (
-                                                                    <div key={`${factura.origen}-${factura.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, 1fr) minmax(90px, 0.8fr) repeat(3, minmax(110px, 1fr)) auto', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 10px', background: '#fff', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)' }}>
-                                                                        <strong>Fac. {factura.numeroFactura || 'S/N'}</strong>
+                                                                    <div key={`${factura.origen}-${factura.id}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1.1fr) minmax(90px, 0.8fr) repeat(3, minmax(110px, 1fr)) auto', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 10px', background: '#fff', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-sm)' }}>
+                                                                        <div>
+                                                                            <strong style={{ display: 'block' }}>Fac. {factura.numeroFactura || 'S/N'}</strong>
+                                                                            <small style={{ color: 'var(--color-gray-500)' }}>📍 {factura.ubicacionNombre}</small>
+                                                                        </div>
                                                                         <span>{new Date(factura.fecha).toLocaleDateString('es-AR')}</span>
                                                                         <span>Total: ${factura.costoTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                                                                         <span>Pagado: ${factura.montoPagado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
