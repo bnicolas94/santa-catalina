@@ -8,5 +8,9 @@ export async function register() {
             const { iniciarGoogleSheetsCaja } = await import('./lib/google-sheets-caja-worker')
             iniciarGoogleSheetsCaja()
         }
+        if (process.env.SHEETS_STOCK_AUTO !== 'false') {
+            const { iniciarGoogleSheetsStock } = await import('./lib/google-sheets-stock-worker')
+            iniciarGoogleSheetsStock()
+        }
     }
 }

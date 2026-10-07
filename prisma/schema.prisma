@@ -304,6 +304,7 @@ model Ubicacion {
   compras             Compra[]
   cajas               SaldoCaja[]
   integracionesSheet  IntegracionSheetSucursal[]
+  movimientosSheetStock MovimientoSheetStock[]
 
   @@map("ubicaciones")
 }
@@ -341,17 +342,21 @@ model MovimientoProducto {
   entregaId      String?      @map("id_entrega")
   rutaId         String?      @map("id_ruta")
   pedidoId       String?      @map("id_pedido")
+  movimientoSheetStockId String? @map("id_movimiento_sheet_stock")
   entrega        Entrega?     @relation(fields: [entregaId], references: [id])
   lote           Lote?        @relation(fields: [loteId], references: [id])
   presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
   producto       Producto     @relation(fields: [productoId], references: [id])
   ruta           Ruta?        @relation(fields: [rutaId], references: [id])
   pedido         Pedido?      @relation(fields: [pedidoId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  movimientoSheetStock MovimientoSheetStock? @relation(fields: [movimientoSheetStockId], references: [id], onDelete: Restrict)
   ubicacion      Ubicacion    @relation(fields: [ubicacionId], references: [id])
 
   @@unique([pedidoId, presentacionId, tipo])
+  @@unique([movimientoSheetStockId, presentacionId], map: "movimientos_producto_sheet_stock_presentacion_key")
   @@index([tipo, fecha])
   @@index([pedidoId])
+  @@index([movimientoSheetStockId])
   @@map("movimientos_producto")
 }
 
@@ -886,6 +891,30 @@ model MovimientoSheetCaja {
   @@unique([spreadsheetId, hoja, externalId])
   @@index([estadoProcesamiento, updatedAt])
   @@map("movimientos_sheet_caja")
+}
+
+model MovimientoSheetStock {
+  id                  String @id @default(uuid())
+  spreadsheetId       String @map("spreadsheet_id")
+  hoja                String
+  externalId          String @map("external_id")
+  fila                Int
+  productoTexto       String @map("producto_texto")
+  cantidadTexto       String @map("cantidad_texto")
+  ubicacionTexto      String @map("ubicacion_texto")
+  ubicacionId         String? @map("id_ubicacion")
+  estadoFuente        String @map("estado_fuente")
+  huellaStock         String @map("huella_stock")
+  estadoProcesamiento String @map("estado_procesamiento")
+  detalle             String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  ubicacion           Ubicacion? @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  movimientos         MovimientoProducto[]
+
+  @@unique([spreadsheetId, hoja, externalId])
+  @@index([estadoProcesamiento, updatedAt])
+  @@map("movimientos_sheet_stock")
 }
 
 model AuditoriaConfiguracionCaja {

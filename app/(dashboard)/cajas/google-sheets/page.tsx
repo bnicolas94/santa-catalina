@@ -104,7 +104,7 @@ export default function IntegracionGoogleSheetsPage() {
     }
     return <div>
         <div className="page-header"><div><h1>Integración Google Sheets</h1><p>Registra en Caja los pedidos cuando su estado pasa a Entregado.</p></div>
-            <div style={{ display: 'flex', gap: 8 }}><Link className="btn btn-secondary" href="/cajas">Volver a cajas</Link>
+            <div style={{ display: 'flex', gap: 8 }}><Link className="btn btn-secondary" href="/cajas/google-sheets/stock">Entregas y stock</Link><Link className="btn btn-secondary" href="/cajas">Volver a cajas</Link>
                 <button className="btn btn-secondary" disabled={ocupado || !data?.config.activo} onClick={() => void sincronizar()}>{ocupado ? 'Procesando…' : 'Sincronizar ahora'}</button></div></div>
         {(error || errorCarga) && <p role="alert" className="toast toast-error">{error || errorCarga?.message}</p>}
         {mensaje && <p role="status" className="toast toast-success">{mensaje}</p>}
