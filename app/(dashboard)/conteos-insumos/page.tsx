@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { parseCantidadConteo } from '@/lib/insumos/conteos'
 
 interface Ubicacion {
     id: string
@@ -21,6 +22,7 @@ interface Insumo {
 interface Conteo {
     id: string
     fecha: string
+    observaciones: string | null
     ubicacion: { nombre: string }
     responsable: { nombre: string; apellido: string | null } | null
     detalles: {
@@ -28,11 +30,24 @@ interface Conteo {
         stockSistema: number
         cantidadContada: number
         diferencia: number
+        movimientoStockId: string | null
         insumo: { nombre: string; unidadMedida: string }
     }[]
 }
 
-const parseCantidad = (value: string) => Number(value.replace(',', '.'))
+interface VistaPreviaConteo {
+    ubicacion: { id: string; nombre: string }
+    revisadoEn: string
+    detalles: {
+        insumoId: string
+        nombre: string
+        unidadMedida: string
+        stockSistema: number
+        stockSecundario: number
+        cantidadContada: number
+        diferencia: number
+    }[]
+}
 
 export default function ConteosInsumosPage() {
     const [insumos, setInsumos] = useState<Insumo[]>([])
@@ -44,6 +59,9 @@ export default function ConteosInsumosPage() {
     const [busqueda, setBusqueda] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [revisando, setRevisando] = useState(false)
+    const [vistaPrevia, setVistaPrevia] = useState<VistaPreviaConteo | null>(null)
+    const [conteoAbiertoId, setConteoAbiertoId] = useState<string | null>(null)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
 
@@ -62,7 +80,7 @@ export default function ConteosInsumosPage() {
             setInsumos(Array.isArray(insumosData) ? insumosData.filter((item: Insumo) => item.activo) : [])
             setUbicaciones(Array.isArray(ubicacionesData) ? ubicacionesData : [])
             setConteos(Array.isArray(conteosData) ? conteosData : [])
-            setUbicacionId((actual) => actual || ubicacionesData.find((item: Ubicacion) => item.tipo === 'FABRICA')?.id || ubicacionesData[0]?.id || '')
+            setUbicacionId((actual) => ubicacionesData.some((item: Ubicacion) => item.id === actual) ? actual : '')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar datos')
         } finally {
@@ -77,40 +95,97 @@ export default function ConteosInsumosPage() {
         return insumos.filter((insumo) => !termino || insumo.nombre.toLocaleLowerCase('es').includes(termino))
     }, [insumos, busqueda])
 
+    const ubicacionSeleccionada = ubicaciones.find((ubicacion) => ubicacion.id === ubicacionId)
+
+    function cambiarUbicacion(nuevaUbicacionId: string) {
+        if (nuevaUbicacionId === ubicacionId) return
+        if (Object.values(cantidades).some((value) => value.trim() !== '') &&
+            !window.confirm('Cambiar de sede borrará las cantidades ingresadas. ¿Continuar?')) return
+        setUbicacionId(nuevaUbicacionId)
+        setCantidades({})
+        setVistaPrevia(null)
+        setError('')
+        setSuccess('')
+    }
+
     const stockUbicacion = (insumo: Insumo) => insumo.stocks.find((stock) => stock.ubicacionId === ubicacionId)?.cantidad || 0
     const stockSecundarioUbicacion = (insumo: Insumo) => insumo.stocks.find((stock) => stock.ubicacionId === ubicacionId)?.cantidadSecundaria || 0
     const lineasCargadas = Object.entries(cantidades).filter(([, value]) => value.trim() !== '')
 
-    async function confirmarConteo() {
+    async function revisarConteo() {
         setError(''); setSuccess('')
-        if (!ubicacionId || lineasCargadas.length === 0) {
+        setVistaPrevia(null)
+        if (!ubicacionSeleccionada) {
+            setError('Seleccioná la sucursal o fábrica donde realizaste el conteo')
+            return
+        }
+        if (lineasCargadas.length === 0) {
             setError('Ingresá al menos una cantidad contada')
             return
         }
-        if (lineasCargadas.some(([, value]) => !Number.isFinite(parseCantidad(value)) || parseCantidad(value) < 0)) {
+        if (lineasCargadas.some(([, value]) => !Number.isFinite(parseCantidadConteo(value)))) {
             setError('Revisá las cantidades: deben ser números mayores o iguales a cero')
             return
         }
-        if (!window.confirm('¿Confirmar el conteo? Las diferencias actualizarán el stock y quedarán registradas como movimientos de ajuste.')) return
+        setRevisando(true)
+        try {
+            const response = await fetch('/api/conteos-insumos', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ubicacionId,
+                    detalles: lineasCargadas.map(([insumoId, cantidadContada]) => ({ insumoId, cantidadContada })),
+                }),
+            })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error || 'No se pudo revisar el conteo')
+            const previa = payload as VistaPreviaConteo
+            setVistaPrevia(previa)
+            const stocksActualizados = new Map(previa.detalles.map((detalle) => [detalle.insumoId, detalle]))
+            setInsumos((actuales) => actuales.map((insumo) => {
+                const detalle = stocksActualizados.get(insumo.id)
+                if (!detalle) return insumo
+                const otrosStocks = insumo.stocks.filter((stock) => stock.ubicacionId !== ubicacionId)
+                return { ...insumo, stocks: [...otrosStocks, {
+                    ubicacionId, cantidad: detalle.stockSistema, cantidadSecundaria: detalle.stockSecundario,
+                }] }
+            }))
+        } catch (err) {
+            setVistaPrevia(null)
+            setError(err instanceof Error ? err.message : 'No se pudo revisar el conteo')
+        } finally {
+            setRevisando(false)
+        }
+    }
 
+    async function confirmarConteo() {
+        if (!vistaPrevia) return
+        setError(''); setSuccess('')
         setSaving(true)
         try {
             const response = await fetch('/api/conteos-insumos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ubicacionId,
+                    ubicacionId: vistaPrevia.ubicacion.id,
                     observaciones,
-                    detalles: lineasCargadas.map(([insumoId, cantidadContada]) => ({ insumoId, cantidadContada })),
+                    detalles: vistaPrevia.detalles.map((detalle) => ({
+                        insumoId: detalle.insumoId,
+                        cantidadContada: detalle.cantidadContada,
+                        stockSistemaEsperado: detalle.stockSistema,
+                    })),
                 }),
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error || 'No se pudo registrar el conteo')
+            setVistaPrevia(null)
             setCantidades({}); setObservaciones('')
-            setSuccess(`Conteo confirmado: ${payload.detalles.length} insumos registrados.`)
+            setSuccess(`Conteo confirmado en ${payload.ubicacion.nombre}: ${payload.detalles.length} insumos registrados.`)
             await cargarDatos()
         } catch (err) {
+            setVistaPrevia(null)
             setError(err instanceof Error ? err.message : 'No se pudo registrar el conteo')
+            await cargarDatos()
         } finally {
             setSaving(false)
         }
@@ -131,11 +206,19 @@ export default function ConteosInsumosPage() {
                 <strong>Momento de corte:</strong> mientras realizás este conteo, evitá iniciar rondas o registrar entradas y salidas de insumos en esta ubicación.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-                <label className="form-group"><span className="form-label">Ubicación</span><select className="form-select" value={ubicacionId} onChange={(event) => { setUbicacionId(event.target.value); setCantidades({}) }}>
-                    {ubicaciones.map((ubicacion) => <option key={ubicacion.id} value={ubicacion.id}>{ubicacion.nombre}</option>)}
+                <label className="form-group"><span className="form-label">Sucursal o fábrica del conteo</span><select className="form-select" value={ubicacionId} disabled={revisando || saving} onChange={(event) => cambiarUbicacion(event.target.value)}>
+                    <option value="">Seleccioná dónde se realizó el conteo</option>
+                    <optgroup label="Sucursales">
+                        {ubicaciones.filter((ubicacion) => ubicacion.tipo === 'LOCAL').map((ubicacion) => <option key={ubicacion.id} value={ubicacion.id}>{ubicacion.nombre}</option>)}
+                    </optgroup>
+                    <optgroup label="Fábrica">
+                        {ubicaciones.filter((ubicacion) => ubicacion.tipo === 'FABRICA').map((ubicacion) => <option key={ubicacion.id} value={ubicacion.id}>{ubicacion.nombre}</option>)}
+                    </optgroup>
                 </select></label>
                 <label className="form-group"><span className="form-label">Buscar insumo</span><input className="form-input" value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Jamón, queso, pan..." /></label>
             </div>
+
+            {!ubicacionSeleccionada && <p style={{ marginBottom: 'var(--space-4)', color: 'var(--color-gray-500)' }}>Elegí una sede para ver su stock y cargar las cantidades contadas.</p>}
 
             <div className="table-container">
                 <table className="table">
@@ -143,7 +226,7 @@ export default function ConteosInsumosPage() {
                     <tbody>{insumosFiltrados.map((insumo) => {
                         const sistema = stockUbicacion(insumo)
                         const value = cantidades[insumo.id] ?? ''
-                        const contado = value === '' ? null : parseCantidad(value)
+                        const contado = value.trim() === '' ? null : parseCantidadConteo(value)
                         const diferencia = contado !== null && Number.isFinite(contado) ? contado - sistema : null
                         return <tr key={insumo.id}>
                             <td>
@@ -154,12 +237,12 @@ export default function ConteosInsumosPage() {
                                 )}
                             </td>
                             <td>
-                                <div>{sistema.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {insumo.unidadMedida}</div>
-                                {insumo.unidadSecundaria && <small style={{ color: 'var(--color-gray-500)' }}>{stockSecundarioUbicacion(insumo).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {insumo.unidadSecundaria}</small>}
+                                <div>{ubicacionSeleccionada ? `${sistema.toLocaleString('es-AR', { maximumFractionDigits: 3 })} ${insumo.unidadMedida}` : '—'}</div>
+                                {ubicacionSeleccionada && insumo.unidadSecundaria && <small style={{ color: 'var(--color-gray-500)' }}>{stockSecundarioUbicacion(insumo).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {insumo.unidadSecundaria}</small>}
                             </td>
                             <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 220 }}>
-                                    <input className="form-input" inputMode="decimal" value={value} onChange={(event) => setCantidades((actual) => ({ ...actual, [insumo.id]: event.target.value }))} placeholder={`Cantidad en ${insumo.unidadMedida}`} aria-label={`Cantidad contada de ${insumo.nombre} en ${insumo.unidadMedida}`} />
+                                    <input className="form-input" inputMode="decimal" disabled={!ubicacionSeleccionada || revisando || saving} value={value} onChange={(event) => { setVistaPrevia(null); setCantidades((actual) => ({ ...actual, [insumo.id]: event.target.value })) }} placeholder={`Cantidad en ${insumo.unidadMedida}`} aria-label={`Cantidad contada de ${insumo.nombre} en ${insumo.unidadMedida}`} />
                                     <strong style={{ minWidth: 34, color: 'var(--color-primary)' }}>{insumo.unidadMedida}</strong>
                                 </div>
                             </td>
@@ -171,15 +254,40 @@ export default function ConteosInsumosPage() {
                 </table>
             </div>
             <label className="form-group" style={{ marginTop: 'var(--space-4)' }}><span className="form-label">Observaciones</span><textarea className="form-input" value={observaciones} onChange={(event) => setObservaciones(event.target.value)} placeholder="Responsable, sector o aclaraciones del conteo" rows={2} /></label>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}><button className="btn btn-primary" disabled={saving || lineasCargadas.length === 0} onClick={confirmarConteo}>{saving ? 'Confirmando...' : `Confirmar conteo (${lineasCargadas.length})`}</button></div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}><button className="btn btn-primary" disabled={revisando || saving || !ubicacionSeleccionada || lineasCargadas.length === 0} onClick={revisarConteo}>{revisando ? 'Actualizando stock...' : `Revisar conteo (${lineasCargadas.length})`}</button></div>
+            {vistaPrevia && <div style={{ marginTop: 'var(--space-4)', padding: 'var(--space-4)', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)' }}>
+                <h3>Vista previa: {vistaPrevia.ubicacion.nombre}</h3>
+                <p style={{ color: 'var(--color-gray-500)', marginBottom: 'var(--space-3)' }}>Stock actualizado al {new Date(vistaPrevia.revisadoEn).toLocaleString('es-AR')}. Revisá las diferencias antes de confirmar.</p>
+                <div className="table-container"><table className="table"><thead><tr><th>Insumo</th><th>Stock actualizado</th><th>Contado</th><th>Ajuste</th></tr></thead><tbody>
+                    {vistaPrevia.detalles.map((detalle) => <tr key={detalle.insumoId}>
+                        <td>{detalle.nombre}</td>
+                        <td>{detalle.stockSistema.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {detalle.unidadMedida}</td>
+                        <td>{detalle.cantidadContada.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {detalle.unidadMedida}</td>
+                        <td>{detalle.diferencia > 0 ? '+' : ''}{detalle.diferencia.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {detalle.unidadMedida}</td>
+                    </tr>)}
+                </tbody></table></div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}><button className="btn btn-primary" disabled={saving} onClick={confirmarConteo}>{saving ? 'Confirmando...' : `Confirmar ajustes en ${vistaPrevia.ubicacion.nombre}`}</button></div>
+            </div>}
         </div>
 
         <h2 style={{ marginBottom: 'var(--space-3)' }}>Últimos conteos</h2>
-        <div className="table-container"><table className="table"><thead><tr><th>Fecha</th><th>Ubicación</th><th>Responsable</th><th>Insumos</th><th>Diferencia neta</th></tr></thead>
-            <tbody>{conteos.length === 0 ? <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>Todavía no hay conteos registrados.</td></tr> : conteos.map((conteo) => <tr key={conteo.id}>
+        <div className="table-container"><table className="table"><thead><tr><th>Fecha</th><th>Sucursal o fábrica</th><th>Responsable</th><th>Insumos</th><th>Insumos con diferencia</th><th>Detalle</th></tr></thead>
+            <tbody>{conteos.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>Todavía no hay conteos registrados.</td></tr> : conteos.map((conteo) => <Fragment key={conteo.id}><tr>
                 <td>{new Date(conteo.fecha).toLocaleString('es-AR')}</td><td>{conteo.ubicacion.nombre}</td><td>{conteo.responsable ? `${conteo.responsable.nombre} ${conteo.responsable.apellido || ''}`.trim() : 'Sin identificar'}</td><td>{conteo.detalles.length}</td>
-                <td>{conteo.detalles.reduce((total, detalle) => total + detalle.diferencia, 0).toLocaleString('es-AR', { maximumFractionDigits: 3 })}</td>
-            </tr>)}</tbody>
+                <td>{conteo.detalles.filter((detalle) => Math.abs(detalle.diferencia) > 0.000001).length}</td>
+                <td><button className="btn btn-secondary" aria-expanded={conteoAbiertoId === conteo.id} onClick={() => setConteoAbiertoId((actual) => actual === conteo.id ? null : conteo.id)}>{conteoAbiertoId === conteo.id ? 'Ocultar' : 'Ver ajustes'}</button></td>
+            </tr>{conteoAbiertoId === conteo.id && <tr><td colSpan={6}>
+                {conteo.observaciones && <p style={{ marginBottom: 'var(--space-3)' }}><strong>Observaciones:</strong> {conteo.observaciones}</p>}
+                <div className="table-container"><table className="table"><thead><tr><th>Insumo</th><th>Stock anterior</th><th>Contado</th><th>Diferencia</th><th>Movimiento</th></tr></thead><tbody>
+                    {conteo.detalles.map((detalle) => <tr key={detalle.id}>
+                        <td>{detalle.insumo.nombre}</td>
+                        <td>{detalle.stockSistema.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {detalle.insumo.unidadMedida}</td>
+                        <td>{detalle.cantidadContada.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {detalle.insumo.unidadMedida}</td>
+                        <td>{detalle.diferencia > 0 ? '+' : ''}{detalle.diferencia.toLocaleString('es-AR', { maximumFractionDigits: 3 })} {detalle.insumo.unidadMedida}</td>
+                        <td>{detalle.movimientoStockId ? 'Ajuste registrado' : 'Sin ajuste'}</td>
+                    </tr>)}
+                </tbody></table></div>
+            </td></tr>}</Fragment>)}</tbody>
         </table></div>
     </div>
 }
