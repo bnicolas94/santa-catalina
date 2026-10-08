@@ -116,14 +116,6 @@ export default function ProduccionPage() {
         name?: string | null
         ubicacionId?: string | null
         ubicacionTipo?: string | null
-        permisos?: {
-            permisoDashboard?: boolean
-            permisoStock?: boolean
-            permisoCaja?: boolean
-            permisoPersonal?: boolean
-            permisoProduccion?: boolean
-            permisoCostos?: boolean
-        } | null
     } | undefined
     const ubicacionTipoUsuario = sessionUser?.ubicacionTipo?.toUpperCase()
 
@@ -713,15 +705,7 @@ export default function ProduccionPage() {
         return <div className="loading-container"><div className="loader"></div><p>Abriendo Caja...</p></div>
     }
 
-    if (usaVistaOperativaProduccion(sessionUser?.rol, sessionUser?.permisos)) {
-        if (ubicacionTipoUsuario !== 'FABRICA') {
-            return (
-                <div className="empty-state">
-                    <p>La vista operativa de Producción está disponible solamente para personal de Fábrica.</p>
-                </div>
-            )
-        }
-
+    if (usaVistaOperativaProduccion(sessionUser?.rol, ubicacionTipoUsuario)) {
         return (
             <OperatorProductionView
                 userName={sessionUser?.name || 'Operario'}
