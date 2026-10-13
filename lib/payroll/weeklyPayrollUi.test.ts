@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calcularTotalNeto, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resumirDesglose, sumarAdicionales, toTimeInputValue } from '../../components/empleados/weeklyPayroll.utils'
+import { calcularTotalNeto, cambiarIngresoAnticipado, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resumirDesglose, sumarAdicionales, toTimeInputValue } from '../../components/empleados/weeklyPayroll.utils'
 import type { DiaLiquidacionUI, ResultadoLiquidacionUI } from '../../components/empleados/weeklyPayroll.types'
 
 test('interpreta horarios de 24 y 12 horas', () => {
@@ -76,6 +76,29 @@ test('al editar una jornada paga cada minuto extra sin redondear a media hora', 
     assert.equal(ajustado.horasExtras, 17 / 60)
     assert.equal(ajustado.valorExtra, 567)
     assert.equal(ajustado.totalDia, 10_567)
+})
+
+test('permite incluir y quitar el ingreso anticipado sin duplicar horas', () => {
+    const dia: DiaLiquidacionUI = {
+        fecha: '2026-10-12', diaSemana: 'Lunes', esFeriado: false,
+        horasTrabajadas: 8, horasJornada: 8, horasExtras: 0,
+        horasAnticipadasIgnoradas: 3, incluirIngresoAnticipado: false,
+        entrada: '06:00', salida: '17:00', jornalBase: 40_000,
+        valorDiaBase: 40_000, multiplicadorJornal: 1, valorExtra: 0,
+        valorFeriado: 0, totalDia: 40_000, esJustificado: false,
+    }
+
+    const incluido = cambiarIngresoAnticipado(dia, true, 8, 10_000)
+    assert.equal(incluido.horasTrabajadas, 11)
+    assert.equal(incluido.horasExtras, 3)
+    assert.equal(incluido.valorExtra, 30_000)
+    assert.equal(incluido.incluirIngresoAnticipado, true)
+
+    const quitado = cambiarIngresoAnticipado(incluido, false, 8, 10_000)
+    assert.equal(quitado.horasTrabajadas, 8)
+    assert.equal(quitado.horasExtras, 0)
+    assert.equal(quitado.valorExtra, 0)
+    assert.equal(quitado.incluirIngresoAnticipado, false)
 })
 
 test('un ajuste diario actualiza los totales sin incorporar deudas de otras semanas', () => {

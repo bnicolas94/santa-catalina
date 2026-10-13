@@ -33,6 +33,8 @@ export interface DiaTrabajado {
     horarioEsperadoEntrada?: string | null
     horarioEsperadoSalida?: string | null
     horasExtras: number
+    horasAnticipadasIgnoradas?: number
+    incluirIngresoAnticipado?: boolean
     entrada: string | null
     salida: string | null
     jornalBase: number
@@ -347,6 +349,8 @@ export class PayrollService {
                 horasTrabajadas: resumen.horasTrabajadas,
                 horasJornada: horasJornadaDia,
                 horasExtras: calculoDia.horasExtras,
+                horasAnticipadasIgnoradas: resumen.horasAnticipadasIgnoradas,
+                incluirIngresoAnticipado: false,
                 entrada: primerEntrada ? new Date(primerEntrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 salida: ultimaSalida ? new Date(ultimaSalida).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
                 jornalBase: Math.round(jornalBase),

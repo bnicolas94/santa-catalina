@@ -13,6 +13,7 @@ export interface Marca {
 export interface ResumenDia {
     horasTrabajadas: number;
     horasExtras: number;
+    horasAnticipadasIgnoradas: number;
     esAusencia: boolean;
     marcas: Marca[];
 }
@@ -79,6 +80,7 @@ export function calcularResumenDia(
         return { 
             horasTrabajadas: esAusenciaRemunerada ? horasJornada : 0, 
             horasExtras: 0, 
+            horasAnticipadasIgnoradas: 0,
             esAusencia: true, 
             marcas 
         };
@@ -90,6 +92,7 @@ export function calcularResumenDia(
     );
 
     let entradaActual: Date | null = null;
+    let milisegundosAnticipadosIgnorados = 0;
 
     for (const marca of marcasOrdenadas) {
         if (marca.tipo === 'entrada') {
@@ -101,6 +104,13 @@ export function calcularResumenDia(
                 ? inicioComputable
                 : entradaActual;
 
+            if (inicioComputable && entradaActual < inicioComputable) {
+                milisegundosAnticipadosIgnorados += Math.max(
+                    0,
+                    Math.min(salida.getTime(), inicioComputable.getTime()) - entradaActual.getTime(),
+                );
+            }
+
             milisegundosTrabajados += Math.max(0, salida.getTime() - inicioTramo.getTime());
             entradaActual = null;
         }
@@ -108,10 +118,12 @@ export function calcularResumenDia(
 
     const horasTrabajadas = normalizarHorasAMinuto(milisegundosTrabajados / (1000 * 60 * 60));
     const horasExtras = normalizarHorasAMinuto(Math.max(0, horasTrabajadas - horasJornada));
+    const horasAnticipadasIgnoradas = normalizarHorasAMinuto(milisegundosAnticipadosIgnorados / (1000 * 60 * 60));
 
     return {
         horasTrabajadas,
         horasExtras,
+        horasAnticipadasIgnoradas,
         esAusencia: false,
         marcas: marcasOrdenadas
     };

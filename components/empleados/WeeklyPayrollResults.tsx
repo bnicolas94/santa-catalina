@@ -17,6 +17,7 @@ interface Props {
     onAjusteChange: (empleadoId: string, valor: string) => void
     onTimeChange: (empleadoId: string, fecha: string, campo: 'entrada' | 'salida', valor: string) => void
     onHoursChange: (empleadoId: string, fecha: string, valor: string) => void
+    onEarlyEntryChange: (empleadoId: string, fecha: string, incluir: boolean) => void
     onJustificar: (empleadoId: string, fecha: string) => void
     onQuitarJustificacion: (empleadoId: string, fecha: string) => void
     onStatusChange: (empleadoId: string, fecha: string, estado: string) => void
@@ -125,7 +126,7 @@ export function WeeklyPayrollResults(props: Props) {
                 </tr>
                 {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={9} style={{ padding: 'var(--space-4)' }}>
                     {alertas.length > 0 && <div style={{ display: 'grid', gap: '6px', marginBottom: 'var(--space-3)' }}>{alertas.map((alerta, indice) => <div key={`${alerta.fecha || 'general'}-${indice}`} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: alerta.nivel === 'error' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', color: alerta.nivel === 'error' ? 'var(--color-danger)' : 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{alerta.fecha ? `${alerta.fecha}: ` : ''}{alerta.mensaje}</div>)}</div>}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>{resultado.desglosePorDia.map(dia => <WeeklyPayrollDayCard key={dia.fecha} dia={dia} empleadoId={resultado.empleadoId} actualizandoEstado={props.updatingStatusDate === `${resultado.empleadoId}-${dia.fecha}`} estado={props.getDiaStatus(dia)} onTimeChange={props.onTimeChange} onHoursChange={props.onHoursChange} onJustificar={props.onJustificar} onQuitarJustificacion={props.onQuitarJustificacion} onStatusChange={props.onStatusChange} />)}</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>{resultado.desglosePorDia.map(dia => <WeeklyPayrollDayCard key={dia.fecha} dia={dia} empleadoId={resultado.empleadoId} actualizandoEstado={props.updatingStatusDate === `${resultado.empleadoId}-${dia.fecha}`} estado={props.getDiaStatus(dia)} onTimeChange={props.onTimeChange} onHoursChange={props.onHoursChange} onEarlyEntryChange={props.onEarlyEntryChange} onJustificar={props.onJustificar} onQuitarJustificacion={props.onQuitarJustificacion} onStatusChange={props.onStatusChange} />)}</div>
                     {resultado.esSeguimientoMensualMixto
                         ? <div style={{ marginTop: 'var(--space-3)', padding: 'var(--space-3)', color: 'var(--color-info)', background: 'var(--color-info-bg)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
                             Este cálculo es informativo: podés corregir las horas de cada día, pero no genera Caja, recibo ni pago semanal. Los días guardados alimentan el cierre de su mes calendario.

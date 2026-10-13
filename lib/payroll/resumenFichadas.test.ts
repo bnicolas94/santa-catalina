@@ -22,6 +22,7 @@ test('calcula una jornada a partir de una entrada y una salida', () => {
     assert.deepEqual(calcularResumenDia(marcas, 9), {
         horasTrabajadas: 9,
         horasExtras: 0,
+        horasAnticipadasIgnoradas: 0,
         esAusencia: false,
         marcas,
     })
@@ -51,6 +52,7 @@ test('no computa como trabajadas ni extras las horas anteriores al horario de en
 
     assert.equal(resultado.horasTrabajadas, 9)
     assert.equal(resultado.horasExtras, 0)
+    assert.equal(resultado.horasAnticipadasIgnoradas, 1)
 })
 
 test('mantiene como extra el tiempo posterior a la jornada aunque la entrada haya sido anticipada', () => {

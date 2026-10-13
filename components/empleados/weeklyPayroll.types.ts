@@ -40,6 +40,8 @@ export interface DiaLiquidacionUI {
     horarioEsperadoEntrada?: string | null
     horarioEsperadoSalida?: string | null
     horasExtras: number
+    horasAnticipadasIgnoradas?: number
+    incluirIngresoAnticipado?: boolean
     entrada: string | null
     salida: string | null
     jornalBase: number

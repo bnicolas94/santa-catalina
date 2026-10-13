@@ -10,7 +10,7 @@ import type {
     LiquidacionPagadaUI,
     ResultadoLiquidacionUI,
 } from './weeklyPayroll.types'
-import { fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado } from './weeklyPayroll.utils'
+import { cambiarIngresoAnticipado, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado } from './weeklyPayroll.utils'
 import { WeeklyPayrollControls } from './WeeklyPayrollControls'
 import { WeeklyPayrollHeader } from './WeeklyPayrollHeader'
 import { WeeklyPayrollFooter } from './WeeklyPayrollFooter'
@@ -547,6 +547,21 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setBorradorCargado(false)
     }
 
+    const handleEarlyEntryChange = (empleadoId: string, fecha: string, incluir: boolean) => {
+        setResultados(prev => prev.map(resultado => {
+            if (resultado.empleadoId !== empleadoId) return resultado
+            const desglosePorDia = resultado.desglosePorDia.map(dia => dia.fecha === fecha
+                ? cambiarIngresoAnticipado(dia, incluir, dia.horasJornada || resultado.horasJornada || 8, resultado.valorHoraExtra)
+                : dia)
+            return recalcularResultado({
+                ...resultado,
+                desglosePorDia,
+                seguimientoGuardado: resultado.esSeguimientoMensualMixto ? false : resultado.seguimientoGuardado,
+            })
+        }))
+        setBorradorCargado(false)
+    }
+
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh' }}>
@@ -579,6 +594,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         onAjusteChange={handleAjusteChange}
                         onTimeChange={handleTimeChange}
                         onHoursChange={handleHoursChange}
+                        onEarlyEntryChange={handleEarlyEntryChange}
                         onJustificar={handleJustificar}
                         onQuitarJustificacion={handleQuitarJustificacion}
                         onStatusChange={handleStatusChange}

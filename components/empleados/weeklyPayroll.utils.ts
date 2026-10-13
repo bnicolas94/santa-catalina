@@ -37,6 +37,28 @@ export function recalcularDiaPorHoras(
     }
 }
 
+export function cambiarIngresoAnticipado(
+    dia: DiaLiquidacionUI,
+    incluir: boolean,
+    horasJornada: number,
+    valorHoraExtra: number,
+): DiaLiquidacionUI {
+    const horasAnticipadas = normalizarHorasAMinuto(Math.max(0, dia.horasAnticipadasIgnoradas || 0))
+    const horasBase = normalizarHorasAMinuto(Math.max(
+        0,
+        dia.horasTrabajadas - (dia.incluirIngresoAnticipado ? horasAnticipadas : 0),
+    ))
+    return {
+        ...recalcularDiaPorHoras(
+            dia,
+            horasBase + (incluir ? horasAnticipadas : 0),
+            horasJornada,
+            valorHoraExtra,
+        ),
+        incluirIngresoAnticipado: incluir,
+    }
+}
+
 export function recalcularResultado(resultado: ResultadoLiquidacionUI): ResultadoLiquidacionUI {
     const resumen = resumirDesglose(resultado.desglosePorDia)
     const montoHorasExtras = resumen.montoHorasExtras

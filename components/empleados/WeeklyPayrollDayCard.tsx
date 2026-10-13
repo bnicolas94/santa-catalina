@@ -8,6 +8,7 @@ interface Props {
     estado: string
     onTimeChange: (empleadoId: string, fecha: string, campo: 'entrada' | 'salida', valor: string) => void
     onHoursChange: (empleadoId: string, fecha: string, valor: string) => void
+    onEarlyEntryChange: (empleadoId: string, fecha: string, incluir: boolean) => void
     onJustificar: (empleadoId: string, fecha: string) => void
     onQuitarJustificacion: (empleadoId: string, fecha: string) => void
     onStatusChange: (empleadoId: string, fecha: string, estado: string) => void
@@ -40,6 +41,10 @@ export function WeeklyPayrollDayCard(props: Props) {
                     </label>
                     {dia.horasExtras > 0 && <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>+{Number(dia.horasExtras.toFixed(2))} h extra</span>}
                 </div>
+                {(dia.horasAnticipadasIgnoradas || 0) > 0 && <label style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: dia.incluirIngresoAnticipado ? 'var(--color-success)' : 'var(--color-gray-500)', fontWeight: 600 }} title="Suma el tiempo trabajado antes del horario previsto al total de la jornada">
+                    <input type="checkbox" disabled={esVacaciones} checked={dia.incluirIngresoAnticipado === true} onChange={e => props.onEarlyEntryChange(empleadoId, dia.fecha, e.target.checked)} />
+                    Incluir {Number((dia.horasAnticipadasIgnoradas || 0).toFixed(2))} h anticipadas
+                </label>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {!esVacaciones && dia.horasTrabajadas === 0 && <button className="btn btn-ghost" title="Justificar día completo" onClick={() => props.onJustificar(empleadoId, dia.fecha)} style={{ padding: '2px', height: 'auto', fontSize: '14px', color: 'var(--color-success)' }}>🟢</button>}
