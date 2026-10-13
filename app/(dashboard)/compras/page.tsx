@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { cantidadGastoOpcional } from '@/lib/compras/validacion'
+import { calcularFacturaConIva, cantidadGastoOpcional, IVA_GENERAL_PORCENTAJE } from '@/lib/compras/validacion'
 import { filtrarFacturasGasto, paginaFacturasGasto } from '@/lib/compras/listado-gastos'
 
 const FACTURAS_GASTO_POR_PAGINA = 10
@@ -138,7 +138,7 @@ function ComprasContent() {
     const [editingCompraId, setEditingCompraId] = useState<string | null>(null)
     const [editingFacturaItemIndex, setEditingFacturaItemIndex] = useState<number | null>(null)
     const [loadingFactura, setLoadingFactura] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '' })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '', aplicarIva: false })
     const [tempItem, setTempItem] = useState({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -164,6 +164,10 @@ function ComprasContent() {
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const resumenFactura = calcularFacturaConIva(
+        facturaForm.items.map(item => parseFloat(item.costoTotal || '0')),
+        facturaForm.aplicarIva
+    )
 
     const emptyTempItem = () => ({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const fechaInput = (fecha: string | null | undefined) => fecha ? new Date(fecha).toLocaleDateString('en-CA') : ''
@@ -370,7 +374,7 @@ function ComprasContent() {
         if (facturaForm.items.length === 0) return setError('Debe agregar al menos un ítem a la factura')
         
         if (!editingCompraId && (facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && facturaForm.pagoDividido) {
-            const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
+            const totalFactura = resumenFactura.total;
             const totalEsperado = facturaForm.estadoPago === 'a_cuenta' ? parseFloat(facturaForm.montoPagado || '0') : totalFactura;
             const totalPagos = facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0);
             if (Math.abs(totalEsperado - totalPagos) > 0.01) {
@@ -379,7 +383,7 @@ function ComprasContent() {
         }
 
         if (!editingCompraId && facturaForm.estadoPago === 'a_cuenta') {
-            const totalFactura = facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0);
+            const totalFactura = resumenFactura.total;
             const montoP = parseFloat(facturaForm.montoPagado || '0');
             if (montoP <= 0) return setError('Ingrese el monto a pagar a cuenta');
             if (montoP >= totalFactura) return setError('El monto a cuenta debe ser menor al total. Si paga todo, use "Pagado".');
@@ -394,7 +398,7 @@ function ComprasContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess(editingCompraId ? 'Factura actualizada correctamente' : 'Factura registrada correctamente')
             closeFacturaModal()
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '' })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '', aplicarIva: false })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -426,6 +430,7 @@ function ComprasContent() {
                 ubicacionId: compra.ubicacion?.id || '',
                 observaciones: compra.observaciones || '',
                 montoPagado: String(compra.montoPagado || ''),
+                aplicarIva: false,
                 items: ([...compra.movimientosStock.map(movimiento => ({
                     tipoItem: 'insumo' as const,
                     movimientoId: movimiento.id,
@@ -773,7 +778,7 @@ function ComprasContent() {
                         const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
                         setEditingCompraId(null)
                         setEditingFacturaItemIndex(null)
-                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '' })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '', aplicarIva: false })
                         setTempItem(emptyTempItem())
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
@@ -1422,6 +1427,19 @@ function ComprasContent() {
                                         <input type="date" className="form-input" value={facturaForm.fechaFactura} onChange={(e) => setFacturaForm({ ...facturaForm, fechaFactura: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
                                     </div>
                                 </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', marginBottom: 'var(--space-4)', border: '1px solid #F5D98B', borderRadius: 'var(--radius-md)', background: facturaForm.aplicarIva ? '#FFF8E7' : '#fff', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={facturaForm.aplicarIva}
+                                        onChange={(e) => setFacturaForm({ ...facturaForm, aplicarIva: e.target.checked })}
+                                    />
+                                    <span>
+                                        <strong>Agregar IVA {IVA_GENERAL_PORCENTAJE}% al total</strong>
+                                        <small style={{ display: 'block', color: 'var(--color-gray-500)' }}>
+                                            Activá esta opción sólo si los importes cargados no incluyen IVA.
+                                        </small>
+                                    </span>
+                                </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Estado de Pago</label>
@@ -1440,7 +1458,7 @@ function ComprasContent() {
                                                 placeholder="Ej: 50000" required />
                                             {facturaForm.montoPagado && facturaForm.items.length > 0 && (
                                                 <div style={{ marginTop: '4px', fontSize: '0.75rem', color: '#2980B9' }}>
-                                                    Quedará pendiente: <strong>${(facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0) - parseFloat(facturaForm.montoPagado || '0')).toLocaleString('es-AR')}</strong>
+                                                    Quedará pendiente: <strong>${(resumenFactura.total - parseFloat(facturaForm.montoPagado || '0')).toLocaleString('es-AR')}</strong>
                                                 </div>
                                             )}
                                         </div>
@@ -1516,8 +1534,8 @@ function ComprasContent() {
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                         <button type="button" className="btn btn-sm btn-ghost" onClick={() => setFacturaForm({ ...facturaForm, pagos: [...facturaForm.pagos, { cajaOrigen: cajas.length > 0 ? cajas[0].tipo : 'caja_chica', monto: '' }] })} style={{ color: 'var(--color-primary)' }}>+ Agregar otra caja</button>
                                                         {facturaForm.items.length > 0 && (
-                                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: Math.abs(facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0) - facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0)) < 0.01 ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                                                                Total asignado: ${facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: Math.abs(facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0) - resumenFactura.total) < 0.01 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                                                Total asignado: ${facturaForm.pagos.reduce((acc, p) => acc + parseFloat(p.monto || '0'), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${resumenFactura.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1786,10 +1804,22 @@ function ComprasContent() {
                                             })}
                                         </tbody>
                                         <tfoot>
+                                            {facturaForm.aplicarIva && (
+                                                <>
+                                                    <tr>
+                                                        <td colSpan={2} style={{ textAlign: 'right' }}>Subtotal:</td>
+                                                        <td colSpan={3}>${resumenFactura.subtotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td colSpan={2} style={{ textAlign: 'right' }}>IVA {IVA_GENERAL_PORCENTAJE}%:</td>
+                                                        <td colSpan={3}>${resumenFactura.iva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                                                    </tr>
+                                                </>
+                                            )}
                                             <tr>
                                                 <td colSpan={2} style={{ textAlign: 'right', fontWeight: 'bold' }}>Total Factura:</td>
                                                 <td colSpan={3} style={{ fontWeight: 'bold', color: 'var(--color-primary)', fontSize: '1.2rem' }}>
-                                                    ${facturaForm.items.reduce((acc, it) => acc + parseFloat(it.costoTotal || '0'), 0).toLocaleString('es-AR')}
+                                                    ${resumenFactura.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         </tfoot>

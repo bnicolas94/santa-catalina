@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { ComprasService } from '@/lib/services/compras.service'
 import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
 import {
+    calcularFacturaConIva,
     CompraValidationError,
     cantidadGastoOpcional,
     distribuirMontoPagadoPorCostos,
@@ -103,7 +104,7 @@ export async function PATCH(
             throw new CompraValidationError('La factura debe conservar al menos un ítem')
         }
 
-        const items: ItemEdicion[] = body.items.map((raw, index) => {
+        const itemsBase: ItemEdicion[] = body.items.map((raw, index) => {
             if (!raw || typeof raw !== 'object') throw new CompraValidationError(`Ítem ${index + 1} inválido`)
             const item = raw as Record<string, unknown>
             const tipoItem = item.tipoItem === 'gasto' ? 'gasto' : 'insumo'
@@ -141,6 +142,14 @@ export async function PATCH(
             }
         })
 
+        const facturaConIva = calcularFacturaConIva(
+            itemsBase.map(item => item.costoTotal),
+            body.aplicarIva === true
+        )
+        const items = itemsBase.map((item, index) => ({
+            ...item,
+            costoTotal: facturaConIva.costosFinales[index],
+        }))
         const idsMovimientosRecibidos = items.flatMap(item => item.movimientoId ? [item.movimientoId] : [])
         const idsGastosRecibidos = items.flatMap(item => item.gastoId ? [item.gastoId] : [])
 
@@ -165,7 +174,7 @@ export async function PATCH(
                 }
             }
 
-            const costoTotal = items.reduce((acc, item) => acc + item.costoTotal, 0)
+            const costoTotal = facturaConIva.total
             validarMontoPagado(costoTotal, compra.montoPagado)
             const estadoPago = estadoPagoDesdeMontos(costoTotal, compra.montoPagado)
             const numeroFactura = String(body.numeroFactura || '').trim() || null

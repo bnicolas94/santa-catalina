@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { ComprasService } from '@/lib/services/compras.service'
 import { normalizarNombreInsumo } from '@/lib/insumos/nombres'
 import {
+    calcularFacturaConIva,
     CompraValidationError,
     cantidadGastoOpcional,
     estadoPagoDesdeMontos,
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
             throw new CompraValidationError('Debe agregar al menos un ítem')
         }
 
-        const items: ItemFactura[] = body.items.map((raw, index) => {
+        const itemsBase: ItemFactura[] = body.items.map((raw, index) => {
             if (!raw || typeof raw !== 'object') throw new CompraValidationError(`Ítem ${index + 1} inválido`)
             const item = raw as Record<string, unknown>
             const tipoItem = item.tipoItem === 'gasto' ? 'gasto' : 'insumo'
@@ -81,7 +82,15 @@ export async function POST(request: Request) {
             }
         })
 
-        const costoTotal = items.reduce((acc, item) => acc + item.costoTotal, 0)
+        const facturaConIva = calcularFacturaConIva(
+            itemsBase.map(item => item.costoTotal),
+            body.aplicarIva === true
+        )
+        const items = itemsBase.map((item, index) => ({
+            ...item,
+            costoTotal: facturaConIva.costosFinales[index],
+        }))
+        const costoTotal = facturaConIva.total
         const estadoSolicitado = String(body.estadoPago || 'pendiente')
         if (!['pagado', 'pendiente', 'a_cuenta'].includes(estadoSolicitado)) {
             throw new CompraValidationError('Estado de pago inválido')

@@ -34,6 +34,10 @@ de stock y de los conceptos de gasto de la factura.
   incluyendo pagos divididos y pagos posteriores.
 - Editar el costo nunca crea, elimina ni modifica pagos existentes. Si el nuevo
   total fuese menor que lo ya pagado, la edición se rechaza.
+- La carga y edición integral permite sumar opcionalmente IVA 21% sobre los
+  importes ingresados. El impuesto se distribuye entre los ítems para que la
+  cabecera, los costos y el pago conserven el mismo total; si no se activa, los
+  importes se toman como valores finales con IVA incluido.
 - Un gasto o servicio exige descripción y categoría; nunca crea un `Insumo`.
 - Los conceptos de gasto permiten cantidad opcional positiva (también decimal),
   guardada en `GastoOperativo.cantidad`. Es informativa: no afecta stock ni multiplica

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+    calcularFacturaConIva,
     distribuirMontoPagadoPorCostos,
     distribuirPagoEntreItems,
     estadoPagoDesdeMontos,
@@ -9,6 +10,30 @@ import {
     validarPagosDivididos,
     validarIdsEdicionCompra,
 } from './validacion'
+
+test('suma IVA 21% al total y lo distribuye sin perder centavos', () => {
+    const factura = calcularFacturaConIva([100, 200], true)
+
+    assert.deepEqual(factura, {
+        subtotal: 300,
+        iva: 63,
+        total: 363,
+        costosFinales: [121, 242],
+    })
+
+    const centavos = calcularFacturaConIva([0.01, 0.01, 0.01], true)
+    assert.equal(centavos.total, 0.04)
+    assert.equal(centavos.costosFinales.reduce((total, costo) => total + costo, 0), 0.04)
+})
+
+test('mantiene los importes cuando no se solicita agregar IVA', () => {
+    assert.deepEqual(calcularFacturaConIva([100, 200], false), {
+        subtotal: 300,
+        iva: 0,
+        total: 300,
+        costosFinales: [100, 200],
+    })
+})
 
 test('rechaza cantidades negativas, cero y valores no numéricos', () => {
     assert.throws(() => numeroPositivo(-1, 'Cantidad'))

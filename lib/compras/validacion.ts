@@ -10,6 +10,7 @@ export type ItemCompraParaPago = {
 }
 
 const CENTAVO = 0.01
+export const IVA_GENERAL_PORCENTAJE = 21
 export const CAJAS_COMPRA = [
     'caja_madre',
     'caja_chica',
@@ -20,6 +21,35 @@ export const CAJAS_COMPRA = [
 ] as const
 
 export class CompraValidationError extends Error {}
+
+function redondearMoneda(value: number): number {
+    return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+export function calcularFacturaConIva(costos: number[], aplicarIva: boolean): {
+    subtotal: number
+    iva: number
+    total: number
+    costosFinales: number[]
+} {
+    const subtotal = redondearMoneda(costos.reduce((acc, costo) => acc + costo, 0))
+    if (!aplicarIva) {
+        return { subtotal, iva: 0, total: subtotal, costosFinales: costos }
+    }
+
+    const iva = redondearMoneda(subtotal * IVA_GENERAL_PORCENTAJE / 100)
+    const total = redondearMoneda(subtotal + iva)
+    let acumulado = 0
+    const costosFinales = costos.map((costo, index) => {
+        const costoFinal = index === costos.length - 1
+            ? redondearMoneda(total - acumulado)
+            : redondearMoneda(costo * (1 + IVA_GENERAL_PORCENTAJE / 100))
+        acumulado = redondearMoneda(acumulado + costoFinal)
+        return costoFinal
+    })
+
+    return { subtotal, iva, total, costosFinales }
+}
 
 export function cantidadGastoOpcional(value: unknown): number | null {
     if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) return null
