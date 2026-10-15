@@ -86,34 +86,34 @@ export function ConfiguracionUniformes() {
         {mensaje && <div role="status" className="alert">{mensaje}</div>}
         <form className="card" onSubmit={evento => { evento.preventDefault(); void guardar('/api/uniformes/configuracion', { tipo: 'empleador', razonSocial, cuit }) }}><div className="card-body" style={{ display: 'grid', gap: 12 }}>
             <h3>Empleador</h3>
-            <label className="form-control"><span className="label">Razón social completa</span><input className="input" required value={razonSocial} onChange={evento => setRazonSocial(evento.target.value)} /></label>
-            <label className="form-control"><span className="label">CUIT</span><input className="input" required inputMode="numeric" value={cuit} onChange={evento => setCuit(evento.target.value)} /></label>
+            <label className="form-group"><span className="form-label">Razón social completa</span><input className="form-input" required value={razonSocial} onChange={evento => setRazonSocial(evento.target.value)} /></label>
+            <label className="form-group"><span className="form-label">CUIT</span><input className="form-input" required inputMode="numeric" value={cuit} onChange={evento => setCuit(evento.target.value)} /></label>
             <div><button type="submit" className="btn btn-primary" disabled={guardando}>Guardar empleador</button></div>
         </div></form>
 
         <form className="card" onSubmit={evento => { evento.preventDefault(); void guardar('/api/uniformes/configuracion', { tipo: 'establecimiento', ubicacionId, ...establecimiento }) }}><div className="card-body" style={{ display: 'grid', gap: 12 }}>
             <h3>Establecimiento donde trabaja el empleado</h3>
-            <label className="form-control"><span className="label">Sede</span><select className="input" required value={ubicacionId} onChange={evento => setUbicacionId(evento.target.value)}><option value="">Seleccionar</option>{configuracion.establecimientos.map(item => <option key={item.id} value={item.id}>{item.nombre}{item.activo ? '' : ' (inactiva)'}</option>)}</select></label>
+            <label className="form-group"><span className="form-label">Sede</span><select className="form-input" required value={ubicacionId} onChange={evento => setUbicacionId(evento.target.value)}><option value="">Seleccionar</option>{configuracion.establecimientos.map(item => <option key={item.id} value={item.id}>{item.nombre}{item.activo ? '' : ' (inactiva)'}</option>)}</select></label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                {([['direccion', 'Dirección'], ['localidad', 'Localidad'], ['codigoPostal', 'Código postal'], ['provincia', 'Provincia']] as const).map(([campo, etiqueta]) => <label className="form-control" key={campo}><span className="label">{etiqueta}</span><input className="input" required value={establecimiento[campo]} onChange={evento => setEstablecimiento(actual => ({ ...actual, [campo]: evento.target.value }))} /></label>)}
+                {([['direccion', 'Dirección'], ['localidad', 'Localidad'], ['codigoPostal', 'Código postal'], ['provincia', 'Provincia']] as const).map(([campo, etiqueta]) => <label className="form-group" key={campo}><span className="form-label">{etiqueta}</span><input className="form-input" required value={establecimiento[campo]} onChange={evento => setEstablecimiento(actual => ({ ...actual, [campo]: evento.target.value }))} /></label>)}
             </div>
             <div><button type="submit" className="btn btn-primary" disabled={guardando || !ubicacionId}>Guardar establecimiento</button></div>
         </div></form>
 
         <form className="card" onSubmit={evento => { evento.preventDefault(); void guardar('/api/uniformes/configuracion', { tipo: 'epp', puestoId, eppNecesarios }) }}><div className="card-body" style={{ display: 'grid', gap: 12 }}>
             <h3>Elementos de protección necesarios</h3>
-            <label className="form-control"><span className="label">Puesto</span><select className="input" value={puestoId} onChange={evento => setPuestoId(evento.target.value)}><option value="">Valor general para puestos sin configuración específica</option>{configuracion.puestos.map(item => <option key={item.id} value={item.id}>{item.nombre}{item.activo ? '' : ' (inactivo)'}</option>)}</select></label>
-            <label className="form-control"><span className="label">EPP indicados por Higiene y Seguridad o la ART</span><textarea className="input" required maxLength={1000} value={eppNecesarios} onChange={evento => setEppNecesarios(evento.target.value)} /></label>
+            <label className="form-group"><span className="form-label">Puesto</span><select className="form-input" value={puestoId} onChange={evento => setPuestoId(evento.target.value)}><option value="">Valor general para puestos sin configuración específica</option>{configuracion.puestos.map(item => <option key={item.id} value={item.id}>{item.nombre}{item.activo ? '' : ' (inactivo)'}</option>)}</select></label>
+            <label className="form-group"><span className="form-label">EPP indicados por Higiene y Seguridad o la ART</span><textarea className="form-input" required maxLength={1000} value={eppNecesarios} onChange={evento => setEppNecesarios(evento.target.value)} /></label>
             <div><button type="submit" className="btn btn-primary" disabled={guardando}>Guardar EPP requeridos</button></div>
         </div></form>
 
         <form className="card" onSubmit={evento => { evento.preventDefault(); void guardar(`/api/uniformes/stock/${stockId}`, { tipoModelo, marca, certificado: certificado === 'SI' }) }}><div className="card-body" style={{ display: 'grid', gap: 12 }}>
             <h3>Ficha de producto</h3>
-            <label className="form-control"><span className="label">Prenda y talle</span><select className="input" required value={stockId} onChange={evento => setStockId(evento.target.value)}><option value="">Seleccionar</option>{stock.map(item => <option key={item.id} value={item.id}>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.talle}</option>)}</select></label>
+            <label className="form-group"><span className="form-label">Prenda y talle</span><select className="form-input" required value={stockId} onChange={evento => setStockId(evento.target.value)}><option value="">Seleccionar</option>{stock.map(item => <option key={item.id} value={item.id}>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.talle}</option>)}</select></label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                <label className="form-control"><span className="label">Tipo / modelo</span><input className="input" required maxLength={100} value={tipoModelo} onChange={evento => setTipoModelo(evento.target.value)} /></label>
-                <label className="form-control"><span className="label">Marca</span><input className="input" required maxLength={100} value={marca} onChange={evento => setMarca(evento.target.value)} /></label>
-                <label className="form-control"><span className="label">Posee certificación</span><select className="input" required value={certificado} onChange={evento => setCertificado(evento.target.value)}><option value="">Seleccionar</option><option value="SI">Sí</option><option value="NO">No</option></select></label>
+                <label className="form-group"><span className="form-label">Tipo / modelo</span><input className="form-input" required maxLength={100} value={tipoModelo} onChange={evento => setTipoModelo(evento.target.value)} /></label>
+                <label className="form-group"><span className="form-label">Marca</span><input className="form-input" required maxLength={100} value={marca} onChange={evento => setMarca(evento.target.value)} /></label>
+                <label className="form-group"><span className="form-label">Posee certificación</span><select className="form-input" required value={certificado} onChange={evento => setCertificado(evento.target.value)}><option value="">Seleccionar</option><option value="SI">Sí</option><option value="NO">No</option></select></label>
             </div>
             <div><button type="submit" className="btn btn-primary" disabled={guardando || !stockId || !certificado}>Guardar ficha de producto</button></div>
         </div></form>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { UniformesTab } from './UniformesTab'
 import { ConfiguracionUniformes } from './ConfiguracionUniformes'
+import styles from './PlanillaUniformesModal.module.css'
 
 type Empleado = { id: string; nombre: string; apellido: string | null; ubicacionId: string | null }
 type Stock = { id: string; prenda: 'REMERA' | 'BUZO'; talle: string; cantidad: number }
@@ -55,6 +56,10 @@ export function PlanillaUniformesModal({ onClose }: { onClose: () => void }) {
     const empleadosFiltrados = useMemo(() => empleados.filter(empleado =>
         `${empleado.nombre} ${empleado.apellido || ''}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')),
     ), [empleados, busqueda])
+    const empleadoSeleccionado = empleados.find(empleado => empleado.id === empleadoId)
+    const totalPrendas = stock.reduce((total, item) => total + item.cantidad, 0)
+
+    const iniciales = (empleado: Empleado) => `${empleado.nombre[0] || ''}${empleado.apellido?.[0] || ''}`.toUpperCase()
 
     async function registrarMovimiento(evento: React.FormEvent) {
         evento.preventDefault()
@@ -78,41 +83,44 @@ export function PlanillaUniformesModal({ onClose }: { onClose: () => void }) {
         }
     }
 
-    return <div className="modal-overlay" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-label="Ropa de trabajo" style={{ maxWidth: 1100, width: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="modal-header"><h2>Ropa de trabajo</h2><button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar">×</button></div>
-        <div className="modal-body" style={{ overflow: 'auto' }}>
-            {error && <div role="alert" className="alert alert-error">{error}</div>}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                <button type="button" className={`btn ${pestana === 'entregas' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setPestana('entregas')}>Entregas</button>
-                <button type="button" className={`btn ${pestana === 'stock' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setPestana('stock'); void cargar() }}>Stock y movimientos</button>
-                <button type="button" className={`btn ${pestana === 'configuracion' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setPestana('configuracion')}>Configuración 299/11</button>
-            </div>
-            {loading ? <p>Cargando ropa de trabajo...</p> : pestana === 'configuracion' ? <ConfiguracionUniformes /> : pestana === 'entregas' ? <div style={{ display: 'grid', gap: 16 }}>
-                <label className="form-control"><span className="label">Buscar empleado</span><input className="input" value={busqueda} onChange={evento => setBusqueda(evento.target.value)} placeholder="Nombre o apellido" /></label>
-                <label className="form-control"><span className="label">Empleado</span><select className="input" value={empleadoId} onChange={evento => setEmpleadoId(evento.target.value)}>
-                    <option value="">Seleccionar empleado</option>
-                    {empleadosFiltrados.map(empleado => <option key={empleado.id} value={empleado.id}>{empleado.nombre} {empleado.apellido}</option>)}
-                </select></label>
-                {empleadoId ? <UniformesTab key={empleadoId} empleadoId={empleadoId} /> : <p>Seleccioná un empleado para consultar o registrar sus entregas.</p>}
-            </div> : <div style={{ display: 'grid', gap: 24 }}>
-                {esAdmin && <form onSubmit={registrarMovimiento} className="card"><div className="card-body" style={{ display: 'grid', gap: 12 }}>
-                    <h3>Ingreso o ajuste de stock</h3>
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        <label className="form-control"><span className="label">Prenda</span><select className="input" value={prenda} onChange={evento => setPrenda(evento.target.value as 'REMERA' | 'BUZO')}><option value="REMERA">Remera</option><option value="BUZO">Buzo</option></select></label>
-                        <label className="form-control"><span className="label">Talle</span><input className="input" required maxLength={20} value={talle} onChange={evento => setTalle(evento.target.value)} placeholder="M, L, XL..." /></label>
-                        <label className="form-control"><span className="label">Cambio en unidades</span><input className="input" type="number" required step={1} value={delta} onChange={evento => setDelta(Number(evento.target.value))} title="Positivo para ingresar, negativo para descontar" /></label>
-                    </div>
-                    <label className="form-control"><span className="label">Motivo</span><input className="input" required maxLength={500} value={motivo} onChange={evento => setMotivo(evento.target.value)} placeholder="Compra, conteo físico, corrección..." /></label>
-                    <p>Usá un número positivo para ingresar prendas y negativo para ajustar una diferencia.</p>
-                    <div><button type="submit" className="btn btn-primary" disabled={guardando}>{guardando ? 'Guardando...' : 'Registrar movimiento'}</button></div>
-                </div></form>}
-                <section><h3>Existencias</h3>{stock.length === 0 ? <p>Todavía no hay prendas cargadas.</p> : <div className="table-container"><table className="table"><thead><tr><th>Prenda</th><th>Talle</th><th>Disponible</th></tr></thead><tbody>{stock.map(item => <tr key={item.id}><td>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'}</td><td>{item.talle}</td><td>{item.cantidad}</td></tr>)}</tbody></table></div>}</section>
-                <section><h3>Últimos movimientos</h3>{movimientos.length === 0 ? <p>No hay movimientos.</p> : <div className="table-container"><table className="table"><thead><tr><th>Fecha</th><th>Prenda</th><th>Movimiento</th><th>Saldo</th><th>Responsable</th><th>Motivo</th></tr></thead><tbody>{movimientos.map(item => <tr key={item.id}>
-                    <td>{new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Buenos_Aires' }).format(new Date(item.createdAt))}</td>
-                    <td>{item.stock.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.stock.talle}</td><td>{item.tipo} ({item.delta > 0 ? '+' : ''}{item.delta})</td><td>{item.saldoPosterior}</td>
-                    <td>{item.registradoPor.nombre} {item.registradoPor.apellido}</td><td>{item.motivo || (item.entrega ? `Entrega a ${item.entrega.empleado.nombre} ${item.entrega.empleado.apellido || ''}` : '—')}</td>
+    return <div className={styles.overlay} role="presentation" onMouseDown={onClose}><section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="uniformes-title" onMouseDown={evento => evento.stopPropagation()}>
+        <header className={styles.header}>
+            <div><span className={styles.eyebrow}>Gestión de personal</span><h2 id="uniformes-title">Ropa de trabajo</h2><p>Controlá existencias, registrá entregas y emití la constancia reglamentaria desde un único lugar.</p></div>
+            <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Cerrar">×</button>
+        </header>
+        <div className={styles.summary}>
+            <div><strong>{empleados.length}</strong><span>Empleados activos</span></div>
+            <div><strong>{totalPrendas}</strong><span>Prendas disponibles</span></div>
+            <div><strong>{stock.length}</strong><span>Combinaciones de talle</span></div>
+        </div>
+        <nav className={styles.tabs} aria-label="Secciones de ropa de trabajo">
+            <button type="button" className={`${styles.tab} ${pestana === 'entregas' ? styles.tabActive : ''}`} onClick={() => setPestana('entregas')}><span className={styles.tabIcon}>✓</span><span><strong>Entregas</strong><small>Por empleado</small></span></button>
+            <button type="button" className={`${styles.tab} ${pestana === 'stock' ? styles.tabActive : ''}`} onClick={() => { setPestana('stock'); void cargar() }}><span className={styles.tabIcon}>□</span><span><strong>Stock y movimientos</strong><small>Existencias y auditoría</small></span></button>
+            <button type="button" className={`${styles.tab} ${pestana === 'configuracion' ? styles.tabActive : ''}`} onClick={() => setPestana('configuracion')}><span className={styles.tabIcon}>⚙</span><span><strong>Configuración 299/11</strong><small>Datos reglamentarios</small></span></button>
+        </nav>
+        {error && <div role="alert" className={styles.error}>{error}</div>}
+        <main className={styles.content}>
+            {loading ? <div className={styles.loading}><span className={styles.spinner} /><span>Cargando ropa de trabajo…</span></div> : pestana === 'configuracion' ? <div className={styles.configContent}><ConfiguracionUniformes /></div> : pestana === 'entregas' ? <div className={styles.employeeWorkspace}>
+                <aside className={styles.employeeSidebar}>
+                    <div className={styles.employeeSearch}><label className={styles.searchBox}><span>⌕</span><input value={busqueda} onChange={evento => setBusqueda(evento.target.value)} placeholder="Buscar empleado…" aria-label="Buscar empleado" /></label><small>{empleadosFiltrados.length} resultado{empleadosFiltrados.length === 1 ? '' : 's'}</small></div>
+                    <div className={styles.employeeList}>{empleadosFiltrados.length ? empleadosFiltrados.map(empleado => <button type="button" key={empleado.id} className={`${styles.employeeCard} ${empleadoId === empleado.id ? styles.employeeCardActive : ''}`} onClick={() => setEmpleadoId(empleado.id)}><span className={styles.avatar}>{iniciales(empleado)}</span><span><strong>{empleado.nombre} {empleado.apellido || ''}</strong><span>{empleadoId === empleado.id ? 'Ficha seleccionada' : 'Ver entregas y talles'}</span></span></button>) : <div className={styles.empty}>No encontramos empleados con ese nombre.</div>}</div>
+                </aside>
+                <section className={styles.employeePanel}>{empleadoSeleccionado ? <UniformesTab key={empleadoSeleccionado.id} empleadoId={empleadoSeleccionado.id} /> : <div className={styles.empty}><span className={styles.emptyIcon}>⌕</span><h3>Seleccioná un empleado</h3><p>Vas a poder consultar sus talles, registrar entregas, anular movimientos e imprimir la constancia correspondiente.</p></div>}</section>
+            </div> : <div className={styles.stockContent}>
+                {esAdmin && <section className={styles.panel}><div className={styles.panelHeader}><div><h3>Registrar movimiento de stock</h3><p>Ingresá una compra o corregí una diferencia de inventario.</p></div></div><form onSubmit={registrarMovimiento} className={styles.panelBody}>
+                    <div className={styles.stockForm}>
+                        <label className={styles.field}><span>Prenda</span><select className="form-input" value={prenda} onChange={evento => setPrenda(evento.target.value as 'REMERA' | 'BUZO')}><option value="REMERA">Remera</option><option value="BUZO">Buzo</option></select></label>
+                        <label className={styles.field}><span>Talle</span><input className="form-input" required maxLength={20} value={talle} onChange={evento => setTalle(evento.target.value)} placeholder="M, L, XL…" /></label>
+                        <label className={styles.field}><span>Cambio</span><input className="form-input" type="number" required step={1} value={delta} onChange={evento => setDelta(Number(evento.target.value))} title="Positivo para ingresar, negativo para descontar" /></label>
+                        <label className={styles.field}><span>Motivo</span><input className="form-input" required maxLength={500} value={motivo} onChange={evento => setMotivo(evento.target.value)} placeholder="Compra, conteo físico, corrección…" /></label>
+                        <button type="submit" className="btn btn-primary" disabled={guardando}>{guardando ? 'Guardando…' : 'Registrar'}</button>
+                    </div><p className={styles.helper}>Los valores positivos ingresan unidades; los negativos corrigen faltantes. Todo movimiento queda auditado.</p>
+                </form></section>}
+                <section className={styles.panel}><div className={styles.panelHeader}><div><h3>Existencias actuales</h3><p>Disponibilidad total discriminada por prenda y talle.</p></div></div><div className={styles.panelBody}>{stock.length === 0 ? <div className={styles.empty}>Todavía no hay prendas cargadas.</div> : <div className={styles.stockGrid}>{stock.map(item => <article key={item.id} className={styles.stockCard}><div className={styles.stockCardTop}><span className={styles.garment}>{item.prenda === 'REMERA' ? 'T' : '▣'}</span><strong>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.talle}</strong></div><div className={`${styles.stockCount} ${item.cantidad === 0 ? styles.zero : ''}`}>{item.cantidad} <span>unidades</span></div></article>)}</div>}</div></section>
+                <section className={styles.panel}><div className={styles.panelHeader}><div><h3>Últimos movimientos</h3><p>Trazabilidad de ingresos, ajustes, entregas y anulaciones.</p></div></div>{movimientos.length === 0 ? <div className={styles.empty}>No hay movimientos registrados.</div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Fecha</th><th>Prenda</th><th>Movimiento</th><th>Saldo</th><th>Responsable</th><th>Motivo</th></tr></thead><tbody>{movimientos.map(item => <tr key={item.id}>
+                    <td>{new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Buenos_Aires' }).format(new Date(item.createdAt))}</td><td>{item.stock.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.stock.talle}</td><td><span className={item.delta > 0 ? styles.movementPositive : styles.movementNegative}>{item.delta > 0 ? '+' : ''}{item.delta}</span> · {item.tipo}</td><td>{item.saldoPosterior}</td><td>{item.registradoPor.nombre} {item.registradoPor.apellido}</td><td>{item.motivo || (item.entrega ? `Entrega a ${item.entrega.empleado.nombre} ${item.entrega.empleado.apellido || ''}` : '—')}</td>
                 </tr>)}</tbody></table></div>}</section>
             </div>}
-        </div>
+        </main>
     </section></div>
 }

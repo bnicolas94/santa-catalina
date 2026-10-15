@@ -137,9 +137,9 @@ export function UniformesTab({ empleadoId }: { empleadoId: string }) {
         <section className="card"><div className="card-body">
             <h3>Talles habituales</h3>
             <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'end' }}>
-                {(['remera', 'buzo'] as const).map(prenda => <label key={prenda} className="form-control">
-                    <span className="label">Talle {prenda}</span>
-                    <input className="input" value={talles[prenda]} disabled={!esAdmin || guardando}
+                {(['remera', 'buzo'] as const).map(prenda => <label key={prenda} className="form-group">
+                    <span className="form-label">Talle {prenda}</span>
+                    <input className="form-input" value={talles[prenda]} disabled={!esAdmin || guardando}
                         onChange={evento => setTalles(actual => ({ ...actual, [prenda]: evento.target.value }))} />
                 </label>)}
                 {esAdmin && <button type="button" className="btn btn-primary" disabled={guardando} onClick={guardarTalles}>Guardar talles</button>}
@@ -165,6 +165,7 @@ export function UniformesTab({ empleadoId }: { empleadoId: string }) {
                     <td>{entrega.registradoPor ? `${entrega.registradoPor.nombre} ${entrega.registradoPor.apellido || ''}` : 'Sin registro'}</td>
                     <td>{entrega.estado === 'ANULADA' ? `Anulada: ${entrega.motivoAnulacion || ''}` : 'Activa'}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => window.open(`/empleados/${empleadoId}/uniformes/imprimir/${entrega.id}`, '_blank')}>Comprobante</button>
                         {esAdmin && entrega.estado === 'ACTIVA' && <button type="button" className="btn btn-sm btn-ghost"
                             disabled={guardando} onClick={() => void anularEntrega(entrega.id)}>Anular</button>}
                     </td>
@@ -176,19 +177,19 @@ export function UniformesTab({ empleadoId }: { empleadoId: string }) {
             <div className="modal-header"><h3>Registrar entrega de ropa</h3><button type="button" className="btn-close" onClick={() => setMostrarFormulario(false)} aria-label="Cerrar">×</button></div>
             <form onSubmit={registrarEntrega} className="modal-body" style={{ display: 'grid', gap: 16 }}>
                 {error && <div role="alert" className="alert alert-error">{error}</div>}
-                <label className="form-control"><span className="label">Fecha de entrega</span><input type="date" className="input" required value={fecha} onChange={evento => setFecha(evento.target.value)} /></label>
+                <label className="form-group"><span className="form-label">Fecha de entrega</span><input type="date" className="form-input" required value={fecha} onChange={evento => setFecha(evento.target.value)} /></label>
                 {lineas.map((linea, indice) => <div key={indice} style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap' }}>
-                    <label className="form-control" style={{ flex: 1, minWidth: 180 }}><span className="label">Prenda y talle</span>
-                        <select className="input" required value={linea.stockId} onChange={evento => cambiarLinea(indice, { stockId: evento.target.value })}>
+                    <label className="form-group" style={{ flex: 1, minWidth: 180 }}><span className="form-label">Prenda y talle</span>
+                        <select className="form-input" required value={linea.stockId} onChange={evento => cambiarLinea(indice, { stockId: evento.target.value })}>
                             <option value="">Seleccionar</option>
                             {stock.filter(item => item.cantidad > 0).map(item => <option key={item.id} value={item.id} disabled={!item.tipoModelo || !item.marca || item.certificado === null}>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.talle} · disponible {item.cantidad}{!item.tipoModelo || !item.marca || item.certificado === null ? ' · configurar ficha' : ''}</option>)}
                         </select>
                     </label>
-                    <label className="form-control"><span className="label">Cantidad</span><input type="number" className="input" min={1} step={1} required style={{ width: 100 }} value={linea.cantidad} onChange={evento => cambiarLinea(indice, { cantidad: Number(evento.target.value) })} /></label>
+                    <label className="form-group"><span className="form-label">Cantidad</span><input type="number" className="form-input" min={1} step={1} required style={{ width: 100 }} value={linea.cantidad} onChange={evento => cambiarLinea(indice, { cantidad: Number(evento.target.value) })} /></label>
                     {lineas.length > 1 && <button type="button" className="btn btn-ghost" onClick={() => setLineas(actuales => actuales.filter((_, posicion) => posicion !== indice))}>Quitar</button>}
                 </div>)}
                 <button type="button" className="btn btn-ghost" disabled={lineas.length >= 20} onClick={() => setLineas(actuales => [...actuales, { stockId: '', cantidad: 1 }])}>+ Agregar prenda</button>
-                <label className="form-control"><span className="label">Observaciones</span><textarea className="input" maxLength={500} value={observaciones} onChange={evento => setObservaciones(evento.target.value)} /></label>
+                <label className="form-group"><span className="form-label">Observaciones</span><textarea className="form-input" maxLength={500} value={observaciones} onChange={evento => setObservaciones(evento.target.value)} /></label>
                 <p>Al confirmar se descontará el stock. El comprobante podrá imprimirse desde el historial.</p>
                 <div style={{ display: 'flex', justifyContent: 'end', gap: 8 }}><button type="button" className="btn btn-ghost" onClick={() => setMostrarFormulario(false)}>Cancelar</button><button type="submit" className="btn btn-primary" disabled={guardando}>{guardando ? 'Registrando...' : 'Confirmar entrega'}</button></div>
             </form>
