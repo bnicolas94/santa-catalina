@@ -10,10 +10,19 @@ const estado: Record<string, string> = { pagado: 'Pagada', a_cuenta: 'Pago parci
 const medio: Record<string, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', mercado_pago: 'Mercado Pago', cheque: 'Cheque' }
 const POR_PAGINA = 10
 
-export default function HistorialProveedor({ facturas }: { facturas: FacturaProveedor[] }) {
+export default function HistorialProveedor({
+    facturas,
+    onFacturaEliminada,
+}: {
+    facturas: FacturaProveedor[]
+    onFacturaEliminada: () => Promise<void> | void
+}) {
     const [filtros, setFiltros] = useState({ busqueda: '', sede: '', estado: '', desde: '', hasta: '' })
     const [pagina, setPagina] = useState(1)
     const [abiertas, setAbiertas] = useState<string[]>([])
+    const [eliminandoId, setEliminandoId] = useState<string | null>(null)
+    const [mensajeAccion, setMensajeAccion] = useState('')
+    const [errorAccion, setErrorAccion] = useState('')
     const filtradas = filtrarHistorialProveedor(facturas, filtros)
     const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA))
     const paginaActual = Math.min(pagina, paginas)
@@ -26,12 +35,43 @@ export default function HistorialProveedor({ facturas }: { facturas: FacturaProv
         setPagina(1)
     }
 
+    async function eliminarFactura(factura: FacturaProveedor) {
+        if (factura.origen !== 'compra') return
+        const detallePago = factura.pagado > 0.01
+            ? `Registra ${importe(factura.pagado)} pagados, que también se revertirán.`
+            : 'No registra pagos.'
+        const confirmada = confirm(
+            `¿Eliminar la factura ${factura.numeroFactura || 'sin número'} (${estado[factura.estadoPago] || factura.estadoPago}) por ${importe(factura.total)}?\n\n${detallePago}\nSe revertirán sus ítems, stock y movimientos asociados. No se modificarán otras facturas con el mismo número.`
+        )
+        if (!confirmada) return
+
+        setEliminandoId(factura.id)
+        setMensajeAccion('')
+        setErrorAccion('')
+        try {
+            const respuesta = await fetch(`/api/compras/${factura.id}`, { method: 'DELETE' })
+            if (!respuesta.ok) {
+                const data = await respuesta.json() as { error?: string }
+                throw new Error(data.error || 'No se pudo eliminar la factura')
+            }
+            setAbiertas(actual => actual.filter(id => id !== factura.id))
+            await onFacturaEliminada()
+            setMensajeAccion(`Factura ${factura.numeroFactura || 'sin número'} eliminada correctamente.`)
+        } catch (error: unknown) {
+            setErrorAccion(error instanceof Error ? error.message : 'No se pudo eliminar la factura')
+        } finally {
+            setEliminandoId(null)
+        }
+    }
+
     return (
         <section className="card">
             <div className={`card-header ${styles.encabezado}`}>
                 <h3>Facturas y pagos</h3>
                 <p className={styles.ayuda}>Consultá la sede de destino y abrí cada factura para ver sus ítems y pagos.</p>
             </div>
+            {mensajeAccion && <p className={styles.mensajeExito}>{mensajeAccion}</p>}
+            {errorAccion && <p className={styles.mensajeError}>{errorAccion}</p>}
             <div className={`card-body ${styles.filtros}`}>
                 <label className={styles.busqueda}>
                     <span className="form-label">Buscar</span>
@@ -65,7 +105,7 @@ export default function HistorialProveedor({ facturas }: { facturas: FacturaProv
             </div>
             <div className="table-container">
                 <table className={`table ${styles.tabla}`}>
-                    <thead><tr><th>Fecha factura</th><th>Factura</th><th>Sede de destino</th><th>Total</th><th>Pagado / forma de pago</th><th>Saldo pendiente</th><th>Detalle</th></tr></thead>
+                    <thead><tr><th>Fecha factura</th><th>Factura</th><th>Sede de destino</th><th>Total</th><th>Pagado / forma de pago</th><th>Saldo pendiente</th><th>Acciones</th></tr></thead>
                     <tbody>
                         {visibles.length === 0 && <tr><td colSpan={7} className="text-center p-4">{facturas.length ? 'No hay facturas con estos filtros.' : 'Sin facturas registradas.'}</td></tr>}
                         {visibles.map(factura => {
@@ -89,7 +129,16 @@ export default function HistorialProveedor({ facturas }: { facturas: FacturaProv
                                             {!factura.pagos.length && !factura.pagoSinDetalle && <div className={styles.ayuda}>Sin pagos registrados</div>}
                                         </td>
                                         <td className={styles.moneda}><strong>{importe(factura.pendiente)}</strong></td>
-                                        <td><button className="btn btn-ghost btn-sm" aria-expanded={abierta} aria-controls={`factura-${factura.id}`} aria-label={`${abierta ? 'Cerrar' : 'Ver'} detalle de factura ${factura.numeroFactura || 'sin número'} del ${fecha(factura.fecha)}`} onClick={() => setAbiertas(actual => abierta ? actual.filter(id => id !== factura.id) : [...actual, factura.id])}>{abierta ? 'Cerrar' : 'Ver detalle'}</button></td>
+                                        <td><div className={styles.acciones}>
+                                            <button className="btn btn-ghost btn-sm" aria-expanded={abierta} aria-controls={`factura-${factura.id}`} aria-label={`${abierta ? 'Cerrar' : 'Ver'} detalle de factura ${factura.numeroFactura || 'sin número'} del ${fecha(factura.fecha)}`} onClick={() => setAbiertas(actual => abierta ? actual.filter(id => id !== factura.id) : [...actual, factura.id])}>{abierta ? 'Cerrar' : 'Ver detalle'}</button>
+                                            {factura.origen === 'compra' && <button
+                                                className="btn btn-ghost btn-sm"
+                                                style={{ color: 'var(--color-danger)' }}
+                                                disabled={eliminandoId === factura.id}
+                                                aria-label={`Eliminar factura ${factura.numeroFactura || 'sin número'} ${estado[factura.estadoPago] || factura.estadoPago}`}
+                                                onClick={() => eliminarFactura(factura)}
+                                            >{eliminandoId === factura.id ? 'Eliminando…' : '🗑️ Eliminar'}</button>}
+                                        </div></td>
                                     </tr>
                                     {abierta && <tr id={`factura-${factura.id}`}><td colSpan={7} className={styles.detalle}>
                                         <div className={styles.encabezadoDetalle}>

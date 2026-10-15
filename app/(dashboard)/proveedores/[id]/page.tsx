@@ -157,7 +157,7 @@ export default function ProveedorPerfilPage({ params }: { params: Promise<{ id: 
                 </div></div>)}
             </div>
             {proveedor.resumen.sinDetallePago > 0 && <p className={styles.aviso}>{proveedor.resumen.sinDetallePago} {proveedor.resumen.sinDetallePago === 1 ? 'factura tiene' : 'facturas tienen'} pagos sin detalle completo de medio, caja o fecha. Consultá el aviso en cada factura.</p>}
-            <HistorialProveedor key={proveedor.id} facturas={proveedor.facturas} />
+            <HistorialProveedor key={proveedor.id} facturas={proveedor.facturas} onFacturaEliminada={() => fetchProveedor()} />
 
             <div className={styles.informacion}>
                 {/* Datos de contacto */}
