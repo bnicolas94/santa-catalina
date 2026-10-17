@@ -36,6 +36,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 2. La configuración salarial sigue una **cascada de prioridad**:
    `Empleado (Config Específica) -> Rol (Valores por Defecto) -> Saldo Base Global`.
 3. El rol también define accesos independientes por módulo. La sesión hereda esas casillas y el middleware aplica el mismo permiso tanto a la página como a sus APIs; `ADMIN` conserva acceso total.
+4. El rol guarda una jornada diaria esperada como plantilla. Desde Tipos de empleado, `ADMIN` puede aplicarla masivamente a todas las fichas vinculadas; la operación no modifica liquidaciones ya pagadas y las altas futuras toman ese valor al elegir el rol.
 
 ### B. Ciclo de Asistencia Diaria
 1. El empleado ficha en el reloj biométrico.
@@ -86,7 +87,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 
 * **Idempotencia**: El importador de fichadas verifica `empleadoId + fechaHora + tipo` para evitar duplicar registros si se carga el mismo archivo dos veces.
 * **Timezones**: Las comparaciones de horas para tardanzas deben ser precisas. El sistema normaliza a la fecha local del servidor para comparar con los strings de "HH:mm" de los turnos.
-* **Redondeo de Horas Extras**: Se implementa una regla de negocio donde las horas extras se compensan con tardanzas del mismo periodo y se redondean al 0.5 más cercano.
+* **Horas Extras**: El excedente sobre la jornada esperada se liquida al minuto real. La actualización masiva por rol cambia la referencia futura de cada ficha, no los snapshots históricos.
 * **Feriados**: El sistema busca en la tabla `Feriado` para aplicar el recargo (habitualmente 100%) sobre las horas trabajadas.
 
 ---

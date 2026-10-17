@@ -13,7 +13,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         if (usuario.rol !== 'ADMIN') return NextResponse.json({ error: 'Sólo un administrador puede modificar tipos de empleado.' }, { status: 403 })
 
         const { id } = await context.params
-        const data = normalizarRolEmpleado(await req.json())
+        const entrada = await req.json()
+        const data = normalizarRolEmpleado(entrada)
+        const aplicarHorasAEmpleados = entrada?.aplicarHorasAEmpleados === true
 
         const actualizado = await prisma.$transaction(async tx => {
             const anterior = await tx.rolEmpleado.findUniqueOrThrow({
@@ -33,7 +35,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
             const rolActualizado = await tx.rolEmpleado.update({ where: { id }, data })
             // `Empleado.rol` se conserva por compatibilidad con accesos históricos.
             // Al renombrar el tipo, ambos vínculos deben seguir diciendo lo mismo.
-            await tx.empleado.updateMany({ where: { rolId: id }, data: { rol: data.nombre } })
+            const empleadosActualizados = await tx.empleado.updateMany({
+                where: { rolId: id },
+                data: aplicarHorasAEmpleados
+                    ? { rol: data.nombre, horasTrabajoDiarias: data.horasTrabajoDiarias }
+                    : { rol: data.nombre },
+            })
 
             const cambios = anterior.empleados.flatMap(empleado => {
                 const configuracionAnterior = configuracionSalarialEfectiva({ ...empleado, rolRel: anterior })
@@ -56,10 +63,14 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
             })
             if (cambios.length > 0) await tx.historialSalarial.createMany({ data: cambios })
 
-            return tx.rolEmpleado.findUniqueOrThrow({
+            const rol = await tx.rolEmpleado.findUniqueOrThrow({
                 where: { id },
                 include: { _count: { select: { empleados: true } } },
             })
+            return {
+                ...rol,
+                empleadosActualizados: aplicarHorasAEmpleados ? empleadosActualizados.count : 0,
+            }
         })
 
         return NextResponse.json(actualizado)

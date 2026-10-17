@@ -1220,6 +1220,7 @@ model RolEmpleado {
   permisoAtencionAdmin Boolean    @default(false) @map("permiso_atencion_admin")
   jornal               Float      @default(0)
   valorHoraExtra       Float      @default(0) @map("valor_hora_extra")
+  horasTrabajoDiarias  Float      @default(8) @map("horas_trabajo_diarias")
   cicloPago            CicloPago  @default(SEMANAL) @map("ciclo_pago")
   empleados            Empleado[]
   historialSalarial    HistorialSalarial[]

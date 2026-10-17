@@ -24,6 +24,7 @@ export interface RolEmpleadoInput {
     permisoAtencionAdmin?: unknown
     jornal?: unknown
     valorHoraExtra?: unknown
+    horasTrabajoDiarias?: unknown
     cicloPago?: unknown
 }
 
@@ -38,6 +39,14 @@ function montoNoNegativo(value: unknown, field: string): number {
     const parsed = Number(value ?? 0)
     if (!Number.isFinite(parsed) || parsed < 0) throw new RolEmpleadoValidationError(`${field} debe ser un importe válido mayor o igual a cero.`)
     return Math.round(parsed * 100) / 100
+}
+
+function horasEsperadas(value: unknown): number {
+    const parsed = Number(value ?? 8)
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 24) {
+        throw new RolEmpleadoValidationError('Las horas esperadas deben ser mayores a cero y no superar las 24 horas.')
+    }
+    return Math.round(parsed * 60) / 60
 }
 
 export function normalizarRolEmpleado(input: RolEmpleadoInput) {
@@ -74,6 +83,7 @@ export function normalizarRolEmpleado(input: RolEmpleadoInput) {
         permisoAtencionAdmin: input.permisoAtencionAdmin === true,
         jornal: montoNoNegativo(input.jornal, 'El monto base'),
         valorHoraExtra: montoNoNegativo(input.valorHoraExtra, 'El valor de hora extra'),
+        horasTrabajoDiarias: horasEsperadas(input.horasTrabajoDiarias),
         cicloPago: cicloPago as CicloRol,
     }
 }

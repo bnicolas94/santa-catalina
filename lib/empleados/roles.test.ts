@@ -11,6 +11,7 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         cicloPago: 'mensual',
         jornal: '150000.129',
         valorHoraExtra: '4500',
+        horasTrabajoDiarias: '8.5',
         permisoCaja: true,
         permisoFlota: true,
         permisoAtencion: true,
@@ -37,6 +38,7 @@ test('normaliza la identidad y los importes del tipo de empleado', () => {
         permisoAtencionAdmin: false,
         jornal: 150000.13,
         valorHoraExtra: 4500,
+        horasTrabajoDiarias: 8.5,
         cicloPago: 'MENSUAL',
     })
 })
@@ -45,4 +47,6 @@ test('rechaza importes negativos, colores y ciclos inválidos', () => {
     assert.throws(() => normalizarRolEmpleado({ nombre: 'ROL', jornal: -1 }))
     assert.throws(() => normalizarRolEmpleado({ nombre: 'ROL', color: 'rojo' }))
     assert.throws(() => normalizarRolEmpleado({ nombre: 'ROL', cicloPago: 'QUINCENAL' }))
+    assert.throws(() => normalizarRolEmpleado({ nombre: 'ROL', horasTrabajoDiarias: 0 }))
+    assert.throws(() => normalizarRolEmpleado({ nombre: 'ROL', horasTrabajoDiarias: 25 }))
 })

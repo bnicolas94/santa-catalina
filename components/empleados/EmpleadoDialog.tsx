@@ -30,6 +30,7 @@ interface EmployeeRole {
     permisoAtencionAdmin: boolean
     jornal: number
     valorHoraExtra: number
+    horasTrabajoDiarias: number
     cicloPago: string
 }
 
@@ -316,6 +317,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
             const selectedRole = roles.find(r => r.id === value)
             if (selectedRole) {
                 newFormData.rol = selectedRole.nombre
+                newFormData.horasTrabajoDiarias = String(selectedRole.horasTrabajoDiarias || 8)
             } else if (value === '') {
                 newFormData.rol = ''
             }

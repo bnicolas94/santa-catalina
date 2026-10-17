@@ -44,6 +44,7 @@ interface Role {
     permisoAtencionAdmin: boolean
     jornal: number
     valorHoraExtra: number
+    horasTrabajoDiarias: number
     cicloPago: string
     _count?: { empleados: number }
 }
@@ -94,6 +95,7 @@ const EMPTY_ROLE: Partial<Role> = {
     permisoAtencionAdmin: false,
     jornal: 0,
     valorHoraExtra: 0,
+    horasTrabajoDiarias: 8,
     cicloPago: 'SEMANAL',
 }
 
@@ -105,7 +107,9 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
     const [saving, setSaving] = useState(false)
     const [editRole, setEditRole] = useState<Partial<Role> | null>(null)
     const [error, setError] = useState('')
+    const [success, setSuccess] = useState('')
     const [search, setSearch] = useState('')
+    const [aplicarHorasAEmpleados, setAplicarHorasAEmpleados] = useState(false)
 
     const fetchRoles = useCallback(async () => {
         setLoading(true)
@@ -140,6 +144,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
     const updateRole = <K extends keyof Role>(key: K, value: Role[K]) => {
         setEditRole(current => current ? { ...current, [key]: value } : current)
         setError('')
+        setSuccess('')
     }
 
     const handleSave = async (event: React.FormEvent) => {
@@ -155,11 +160,15 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
             const res = await fetch(url, {
                 method: editRole.id ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(editRole),
+                body: JSON.stringify({ ...editRole, aplicarHorasAEmpleados }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'No se pudo guardar el tipo de empleado.')
             setEditRole(data)
+            setAplicarHorasAEmpleados(false)
+            setSuccess(data.empleadosActualizados > 0
+                ? `Jornada actualizada para ${data.empleadosActualizados} empleado${data.empleadosActualizados === 1 ? '' : 's'} vinculado${data.empleadosActualizados === 1 ? '' : 's'}.`
+                : 'Tipo de empleado guardado correctamente.')
             await fetchRoles()
             onRolesChanged()
         } catch (err: unknown) {
@@ -211,6 +220,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                 </div>
 
                 {error && <div className={styles.error} role="alert">{error}</div>}
+                {success && <div className={styles.success} role="status">{success}</div>}
 
                 <div className={styles.workspace}>
                     <aside className={styles.sidebar}>
@@ -219,7 +229,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                 <span>⌕</span>
                                 <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar tipo…" />
                             </label>
-                            <button type="button" className="btn btn-primary" onClick={() => { setEditRole({ ...EMPTY_ROLE }); setError('') }}>
+                            <button type="button" className="btn btn-primary" onClick={() => { setEditRole({ ...EMPTY_ROLE }); setAplicarHorasAEmpleados(false); setError(''); setSuccess('') }}>
                                 + Nuevo tipo
                             </button>
                         </div>
@@ -235,7 +245,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                         type="button"
                                         key={role.id}
                                         className={`${styles.roleCard} ${selected ? styles.roleCardSelected : ''}`}
-                                        onClick={() => { setEditRole({ ...role }); setError('') }}
+                                        onClick={() => { setEditRole({ ...role }); setAplicarHorasAEmpleados(false); setError(''); setSuccess('') }}
                                     >
                                         <span className={styles.colorMark} style={{ backgroundColor: role.color || '#9b1c31' }} />
                                         <span className={styles.roleCardBody}>
@@ -246,7 +256,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                             <small>{role.descripcion || 'Sin descripción'}</small>
                                             <span className={styles.roleMeta}>
                                                 <span>{permissionCount} acceso{permissionCount === 1 ? '' : 's'}</span>
-                                                <span>{role.jornal > 0 ? `$${money(role.jornal)} / ${role.cicloPago.toLowerCase()}` : 'Sin base salarial'}</span>
+                                                <span>{role.horasTrabajoDiarias || 8} h esperadas</span>
                                             </span>
                                         </span>
                                     </button>
@@ -261,7 +271,7 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                 <div className={styles.welcomeIcon}>R</div>
                                 <h3>Seleccioná un tipo de empleado</h3>
                                 <p>Podrás revisar quiénes lo usan, qué módulos habilita y qué valores toma como referencia cada ficha.</p>
-                                <button type="button" className="btn btn-primary" onClick={() => setEditRole({ ...EMPTY_ROLE })}>Crear el primer tipo</button>
+                                <button type="button" className="btn btn-primary" onClick={() => { setEditRole({ ...EMPTY_ROLE }); setAplicarHorasAEmpleados(false); setSuccess('') }}>Crear el primer tipo</button>
                             </div>
                         ) : (
                             <form onSubmit={handleSave} className={styles.form}>
@@ -295,6 +305,25 @@ export default function RolesConfigModal({ onClose, onRolesChanged }: RolesConfi
                                             <span>Descripción</span>
                                             <textarea className="form-input" rows={2} value={editRole.descripcion || ''} onChange={event => updateRole('descripcion', event.target.value)} placeholder="Responsabilidades o alcance de este tipo de empleado." />
                                         </label>
+                                    </div>
+                                </section>
+
+                                <section className={styles.section}>
+                                    <div className={styles.sectionHeading}>
+                                        <div><h4>Jornada esperada</h4><p>Define desde qué cantidad diaria el tiempo trabajado comienza a liquidarse como hora extra.</p></div>
+                                        <span className={styles.inheritanceBadge}>Plantilla del tipo</span>
+                                    </div>
+                                    <div className={styles.scheduleGrid}>
+                                        <label className={styles.field}>
+                                            <span>Horas esperadas por día</span>
+                                            <div className={styles.hoursInput}><input type="number" min="0.25" max="24" step="0.25" value={editRole.horasTrabajoDiarias ?? 8} onChange={event => updateRole('horasTrabajoDiarias', Number(event.target.value))} /><b>horas</b></div>
+                                            <small>Ejemplo: con 8 h esperadas, una jornada real de 10 h genera 2 h extras.</small>
+                                        </label>
+                                        {editRole.id && (editRole._count?.empleados || 0) > 0 && <label className={`${styles.bulkCard} ${aplicarHorasAEmpleados ? styles.bulkCardActive : ''}`}>
+                                            <input type="checkbox" checked={aplicarHorasAEmpleados} onChange={event => { setAplicarHorasAEmpleados(event.target.checked); setSuccess('') }} />
+                                            <span className={styles.bulkCheck}>{aplicarHorasAEmpleados ? '✓' : ''}</span>
+                                            <span><strong>Aplicar masivamente al guardar</strong><small>Actualizará la jornada de los {editRole._count?.empleados || 0} empleados vinculados a este tipo. No modifica liquidaciones históricas.</small></span>
+                                        </label>}
                                     </div>
                                 </section>
 
