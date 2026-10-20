@@ -37,6 +37,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
    `Empleado (Config Específica) -> Rol (Valores por Defecto) -> Saldo Base Global`.
 3. El rol también define accesos independientes por módulo. La sesión hereda esas casillas y el middleware aplica el mismo permiso tanto a la página como a sus APIs; `ADMIN` conserva acceso total.
 4. El rol guarda una jornada diaria esperada como plantilla. Desde Tipos de empleado, `ADMIN` puede aplicarla masivamente a todas las fichas vinculadas; la operación no modifica liquidaciones ya pagadas y las altas futuras toman ese valor al elegir el rol.
+5. La lista y la ficha individual permiten imprimir una carátula A4 del legajo con identificación, asignación laboral, control documental y observaciones. La carátula omite importes salariales.
 
 ### B. Ciclo de Asistencia Diaria
 1. El empleado ficha en el reloj biométrico.

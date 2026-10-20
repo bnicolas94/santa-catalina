@@ -10,6 +10,7 @@ import { FichadasTab } from '@/components/empleados/FichadasTab'
 import { PrestamosTab } from '@/components/empleados/PrestamosTab'
 import { LiquidacionesTab } from '@/components/empleados/LiquidacionesTab'
 import { UniformesTab } from '@/components/empleados/UniformesTab'
+import { imprimirCaratulaLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
 
 export default function EmpleadoDetailPage() {
     const { data: session } = useSession()
@@ -18,6 +19,7 @@ export default function EmpleadoDetailPage() {
     const [empleado, setEmpleado] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [activeTab, setActiveTab] = useState('resumen')
+    const [imprimiendoCaratula, setImprimiendoCaratula] = useState(false)
 
     useEffect(() => {
         if (params.id) {
@@ -37,6 +39,18 @@ export default function EmpleadoDetailPage() {
             console.error(error)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleImprimirCaratula = async () => {
+        setImprimiendoCaratula(true)
+        try {
+            await imprimirCaratulaLegajo(empleado)
+        } catch (error) {
+            console.error(error)
+            alert(error instanceof Error ? error.message : 'No se pudo abrir la carátula para imprimir.')
+        } finally {
+            setImprimiendoCaratula(false)
         }
     }
 
@@ -79,6 +93,9 @@ export default function EmpleadoDetailPage() {
                         <Link href="/empleados" className="btn btn-ghost btn-sm" style={{ fontWeight: 600 }}>
                             ← Volver a Lista
                         </Link>
+                        <button type="button" className="btn btn-outline btn-sm" disabled={imprimiendoCaratula} onClick={() => void handleImprimirCaratula()}>
+                            {imprimiendoCaratula ? 'Preparando…' : '🖨 Imprimir carátula A4'}
+                        </button>
                         <span className={`badge ${empleado.activo ? 'badge-success' : 'badge-neutral'}`}>
                             {empleado.activo ? 'Activo' : 'Inactivo'}
                         </span>

@@ -34,6 +34,7 @@ import {
 } from '@/lib/fichadas/importar-archivo'
 import Link from 'next/link'
 import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
+import { imprimirCaratulaLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
 
 type EmpleadoConRelojes = Empleado & { codigosReloj?: Array<{ origen: string; codigo: string }> }
 
@@ -85,6 +86,7 @@ function EmpleadosContent() {
     const [showSancionesModal, setShowSancionesModal] = useState(false)
     const [showLiquidacionFinalModal, setShowLiquidacionFinalModal] = useState(false)
     const [showUniformesModal, setShowUniformesModal] = useState(false)
+    const [imprimiendoCaratulaId, setImprimiendoCaratulaId] = useState<string | null>(null)
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -228,6 +230,18 @@ function EmpleadosContent() {
         } catch (error) {
             console.error(error)
             alert('Error al desactivar empleado')
+        }
+    }
+
+    const handleImprimirCaratula = async (empleado: EmpleadoConRelojes) => {
+        setImprimiendoCaratulaId(empleado.id)
+        try {
+            await imprimirCaratulaLegajo(empleado)
+        } catch (error) {
+            console.error(error)
+            alert(error instanceof Error ? error.message : 'No se pudo abrir la carátula para imprimir.')
+        } finally {
+            setImprimiendoCaratulaId(null)
         }
     }
 
@@ -565,6 +579,14 @@ function EmpleadosContent() {
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                            <button
+                                                className="btn btn-ghost btn-icon"
+                                                onClick={() => void handleImprimirCaratula(emp)}
+                                                disabled={imprimiendoCaratulaId === emp.id}
+                                                title="Imprimir carátula A4"
+                                            >
+                                                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-12-5h12v9H6v-9z" /></svg>
+                                            </button>
                                             <button
                                                 className="btn btn-ghost btn-icon"
                                                 onClick={() => handleOpenDialog(emp)}
