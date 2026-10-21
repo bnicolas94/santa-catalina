@@ -34,7 +34,7 @@ import {
 } from '@/lib/fichadas/importar-archivo'
 import Link from 'next/link'
 import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
-import { imprimirCaratulaLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
+import { imprimirCaratulaLegajo, imprimirCaratulasLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
 
 type EmpleadoConRelojes = Empleado & { codigosReloj?: Array<{ origen: string; codigo: string }> }
 
@@ -87,6 +87,7 @@ function EmpleadosContent() {
     const [showLiquidacionFinalModal, setShowLiquidacionFinalModal] = useState(false)
     const [showUniformesModal, setShowUniformesModal] = useState(false)
     const [imprimiendoCaratulaId, setImprimiendoCaratulaId] = useState<string | null>(null)
+    const [empleadosCaratulaSeleccionados, setEmpleadosCaratulaSeleccionados] = useState<Set<string>>(new Set())
 
     const fetchEmpleados = async () => {
         setLoading(true)
@@ -354,6 +355,38 @@ function EmpleadosContent() {
         const matchesActivo = filterActivo === 'todos' ? true : e.activo === filterActivo
         return matchesSearch && matchesActivo
     })
+    const todosVisiblesSeleccionados = filteredEmpleados.length > 0 && filteredEmpleados.every(empleado => empleadosCaratulaSeleccionados.has(empleado.id))
+
+    const alternarEmpleadoCaratula = (id: string) => {
+        setEmpleadosCaratulaSeleccionados(actual => {
+            const siguiente = new Set(actual)
+            if (siguiente.has(id)) siguiente.delete(id)
+            else siguiente.add(id)
+            return siguiente
+        })
+    }
+
+    const alternarEmpleadosVisibles = () => {
+        setEmpleadosCaratulaSeleccionados(actual => {
+            const siguiente = new Set(actual)
+            if (todosVisiblesSeleccionados) filteredEmpleados.forEach(empleado => siguiente.delete(empleado.id))
+            else filteredEmpleados.forEach(empleado => siguiente.add(empleado.id))
+            return siguiente
+        })
+    }
+
+    const imprimirCaratulasSeleccionadas = async () => {
+        const seleccionados = empleados.filter(empleado => empleadosCaratulaSeleccionados.has(empleado.id))
+        setImprimiendoCaratulaId('varios')
+        try {
+            await imprimirCaratulasLegajo(seleccionados)
+        } catch (error) {
+            console.error(error)
+            alert(error instanceof Error ? error.message : 'No se pudieron abrir las carátulas para imprimir.')
+        } finally {
+            setImprimiendoCaratulaId(null)
+        }
+    }
 
     const stats = {
         total: empleados.length,
@@ -409,7 +442,15 @@ function EmpleadosContent() {
             </div>
 
             {/* Toolbar Secundaria */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 'var(--space-4)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', minHeight: 36 }}>
+                    {empleadosCaratulaSeleccionados.size > 0 && <>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={imprimiendoCaratulaId === 'varios'} onClick={() => void imprimirCaratulasSeleccionadas()}>
+                            {imprimiendoCaratulaId === 'varios' ? 'Preparando…' : `🖨 Imprimir carátulas (${empleadosCaratulaSeleccionados.size})`}
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEmpleadosCaratulaSeleccionados(new Set())}>Limpiar selección</button>
+                    </>}
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                     <div className="form-group" style={{ margin: 0, position: 'relative' }}>
                         <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)' }}>🔍</span>
@@ -445,7 +486,7 @@ function EmpleadosContent() {
                     <table className="table">
                         <thead>
                             <tr>
-                                <th>Empleado</th>
+                                <th><label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: filteredEmpleados.length ? 'pointer' : 'default' }}><input type="checkbox" aria-label="Seleccionar empleados visibles" disabled={filteredEmpleados.length === 0} checked={todosVisiblesSeleccionados} onChange={alternarEmpleadosVisibles} /> Empleado</label></th>
                                 <th>Rol / Puesto</th>
                                 <th>Contacto</th>
                                 <th>Sueldo / Ciclo</th>
@@ -460,6 +501,7 @@ function EmpleadosContent() {
                                 <tr key={emp.id} style={{ opacity: emp.activo ? 1 : 0.6 }}>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                            <input type="checkbox" aria-label={`Seleccionar carátula de ${emp.nombre} ${emp.apellido || ''}`} checked={empleadosCaratulaSeleccionados.has(emp.id)} onChange={() => alternarEmpleadoCaratula(emp.id)} />
                                             <div style={{
                                                 width: 40, height: 40, borderRadius: '50%',
                                                 backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)',

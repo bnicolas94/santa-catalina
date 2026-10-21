@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
     crearHtmlCaratulaLegajo,
+    crearHtmlCaratulasLegajo,
     escaparHtmlCaratula,
     formatearFechaIngresoCaratula,
 } from '../../components/empleados/imprimirCaratulaLegajo'
@@ -9,6 +10,18 @@ import {
 test('formatea la fecha civil de ingreso sin desplazar el día', () => {
     assert.equal(formatearFechaIngresoCaratula('2026-10-20T00:00:00.000Z'), '20/10/2026')
     assert.equal(formatearFechaIngresoCaratula(null), 'Sin registrar')
+})
+
+test('genera una página A4 independiente por cada empleado seleccionado', () => {
+    const html = crearHtmlCaratulasLegajo([
+        { id: 'emp-1', nombre: 'Ana', activo: true },
+        { id: 'emp-2', nombre: 'Luis', activo: false },
+    ], 'logo', 'marca')
+
+    assert.equal((html.match(/<main class="hoja">/g) || []).length, 2)
+    assert.match(html, /estado activo">ACTIVO/)
+    assert.match(html, /estado inactivo">INACTIVO/)
+    assert.match(html, /break-after: page/)
 })
 
 test('escapa los datos del empleado antes de incorporarlos a la impresión', () => {

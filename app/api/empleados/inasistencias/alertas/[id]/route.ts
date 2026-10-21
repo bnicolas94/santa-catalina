@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { AlertaAusentismoValidationError, normalizarReglaAusentismo } from '@/lib/rrhh/alertas-ausentismo'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -7,10 +8,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         const body = await request.json()
         const alerta = await prisma.alertaAusentismo.update({
             where: { id },
-            data: body
+            data: normalizarReglaAusentismo(body)
         })
         return NextResponse.json(alerta)
     } catch (error) {
+        if (error instanceof AlertaAusentismoValidationError) {
+            return NextResponse.json({ error: error.message }, { status: 400 })
+        }
         return NextResponse.json({ error: 'Error updating alerta' }, { status: 500 })
     }
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { SancionService } from '@/lib/services/sancion.service'
 import { instanteRRHH, rangoDiaRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 
 export async function POST(request: Request) {
@@ -98,13 +97,6 @@ export async function POST(request: Request) {
                     }
                 })
             }
-        }
-
-        // 3. Recalcular alertas/sanciones automáticas
-        try {
-            await SancionService.checkAndApplyAlerts(empleadoId)
-        } catch (alertaError) {
-            console.error('Error al procesar alertas tras modificar asistencia diaria:', alertaError)
         }
 
         return NextResponse.json({ success: true })

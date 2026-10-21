@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { SancionService } from '@/lib/services/sancion.service'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
@@ -123,12 +122,6 @@ export async function POST(request: Request) {
                 })
             })
             results.push(inasistencia)
-        }
-
-        try {
-            await SancionService.checkAndApplyAlerts(empleadoId)
-        } catch (alertaError) {
-            console.error('Error al procesar alertas tras inasistencia:', alertaError)
         }
 
         return NextResponse.json(results)

@@ -68,7 +68,8 @@ export function crearHtmlCaratulaLegajo(empleado: EmpleadoCaratula, logo: string
         @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; }
         body { margin: 0; background: #e7e7e7; color: #172033; font-family: Arial, Helvetica, sans-serif; }
-        .hoja { position: relative; width: 210mm; height: 297mm; margin: 10mm auto; padding: 11mm 16mm 12mm; overflow: hidden; background: #fff; }
+        .hoja { position: relative; width: 210mm; height: 297mm; margin: 10mm auto; padding: 11mm 16mm 12mm; overflow: hidden; background: #fff; break-after: page; }
+        .hoja:last-of-type { break-after: auto; }
         .barra { position: absolute; inset: 0 auto 0 0; width: 5mm; background: #b5122b; }
         .marca-agua { position: absolute; right: -18mm; bottom: 1mm; width: 112mm; opacity: .035; pointer-events: none; }
         header { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 5mm; border-bottom: 1.5px solid #b5122b; }
@@ -82,7 +83,9 @@ export function crearHtmlCaratulaLegajo(empleado: EmpleadoCaratula, logo: string
         .iniciales { display: grid; place-items: center; width: 21mm; height: 21mm; border-radius: 50%; background: #b5122b; color: #fff; font-size: 17pt; font-weight: 900; letter-spacing: -.03em; }
         .persona h2 { margin: 0 0 1.5mm; font-size: 19pt; line-height: 1.08; text-transform: uppercase; }
         .persona p { margin: 0; color: #667085; font-size: 10pt; text-transform: uppercase; letter-spacing: .06em; }
-        .estado { padding: 2.2mm 4mm; border-radius: 99px; color: ${empleado.activo === false ? '#8d1c1c' : '#137333'}; background: ${empleado.activo === false ? '#fde8e8' : '#e5f7eb'}; font-size: 8pt; font-weight: 900; letter-spacing: .08em; }
+        .estado { padding: 2.2mm 4mm; border-radius: 99px; font-size: 8pt; font-weight: 900; letter-spacing: .08em; }
+        .estado.activo { color: #137333; background: #e5f7eb; }
+        .estado.inactivo { color: #8d1c1c; background: #fde8e8; }
         .seccion { margin-top: 4.5mm; break-inside: avoid; }
         .seccion h3 { display: flex; align-items: center; gap: 3mm; margin: 0 0 2.5mm; color: #8d0d20; font-size: 9pt; letter-spacing: .14em; text-transform: uppercase; }
         .seccion h3::after { content: ''; height: 1px; flex: 1; background: #e6c9cf; }
@@ -118,7 +121,7 @@ export function crearHtmlCaratulaLegajo(empleado: EmpleadoCaratula, logo: string
         <section class="persona">
             <div class="iniciales">${escaparHtmlCaratula(iniciales || 'SC')}</div>
             <div><h2>${escaparHtmlCaratula(nombreCompleto)}</h2><p>${escaparHtmlCaratula(rol)}</p></div>
-            <div class="estado">${estado}</div>
+            <div class="estado ${empleado.activo === false ? 'inactivo' : 'activo'}">${estado}</div>
         </section>
 
         <section class="seccion">
@@ -170,12 +173,29 @@ export function crearHtmlCaratulaLegajo(empleado: EmpleadoCaratula, logo: string
 </html>`
 }
 
-export async function imprimirCaratulaLegajo(empleado: EmpleadoCaratula): Promise<void> {
+export function crearHtmlCaratulasLegajo(empleados: EmpleadoCaratula[], logo: string, watermark: string): string {
+    if (empleados.length === 0) throw new Error('Seleccioná al menos un empleado para imprimir.')
+    const documentos = empleados.map(empleado => crearHtmlCaratulaLegajo(empleado, logo, watermark))
+    const paginas = documentos.map(documento => documento.match(/<main class="hoja">[\s\S]*?<\/main>/)?.[0] || '').join('\n')
+    const titulo = empleados.length === 1
+        ? `Carátula de legajo - ${empleados[0].nombre} ${empleados[0].apellido || ''}`.trim()
+        : `Carátulas de legajo - ${empleados.length} empleados`
+    return documentos[0]
+        .replace(/<title>[\s\S]*?<\/title>/, `<title>${escaparHtmlCaratula(titulo)}</title>`)
+        .replace(/<body>[\s\S]*?<script>/, `<body>${paginas}<script>`)
+}
+
+export async function imprimirCaratulasLegajo(empleados: EmpleadoCaratula[]): Promise<void> {
+    if (empleados.length === 0) throw new Error('Seleccioná al menos un empleado para imprimir.')
     const ventana = window.open('', '_blank')
     if (!ventana) throw new Error('El navegador bloqueó la ventana de impresión.')
-    ventana.document.write('<!doctype html><title>Preparando carátula…</title><p style="font-family:Arial;padding:24px">Preparando carátula…</p>')
+    ventana.document.write('<!doctype html><title>Preparando carátulas…</title><p style="font-family:Arial;padding:24px">Preparando carátulas…</p>')
     const { logo, watermark } = await getPrintLogos()
     ventana.document.open()
-    ventana.document.write(crearHtmlCaratulaLegajo(empleado, logo, watermark))
+    ventana.document.write(crearHtmlCaratulasLegajo(empleados, logo, watermark))
     ventana.document.close()
+}
+
+export async function imprimirCaratulaLegajo(empleado: EmpleadoCaratula): Promise<void> {
+    return imprimirCaratulasLegajo([empleado])
 }

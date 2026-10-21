@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma'
 import { eventBus } from '@/lib/events'
-import { SancionService } from './sancion.service'
 import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
 import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
 import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
@@ -224,20 +223,8 @@ export class AsistenciaService {
                 await tx.inasistencia.createMany({ data: tardanzasNuevas })
             }
 
-            return {
-                importados: nuevas.length,
-                empleadosConTardanza: [...new Set(tardanzasNuevas.map(tardanza => tardanza.empleadoId))],
-            }
+            return { importados: nuevas.length }
         }, { maxWait: 10_000, timeout: 30_000 })
-
-        // Las alertas se verifican una sola vez por empleado, fuera de la transacción del lote.
-        await Promise.all(resultado.empleadosConTardanza.map(async empleadoId => {
-            try {
-                await SancionService.checkAndApplyAlerts(empleadoId)
-            } catch (error) {
-                console.error(`Error verificando alertas para empleado ${empleadoId}:`, error)
-            }
-        }))
 
         // Evento de dominio
         if (resultado.importados > 0) {
@@ -344,8 +331,6 @@ export class AsistenciaService {
                             observaciones: `Llegada tarde registrada manualmente (${mins} min de retraso).`
                         }
                     })
-                    // Disparar chequeo de alertas para posibles sanciones automáticas
-                    await SancionService.checkAndApplyAlerts(params.empleadoId)
                 }
             }
         }
@@ -465,8 +450,6 @@ export class AsistenciaService {
                     }
                 })
                 creados++
-                // Disparar chequeo de alertas
-                await SancionService.checkAndApplyAlerts(emp.id)
             }
         }
 
