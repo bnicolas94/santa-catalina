@@ -93,6 +93,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 * **Horas Extras**: El excedente sobre la jornada esperada se liquida al minuto real. La actualización masiva por rol cambia la referencia futura de cada ficha, no los snapshots históricos.
 * **Feriados**: El sistema busca en la tabla `Feriado` para aplicar el recargo (habitualmente 100%) sobre las horas trabajadas.
 * **Recibos semanales**: Los modelos A y B identifican empleado, DNI, fecha de ingreso y rango exacto liquidado, con una constancia narrativa de recepción que no implica renuncia de derechos. Los feriados y las licencias pagas por enfermedad se informan desde cada jornada histórica, con fecha, unidad y valor, separándolos del sueldo regular para no duplicar importes. El Modelo A los integra en su leyenda clásica y el Modelo B los expone en la tabla detallada.
+* **Reporte de pagos**: La grilla, la impresión de recibos seleccionados y la planilla resumen se ordenan alfabéticamente por nombre completo, de A a Z, con comparación en español que ignora diferencias de acentos y mayúsculas.
 
 ---
 

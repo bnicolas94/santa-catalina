@@ -3,6 +3,7 @@
 import { getPrintLogos } from '@/lib/utils/printLogos'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
+import { ordenarReportePagosAlfabeticamente } from '@/lib/payroll/reportePagos'
 
 interface ReportePagosModalProps {
     onClose: () => void
@@ -69,11 +70,13 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         void fetchReporte()
     }, [fetchReporte])
 
+    const datosOrdenados = useMemo(() => ordenarReportePagosAlfabeticamente(datos), [datos])
+
     const filteredDatos = useMemo(() => {
-        if (!filtroNombre) return datos
+        if (!filtroNombre) return datosOrdenados
         const low = filtroNombre.toLowerCase()
-        return datos.filter(d => d.empleado.toLowerCase().includes(low))
-    }, [datos, filtroNombre])
+        return datosOrdenados.filter(d => d.empleado.toLowerCase().includes(low))
+    }, [datosOrdenados, filtroNombre])
 
     const recibosImprimibles = filteredDatos.filter(d => !d.esMixtoEfectivo || d.totalNeto > 0)
 
@@ -150,7 +153,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                         </tr>
                     </thead>
                     <tbody>
-                        ${datos.length > 0 ? datos.map((row, i) => `
+                        ${datosOrdenados.length > 0 ? datosOrdenados.map((row, i) => `
                             <tr>
                                 <td>${i + 1}</td>
                                 <td>${row.empleado}</td>
@@ -205,7 +208,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
 
     const handlePrintReceipts = async () => {
         if (selectedIds.size === 0) return
-        const selectedLiquidaciones = datos.filter(d => selectedIds.has(d.id) && (!d.esMixtoEfectivo || d.totalNeto > 0))
+        const selectedLiquidaciones = datosOrdenados.filter(d => selectedIds.has(d.id) && (!d.esMixtoEfectivo || d.totalNeto > 0))
         if (selectedLiquidaciones.length === 0) {
             window.alert('Los cierres seleccionados no tienen pagos en efectivo para respaldar con un recibo interno.')
             return
