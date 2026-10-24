@@ -17,10 +17,12 @@ interface ReporteFila {
         nombre: string
         apellido: string | null
         dni: string | null
+        fechaIngreso: string | null
     }
     periodo: string
     fechaGeneracion: string
     horasExtras: number
+    horasFeriado: number
     ajusteHorasExtras: number
     montoHorasExtras: number
     montoAjusteHorasExtras: number
@@ -214,6 +216,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
             fechaGeneracion: liq.fechaGeneracion,
             tipo: liq.tipo,
             horasExtras: liq.horasExtras,
+            horasFeriado: liq.horasFeriado,
             ajusteHorasExtras: liq.ajusteHorasExtras,
             sueldoProporcional: liq.sueldoProporcional,
             montoHorasNormales: liq.montoHorasNormales,

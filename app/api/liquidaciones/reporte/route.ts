@@ -87,11 +87,13 @@ export async function GET(request: Request) {
                 empleadoDatos: {
                     nombre: liq.empleado.nombre,
                     apellido: liq.empleado.apellido,
-                    dni: liq.empleado.dni
+                    dni: liq.empleado.dni,
+                    fechaIngreso: liq.empleado.fechaIngreso,
                 },
                 periodo: liq.periodo,
                 fechaGeneracion: liq.fechaGeneracion,
                 horasExtras: esMixto ? 0 : detalleHoras.horasExtras,
+                horasFeriado: esMixto ? 0 : liq.horasFeriado,
                 ajusteHorasExtras: esMixto ? 0 : detalleHoras.horasAdeudadas,
                 montoHorasExtras: esMixto ? 0 : liq.montoHorasExtras,
                 montoAjusteHorasExtras: esMixto ? 0 : detalleHoras.montoHorasAdeudadas,
@@ -120,11 +122,13 @@ export async function GET(request: Request) {
                 empleadoDatos: {
                     nombre: liq.empleado.nombre,
                     apellido: liq.empleado.apellido,
-                    dni: liq.empleado.dni
+                    dni: liq.empleado.dni,
+                    fechaIngreso: liq.empleado.fechaIngreso,
                 },
                 periodo: `Liquidación Final (${liq.tipoEgreso})`,
                 fechaGeneracion: liq.fechaEgreso,
                 horasExtras: 0,
+                horasFeriado: 0,
                 ajusteHorasExtras: 0,
                 montoHorasExtras: 0,
                 montoAjusteHorasExtras: 0,

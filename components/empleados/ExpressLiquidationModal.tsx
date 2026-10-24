@@ -36,6 +36,7 @@ interface EmpleadoExpress {
     nombre: string
     apellido?: string | null
     dni?: string | null
+    fechaIngreso?: string | Date | null
     sueldoBaseMensual: number
     cicloPago?: string | null
     valorHoraExtra?: number | null

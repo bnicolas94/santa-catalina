@@ -230,6 +230,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
             fechaGeneracion: liq.fechaGeneracion,
             tipo: liq.tipo,
             horasExtras: esMixto ? 0 : detalleHoras.horasExtras,
+            horasFeriado: esMixto ? 0 : liq.horasFeriado,
             ajusteHorasExtras: esMixto ? 0 : detalleHoras.horasAdeudadas,
             sueldoProporcional: esMixto ? efectivoMixto : liq.sueldoProporcional,
             montoHorasNormales: esMixto ? 0 : liq.montoHorasNormales,

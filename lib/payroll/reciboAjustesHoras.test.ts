@@ -8,7 +8,7 @@ import {
 } from '../../components/empleados/recibosLiquidacion'
 
 const recibo: DatosReciboLiquidacion = {
-    empleado: { nombre: 'Brian', apellido: 'Quiroz', dni: '12345678' },
+    empleado: { nombre: 'Brian', apellido: 'Quiroz', dni: '12345678', fechaIngreso: '2025-02-03' },
     periodo: 'Semana del 24/08/2026 al 30/08/2026',
     horasExtras: 0.5,
     ajusteHorasExtras: 2,
@@ -35,6 +35,10 @@ test('el recibo detallado informa por separado las horas adeudadas', () => {
 test('el recibo clásico menciona expresamente el ajuste de horas adeudadas', () => {
     const contenido = cuerpoModeloA(recibo)
 
+    assert.match(contenido, /Brian Quiroz/)
+    assert.match(contenido, /DNI <strong>12345678/)
+    assert.match(contenido, /relación laboral se inició el <strong>3\/2\/2025/)
+    assert.match(contenido, /semana de trabajo comprendida entre el <strong>24\/08\/2026<\/strong> y el <strong>30\/08\/2026/)
     assert.match(contenido, /0,5 horas extras de la semana/)
     assert.match(contenido, /2 horas de ajuste \/ adeudadas/)
     assert.match(contenido, /Semana del 17\/08\/2026 al 23\/08\/2026/)
@@ -55,6 +59,7 @@ test('el recibo semanal omite descuentos y muestra el importe previo a descontar
     assert.equal(importeMostradoEnRecibo(conDescuento), 196_843)
     assert.doesNotMatch(contenido, /descuento|20\.400/i)
     assert.doesNotMatch(contenido, /175\.443|otra deducción/i)
-    assert.match(contenido, /importe total a pagar es de <strong>\$196\.843/)
+    assert.match(contenido, /suma total de <strong>\$196\.843/)
+    assert.match(contenido, /no implica renuncia a derechos laborales/)
     assert.equal(conceptosDetallados(conDescuento).some(concepto => concepto.monto < 0), false)
 })
