@@ -95,6 +95,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 * **Recibos semanales**: Los modelos A y B identifican empleado, DNI, fecha de ingreso y rango exacto liquidado, con una constancia narrativa de recepción que no implica renuncia de derechos. Los feriados y las licencias pagas por enfermedad se informan desde cada jornada histórica, con fecha, unidad y valor, separándolos del sueldo regular para no duplicar importes. El Modelo A los integra en su leyenda clásica y el Modelo B los expone en la tabla detallada.
 * **Reporte de pagos**: La grilla, la impresión de recibos seleccionados y la planilla resumen se ordenan alfabéticamente por nombre completo, de A a Z, con comparación en español que ignora diferencias de acentos y mayúsculas.
 * **Orden del personal**: El padrón se ordena por apellido y luego por nombres, ignorando mayúsculas y acentos, y se presenta como `Apellido, Nombres`. Los registros históricos sin apellido quedan al final sin inventar ese dato.
+* **Participación en nómina**: `Empleado.incluidoNomina` separa el acceso al sistema de la participación salarial. Desmarcarlo conserva el estado activo, las credenciales, el rol y los permisos, pero excluye a la persona de liquidaciones semanales, masivas y Express, cierres mixtos, SAC, vacaciones, horas extras y feriados adeudados. El historial ya generado se conserva.
 
 ---
 

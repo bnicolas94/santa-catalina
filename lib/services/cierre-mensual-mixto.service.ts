@@ -80,7 +80,7 @@ export class CierreMensualMixtoService {
     static async obtener(periodo: string) {
         const rango = rangoMesLiquidacion(periodo)
         const empleados = await prisma.empleado.findMany({
-            where: { activo: true, modalidadPago: MODALIDAD_MENSUAL_MIXTA },
+            where: { activo: true, incluidoNomina: true, modalidadPago: MODALIDAD_MENSUAL_MIXTA },
             select: { id: true, nombre: true, apellido: true, dni: true, diasTrabajoSemana: true },
             orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
         })

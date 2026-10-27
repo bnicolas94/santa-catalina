@@ -9,7 +9,7 @@ export async function GET(request: Request) {
         const anio = parseInt(searchParams.get('anio') || new Date().getFullYear().toString())
 
         const empleados = await prisma.empleado.findMany({
-            where: { activo: true },
+            where: { activo: true, incluidoNomina: true },
             select: {
                 id: true,
                 nombre: true,

@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 interface VacacionesSACModalProps {
     onClose: () => void
-    empleados: Array<{ id: string; nombre: string; apellido?: string | null }>
+    empleados: Array<{ id: string; nombre: string; apellido?: string | null; activo?: boolean; incluidoNomina?: boolean }>
 }
 
 interface PreviewLiquidacionEspecial {
@@ -161,7 +162,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                             onChange={e => setSelectedEmpleado(e.target.value)}
                         >
                             <option value="">Seleccionar empleado...</option>
-                            {empleados.map(e => (
+                            {empleados.filter(empleadoIncluidoEnNomina).map(e => (
                                 <option key={e.id} value={e.id}>{nombreEmpleadoApellidoPrimero(e)}</option>
                             ))}
                         </select>

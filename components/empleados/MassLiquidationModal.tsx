@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 interface MassLiquidationModalProps {
     empleados: any[]
@@ -42,7 +43,7 @@ export function MassLiquidationModal({ empleados, onClose, onSuccess }: MassLiqu
         const end = new Date(Date.UTC(anio, numeroMes, 0)).toISOString().slice(0, 10)
 
         try {
-            const scanPromises = empleados.filter(e => e.activo).map(async (emp) => {
+            const scanPromises = empleados.filter(empleadoIncluidoEnNomina).map(async (emp) => {
                 const res = await fetch(`/api/fichadas?empleadoId=${emp.id}&inicio=${start}&fin=${end}`)
                 const fichadas = await res.json()
 

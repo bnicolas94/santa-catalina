@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { CajaService } from './caja.service'
+import { validarEmpleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 export interface LiquidacionFinalInput {
     empleadoId: string
@@ -35,6 +36,7 @@ export class LiquidacionFinalService {
         if (!empleado.activo) {
             throw new Error('El empleado ya se encuentra inactivo.')
         }
+        validarEmpleadoIncluidoEnNomina(empleado)
 
         const ingreso = new Date(empleado.fechaIngreso)
         if (egreso < ingreso) {

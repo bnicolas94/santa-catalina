@@ -41,6 +41,7 @@ interface EmpleadoExpress {
     sueldoBaseMensual: number
     cicloPago?: string | null
     valorHoraExtra?: number | null
+    incluidoNomina?: boolean
     rolRel?: {
         nombre: string
         jornal: number

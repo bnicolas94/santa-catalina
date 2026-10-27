@@ -18,6 +18,7 @@ model Empleado {
   rol                       String
   telefono                  String?
   activo                    Boolean                   @default(true)
+  incluidoNomina            Boolean                   @default(true) @map("incluido_nomina")
   fechaIngreso              DateTime?                 @map("fecha_ingreso")
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt

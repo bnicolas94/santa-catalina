@@ -5,6 +5,7 @@ import { etiquetaSemanaOrigen, semanaLaboralDeOrigen } from '@/lib/payroll/horas
 import { prisma } from '@/lib/prisma'
 import { fechaClaveRRHH, instanteRRHH } from '@/lib/rrhh/fechas'
 import { CajaService } from '@/lib/services/caja.service'
+import { validarEmpleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 export async function POST(request: Request) {
     try {
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
                 include: { empleado: true },
             })
             if (!pendiente || pendiente.pagado) throw new Error('La deuda no existe o ya fue pagada.')
+            validarEmpleadoIncluidoEnNomina(pendiente.empleado)
             if (!Number.isFinite(pendiente.cantidadHoras) || pendiente.cantidadHoras <= 0
                 || !Number.isFinite(pendiente.montoCalculado) || pendiente.montoCalculado <= 0) {
                 throw new Error('La deuda tiene horas o importe inválidos y no puede pagarse.')

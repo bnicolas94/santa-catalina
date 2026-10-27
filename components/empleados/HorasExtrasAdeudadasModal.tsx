@@ -7,12 +7,14 @@ import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
 import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 interface EmpleadoPago {
     id: string
     nombre: string
     apellido?: string | null
     activo: boolean
+    incluidoNomina?: boolean
 }
 
 interface Pendiente {
@@ -163,7 +165,7 @@ async function imprimirReciboHorasAdeudadas(pendiente: Pendiente, fechaPago: str
 export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
     const { data: session } = useSession()
     const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
-    const activos = useMemo(() => empleados.filter(empleado => empleado.activo), [empleados])
+    const activos = useMemo(() => empleados.filter(empleadoIncluidoEnNomina), [empleados])
     const [empleadoId, setEmpleadoId] = useState('')
     const [fechaOrigen, setFechaOrigen] = useState(lunesSemanaAnterior)
     const [cantidadHoras, setCantidadHoras] = useState('')

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { validarEmpleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 import { eventBus } from '@/lib/events'
 import { CajaService } from '@/lib/services/caja.service'
 import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
@@ -192,6 +193,7 @@ export class PayrollService {
         })
 
         if (!empleado) throw new Error('Empleado no encontrado')
+        validarEmpleadoIncluidoEnNomina(empleado)
 
         const inasistenciasPorFecha = new Map<string, typeof empleado.inasistencias[number]>()
         empleado.inasistencias.forEach(inasistencia => {
@@ -554,6 +556,7 @@ export class PayrollService {
         })
 
         if (!empleado) throw new Error('Empleado no encontrado')
+        validarEmpleadoIncluidoEnNomina(empleado)
         if (empleado.modalidadPago === 'MENSUAL_MIXTA' && tipoLiquidacion === 'NORMAL') {
             throw new Error('Esta empleada utiliza cierre mensual mixto y no puede pagarse desde una liquidación semanal, masiva o Express.')
         }
@@ -720,6 +723,11 @@ export class PayrollService {
             // compartidos entre periodos diferentes.
             const lockKey = `liquidacion:${empleado.id}`
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS lock_result`
+            const elegibilidadActual = await tx.empleado.findUniqueOrThrow({
+                where: { id: empleado.id },
+                select: { activo: true, incluidoNomina: true },
+            })
+            validarEmpleadoIncluidoEnNomina(elegibilidadActual)
 
             // La verificación definitiva ocurre dentro del bloqueo. La consulta
             // previa sólo funciona como salida rápida para el caso habitual.
@@ -1099,6 +1107,7 @@ export class PayrollService {
             include: { rolRel: true }
         });
         if (!empleado) throw new Error('Empleado no encontrado');
+        validarEmpleadoIncluidoEnNomina(empleado)
 
         // Agrupamos por mes para encontrar el mejor mes
         const montosPorMes: Record<number, number> = {};
@@ -1139,6 +1148,7 @@ export class PayrollService {
             include: { rolRel: true }
         });
         if (!empleado) throw new Error('Empleado no encontrado');
+        validarEmpleadoIncluidoEnNomina(empleado)
 
         if (!empleado.fechaIngreso) return { dias: 0, monto: 0, antiguedad: 0 };
 

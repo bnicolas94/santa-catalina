@@ -62,6 +62,7 @@ interface EmployeeDialogEmployee {
     puestoId?: string | null
     turnoId?: string | null
     codigosReloj?: Array<{ origen: string; codigo: string }>
+    incluidoNomina?: boolean
 }
 
 interface EmployeeFormData {
@@ -92,6 +93,7 @@ interface EmployeeFormData {
     puestoId: string
     turnoId: string
     codigosReloj: Array<{ origen: OrigenReloj; codigo: string }>
+    incluidoNomina: boolean
 }
 
 interface LocationOption { id: string; nombre: string; tipo: string }
@@ -167,6 +169,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
             origen,
             codigo: empleado?.codigosReloj?.find(vinculo => vinculo.origen === origen)?.codigo || '',
         })),
+        incluidoNomina: empleado?.incluidoNomina !== false,
     })
 
     useEffect(() => {
@@ -734,6 +737,20 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                             : 'Se mantiene el circuito actual de liquidación semanal.'}
                                     </p>
                                 </div>
+                                <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', padding: 'var(--space-4)', border: `1px solid ${formData.incluidoNomina ? 'var(--color-success)' : 'var(--color-warning)'}`, borderRadius: 'var(--radius-md)', background: formData.incluidoNomina ? 'var(--color-success-bg)' : 'var(--color-warning-bg)', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.incluidoNomina}
+                                        onChange={event => setFormData(actual => ({ ...actual, incluidoNomina: event.target.checked }))}
+                                        style={{ marginTop: 3 }}
+                                    />
+                                    <span>
+                                        <strong style={{ display: 'block' }}>Incluir en liquidaciones de sueldo</strong>
+                                        <small style={{ color: 'var(--color-gray-600)' }}>
+                                            Al desmarcarlo conserva el acceso al sistema, el rol y los permisos, pero deja de aparecer en nómina, SAC, vacaciones y pagos complementarios.
+                                        </small>
+                                    </span>
+                                </label>
                                 <div className="form-group">
                                     <label className="form-label">Valor Hora Extra (%)</label>
                                     <div style={{ display: 'flex' }}>

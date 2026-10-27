@@ -36,6 +36,7 @@ import Link from 'next/link'
 import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
 import { imprimirCaratulaLegajo, imprimirCaratulasLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
 import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 type EmpleadoConRelojes = Empleado & { codigosReloj?: Array<{ origen: string; codigo: string }> }
 
@@ -620,9 +621,10 @@ function EmpleadosContent() {
                                         </div>
                                     </td>
                                     <td>
-                                        <span className={`badge ${emp.activo ? 'badge-success' : 'badge-neutral'}`}>
-                                            {emp.activo ? 'Activo' : 'Inactivo'}
-                                        </span>
+                                        {!emp.activo ? <span className="badge badge-neutral">Inactivo</span>
+                                            : emp.incluidoNomina === false
+                                                ? <span className="badge badge-warning">Fuera de nómina</span>
+                                                : <span className="badge badge-success">Activo</span>}
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
@@ -644,7 +646,8 @@ function EmpleadosContent() {
                                             <button
                                                 className="btn btn-ghost btn-icon"
                                                 onClick={() => { setSelectedEmpleado(emp); setExpressLiquidationOpen(true); }}
-                                                title="Liquidación Express"
+                                                disabled={!empleadoIncluidoEnNomina(emp)}
+                                                title={empleadoIncluidoEnNomina(emp) ? 'Liquidación Express' : 'Esta persona está fuera de nómina'}
                                                 style={{ color: 'var(--color-success)' }}
                                             >
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

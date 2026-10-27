@@ -3,6 +3,7 @@ export interface EmpleadoLiquidable {
     nombre: string
     apellido?: string | null
     activo: boolean
+    incluidoNomina?: boolean
     modalidadPago?: string
     ubicacionId?: string | null
 }

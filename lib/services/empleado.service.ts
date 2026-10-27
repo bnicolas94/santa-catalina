@@ -35,6 +35,7 @@ export interface CreateEmpleadoInput {
     areaId?: string | null
     puestoId?: string | null
     turnoId?: string | null
+    incluidoNomina?: boolean
     codigosReloj?: CodigoRelojInput[]
 }
 
@@ -66,6 +67,7 @@ export interface UpdateEmpleadoInput {
     puestoId?: string | null
     turnoId?: string | null
     activo?: boolean
+    incluidoNomina?: boolean
     codigosReloj?: CodigoRelojInput[]
 }
 
@@ -100,6 +102,7 @@ const EMPLEADO_SELECT = {
     rol: true,
     telefono: true,
     activo: true,
+    incluidoNomina: true,
     createdAt: true,
     fechaIngreso: true,
     sueldoBaseMensual: true,
@@ -284,6 +287,7 @@ export class EmpleadoService {
                 areaId: input.areaId || null,
                 puestoId: input.puestoId || null,
                 turnoId: input.turnoId || null,
+                incluidoNomina: input.incluidoNomina !== false,
             }, select: { id: true } })
             if (codigosReloj.length) {
                 await tx.codigoRelojEmpleado.createMany({
@@ -357,6 +361,7 @@ export class EmpleadoService {
             areaId: (input.areaId !== undefined) ? (input.areaId || null) : undefined,
             puestoId: (input.puestoId !== undefined) ? (input.puestoId || null) : undefined,
             turnoId: (input.turnoId !== undefined) ? (input.turnoId || null) : undefined,
+            incluidoNomina: input.incluidoNomina,
         }
 
         if (input.activo !== undefined) {

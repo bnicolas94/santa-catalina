@@ -16,6 +16,7 @@ import { WeeklyPayrollHeader } from './WeeklyPayrollHeader'
 import { WeeklyPayrollFooter } from './WeeklyPayrollFooter'
 import { WeeklyPayrollResults } from './WeeklyPayrollResults'
 import { cajaSugeridaParaEmpleado, cajasActivasParaLiquidacion } from '@/lib/payroll/cajasLiquidacion'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 interface WeeklyPayrollModalProps {
     empleados: EmpleadoLiquidable[]
@@ -129,11 +130,11 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             )
 
             // 3. Filtrar empleados: Solo activos y que NO tengan liquidación pagada en este rango
-            const empleadosMixtos = empleados.filter(e => e.activo && e.modalidadPago === 'MENSUAL_MIXTA')
+            const empleadosMixtos = empleados.filter(e => empleadoIncluidoEnNomina(e) && e.modalidadPago === 'MENSUAL_MIXTA')
             const idsMixtos = new Set(empleadosMixtos.map(empleado => empleado.id))
-            const empleadosSemanales = empleados.filter(e => e.activo && e.modalidadPago !== 'MENSUAL_MIXTA' && !idsPagados.has(e.id))
+            const empleadosSemanales = empleados.filter(e => empleadoIncluidoEnNomina(e) && e.modalidadPago !== 'MENSUAL_MIXTA' && !idsPagados.has(e.id))
             const empleadosParaLiquidar = [...empleadosSemanales, ...empleadosMixtos]
-            const excluidos = empleados.filter(e => e.activo && e.modalidadPago !== 'MENSUAL_MIXTA' && idsPagados.has(e.id))
+            const excluidos = empleados.filter(e => empleadoIncluidoEnNomina(e) && e.modalidadPago !== 'MENSUAL_MIXTA' && idsPagados.has(e.id))
             setEmpleadosExcluidos(excluidos)
 
             if (empleadosParaLiquidar.length === 0) {

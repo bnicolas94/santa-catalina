@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { DetalleConcepto } from '@/lib/services/liquidacion-final.service'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 interface LiquidacionFinalModalProps {
     empleados?: any[]
@@ -188,7 +189,7 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                             <select className="form-select" value={empleadoId} onChange={e => setEmpleadoId(e.target.value)} disabled={!!selectedEmpleadoId || !!calculo}>
                                 <option value="">Seleccionar...</option>
                                 {empleados.length > 0 ? (
-                                    empleados.filter(e => e.activo || e.id === empleadoId).map(e => (
+                                    empleados.filter(e => empleadoIncluidoEnNomina(e) || e.id === empleadoId).map(e => (
                                         <option key={e.id} value={e.id}>{nombreEmpleadoApellidoPrimero(e)}</option>
                                     ))
                                 ) : (

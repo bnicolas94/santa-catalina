@@ -7,6 +7,7 @@ import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoBut
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
 import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
 import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: string, empleadoDatos: any }) {
     const { data: session } = useSession()
@@ -43,6 +44,7 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
     const [motivoAnulacion, setMotivoAnulacion] = useState('')
     const [anulando, setAnulando] = useState(false)
     const [errorAnulacion, setErrorAnulacion] = useState('')
+    const incluidoEnNomina = empleadoIncluidoEnNomina(empleadoDatos)
     const [modeloRecibo, setModeloRecibo] = useState<ModeloRecibo>('A')
 
     const fetchLiquidaciones = async () => {
@@ -335,8 +337,9 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
 
                             <button
                                 onClick={handleGenerar}
-                                disabled={generando || escaneando || alertas.length > 0}
+                                disabled={!incluidoEnNomina || generando || escaneando || alertas.length > 0}
                                 className="btn btn-primary"
+                                title={incluidoEnNomina ? 'Liquidar período' : 'Esta persona está fuera de nómina'}
                             >
                                 {generando ? 'Procesando...' : (escaneando ? 'Validando...' : 'Liquidar y Generar')}
                             </button>
@@ -344,6 +347,8 @@ export function LiquidacionesTab({ empleadoId, empleadoDatos }: { empleadoId: st
                                 onClick={() => setExpressModalOpen(true)}
                                 className="btn btn-outline"
                                 style={{ borderColor: 'var(--color-success)', color: 'var(--color-success)' }}
+                                disabled={!incluidoEnNomina}
+                                title={incluidoEnNomina ? 'Generar liquidación manual' : 'Esta persona está fuera de nómina'}
                             >
                                 💸 Express (Manual)
                             </button>

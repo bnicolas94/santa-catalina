@@ -11,6 +11,7 @@ import {
 import { etiquetaSemanaOrigen, semanaLaboralDeOrigen } from '@/lib/payroll/horasExtrasAdeudadas'
 import { prisma } from '@/lib/prisma'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { validarEmpleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 import { CajaService } from '@/lib/services/caja.service'
 import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
@@ -105,6 +106,7 @@ export async function GET(request: Request) {
                             apellido: true,
                             dni: true,
                             activo: true,
+                            incluidoNomina: true,
                             horasTrabajoDiarias: true,
                             jornal: true,
                             sueldoBaseMensual: true,
@@ -149,6 +151,7 @@ export async function GET(request: Request) {
         if (fecha) {
             for (const liquidacion of liquidacionesOriginales) {
                 if (candidatosPorEmpleado.has(liquidacion.empleadoId)) continue
+                if (!liquidacion.empleado.incluidoNomina) continue
                 const resolucion = resolverDiaOriginal(liquidacion, fecha)
                 if (!resolucion || Number(resolucion.dia.horasTrabajadas) <= 0) continue
                 const { dia, origen } = resolucion
@@ -269,6 +272,8 @@ export async function POST(request: Request) {
                                 nombre: true,
                                 apellido: true,
                                 dni: true,
+                                activo: true,
+                                incluidoNomina: true,
                                 jornal: true,
                                 sueldoBaseMensual: true,
                                 cicloPago: true,
@@ -292,6 +297,7 @@ export async function POST(request: Request) {
                 if (!originalResuelto?.resolucion) throw new Error('No se encontró una liquidación original con trabajo verificable para uno de los empleados.')
 
                 const { original, resolucion } = originalResuelto
+                validarEmpleadoIncluidoEnNomina(original.empleado)
                 const { dia, origen: origenValidacion } = resolucion
                 const monto = calcularAdicionalFeriadoAdeudado(dia)
                 const cantidadHoras = original.empleado.horasTrabajoDiarias || Number(dia.horasTrabajadas) || 0

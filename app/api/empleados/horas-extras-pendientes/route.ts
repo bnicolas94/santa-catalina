@@ -9,6 +9,7 @@ import {
 } from '@/lib/payroll/horasExtrasAdeudadas'
 import { fechaClaveRRHH, instanteRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 
 function mensajeError(error: unknown) {
     return error instanceof Error ? error.message : 'No se pudo procesar la solicitud.'
@@ -23,7 +24,7 @@ export async function GET() {
                 orderBy: [{ fechaOrigen: 'desc' }, { empleado: { nombre: 'asc' } }],
             }),
             prisma.empleado.findMany({
-                where: { activo: true },
+                where: { activo: true, incluidoNomina: true },
                 include: { rolRel: true },
                 orderBy: [
                     { apellido: { sort: 'asc', nulls: 'last' } },
@@ -123,8 +124,8 @@ export async function POST(request: Request) {
             where: { id: empleadoId },
             include: { rolRel: true },
         })
-        if (!empleado || !empleado.activo) {
-            return NextResponse.json({ error: 'El empleado no existe o está inactivo.' }, { status: 404 })
+        if (!empleado || !empleadoIncluidoEnNomina(empleado)) {
+            return NextResponse.json({ error: 'La persona no existe, está inactiva o fue excluida de la nómina.' }, { status: 404 })
         }
 
         const valorHoraExtra = valorHoraExtraAdeudada(empleado)
