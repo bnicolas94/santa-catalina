@@ -93,6 +93,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - `prisma/schema.prisma` y las migraciones son la fuente de verdad estructural. No editar una migración ya desplegada.
 - Tras cambiar el schema, ejecutar `npx prisma generate` y crear/verificar la migración correspondiente.
 - Antes de desplegar cambios de datos o estructura, ejecutar y verificar `npm run db:backup`. Nunca ejecutar `db:reset` sobre una base compartida o productiva.
+- `npm start` ejecuta `prisma migrate deploy` y sólo inicia Next.js si todas las migraciones pendientes terminan correctamente; Railway depende de este orden para no servir código contra un esquema anterior.
 - Mantener operaciones compuestas de caja, stock, compras, pedidos y nómina dentro de transacciones cuando deban ser atómicas.
 
 ### Fechas, dinero y cantidades
