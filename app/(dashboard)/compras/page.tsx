@@ -1800,8 +1800,7 @@ function ComprasContent() {
                                         </tbody>
                                     </table>
                                 )}
-                                {facturaForm.items.length > 0 && (
-                                    <div style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)', border: '1px solid #F5D98B', borderRadius: 'var(--radius-md)', background: '#FFFDF7' }}>
+                                <div style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)', border: '1px solid #F5D98B', borderRadius: 'var(--radius-md)', background: '#FFFDF7' }}>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(180px, 0.45fr)', gap: 'var(--space-4)', alignItems: 'center' }}>
                                             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                                                 <input
@@ -1826,10 +1825,15 @@ function ComprasContent() {
                                                     className="form-input"
                                                     value={facturaForm.descuento}
                                                     onChange={(e) => setFacturaForm({ ...facturaForm, descuento: e.target.value })}
-                                                    placeholder="0,00"
+                                                    placeholder={facturaForm.items.length > 0 ? '0,00' : 'Agregá un ítem primero'}
+                                                    disabled={facturaForm.items.length === 0}
                                                 />
                                                 <small style={{ color: descuentoIngresado > resumenFactura.subtotal ? 'var(--color-danger)' : 'var(--color-gray-500)' }}>
-                                                    {descuentoIngresado > resumenFactura.subtotal ? 'No puede superar el subtotal.' : 'Se aplica antes de calcular el IVA.'}
+                                                    {facturaForm.items.length === 0
+                                                        ? 'Se habilita cuando agregues el primer ítem.'
+                                                        : descuentoIngresado > resumenFactura.subtotal
+                                                            ? 'No puede superar el subtotal.'
+                                                            : 'Se aplica antes de calcular el IVA.'}
                                                 </small>
                                             </div>
                                         </div>
@@ -1842,7 +1846,6 @@ function ComprasContent() {
                                             <strong style={{ borderTop: '1px solid var(--color-gray-300)', paddingTop: '6px', textAlign: 'right', color: 'var(--color-primary)', fontSize: '1.2rem' }}>${resumenFactura.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
                                         </div>
                                     </div>
-                                )}
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-ghost" onClick={closeFacturaModal}>Cancelar</button>
