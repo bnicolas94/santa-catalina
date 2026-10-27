@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { CajaService } from './caja.service'
 import { validarEmpleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
+import { antiguedadMesesCompletos, esPeriodoPruebaSeisMeses, requierePreavisoEnPeriodoPrueba } from '@/lib/payroll/periodoPrueba'
 
 export interface LiquidacionFinalInput {
     empleadoId: string
@@ -67,6 +68,9 @@ export class LiquidacionFinalService {
 
         // 3. Vacaciones No Gozadas
         const antiguedadAnios = this.calcularAntiguedad(ingreso, egreso)
+        const antiguedadMeses = antiguedadMesesCompletos(ingreso, egreso)
+        const enPeriodoPrueba = causaEgreso === 'DESPIDO_SIN_CAUSA'
+            && esPeriodoPruebaSeisMeses(ingreso, egreso)
         const vacacionesData = this.calcularVacacionesNoGozadas(ingreso, egreso, antiguedadAnios, sueldoBase)
 
         // 4. Indemnizaciones (si aplica)
@@ -75,10 +79,12 @@ export class LiquidacionFinalService {
         let integracionMes = 0
 
         if (causaEgreso === 'DESPIDO_SIN_CAUSA') {
-            const aniosParaIndemnizacion = this.calcularAniosIndemnizacion(ingreso, egreso)
-            indemnizacionAntiguedad = this.redondear(sueldoBase * aniosParaIndemnizacion)
+            if (!enPeriodoPrueba) {
+                const aniosParaIndemnizacion = this.calcularAniosIndemnizacion(ingreso, egreso)
+                indemnizacionAntiguedad = this.redondear(sueldoBase * aniosParaIndemnizacion)
+            }
 
-            if (omitirPreaviso) {
+            if (omitirPreaviso && !enPeriodoPrueba) {
                 const mesesPreaviso = antiguedadAnios < 5 ? 1 : 2
                 indemnizacionPreaviso = this.redondear(sueldoBase * mesesPreaviso)
 
@@ -86,6 +92,8 @@ export class LiquidacionFinalService {
                     const diasRestantes = diasTotalesMes - diasMesEgreso
                     integracionMes = this.redondear((sueldoBase / 30) * diasRestantes)
                 }
+            } else if (omitirPreaviso && requierePreavisoEnPeriodoPrueba(egreso)) {
+                indemnizacionPreaviso = this.redondear(sueldoBase / 2)
             }
         }
 
@@ -180,6 +188,8 @@ export class LiquidacionFinalService {
             ingreso: empleado.fechaIngreso,
             egreso: fechaEgreso,
             antiguedadAnios,
+            antiguedadMeses,
+            enPeriodoPrueba,
             causaEgreso,
             items,
             totalHaberes,

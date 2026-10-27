@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { DetalleConcepto } from '@/lib/services/liquidacion-final.service'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
+import { esPeriodoPruebaSeisMeses, requierePreavisoEnPeriodoPrueba } from '@/lib/payroll/periodoPrueba'
 
 interface LiquidacionFinalModalProps {
     empleados?: any[]
@@ -24,6 +25,12 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
     const [confirmando, setConfirmando] = useState(false)
     const [sueldoReferencia, setSueldoReferencia] = useState<number>(0)
     const [recalculando, setRecalculando] = useState(false)
+    const empleadoSeleccionado = empleados.find(item => item.id === empleadoId) || empleado
+    const enPeriodoPruebaEstimado = causaEgreso === 'DESPIDO_SIN_CAUSA'
+        && Boolean(empleadoSeleccionado?.fechaIngreso)
+        && esPeriodoPruebaSeisMeses(empleadoSeleccionado.fechaIngreso, fechaEgreso)
+    const requierePreavisoPeriodoPrueba = enPeriodoPruebaEstimado
+        && requierePreavisoEnPeriodoPrueba(fechaEgreso)
 
     useEffect(() => {
         if (selectedEmpleadoId) {
@@ -210,10 +217,20 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                                 <option value="FIN_CONTRATO">Fin de Contrato</option>
                             </select>
                         </div>
-                        {causaEgreso === 'DESPIDO_SIN_CAUSA' && (
+                        {causaEgreso === 'DESPIDO_SIN_CAUSA' && (!enPeriodoPruebaEstimado || requierePreavisoPeriodoPrueba) && (
                             <div className="form-group" style={{ gridColumn: 'span 3', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                 <input type="checkbox" id="preaviso" checked={omitirPreaviso} onChange={e => setOmitirPreaviso(e.target.checked)} disabled={!!calculo} />
                                 <label htmlFor="preaviso" style={{ marginBottom: 0, cursor: 'pointer' }}>Omitir preaviso (Pagar indemnización sustitutiva)</label>
+                            </div>
+                        )}
+                        {enPeriodoPruebaEstimado && (
+                            <div style={{ gridColumn: 'span 3', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-info)', background: 'var(--color-info-bg)', color: 'var(--color-info)' }}>
+                                <strong>Período de prueba detectado</strong>
+                                <div style={{ marginTop: 4, fontSize: 'var(--text-sm)' }}>
+                                    Según las fechas registradas, la relación todavía se encuentra dentro de los primeros seis meses. {requierePreavisoPeriodoPrueba
+                                        ? 'No se calcularán indemnización por antigüedad ni integración del mes de despido; el preaviso se calculará si se marca como omitido, según la regla vigente a la fecha de egreso.'
+                                        : 'No se calcularán indemnización por antigüedad, preaviso ni integración del mes de despido.'}
+                                </div>
                             </div>
                         )}
                         {!calculo && (
@@ -230,7 +247,10 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                                 <div className="card" style={{ padding: 'var(--space-3)', textAlign: 'center', borderTop: '4px solid var(--color-info)' }}>
                                     <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)' }}>ANTIGÜEDAD</div>
-                                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>{calculo.antiguedadAnios} años</div>
+                                    <div style={{ fontSize: 'var(--text-lg)', fontWeight: 800 }}>
+                                        {calculo.enPeriodoPrueba ? `${calculo.antiguedadMeses} meses` : `${calculo.antiguedadAnios} años`}
+                                    </div>
+                                    {calculo.enPeriodoPrueba && <div style={{ fontSize: '10px', color: 'var(--color-info)', fontWeight: 800 }}>PERÍODO DE PRUEBA</div>}
                                 </div>
                                 <div className="card" style={{ padding: 'var(--space-3)', textAlign: 'center', borderTop: '4px solid var(--color-gray-400)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                                     <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--color-gray-400)', marginBottom: '4px' }}>SUELDO REF. ✏️</div>

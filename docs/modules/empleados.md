@@ -96,6 +96,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 * **Reporte de pagos**: La grilla, la impresión de recibos seleccionados y la planilla resumen se ordenan alfabéticamente por nombre completo, de A a Z, con comparación en español que ignora diferencias de acentos y mayúsculas.
 * **Orden del personal**: El padrón se ordena por apellido y luego por nombres, ignorando mayúsculas y acentos, y se presenta como `Apellido, Nombres`. Los registros históricos sin apellido quedan al final sin inventar ese dato.
 * **Participación en nómina**: `Empleado.incluidoNomina` separa el acceso al sistema de la participación salarial. Desmarcarlo conserva el estado activo, las credenciales, el rol y los permisos, pero excluye a la persona de liquidaciones semanales, masivas y Express, cierres mixtos, SAC, vacaciones, horas extras y feriados adeudados. El historial ya generado se conserva.
+* **Despido durante el período de prueba**: Para relaciones iniciadas desde el 09/07/2024, el despido sin causa anterior al aniversario de seis meses se identifica como período de prueba. En egresos desde el 06/03/2026 no se calculan indemnización por antigüedad, preaviso ni integración del mes; se mantienen los conceptos devengados, como días trabajados, SAC proporcional y vacaciones no gozadas. El recibo identifica las fechas, el artículo 92 bis y deja claro que la firma acredita el pago sin renunciar a derechos. Los egresos históricos anteriores conservan la regla de preaviso vigente en su fecha.
 
 ---
 

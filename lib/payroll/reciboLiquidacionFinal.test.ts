@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
     contenidoEspecialClasico,
+    contenidoReciboFinalPeriodoPrueba,
     contenidoReciboFinalRenuncia,
     type DatosReciboLiquidacion,
 } from '../../components/empleados/recibosLiquidacion'
@@ -61,6 +62,80 @@ test('no aplica el texto de renuncia a otras causas de liquidación final', () =
     }
 
     assert.equal(contenidoReciboFinalRenuncia(reciboDespido), null)
+})
+
+test('el recibo de despido durante el período de prueba identifica las fechas y limita la constancia al pago recibido', () => {
+    const contenido = contenidoReciboFinalPeriodoPrueba({
+        empleado: {
+            nombre: 'Juan',
+            apellido: 'Gómez',
+            dni: '40111222',
+            fechaIngreso: '2026-07-01',
+        },
+        periodo: 'Liquidación Final (DESPIDO_SIN_CAUSA)',
+        tipo: 'FINAL',
+        totalNeto: 225000,
+        desglose: {
+            esLiquidacionFinal: true,
+            tipoEgreso: 'DESPIDO_SIN_CAUSA',
+            enPeriodoPrueba: true,
+            requierePreavisoPeriodoPrueba: false,
+            fechaEgreso: '2026-10-27',
+            conceptos: [
+                { nombre: 'Días trabajados', monto: 180000 },
+                { nombre: 'SAC proporcional', monto: 45000 },
+            ],
+        },
+    })
+
+    assert.ok(contenido)
+    assert.match(contenido, /Liquidación final durante período de prueba/)
+    assert.match(contenido, /Artículo 92 bis/)
+    assert.match(contenido, /Juan Gómez/)
+    assert.match(contenido, /40111222/)
+    assert.match(contenido, /1\/7\/2026/)
+    assert.match(contenido, /27\/10\/2026/)
+    assert.match(contenido, /\$225\.000/)
+    assert.match(contenido, /no incorpora indemnización por antigüedad, indemnización sustitutiva de preaviso ni integración del mes de despido/)
+    assert.match(contenido, /no implica renuncia a derechos laborales/)
+})
+
+test('el texto especial de período de prueba sólo aplica al despido sin causa marcado como tal', () => {
+    const base: DatosReciboLiquidacion = {
+        ...reciboRenuncia,
+        desglose: {
+            ...reciboRenuncia.desglose,
+            tipoEgreso: 'DESPIDO_SIN_CAUSA',
+            enPeriodoPrueba: false,
+        },
+    }
+
+    assert.equal(contenidoReciboFinalPeriodoPrueba(base), null)
+    assert.equal(contenidoReciboFinalPeriodoPrueba({
+        ...base,
+        desglose: { ...base.desglose, tipoEgreso: 'RENUNCIA', enPeriodoPrueba: true },
+    }), null)
+})
+
+test('el recibo histórico de período de prueba no afirma que el preaviso estaba excluido', () => {
+    const contenido = contenidoReciboFinalPeriodoPrueba({
+        empleado: { nombre: 'Ana', apellido: 'López', dni: '39111222', fechaIngreso: '2025-10-01' },
+        periodo: 'Liquidación Final (DESPIDO_SIN_CAUSA)',
+        tipo: 'FINAL',
+        totalNeto: 300000,
+        desglose: {
+            esLiquidacionFinal: true,
+            tipoEgreso: 'DESPIDO_SIN_CAUSA',
+            enPeriodoPrueba: true,
+            requierePreavisoPeriodoPrueba: true,
+            fechaEgreso: '2026-02-15',
+            conceptos: [],
+        },
+    })
+
+    assert.ok(contenido)
+    assert.match(contenido, /el preaviso se refleja, cuando corresponde, en el detalle precedente/)
+    assert.doesNotMatch(contenido, /indemnización sustitutiva de preaviso ni/)
 })
 
 test('escapa el nombre y DNI antes de incorporarlos al recibo', () => {

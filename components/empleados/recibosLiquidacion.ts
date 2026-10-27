@@ -346,6 +346,29 @@ export function contenidoReciboFinalRenuncia(recibo: DatosReciboLiquidacion): st
         <p class="recibi">Recibí</p>`
 }
 
+export function contenidoReciboFinalPeriodoPrueba(recibo: DatosReciboLiquidacion): string | null {
+    const calc = datosCalculados(recibo)
+    const tipoEgreso = String(calc.desglose.tipoEgreso || '').trim().toUpperCase()
+    if (!calc.esFinal || tipoEgreso !== 'DESPIDO_SIN_CAUSA' || calc.desglose.enPeriodoPrueba !== true) return null
+
+    const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
+    const dni = recibo.empleado.dni || '________________'
+    const fechaIngreso = fechaCorta(recibo.empleado.fechaIngreso)
+    const fechaEgreso = fechaCorta(calc.desglose.fechaEgreso as string | Date | null)
+    const requierePreaviso = calc.desglose.requierePreavisoPeriodoPrueba === true
+    const conceptosExcluidos = requierePreaviso
+        ? 'indemnización por antigüedad ni integración del mes de despido; el preaviso se refleja, cuando corresponde, en el detalle precedente'
+        : 'indemnización por antigüedad, indemnización sustitutiva de preaviso ni integración del mes de despido'
+
+    return `
+        <div class="titulo-especial"><h2>Liquidación final durante período de prueba</h2><p>Artículo 92 bis · Ley de Contrato de Trabajo N° 20.744</p></div>
+        <p class="declaracion-pago">Se deja constancia de que la relación laboral de <strong>${escaparHtml(nombre)}</strong>, DNI <strong>${escaparHtml(dni)}</strong>, iniciada el <strong>${escaparHtml(fechaIngreso)}</strong>, finaliza el <strong>${escaparHtml(fechaEgreso)}</strong> por decisión del empleador durante el período de prueba.</p>
+        <p class="declaracion-pago">El trabajador recibe la suma total de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}), correspondiente a los haberes y demás conceptos devengados que se detallan a continuación.</p>
+        ${tablaConceptos(recibo)}
+        <p class="detalle-observacion">Conforme al régimen vigente a la fecha de egreso, esta liquidación no incorpora ${conceptosExcluidos}.</p>
+        <p class="declaracion-pago">La firma acredita exclusivamente la recepción del importe indicado y no implica renuncia a derechos laborales ni a diferencias que pudieran corresponder.</p>`
+}
+
 export function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
     const especial = contenidoEspecialClasico(recibo)
     if (especial) return especial
@@ -396,12 +419,14 @@ export function cuerpoModeloA(recibo: DatosReciboLiquidacion) {
 function reciboHtml(recibo: DatosReciboLiquidacion, modelo: ModeloRecibo, logo: string, watermark: string, pageBreak: boolean) {
     const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
     const contenidoRenuncia = contenidoReciboFinalRenuncia(recibo)
-    const contenido = contenidoRenuncia
-        ? `<div class="texto texto-renuncia">${contenidoRenuncia}</div>`
+    const contenidoPeriodoPrueba = contenidoReciboFinalPeriodoPrueba(recibo)
+    const contenidoFinalEspecial = contenidoRenuncia || contenidoPeriodoPrueba
+    const contenido = contenidoFinalEspecial
+        ? `<div class="texto texto-renuncia">${contenidoFinalEspecial}</div>`
         : modelo === 'A'
             ? `<div class="texto">${cuerpoModeloA(recibo)}</div>`
             : cuerpoModeloB(recibo)
-    return `<section class="recibo ${contenidoRenuncia ? 'recibo-renuncia' : ''} ${pageBreak ? 'salto' : ''}"><img src="${watermark}" class="watermark" alt=""><header><img src="${logo}" alt="Santa Catalina"><p>Berazategui, ${fechaLarga(recibo.fechaImpresion || recibo.fechaGeneracion)}</p></header><main>${contenido}</main><footer><div class="firma">Firma</div><div>Aclaración: ${escaparHtml(nombre)}</div><div>D.N.I: ${escaparHtml(recibo.empleado.dni || '')}</div></footer></section>`
+    return `<section class="recibo ${contenidoFinalEspecial ? 'recibo-renuncia' : ''} ${pageBreak ? 'salto' : ''}"><img src="${watermark}" class="watermark" alt=""><header><img src="${logo}" alt="Santa Catalina"><p>Berazategui, ${fechaLarga(recibo.fechaImpresion || recibo.fechaGeneracion)}</p></header><main>${contenido}</main><footer><div class="firma">Firma</div><div>Aclaración: ${escaparHtml(nombre)}</div><div>D.N.I: ${escaparHtml(recibo.empleado.dni || '')}</div></footer></section>`
 }
 
 export async function imprimirRecibosLiquidacion(recibos: DatosReciboLiquidacion[], modelo: ModeloRecibo, ventanaReservada?: Window | null) {

@@ -3,6 +3,11 @@ import { prisma } from '@/lib/prisma'
 import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
 import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
 import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
+import {
+    antiguedadMesesCompletos,
+    esPeriodoPruebaSeisMeses,
+    requierePreavisoEnPeriodoPrueba,
+} from '@/lib/payroll/periodoPrueba'
 
 export async function GET(request: Request) {
     try {
@@ -117,6 +122,12 @@ export async function GET(request: Request) {
                     esLiquidacionFinal: true,
                     tipoEgreso: liq.tipoEgreso,
                     antiguedadAnios: liq.antiguedadAnios,
+                    antiguedadMeses: antiguedadMesesCompletos(liq.empleado.fechaIngreso || liq.fechaEgreso, liq.fechaEgreso),
+                    enPeriodoPrueba: liq.tipoEgreso === 'DESPIDO_SIN_CAUSA'
+                        && Boolean(liq.empleado.fechaIngreso)
+                        && esPeriodoPruebaSeisMeses(liq.empleado.fechaIngreso!, liq.fechaEgreso),
+                    requierePreavisoPeriodoPrueba: requierePreavisoEnPeriodoPrueba(liq.fechaEgreso),
+                    fechaEgreso: liq.fechaEgreso,
                     conceptos: liq.detalleConceptos
                 },
                 empleado: nombreEmpleadoApellidoPrimero(liq.empleado),
