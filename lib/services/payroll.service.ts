@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 import { eventBus } from '@/lib/events'
 import { CajaService } from '@/lib/services/caja.service'
 import { calcularDiaSemanal } from '@/lib/payroll/calculoDiaSemanal'
@@ -467,7 +468,7 @@ export class PayrollService {
 
         return {
             empleadoId: empleado.id,
-            empleadoNombre: `${empleado.nombre} ${empleado.apellido || ''}`.trim(),
+            empleadoNombre: nombreEmpleadoApellidoPrimero(empleado),
             periodo: `${fechaInicio} a ${fechaFin}`,
             diasTrabajados,
             horasNormales: parseFloat(horasNormales.toFixed(2)),

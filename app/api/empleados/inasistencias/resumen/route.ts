@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { startOfDay, subDays } from 'date-fns'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 export async function GET() {
     try {
@@ -13,10 +14,10 @@ export async function GET() {
             where: { activo: true }
         })
 
-        const resumen = await Promise.all(empleados.map(async (emp) => {
+        const resumen = await Promise.all(ordenarEmpleadosPorApellido(empleados).map(async (emp) => {
             const stats: any = {
                 id: emp.id,
-                nombre: `${emp.nombre} ${emp.apellido || ''}`.trim(),
+                nombre: nombreEmpleadoApellidoPrimero(emp),
                 inasistenciasTotales: 0,
                 alertasDisparadas: []
             }

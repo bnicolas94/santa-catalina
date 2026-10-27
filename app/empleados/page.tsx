@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Empleado } from '@prisma/client'
@@ -35,6 +35,7 @@ import {
 import Link from 'next/link'
 import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/relojes'
 import { imprimirCaratulaLegajo, imprimirCaratulasLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 type EmpleadoConRelojes = Empleado & { codigosReloj?: Array<{ origen: string; codigo: string }> }
 
@@ -348,10 +349,14 @@ function EmpleadosContent() {
         }
     }
 
-    const filteredEmpleados = empleados.filter(e => {
-        const matchesSearch = e.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              (e as any).apellido?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              (e as any).dni?.includes(searchTerm)
+    const empleadosOrdenados = useMemo(() => ordenarEmpleadosPorApellido(empleados), [empleados])
+    const filteredEmpleados = empleadosOrdenados.filter(e => {
+        const busqueda = searchTerm.trim().toLocaleLowerCase('es-AR')
+        const nombreVisible = nombreEmpleadoApellidoPrimero(e).toLocaleLowerCase('es-AR')
+        const nombreTradicional = `${e.nombre} ${e.apellido || ''}`.trim().toLocaleLowerCase('es-AR')
+        const matchesSearch = nombreVisible.includes(busqueda)
+            || nombreTradicional.includes(busqueda)
+            || e.dni?.includes(searchTerm)
         const matchesActivo = filterActivo === 'todos' ? true : e.activo === filterActivo
         return matchesSearch && matchesActivo
     })
@@ -376,7 +381,7 @@ function EmpleadosContent() {
     }
 
     const imprimirCaratulasSeleccionadas = async () => {
-        const seleccionados = empleados.filter(empleado => empleadosCaratulaSeleccionados.has(empleado.id))
+        const seleccionados = empleadosOrdenados.filter(empleado => empleadosCaratulaSeleccionados.has(empleado.id))
         setImprimiendoCaratulaId('varios')
         try {
             await imprimirCaratulasLegajo(seleccionados)
@@ -501,7 +506,7 @@ function EmpleadosContent() {
                                 <tr key={emp.id} style={{ opacity: emp.activo ? 1 : 0.6 }}>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                            <input type="checkbox" aria-label={`Seleccionar carátula de ${emp.nombre} ${emp.apellido || ''}`} checked={empleadosCaratulaSeleccionados.has(emp.id)} onChange={() => alternarEmpleadoCaratula(emp.id)} />
+                                            <input type="checkbox" aria-label={`Seleccionar carátula de ${nombreEmpleadoApellidoPrimero(emp)}`} checked={empleadosCaratulaSeleccionados.has(emp.id)} onChange={() => alternarEmpleadoCaratula(emp.id)} />
                                             <div style={{
                                                 width: 40, height: 40, borderRadius: '50%',
                                                 backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)',
@@ -511,7 +516,7 @@ function EmpleadosContent() {
                                             </div>
                                             <div>
                                                 <Link href={`/empleados/${emp.id}`} style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-                                                    {emp.nombre} {(emp as any).apellido || ''}
+                                                    {nombreEmpleadoApellidoPrimero(emp)}
                                                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                                                 </Link>
                                                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', marginTop: '2px' }}>
@@ -682,7 +687,7 @@ function EmpleadosContent() {
             {reviewModalOpen && (
                 <ReviewImportModal
                     registros={pendingRegistros}
-                    empleados={empleados}
+                    empleados={empleadosOrdenados}
                     formato={pendingImportFormat}
                     confirmando={importLoading}
                     onClose={() => setReviewModalOpen(false)}
@@ -692,7 +697,7 @@ function EmpleadosContent() {
 
             {massLiquidationOpen && (
                 <MassLiquidationModal
-                    empleados={empleados}
+                    empleados={empleadosOrdenados}
                     onClose={closeModal}
                     onSuccess={() => { fetchEmpleados(); closeModal(); }}
                 />
@@ -729,7 +734,7 @@ function EmpleadosContent() {
                 <ReporteVacacionesModal onClose={closeModal} />
             )}
             {showHistorialSalarial && (
-                <HistorialSalarialModal empleados={empleados} onClose={closeModal} />
+                <HistorialSalarialModal empleados={empleadosOrdenados} onClose={closeModal} />
             )}
             
             {showReportePagos && (
@@ -740,13 +745,13 @@ function EmpleadosContent() {
             )}
             {weeklyPayrollOpen && (
                 <WeeklyPayrollModal 
-                    empleados={empleados} 
+                    empleados={empleadosOrdenados}
                     onClose={closeModal} 
                     onSuccess={() => { fetchEmpleados(); closeModal(); }} 
                 />
             )}
             {horasAdeudadasOpen && (
-                <HorasExtrasAdeudadasModal empleados={empleados} onClose={closeModal} />
+                <HorasExtrasAdeudadasModal empleados={empleadosOrdenados} onClose={closeModal} />
             )}
             {feriadosAdeudadosOpen && (
                 <FeriadosAdeudadosModal onClose={closeModal} />
@@ -757,19 +762,19 @@ function EmpleadosContent() {
             {showOrganigramaModal && (
                 <OrganigramaModal
                     onClose={closeModal}
-                    empleados={empleados.map(e => ({ id: e.id, nombre: e.nombre, apellido: (e as any).apellido }))}
+                    empleados={empleadosOrdenados.map(e => ({ id: e.id, nombre: e.nombre, apellido: (e as any).apellido }))}
                     onChanged={() => fetchEmpleados()}
                 />
             )}
             {showTurnosModal && (
-                <TurnosConfigModal onClose={closeModal} empleados={empleados} />
+                <TurnosConfigModal onClose={closeModal} empleados={empleadosOrdenados} />
             )}
             {showConceptosModal && (
                 <ConceptosSalarialesModal onClose={closeModal} />
             )}
             {vacacionesSacOpen && (
                 <VacacionesSACModal 
-                    empleados={empleados.filter(e => e.activo)} 
+                    empleados={empleadosOrdenados.filter(e => e.activo)}
                     onClose={closeModal} 
                 />
             )}
@@ -777,19 +782,19 @@ function EmpleadosContent() {
                 <InasistenciasModal
                     isOpen={showInasistenciasModal}
                     onClose={closeModal}
-                    empleados={empleados}
+                    empleados={empleadosOrdenados}
                 />
             )}
             {showSancionesModal && (
                 <SancionesModal
                     isOpen={showSancionesModal}
                     onClose={closeModal}
-                    empleados={empleados}
+                    empleados={empleadosOrdenados}
                 />
             )}
             {showLiquidacionFinalModal && (
                 <LiquidacionFinalModal
-                    empleados={empleados}
+                    empleados={empleadosOrdenados}
                     selectedEmpleadoId={selectedEmpleado?.id}
                     onClose={closeModal}
                     onSuccess={() => fetchEmpleados()}
@@ -853,7 +858,7 @@ function ReviewImportModal({ registros, empleados, formato, confirmando, onClose
         const emp = empEspecifico || (origen !== 'VILLA_ELISA'
             ? empleados.find(e => normalizarCodigoReloj(e.codigoBiometrico) === codigoNormalizado)
             : undefined)
-        const nombre = emp ? `${emp.nombre} ${emp.apellido || ''}` : `Código ${r.codigoBiometrico} (No vinculado)`
+        const nombre = emp ? nombreEmpleadoApellidoPrimero(emp) : `Código ${r.codigoBiometrico} (No vinculado)`
         const fecha = new Date(r.fechaHora).toLocaleDateString()
         const nombreArchivo = r.nombreOrigen && r.nombreOrigen.toLocaleLowerCase() !== nombre.trim().toLocaleLowerCase()
             ? ` · En archivo: ${r.nombreOrigen}`

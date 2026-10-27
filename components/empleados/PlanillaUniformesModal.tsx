@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { UniformesTab } from './UniformesTab'
 import { ConfiguracionUniformes } from './ConfiguracionUniformes'
 import styles from './PlanillaUniformesModal.module.css'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 type Empleado = { id: string; nombre: string; apellido: string | null; ubicacionId: string | null }
 type Stock = { id: string; prenda: 'REMERA' | 'BUZO'; talle: string; cantidad: number }
@@ -53,9 +54,11 @@ export function PlanillaUniformesModal({ onClose }: { onClose: () => void }) {
 
     useEffect(() => { void cargar() }, [cargar])
 
-    const empleadosFiltrados = useMemo(() => empleados.filter(empleado =>
-        `${empleado.nombre} ${empleado.apellido || ''}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')),
-    ), [empleados, busqueda])
+    const empleadosFiltrados = useMemo(() => ordenarEmpleadosPorApellido(empleados).filter(empleado => {
+        const consulta = busqueda.toLocaleLowerCase('es-AR')
+        return nombreEmpleadoApellidoPrimero(empleado).toLocaleLowerCase('es-AR').includes(consulta)
+            || `${empleado.nombre} ${empleado.apellido || ''}`.toLocaleLowerCase('es-AR').includes(consulta)
+    }), [empleados, busqueda])
     const empleadoSeleccionado = empleados.find(empleado => empleado.id === empleadoId)
     const totalPrendas = stock.reduce((total, item) => total + item.cantidad, 0)
 
@@ -103,7 +106,7 @@ export function PlanillaUniformesModal({ onClose }: { onClose: () => void }) {
             {loading ? <div className={styles.loading}><span className={styles.spinner} /><span>Cargando ropa de trabajo…</span></div> : pestana === 'configuracion' ? <div className={styles.configContent}><ConfiguracionUniformes /></div> : pestana === 'entregas' ? <div className={styles.employeeWorkspace}>
                 <aside className={styles.employeeSidebar}>
                     <div className={styles.employeeSearch}><label className={styles.searchBox}><span>⌕</span><input value={busqueda} onChange={evento => setBusqueda(evento.target.value)} placeholder="Buscar empleado…" aria-label="Buscar empleado" /></label><small>{empleadosFiltrados.length} resultado{empleadosFiltrados.length === 1 ? '' : 's'}</small></div>
-                    <div className={styles.employeeList}>{empleadosFiltrados.length ? empleadosFiltrados.map(empleado => <button type="button" key={empleado.id} className={`${styles.employeeCard} ${empleadoId === empleado.id ? styles.employeeCardActive : ''}`} onClick={() => setEmpleadoId(empleado.id)}><span className={styles.avatar}>{iniciales(empleado)}</span><span><strong>{empleado.nombre} {empleado.apellido || ''}</strong><span>{empleadoId === empleado.id ? 'Ficha seleccionada' : 'Ver entregas y talles'}</span></span></button>) : <div className={styles.empty}>No encontramos empleados con ese nombre.</div>}</div>
+                    <div className={styles.employeeList}>{empleadosFiltrados.length ? empleadosFiltrados.map(empleado => <button type="button" key={empleado.id} className={`${styles.employeeCard} ${empleadoId === empleado.id ? styles.employeeCardActive : ''}`} onClick={() => setEmpleadoId(empleado.id)}><span className={styles.avatar}>{iniciales(empleado)}</span><span><strong>{nombreEmpleadoApellidoPrimero(empleado)}</strong><span>{empleadoId === empleado.id ? 'Ficha seleccionada' : 'Ver entregas y talles'}</span></span></button>) : <div className={styles.empty}>No encontramos empleados con ese nombre.</div>}</div>
                 </aside>
                 <section className={styles.employeePanel}>{empleadoSeleccionado ? <UniformesTab key={empleadoSeleccionado.id} empleadoId={empleadoSeleccionado.id} /> : <div className={styles.empty}><span className={styles.emptyIcon}>⌕</span><h3>Seleccioná un empleado</h3><p>Vas a poder consultar sus talles, registrar entregas, anular movimientos e imprimir la constancia correspondiente.</p></div>}</section>
             </div> : <div className={styles.stockContent}>
@@ -118,7 +121,7 @@ export function PlanillaUniformesModal({ onClose }: { onClose: () => void }) {
                 </form></section>}
                 <section className={styles.panel}><div className={styles.panelHeader}><div><h3>Existencias actuales</h3><p>Disponibilidad total discriminada por prenda y talle.</p></div></div><div className={styles.panelBody}>{stock.length === 0 ? <div className={styles.empty}>Todavía no hay prendas cargadas.</div> : <div className={styles.stockGrid}>{stock.map(item => <article key={item.id} className={styles.stockCard}><div className={styles.stockCardTop}><span className={styles.garment}>{item.prenda === 'REMERA' ? 'T' : '▣'}</span><strong>{item.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.talle}</strong></div><div className={`${styles.stockCount} ${item.cantidad === 0 ? styles.zero : ''}`}>{item.cantidad} <span>unidades</span></div></article>)}</div>}</div></section>
                 <section className={styles.panel}><div className={styles.panelHeader}><div><h3>Últimos movimientos</h3><p>Trazabilidad de ingresos, ajustes, entregas y anulaciones.</p></div></div>{movimientos.length === 0 ? <div className={styles.empty}>No hay movimientos registrados.</div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Fecha</th><th>Prenda</th><th>Movimiento</th><th>Saldo</th><th>Responsable</th><th>Motivo</th></tr></thead><tbody>{movimientos.map(item => <tr key={item.id}>
-                    <td>{new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Buenos_Aires' }).format(new Date(item.createdAt))}</td><td>{item.stock.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.stock.talle}</td><td><span className={item.delta > 0 ? styles.movementPositive : styles.movementNegative}>{item.delta > 0 ? '+' : ''}{item.delta}</span> · {item.tipo}</td><td>{item.saldoPosterior}</td><td>{item.registradoPor.nombre} {item.registradoPor.apellido}</td><td>{item.motivo || (item.entrega ? `Entrega a ${item.entrega.empleado.nombre} ${item.entrega.empleado.apellido || ''}` : '—')}</td>
+                    <td>{new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Buenos_Aires' }).format(new Date(item.createdAt))}</td><td>{item.stock.prenda === 'REMERA' ? 'Remera' : 'Buzo'} · {item.stock.talle}</td><td><span className={item.delta > 0 ? styles.movementPositive : styles.movementNegative}>{item.delta > 0 ? '+' : ''}{item.delta}</span> · {item.tipo}</td><td>{item.saldoPosterior}</td><td>{nombreEmpleadoApellidoPrimero(item.registradoPor)}</td><td>{item.motivo || (item.entrega ? `Entrega a ${nombreEmpleadoApellidoPrimero(item.entrega.empleado)}` : '—')}</td>
                 </tr>)}</tbody></table></div>}</section>
             </div>}
         </main>

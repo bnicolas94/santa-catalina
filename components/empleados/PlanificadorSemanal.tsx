@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { fechaClaveRRHH, sumarDiasRRHH } from '@/lib/rrhh/fechas'
 import { resolverHorarioPlanificado, validarHorarioEsperado, type HorarioEsperado, type PlanificacionHorario } from '@/lib/rrhh/horarios'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 type Empleado = { id: string; nombre: string; apellido: string | null; activo?: boolean }
 type Marca = { empleadoId: string; fechaHora: string; tipo: string }
@@ -23,10 +24,14 @@ export default function PlanificadorSemanal({ empleados }: { empleados: Empleado
     const [progreso, setProgreso] = useState('')
     const [mensaje, setMensaje] = useState('')
     const [nuevo, setNuevo] = useState<HorarioEsperado>({ horaInicio: '09:00', horaFin: '17:00', horasEsperadas: 8, toleranciaMinutos: 10 })
-    const activos = empleados.filter(e => e.activo !== false)
+    const activos = ordenarEmpleadosPorApellido(empleados.filter(e => e.activo !== false))
     const ids = activos.map(e => e.id).join(',')
     const fechas = Array.from({ length: 7 }, (_, i) => sumarDiasRRHH(desde, i))
-    const visibles = activos.filter(e => `${e.nombre} ${e.apellido || ''}`.toLowerCase().includes(busqueda.toLowerCase()))
+    const visibles = activos.filter(e => {
+        const consulta = busqueda.toLocaleLowerCase('es-AR')
+        return nombreEmpleadoApellidoPrimero(e).toLocaleLowerCase('es-AR').includes(consulta)
+            || `${e.nombre} ${e.apellido || ''}`.toLocaleLowerCase('es-AR').includes(consulta)
+    })
     async function consultar(inicio: string, signal?: AbortSignal) {
         const res = await fetch(`/api/empleados/horarios?empleadoIds=${encodeURIComponent(ids)}&desde=${inicio}&hasta=${sumarDiasRRHH(inicio, 6)}`, { signal })
         const data = await res.json()
@@ -88,7 +93,7 @@ export default function PlanificadorSemanal({ empleados }: { empleados: Empleado
         <div className="toolbar"><button className="btn btn-outline" disabled={ocupado} onClick={() => navegar(sumarDiasRRHH(desde, -7))}>← Anterior</button><input aria-label="Semana" type="date" value={desde} disabled={ocupado} onChange={e => e.target.value && navegar(e.target.value)} /><strong>{desde} al {fechas[6]}</strong><button className="btn btn-outline" disabled={ocupado} onClick={() => navegar(sumarDiasRRHH(desde, 7))}>Siguiente →</button><button className="btn btn-outline" disabled={ocupado} onClick={copiar}>Copiar semana anterior (visibles)</button><input placeholder="Buscar empleado…" aria-label="Buscar empleado" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></div>
         <details><summary>Agregar una franja reutilizable para esta planificación</summary><div className="toolbar">Entrada<input type="time" value={nuevo.horaInicio} onChange={e => setNuevo({ ...nuevo, horaInicio: e.target.value })} />Salida<input type="time" value={nuevo.horaFin} onChange={e => setNuevo({ ...nuevo, horaFin: e.target.value })} />Horas normales<input aria-label="Horas normales" type="number" min="0.25" step="0.25" value={nuevo.horasEsperadas} onChange={e => setNuevo({ ...nuevo, horasEsperadas: Number(e.target.value) })} />Tolerancia<input aria-label="Tolerancia" type="number" min="0" max="60" value={nuevo.toleranciaMinutos} onChange={e => setNuevo({ ...nuevo, toleranciaMinutos: Number(e.target.value) })} /><button className="btn btn-outline" onClick={() => { try { const h = validarHorarioEsperado(nuevo); setTurnos(actual => [...actual, h]); setMensaje('Franja agregada al selector. Se conservará al guardar días que la utilicen.') } catch (error) { setMensaje(error instanceof Error ? error.message : 'Franja inválida.') } }}>Agregar al selector</button></div></details>
         <p role="status">{ocupado ? progreso || 'Procesando planificación…' : mensaje}</p>
-        <div className="grid"><table><thead><tr><th>Empleado</th>{fechas.map((f, i) => <th key={f}>{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][i]}<small>{f.slice(8)}/{f.slice(5, 7)}</small></th>)}</tr></thead><tbody>{visibles.map(e => <tr key={e.id}><th>{e.nombre} {e.apellido}</th>{fechas.map(fecha => {
+        <div className="grid"><table><thead><tr><th>Empleado</th>{fechas.map((f, i) => <th key={f}>{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][i]}<small>{f.slice(8)}/{f.slice(5, 7)}</small></th>)}</tr></thead><tbody>{visibles.map(e => <tr key={e.id}><th>{nombreEmpleadoApellidoPrimero(e)}</th>{fechas.map(fecha => {
             const key = `${e.id}|${fecha}`
             const pendiente = Object.hasOwn(cambios, key)
             const h = pendiente ? cambios[key] : resolverHorarioPlanificado(plan, e.id, fecha)

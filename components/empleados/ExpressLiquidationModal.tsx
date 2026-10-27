@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { seleccionarCuotasVencidasPorPrestamo } from '@/lib/payroll/prestamos'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface CuotaPrestamoExpress {
     id: string
@@ -306,7 +307,7 @@ export function ExpressLiquidationModal({ empleado, onClose, onSuccess }: Expres
                 </div>
                 <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', overflowY: 'auto' }}>
                     <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-2)' }}>
-                        <div style={{ fontWeight: 600 }}>{empleado.nombre} {empleado.apellido}</div>
+                        <div style={{ fontWeight: 600 }}>{nombreEmpleadoApellidoPrimero(empleado)}</div>
                         <div style={{ fontSize: 'var(--text-xs)', opacity: 0.8 }}>
                             {jornalRolEfectivo > 0 ? (
                                 <>Sueldo Base del Rol: ${jornalRolEfectivo.toLocaleString()} ({empleado.cicloPago})</>

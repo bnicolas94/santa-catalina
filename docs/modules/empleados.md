@@ -94,6 +94,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 * **Feriados**: El sistema busca en la tabla `Feriado` para aplicar el recargo (habitualmente 100%) sobre las horas trabajadas.
 * **Recibos semanales**: Los modelos A y B identifican empleado, DNI, fecha de ingreso y rango exacto liquidado, con una constancia narrativa de recepción que no implica renuncia de derechos. Los feriados y las licencias pagas por enfermedad se informan desde cada jornada histórica, con fecha, unidad y valor, separándolos del sueldo regular para no duplicar importes. El Modelo A los integra en su leyenda clásica y el Modelo B los expone en la tabla detallada.
 * **Reporte de pagos**: La grilla, la impresión de recibos seleccionados y la planilla resumen se ordenan alfabéticamente por nombre completo, de A a Z, con comparación en español que ignora diferencias de acentos y mayúsculas.
+* **Orden del personal**: El padrón se ordena por apellido y luego por nombres, ignorando mayúsculas y acentos, y se presenta como `Apellido, Nombres`. Los registros históricos sin apellido quedan al final sin inventar ese dato.
 
 ---
 

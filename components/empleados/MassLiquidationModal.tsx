@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface MassLiquidationModalProps {
     empleados: any[]
@@ -176,7 +177,7 @@ export function MassLiquidationModal({ empleados, onClose, onSuccess }: MassLiqu
                                             />
                                         </td>
                                         <td>
-                                            <div style={{ fontWeight: 600 }}>{r.nombre} {r.apellido}</div>
+                                            <div style={{ fontWeight: 600 }}>{nombreEmpleadoApellidoPrimero(r)}</div>
                                             <div style={{ fontSize: '10px', color: 'var(--color-gray-500)' }}>Cod: {r.codigoBiometrico}</div>
                                         </td>
                                         <td>

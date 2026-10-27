@@ -1,4 +1,5 @@
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 export interface EmpleadoCaratula {
     id: string
@@ -49,7 +50,7 @@ function textoHorario(empleado: EmpleadoCaratula): string {
 }
 
 export function crearHtmlCaratulaLegajo(empleado: EmpleadoCaratula, logo: string, watermark: string): string {
-    const nombreCompleto = `${empleado.nombre || ''} ${empleado.apellido || ''}`.trim()
+    const nombreCompleto = nombreEmpleadoApellidoPrimero(empleado)
     const iniciales = `${empleado.nombre?.charAt(0) || ''}${empleado.apellido?.charAt(0) || ''}`.toUpperCase()
     const rol = empleado.rol?.replaceAll('_', ' ') || 'Sin tipo asignado'
     const estado = empleado.activo === false ? 'INACTIVO' : 'ACTIVO'
@@ -175,11 +176,12 @@ export function crearHtmlCaratulaLegajo(empleado: EmpleadoCaratula, logo: string
 
 export function crearHtmlCaratulasLegajo(empleados: EmpleadoCaratula[], logo: string, watermark: string): string {
     if (empleados.length === 0) throw new Error('Seleccioná al menos un empleado para imprimir.')
-    const documentos = empleados.map(empleado => crearHtmlCaratulaLegajo(empleado, logo, watermark))
+    const empleadosOrdenados = ordenarEmpleadosPorApellido(empleados)
+    const documentos = empleadosOrdenados.map(empleado => crearHtmlCaratulaLegajo(empleado, logo, watermark))
     const paginas = documentos.map(documento => documento.match(/<main class="hoja">[\s\S]*?<\/main>/)?.[0] || '').join('\n')
-    const titulo = empleados.length === 1
-        ? `Carátula de legajo - ${empleados[0].nombre} ${empleados[0].apellido || ''}`.trim()
-        : `Carátulas de legajo - ${empleados.length} empleados`
+    const titulo = empleadosOrdenados.length === 1
+        ? `Carátula de legajo - ${nombreEmpleadoApellidoPrimero(empleadosOrdenados[0])}`
+        : `Carátulas de legajo - ${empleadosOrdenados.length} empleados`
     return documentos[0]
         .replace(/<title>[\s\S]*?<\/title>/, `<title>${escaparHtmlCaratula(titulo)}</title>`)
         .replace(/<body>[\s\S]*?<script>/, `<body>${paginas}<script>`)

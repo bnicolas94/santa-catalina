@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface InasistenciasModalProps {
     isOpen: boolean
@@ -285,7 +286,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                                 required
                                             >
                                                 <option value="">Seleccionar...</option>
-                                                {empleados.map(e => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
+                                                {empleados.map(e => <option key={e.id} value={e.id}>{nombreEmpleadoApellidoPrimero(e)}</option>)}
                                             </select>
                                         </div>
                                         <div className="form-group">
@@ -405,7 +406,7 @@ export function InasistenciasModal({ isOpen, onClose, empleados }: Inasistencias
                                         {inasistencias.map(i => (
                                             <tr key={i.id}>
                                                 <td>{format(new Date(i.fecha), 'dd/MM/yyyy')}</td>
-                                                <td style={{ fontWeight: 600 }}>{i.empleado.nombre} {i.empleado.apellido}</td>
+                                                <td style={{ fontWeight: 600 }}>{nombreEmpleadoApellidoPrimero(i.empleado)}</td>
                                                 <td>
                                                     <span className={`badge badge-${i.tipo.includes('INJUSTIFICADA') ? 'danger' : 'info'}`}>
                                                         {i.tipo.replace(/_/g, ' ')}

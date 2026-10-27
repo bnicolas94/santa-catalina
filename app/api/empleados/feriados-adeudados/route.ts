@@ -10,6 +10,7 @@ import {
 } from '@/lib/payroll/feriadosAdeudados'
 import { etiquetaSemanaOrigen, semanaLaboralDeOrigen } from '@/lib/payroll/horasExtrasAdeudadas'
 import { prisma } from '@/lib/prisma'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 import { fechaClaveRRHH, instanteRRHH, rangoDiaRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
 import { CajaService } from '@/lib/services/caja.service'
 import { jornalDiarioEfectivo } from '@/lib/payroll/jornal'
@@ -152,7 +153,7 @@ export async function GET(request: Request) {
                 if (!resolucion || Number(resolucion.dia.horasTrabajadas) <= 0) continue
                 const { dia, origen } = resolucion
 
-                const empleadoNombre = `${liquidacion.empleado.nombre} ${liquidacion.empleado.apellido || ''}`.trim()
+                const empleadoNombre = nombreEmpleadoApellidoPrimero(liquidacion.empleado)
                 const complementoId = yaPagados.get(liquidacion.empleadoId)
                 const yaIncluido = Number(dia.valorFeriado) > 0
                 let monto = 0
@@ -191,7 +192,7 @@ export async function GET(request: Request) {
                 return {
                     liquidacionId: liquidacion.id,
                     empleadoId: liquidacion.empleadoId,
-                    empleadoNombre: `${liquidacion.empleado.nombre} ${liquidacion.empleado.apellido || ''}`.trim(),
+                    empleadoNombre: nombreEmpleadoApellidoPrimero(liquidacion.empleado),
                     empleadoDni: liquidacion.empleado.dni,
                     empleadoActivo: liquidacion.empleado.activo,
                     fechaFeriado: String(desglose.fechaFeriado || ''),

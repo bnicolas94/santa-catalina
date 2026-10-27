@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface Area {
     id: string
@@ -204,7 +205,7 @@ export default function OrganigramaModal({ onClose, empleados, onChanged }: Orga
                                     backgroundColor: `${areaColor}20`, borderRadius: 'var(--radius-sm)',
                                     color: areaColor, fontWeight: 600
                                 }}>
-                                    👤 {area.responsable.nombre} {area.responsable.apellido || ''}
+                                    👤 {nombreEmpleadoApellidoPrimero(area.responsable)}
                                 </span>
                             )}
                             <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
@@ -413,7 +414,7 @@ export default function OrganigramaModal({ onClose, empleados, onChanged }: Orga
                                     <select className="form-select" value={editArea.responsableId || ''} onChange={e => setEditArea({ ...editArea, responsableId: e.target.value || null })}>
                                         <option value="">— Sin responsable —</option>
                                         {empleados.map(emp => (
-                                            <option key={emp.id} value={emp.id}>{emp.nombre} {emp.apellido || ''}</option>
+                                            <option key={emp.id} value={emp.id}>{nombreEmpleadoApellidoPrimero(emp)}</option>
                                         ))}
                                     </select>
                                 </div>

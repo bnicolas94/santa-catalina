@@ -151,7 +151,10 @@ export class EmpleadoService {
 
         const empleados = await prisma.empleado.findMany({
             where,
-            orderBy: { nombre: 'asc' },
+            orderBy: [
+                { apellido: { sort: 'asc', nulls: 'last' } },
+                { nombre: 'asc' },
+            ],
             select: {
                 ...EMPLEADO_SELECT,
                 fichadas: {

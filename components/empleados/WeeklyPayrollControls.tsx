@@ -1,4 +1,5 @@
 import type { CajaLiquidacionUI, EmpleadoLiquidable } from './weeklyPayroll.types'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface Props {
     fechaInicio: string
@@ -50,7 +51,7 @@ export function WeeklyPayrollControls(props: Props) {
             <div style={{ color: 'var(--color-info)', fontWeight: 500 }}>
                 <strong>{props.empleadosExcluidos.length} empleados</strong> ya tienen una liquidación finalizada en este periodo y fueron omitidos:
                 <span style={{ marginLeft: 'var(--space-2)', fontWeight: 400, fontStyle: 'italic' }}>
-                    {props.empleadosExcluidos.map(empleado => `${empleado.nombre} ${empleado.apellido || ''}`).join(', ')}
+                    {props.empleadosExcluidos.map(nombreEmpleadoApellidoPrimero).join('; ')}
                 </span>
             </div>
         </div>}
@@ -60,7 +61,7 @@ export function WeeklyPayrollControls(props: Props) {
             <div style={{ color: '#166534', fontWeight: 500 }}>
                 <strong>{props.empleadosDeVacaciones.length} {props.empleadosDeVacaciones.length === 1 ? 'empleada/o está' : 'empleadas/os están'} de vacaciones</strong> durante toda su semana laboral y no se incluirán en esta liquidación:
                 <span style={{ marginLeft: 'var(--space-2)', fontWeight: 400, fontStyle: 'italic' }}>
-                    {props.empleadosDeVacaciones.map(empleado => `${empleado.nombre} ${empleado.apellido || ''}`).join(', ')}
+                    {props.empleadosDeVacaciones.map(nombreEmpleadoApellidoPrimero).join('; ')}
                 </span>
             </div>
         </div>}

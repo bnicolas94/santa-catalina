@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'react-hot-toast'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface VacacionesSACModalProps {
     onClose: () => void
@@ -161,7 +162,7 @@ export function VacacionesSACModal({ onClose, empleados }: VacacionesSACModalPro
                         >
                             <option value="">Seleccionar empleado...</option>
                             {empleados.map(e => (
-                                <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>
+                                <option key={e.id} value={e.id}>{nombreEmpleadoApellidoPrimero(e)}</option>
                             ))}
                         </select>
                     </div>

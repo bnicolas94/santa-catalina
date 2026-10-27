@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from './CierresMensualesMixtosModal.module.css'
 import { CambiarCajaPagoButton } from './CambiarCajaPagoButton'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 type Medio = 'TRANSFERENCIA' | 'EFECTIVO'
 
@@ -129,7 +130,10 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
             if (!respuestaCierres.ok) throw new Error(cierres.error || 'No se pudieron cargar los cierres.')
             if (!respuestaCajas.ok) throw new Error(saldos.error || 'No se pudieron cargar las cajas.')
 
-            const filasCargadas = (cierres.empleados || []) as FilaMensual[]
+            const filasCargadas = ordenarEmpleadosPorApellido(
+                (cierres.empleados || []) as FilaMensual[],
+                fila => fila.empleado,
+            )
             setFilas(filasCargadas)
             setLiquidacionesConciliadas(actual => {
                 const siguiente = { ...actual }
@@ -219,7 +223,7 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
             mostrarError('El recibo más los pagos semanales aplicados no pueden superar el sueldo real calculado. Desmarcá o reducí un pago si no corresponde íntegramente a este mes.')
             return
         }
-        const nombre = `${fila.empleado.nombre} ${fila.empleado.apellido || ''}`.trim()
+        const nombre = nombreEmpleadoApellidoPrimero(fila.empleado)
         if (!confirm(`¿Cerrar ${etiquetaPeriodo(periodo)} para ${nombre}?\n\nYa abonado en semanas: ${dinero(totalConciliado)}\nTransferencia del recibo: ${dinero(netoRecibo)}\nEfectivo restante: ${dinero(efectivo)}\n\nLuego los importes quedarán congelados.`)) return
 
         setProcesando(`cerrar-${fila.empleado.id}`)
@@ -250,7 +254,7 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
     const pagar = async (fila: FilaMensual, medio: Medio) => {
         if (!fila.cierre) return
         const monto = medio === 'TRANSFERENCIA' ? fila.cierre.netoRecibo : fila.cierre.efectivoCalculado
-        const nombre = `${fila.empleado.nombre} ${fila.empleado.apellido || ''}`.trim()
+        const nombre = nombreEmpleadoApellidoPrimero(fila.empleado)
         const cajaId = cajasPago[medio]
         if (!confirm(`¿Registrar ${dinero(monto)} por ${medio.toLowerCase()} para ${nombre} desde ${nombreCaja(cajas, cajaId)}?`)) return
 
@@ -326,7 +330,7 @@ export function CierresMensualesMixtosModal({ onClose }: Props) {
                             <div className={styles.employeeHeader}>
                                 <div className={styles.avatar}>{fila.empleado.nombre[0]}{fila.empleado.apellido?.[0] || ''}</div>
                                 <div className={styles.employeeIdentity}>
-                                    <h3>{fila.empleado.nombre} {fila.empleado.apellido || ''}</h3>
+                                    <h3>{nombreEmpleadoApellidoPrimero(fila.empleado)}</h3>
                                     <span>{fila.empleado.dni ? `DNI ${fila.empleado.dni}` : 'DNI sin informar'} · {fila.rango.desde.split('-').reverse().join('/')} al {fila.rango.hasta.split('-').reverse().join('/')}</span>
                                 </div>
                                 <span className={`${styles.badge} ${cierre ? styles[cierre.estado.toLowerCase()] : styles.sinCerrar}`}>

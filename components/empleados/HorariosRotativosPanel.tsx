@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { fechaClaveRRHH } from '@/lib/rrhh/fechas'
 import type { DiaPlantillaHorario, HorarioEsperado } from '@/lib/rrhh/horarios'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 const nombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const inicial: HorarioEsperado = { horaInicio: '09:00', horaFin: '17:00', horasEsperadas: 8, toleranciaMinutos: 10 }
@@ -53,7 +54,7 @@ export default function HorariosRotativosPanel({ empleados }: { empleados: Array
     return <section style={{ padding: 24, maxHeight: '65vh', overflowY: 'auto' }}>
         <p>Configurá horarios repetidos o una franja particular para un día. Los días sin planificación mantienen el horario habitual; no se convierten en francos.</p>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', margin: '16px 0' }}>
-            <label>Empleado<select className="form-input" value={empleadoId} onChange={e => setEmpleadoId(e.target.value)}><option value="">Seleccionar…</option>{empleados.map(e => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}</select></label>
+            <label>Empleado<select className="form-input" value={empleadoId} onChange={e => setEmpleadoId(e.target.value)}><option value="">Seleccionar…</option>{empleados.map(e => <option key={e.id} value={e.id}>{nombreEmpleadoApellidoPrimero(e)}</option>)}</select></label>
             <label>Fecha / inicio de vigencia<input className="form-input" type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></label>
         </div>
         <fieldset disabled={ocupado || !empleadoId} style={{ border: 0, padding: 0 }}>

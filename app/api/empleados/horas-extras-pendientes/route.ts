@@ -8,6 +8,7 @@ import {
     valorHoraExtraAdeudada,
 } from '@/lib/payroll/horasExtrasAdeudadas'
 import { fechaClaveRRHH, instanteRRHH, validarFechaCivilRRHH } from '@/lib/rrhh/fechas'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 function mensajeError(error: unknown) {
     return error instanceof Error ? error.message : 'No se pudo procesar la solicitud.'
@@ -24,7 +25,10 @@ export async function GET() {
             prisma.empleado.findMany({
                 where: { activo: true },
                 include: { rolRel: true },
-                orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
+                orderBy: [
+                    { apellido: { sort: 'asc', nulls: 'last' } },
+                    { nombre: 'asc' },
+                ],
             }),
             prisma.liquidacionSueldo.findMany({
                 where: { tipo: 'HORAS_EXTRAS_ADEUDADAS', estado: 'pagado' },
@@ -52,7 +56,7 @@ export async function GET() {
             pendientes: pendientes.map(pendiente => ({
                 id: pendiente.id,
                 empleadoId: pendiente.empleadoId,
-                empleadoNombre: `${pendiente.empleado.nombre} ${pendiente.empleado.apellido || ''}`.trim(),
+                empleadoNombre: nombreEmpleadoApellidoPrimero(pendiente.empleado),
                 empleadoDni: pendiente.empleado.dni,
                 empleadoActivo: pendiente.empleado.activo,
                 cantidadHoras: pendiente.cantidadHoras,
@@ -67,7 +71,7 @@ export async function GET() {
                 return [{
                     id: deuda.id,
                     empleadoId: deuda.empleadoId,
-                    empleadoNombre: `${deuda.empleado.nombre} ${deuda.empleado.apellido || ''}`.trim(),
+                    empleadoNombre: nombreEmpleadoApellidoPrimero(deuda.empleado),
                     empleadoDni: deuda.empleado.dni,
                     empleadoActivo: deuda.empleado.activo,
                     cantidadHoras: deuda.cantidadHoras,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PayrollService } from '@/lib/services/payroll.service'
+import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 
 export async function GET(request: Request) {
     try {
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
             }
         })
 
-        const reporte = empleados.map(emp => {
+        const reporte = ordenarEmpleadosPorApellido(empleados).map(emp => {
             const history = liquidacionesVacas.filter(l => l.empleadoId === emp.id)
             
             // Calcular antigüedad y días que le corresponden
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
 
             return {
                 id: emp.id,
-                nombre: `${emp.nombre} ${emp.apellido || ''}`.trim(),
+                nombre: nombreEmpleadoApellidoPrimero(emp),
                 fechaIngreso: emp.fechaIngreso,
                 antiguedad,
                 diasTotales,

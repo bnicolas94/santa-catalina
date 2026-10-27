@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import { formatCurrencyToWords } from '@/lib/utils/numberToWords'
 import { getPrintLogos } from '@/lib/utils/printLogos'
 import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface EmpleadoPago {
     id: string
@@ -365,7 +366,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                                 <label className="form-group" style={{ gridColumn: '1 / -1' }}><span className="form-label">Empleado</span>
                                     <select className="form-select" value={empleadoId} onChange={evento => setEmpleadoId(evento.target.value)}>
                                         <option value="">Seleccionar empleado…</option>
-                                        {activos.map(empleado => <option key={empleado.id} value={empleado.id}>{empleado.nombre} {empleado.apellido || ''}</option>)}
+                                        {activos.map(empleado => <option key={empleado.id} value={empleado.id}>{nombreEmpleadoApellidoPrimero(empleado)}</option>)}
                                     </select>
                                 </label>
                                 <label className="form-group"><span className="form-label">Fecha de la semana adeudada</span><input className="form-input" type="date" value={fechaOrigen} onChange={evento => setFechaOrigen(evento.target.value)} /></label>
@@ -407,7 +408,7 @@ export function HorasExtrasAdeudadasModal({ empleados, onClose }: Props) {
                                 <option value="todos">Todos los estados</option><option value="pendiente">Pendientes</option><option value="pagado">Pagados</option>
                             </select>
                             <select className="form-select" aria-label="Filtrar por empleado" value={filtroEmpleado} onChange={evento => setFiltroEmpleado(evento.target.value)}>
-                                <option value="">Todos los empleados</option>{empleados.map(empleado => <option key={empleado.id} value={empleado.id}>{empleado.nombre} {empleado.apellido || ''}</option>)}
+                                <option value="">Todos los empleados</option>{empleados.map(empleado => <option key={empleado.id} value={empleado.id}>{nombreEmpleadoApellidoPrimero(empleado)}</option>)}
                             </select>
                             <select className="form-select" aria-label="Filtrar por semana" value={filtroSemana} onChange={evento => setFiltroSemana(evento.target.value)}>
                                 <option value="">Todas las semanas</option>{semanasDisponibles.map(([fecha, etiqueta]) => <option key={fecha} value={fecha}>{etiqueta}</option>)}

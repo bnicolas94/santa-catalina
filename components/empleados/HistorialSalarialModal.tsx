@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 type EmpleadoOpcion = { id: string; nombre: string; apellido?: string | null }
 
@@ -23,7 +24,7 @@ type CambioSalarial = {
 
 const dinero = (value: number) => `$${Number(value || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
 const nombreCompleto = (persona?: { nombre: string; apellido?: string | null } | null) => persona
-    ? `${persona.nombre} ${persona.apellido || ''}`.trim()
+    ? nombreEmpleadoApellidoPrimero(persona)
     : 'Sin identificar'
 
 function fechaHora(value: string) {

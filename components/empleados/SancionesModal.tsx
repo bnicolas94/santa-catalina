@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { escaparHtml } from '@/components/analytics/legajo.utils'
 import { getPrintLogos } from '@/lib/utils/printLogos'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface SancionesModalProps {
     isOpen: boolean
@@ -120,7 +121,7 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
 
                 {showForm && <form onSubmit={handleSubmitSancion} className="card shadow-sm" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-6)', backgroundColor: 'var(--color-gray-50)' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-4)' }}>
-                        <label className="form-group"><span className="form-label">Empleado</span><select className="form-select" value={newSancion.empleadoId} onChange={e => setNewSancion({ ...newSancion, empleadoId: e.target.value })} required><option value="">Seleccionar…</option>{empleados.map(empleado => <option key={empleado.id} value={empleado.id}>{empleado.nombre} {empleado.apellido || ''}</option>)}</select></label>
+                        <label className="form-group"><span className="form-label">Empleado</span><select className="form-select" value={newSancion.empleadoId} onChange={e => setNewSancion({ ...newSancion, empleadoId: e.target.value })} required><option value="">Seleccionar…</option>{empleados.map(empleado => <option key={empleado.id} value={empleado.id}>{nombreEmpleadoApellidoPrimero(empleado)}</option>)}</select></label>
                         <label className="form-group"><span className="form-label">Fecha</span><input type="date" className="form-input" value={newSancion.fecha} onChange={e => setNewSancion({ ...newSancion, fecha: e.target.value })} required /></label>
                         <label className="form-group"><span className="form-label">Tipo</span><select className="form-select" value={newSancion.tipo} onChange={e => setNewSancion({ ...newSancion, tipo: e.target.value })}><option value="APERCIBIMIENTO">Apercibimiento</option><option value="SANCION">Sanción</option><option value="SUSPENSION">Suspensión</option><option value="DESPIDO">Despido (aviso)</option></select></label>
                     </div>
@@ -130,7 +131,7 @@ export function SancionesModal({ isOpen, onClose, empleados }: SancionesModalPro
                 </form>}
 
                 <div className="table-container"><table className="table"><thead><tr><th>Fecha</th><th>Empleado</th><th>Tipo</th><th>Motivo</th><th>Origen</th><th>Acción</th></tr></thead><tbody>
-                    {sanciones.map(sancion => <tr key={sancion.id}><td>{format(new Date(sancion.fecha), 'dd/MM/yyyy')}</td><td style={{ fontWeight: 600 }}>{sancion.empleado.nombre} {sancion.empleado.apellido || ''}</td><td><span className={`badge badge-${sancion.tipo === 'APERCIBIMIENTO' ? 'warning' : 'danger'}`}>{sancion.tipo}</span></td><td style={{ fontSize: 13 }}>{sancion.motivo}</td><td>{sancion.alertaId ? <span className="badge badge-neutral" title="Registro histórico; la automatización ya está desactivada">Automática histórica</span> : <span className="badge badge-info">Manual</span>}</td><td><button className="btn btn-ghost btn-sm" onClick={() => void handlePrintSancion(sancion)} title="Imprimir para firma">🖨 Imprimir</button></td></tr>)}
+                    {sanciones.map(sancion => <tr key={sancion.id}><td>{format(new Date(sancion.fecha), 'dd/MM/yyyy')}</td><td style={{ fontWeight: 600 }}>{nombreEmpleadoApellidoPrimero(sancion.empleado)}</td><td><span className={`badge badge-${sancion.tipo === 'APERCIBIMIENTO' ? 'warning' : 'danger'}`}>{sancion.tipo}</span></td><td style={{ fontSize: 13 }}>{sancion.motivo}</td><td>{sancion.alertaId ? <span className="badge badge-neutral" title="Registro histórico; la automatización ya está desactivada">Automática histórica</span> : <span className="badge badge-info">Manual</span>}</td><td><button className="btn btn-ghost btn-sm" onClick={() => void handlePrintSancion(sancion)} title="Imprimir para firma">🖨 Imprimir</button></td></tr>)}
                     {sanciones.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-gray-400)' }}>No hay sanciones registradas.</td></tr>}
                 </tbody></table></div>
             </div>

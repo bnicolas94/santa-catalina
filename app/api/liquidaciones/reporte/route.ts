@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { montoEfectivoReciboMixto } from '@/lib/payroll/cierreMensualMixto'
 import { separarHorasExtrasYAdeudadas } from '@/lib/payroll/ajustesHorasExtras'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 export async function GET(request: Request) {
     try {
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
                     netoReciboOficial: liq.cierreMensualMixto?.netoRecibo,
                     efectivoAbonado: efectivoMixto,
                 } : liq.desglose,
-                empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
+                empleado: nombreEmpleadoApellidoPrimero(liq.empleado),
                 empleadoDatos: {
                     nombre: liq.empleado.nombre,
                     apellido: liq.empleado.apellido,
@@ -118,7 +119,7 @@ export async function GET(request: Request) {
                     antiguedadAnios: liq.antiguedadAnios,
                     conceptos: liq.detalleConceptos
                 },
-                empleado: `${liq.empleado.nombre} ${liq.empleado.apellido || ''}`.trim(),
+                empleado: nombreEmpleadoApellidoPrimero(liq.empleado),
                 empleadoDatos: {
                     nombre: liq.empleado.nombre,
                     apellido: liq.empleado.apellido,

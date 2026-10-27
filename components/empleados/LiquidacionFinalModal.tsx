@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { DetalleConcepto } from '@/lib/services/liquidacion-final.service'
+import { nombreEmpleadoApellidoPrimero } from '@/lib/rrhh/nombres-empleados'
 
 interface LiquidacionFinalModalProps {
     empleados?: any[]
@@ -188,10 +189,10 @@ export default function LiquidacionFinalModal({ empleados = [], onClose, onSucce
                                 <option value="">Seleccionar...</option>
                                 {empleados.length > 0 ? (
                                     empleados.filter(e => e.activo || e.id === empleadoId).map(e => (
-                                        <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>
+                                        <option key={e.id} value={e.id}>{nombreEmpleadoApellidoPrimero(e)}</option>
                                     ))
                                 ) : (
-                                    empleado && <option value={empleado.id}>{empleado.nombre} {empleado.apellido}</option>
+                                    empleado && <option value={empleado.id}>{nombreEmpleadoApellidoPrimero(empleado)}</option>
                                 )}
                             </select>
                         </div>
