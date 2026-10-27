@@ -11,6 +11,7 @@ import {
     numeroNoNegativo,
     numeroPositivo,
     validarMontoPagado,
+    validarDescuentoFactura,
     validarIdsEdicionCompra,
 } from '@/lib/compras/validacion'
 
@@ -142,10 +143,12 @@ export async function PATCH(
             }
         })
 
-        const facturaConIva = calcularFacturaConIva(
-            itemsBase.map(item => item.costoTotal),
-            body.aplicarIva === true
+        const costosBase = itemsBase.map(item => item.costoTotal)
+        const descuento = validarDescuentoFactura(
+            costosBase.reduce((total, costo) => total + costo, 0),
+            body.descuento
         )
+        const facturaConIva = calcularFacturaConIva(costosBase, body.aplicarIva === true, descuento)
         const items = itemsBase.map((item, index) => ({
             ...item,
             costoTotal: facturaConIva.costosFinales[index],

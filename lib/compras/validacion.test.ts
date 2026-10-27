@@ -7,6 +7,7 @@ import {
     estadoPagoDesdeMontos,
     numeroPositivo,
     validarCajaCompra,
+    validarDescuentoFactura,
     validarPagosDivididos,
     validarIdsEdicionCompra,
 } from './validacion'
@@ -16,6 +17,8 @@ test('suma IVA 21% al total y lo distribuye sin perder centavos', () => {
 
     assert.deepEqual(factura, {
         subtotal: 300,
+        descuento: 0,
+        baseImponible: 300,
         iva: 63,
         total: 363,
         costosFinales: [121, 242],
@@ -29,10 +32,27 @@ test('suma IVA 21% al total y lo distribuye sin perder centavos', () => {
 test('mantiene los importes cuando no se solicita agregar IVA', () => {
     assert.deepEqual(calcularFacturaConIva([100, 200], false), {
         subtotal: 300,
+        descuento: 0,
+        baseImponible: 300,
         iva: 0,
         total: 300,
         costosFinales: [100, 200],
     })
+})
+
+test('aplica el descuento antes del IVA y conserva el total distribuido', () => {
+    const factura = calcularFacturaConIva([100, 200], true, 30)
+
+    assert.deepEqual(factura, {
+        subtotal: 300,
+        descuento: 30,
+        baseImponible: 270,
+        iva: 56.7,
+        total: 326.7,
+        costosFinales: [108.9, 217.8],
+    })
+    assert.equal(validarDescuentoFactura(300, '30'), 30)
+    assert.throws(() => validarDescuentoFactura(300, 301))
 })
 
 test('rechaza cantidades negativas, cero y valores no numéricos', () => {

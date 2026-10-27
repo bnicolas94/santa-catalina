@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { calcularFacturaConIva, cantidadGastoOpcional, IVA_GENERAL_PORCENTAJE } from '@/lib/compras/validacion'
+import { calcularFacturaConIva, cantidadGastoOpcional, IVA_GENERAL_PORCENTAJE, validarDescuentoFactura } from '@/lib/compras/validacion'
 import { filtrarFacturasGasto, paginaFacturasGasto } from '@/lib/compras/listado-gastos'
 
 const FACTURAS_GASTO_POR_PAGINA = 10
@@ -138,7 +138,7 @@ function ComprasContent() {
     const [editingCompraId, setEditingCompraId] = useState<string | null>(null)
     const [editingFacturaItemIndex, setEditingFacturaItemIndex] = useState<number | null>(null)
     const [loadingFactura, setLoadingFactura] = useState(false)
-    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '', aplicarIva: false })
+    const [facturaForm, setFacturaForm] = useState({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }] as PagoForm[], ubicacionId: '', observaciones: '', items: [] as ItemFacturaForm[], montoPagado: '', aplicarIva: false, descuento: '' })
     const [tempItem, setTempItem] = useState({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
     const [mostrarTodosInsumos, setMostrarTodosInsumos] = useState(false)
     const [isManualProveedor, setIsManualProveedor] = useState(false)
@@ -164,9 +164,11 @@ function ComprasContent() {
     })
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
+    const descuentoIngresado = Number(String(facturaForm.descuento || '0').replace(',', '.'))
     const resumenFactura = calcularFacturaConIva(
         facturaForm.items.map(item => parseFloat(item.costoTotal || '0')),
-        facturaForm.aplicarIva
+        facturaForm.aplicarIva,
+        Number.isFinite(descuentoIngresado) ? descuentoIngresado : 0
     )
 
     const emptyTempItem = () => ({ tipoItem: 'insumo' as 'insumo' | 'gasto', insumoId: '', insumoNombre: '', descripcion: '', categoriaGastoId: '', cantidad: '', cantidadSecundaria: '', costoTotal: '', actualizarCosto: true, useBultos: false, bultos: '', unidadesPorBulto: '', fechaVencimiento: '', unidadMedida: 'unidades' })
@@ -372,6 +374,11 @@ function ComprasContent() {
         if (!isManualProveedor && !facturaForm.proveedorId) return setError('Seleccione un proveedor')
         if (isManualProveedor && !facturaForm.proveedorNombre) return setError('Ingrese el nombre del proveedor manual')
         if (facturaForm.items.length === 0) return setError('Debe agregar al menos un ítem a la factura')
+        try {
+            validarDescuentoFactura(resumenFactura.subtotal, facturaForm.descuento)
+        } catch (err: unknown) {
+            return setError(err instanceof Error ? err.message : 'Descuento inválido')
+        }
         
         if (!editingCompraId && (facturaForm.estadoPago === 'pagado' || facturaForm.estadoPago === 'a_cuenta') && facturaForm.pagoDividido) {
             const totalFactura = resumenFactura.total;
@@ -398,7 +405,7 @@ function ComprasContent() {
             if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
             setSuccess(editingCompraId ? 'Factura actualizada correctamente' : 'Factura registrada correctamente')
             closeFacturaModal()
-            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '', aplicarIva: false })
+            setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: '', observaciones: '', items: [], montoPagado: '', aplicarIva: false, descuento: '' })
             fetchData()
             setTimeout(() => setSuccess(''), 3000)
         } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Error') }
@@ -431,6 +438,7 @@ function ComprasContent() {
                 observaciones: compra.observaciones || '',
                 montoPagado: String(compra.montoPagado || ''),
                 aplicarIva: false,
+                descuento: '',
                 items: ([...compra.movimientosStock.map(movimiento => ({
                     tipoItem: 'insumo' as const,
                     movimientoId: movimiento.id,
@@ -778,7 +786,7 @@ function ComprasContent() {
                         const defaultUbi = ubicaciones.length > 0 ? ubicaciones[0].id : ''
                         setEditingCompraId(null)
                         setEditingFacturaItemIndex(null)
-                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '', aplicarIva: false })
+                        setFacturaForm({ proveedorId: '', proveedorNombre: '', numeroFactura: '', fechaFactura: '', fechaMovimiento: new Date().toLocaleDateString('en-CA'), estadoPago: 'pagado', cajaOrigen: cajas[0]?.tipo || '', pagoDividido: false, pagos: [{ cajaOrigen: cajas[0]?.tipo || '', monto: '' }], ubicacionId: defaultUbi, observaciones: '', items: [], montoPagado: '', aplicarIva: false, descuento: '' })
                         setTempItem(emptyTempItem())
                         setMostrarTodosInsumos(false)
                         setIsManualProveedor(false)
@@ -1427,19 +1435,6 @@ function ComprasContent() {
                                         <input type="date" className="form-input" value={facturaForm.fechaFactura} onChange={(e) => setFacturaForm({ ...facturaForm, fechaFactura: e.target.value })} onClick={(e) => e.currentTarget.showPicker?.()} />
                                     </div>
                                 </div>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', marginBottom: 'var(--space-4)', border: '1px solid #F5D98B', borderRadius: 'var(--radius-md)', background: facturaForm.aplicarIva ? '#FFF8E7' : '#fff', cursor: 'pointer' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={facturaForm.aplicarIva}
-                                        onChange={(e) => setFacturaForm({ ...facturaForm, aplicarIva: e.target.checked })}
-                                    />
-                                    <span>
-                                        <strong>Agregar IVA {IVA_GENERAL_PORCENTAJE}% al total</strong>
-                                        <small style={{ display: 'block', color: 'var(--color-gray-500)' }}>
-                                            Activá esta opción sólo si los importes cargados no incluyen IVA.
-                                        </small>
-                                    </span>
-                                </label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
                                     <div className="form-group">
                                         <label className="form-label">Estado de Pago</label>
@@ -1803,27 +1798,50 @@ function ComprasContent() {
                                                 )
                                             })}
                                         </tbody>
-                                        <tfoot>
-                                            {facturaForm.aplicarIva && (
-                                                <>
-                                                    <tr>
-                                                        <td colSpan={2} style={{ textAlign: 'right' }}>Subtotal:</td>
-                                                        <td colSpan={3}>${resumenFactura.subtotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td colSpan={2} style={{ textAlign: 'right' }}>IVA {IVA_GENERAL_PORCENTAJE}%:</td>
-                                                        <td colSpan={3}>${resumenFactura.iva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
-                                                    </tr>
-                                                </>
-                                            )}
-                                            <tr>
-                                                <td colSpan={2} style={{ textAlign: 'right', fontWeight: 'bold' }}>Total Factura:</td>
-                                                <td colSpan={3} style={{ fontWeight: 'bold', color: 'var(--color-primary)', fontSize: '1.2rem' }}>
-                                                    ${resumenFactura.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                                                </td>
-                                            </tr>
-                                        </tfoot>
                                     </table>
+                                )}
+                                {facturaForm.items.length > 0 && (
+                                    <div style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)', border: '1px solid #F5D98B', borderRadius: 'var(--radius-md)', background: '#FFFDF7' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(180px, 0.45fr)', gap: 'var(--space-4)', alignItems: 'center' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={facturaForm.aplicarIva}
+                                                    onChange={(e) => setFacturaForm({ ...facturaForm, aplicarIva: e.target.checked })}
+                                                />
+                                                <span>
+                                                    <strong>Agregar IVA {IVA_GENERAL_PORCENTAJE}% al total</strong>
+                                                    <small style={{ display: 'block', color: 'var(--color-gray-500)' }}>
+                                                        Activá esta opción sólo si los importes cargados no incluyen IVA.
+                                                    </small>
+                                                </span>
+                                            </label>
+                                            <div className="form-group">
+                                                <label className="form-label">Descuento ($)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max={resumenFactura.subtotal}
+                                                    step="0.01"
+                                                    className="form-input"
+                                                    value={facturaForm.descuento}
+                                                    onChange={(e) => setFacturaForm({ ...facturaForm, descuento: e.target.value })}
+                                                    placeholder="0,00"
+                                                />
+                                                <small style={{ color: descuentoIngresado > resumenFactura.subtotal ? 'var(--color-danger)' : 'var(--color-gray-500)' }}>
+                                                    {descuentoIngresado > resumenFactura.subtotal ? 'No puede superar el subtotal.' : 'Se aplica antes de calcular el IVA.'}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', justifyContent: 'end', gap: '4px var(--space-4)', marginTop: 'var(--space-4)', fontVariantNumeric: 'tabular-nums' }}>
+                                            <span>Subtotal:</span>
+                                            <span style={{ textAlign: 'right' }}>${resumenFactura.subtotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                                            {resumenFactura.descuento > 0 && <><span>Descuento:</span><span style={{ textAlign: 'right', color: 'var(--color-success)' }}>-${resumenFactura.descuento.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span></>}
+                                            {facturaForm.aplicarIva && <><span>IVA {IVA_GENERAL_PORCENTAJE}%:</span><span style={{ textAlign: 'right' }}>${resumenFactura.iva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span></>}
+                                            <strong style={{ borderTop: '1px solid var(--color-gray-300)', paddingTop: '6px' }}>Total factura:</strong>
+                                            <strong style={{ borderTop: '1px solid var(--color-gray-300)', paddingTop: '6px', textAlign: 'right', color: 'var(--color-primary)', fontSize: '1.2rem' }}>${resumenFactura.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                             <div className="modal-footer">

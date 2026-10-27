@@ -26,29 +26,34 @@ function redondearMoneda(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
-export function calcularFacturaConIva(costos: number[], aplicarIva: boolean): {
+export function calcularFacturaConIva(costos: number[], aplicarIva: boolean, descuento = 0): {
     subtotal: number
+    descuento: number
+    baseImponible: number
     iva: number
     total: number
     costosFinales: number[]
 } {
     const subtotal = redondearMoneda(costos.reduce((acc, costo) => acc + costo, 0))
-    if (!aplicarIva) {
-        return { subtotal, iva: 0, total: subtotal, costosFinales: costos }
+    const descuentoAplicado = redondearMoneda(Math.min(Math.max(descuento, 0), subtotal))
+    const baseImponible = redondearMoneda(subtotal - descuentoAplicado)
+    if (!aplicarIva && descuentoAplicado === 0) {
+        return { subtotal, descuento: 0, baseImponible: subtotal, iva: 0, total: subtotal, costosFinales: costos }
     }
 
-    const iva = redondearMoneda(subtotal * IVA_GENERAL_PORCENTAJE / 100)
-    const total = redondearMoneda(subtotal + iva)
+    const iva = aplicarIva ? redondearMoneda(baseImponible * IVA_GENERAL_PORCENTAJE / 100) : 0
+    const total = redondearMoneda(baseImponible + iva)
+    const sumaCostos = costos.reduce((acc, costo) => acc + costo, 0)
     let acumulado = 0
     const costosFinales = costos.map((costo, index) => {
         const costoFinal = index === costos.length - 1
             ? redondearMoneda(total - acumulado)
-            : redondearMoneda(costo * (1 + IVA_GENERAL_PORCENTAJE / 100))
+            : redondearMoneda(sumaCostos > 0 ? total * (costo / sumaCostos) : 0)
         acumulado = redondearMoneda(acumulado + costoFinal)
         return costoFinal
     })
 
-    return { subtotal, iva, total, costosFinales }
+    return { subtotal, descuento: descuentoAplicado, baseImponible, iva, total, costosFinales }
 }
 
 export function cantidadGastoOpcional(value: unknown): number | null {
@@ -88,6 +93,14 @@ export function numeroNoNegativo(value: unknown, campo: string, fallback = 0): n
         throw new CompraValidationError(`${campo} debe ser un número válido mayor o igual a 0`)
     }
     return parsed
+}
+
+export function validarDescuentoFactura(subtotal: number, value: unknown): number {
+    const descuento = redondearMoneda(numeroNoNegativo(value, 'Descuento'))
+    if (descuento > redondearMoneda(subtotal)) {
+        throw new CompraValidationError('El descuento no puede superar el subtotal de la factura')
+    }
+    return descuento
 }
 
 export function estadoPagoDesdeMontos(total: number, pagado: number): 'pendiente' | 'a_cuenta' | 'pagado' {
