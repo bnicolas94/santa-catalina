@@ -2,6 +2,10 @@ import { prisma } from '@/lib/prisma'
 import { CajaService } from './caja.service'
 import { validarEmpleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
 import { antiguedadMesesCompletos, esPeriodoPruebaSeisMeses, requierePreavisoEnPeriodoPrueba } from '@/lib/payroll/periodoPrueba'
+import {
+    calcularVacacionesNoGozadasProporcionales,
+    diasVacacionesAnualesPorAntiguedad,
+} from '@/lib/payroll/vacacionesNoGozadas'
 
 export interface LiquidacionFinalInput {
     empleadoId: string
@@ -117,7 +121,7 @@ export class LiquidacionFinalService {
                 nombre: `Vacaciones No Gozadas (${vacacionesData.dias.toFixed(2)} días)`, 
                 monto: this.redondear(vacacionesData.monto), 
                 tipo: 'NO_REMUNERATIVO',
-                metodologia: ''
+                metodologia: `${vacacionesData.diasVacacionesAnuales} días anuales × ${vacacionesData.diasRelacionEnAnio}/${vacacionesData.diasBaseAnual} días de relación laboral en el año; valor diario: sueldo / 25.`
             },
             { 
                 nombre: 'SAC sobre Vacaciones No Gozadas', 
@@ -296,16 +300,14 @@ export class LiquidacionFinalService {
     }
 
     private static calcularVacacionesNoGozadas(ingreso: Date, egreso: Date, antiguedad: number, sueldo: number) {
-        let diasTotales = 14
-        if (antiguedad >= 5) diasTotales = 21
-        if (antiguedad >= 10) diasTotales = 28
-        if (antiguedad >= 20) diasTotales = 35
+        const diasTotales = diasVacacionesAnualesPorAntiguedad(antiguedad)
 
-        const inicioAnio = new Date(egreso.getFullYear(), 0, 1)
-        const diasTrabajadosAnio = Math.floor((egreso.getTime() - inicioAnio.getTime()) / (1000 * 60 * 60 * 24)) + 1
-        const diasProporcionales = (diasTotales / 365) * diasTrabajadosAnio
-        const monto = (sueldo / 25) * diasProporcionales
-        return { dias: diasProporcionales, monto }
+        return calcularVacacionesNoGozadasProporcionales({
+            fechaIngreso: ingreso,
+            fechaEgreso: egreso,
+            diasVacacionesAnuales: diasTotales,
+            sueldoMensual: sueldo,
+        })
     }
 
     private static redondear(num: number) {
