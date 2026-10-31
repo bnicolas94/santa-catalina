@@ -10,6 +10,7 @@ test('protege todos los vínculos contables cuyo origen es RRHH', () => {
     assert.equal(esMovimientoGestionadoPorRRHH({ cuotaPrestamoId: 'cuota' }), true)
     assert.equal(esMovimientoGestionadoPorRRHH({ pagoCierreMensualId: 'pago' }), true)
     assert.equal(esMovimientoGestionadoPorRRHH({ concepto: 'LIQUIDACION_FINAL' }), true)
+    assert.equal(esMovimientoGestionadoPorRRHH({ concepto: 'anulacion_liquidacion_final' }), true)
     assert.equal(esMovimientoGestionadoPorRRHH({}), false)
 })
 

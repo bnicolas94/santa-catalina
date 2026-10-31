@@ -15,7 +15,8 @@ export function esMovimientoGestionadoPorRRHH(movimiento: VinculosMovimientoCaja
         || movimiento.cuotaPrestamoId
         || movimiento.pagoCierreMensualId
         // Las liquidaciones finales históricas no guardaban FK al movimiento.
-        || movimiento.concepto?.toUpperCase() === 'LIQUIDACION_FINAL',
+        || movimiento.concepto?.toUpperCase() === 'LIQUIDACION_FINAL'
+        || movimiento.concepto?.toUpperCase() === 'ANULACION_LIQUIDACION_FINAL'
     )
 }
 

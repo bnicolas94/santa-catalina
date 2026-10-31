@@ -57,7 +57,8 @@ export async function GET(request: Request) {
                     }
                 },
                 include: {
-                    empleado: true
+                    empleado: true,
+                    anuladoPor: { select: { id: true, nombre: true, apellido: true } },
                 },
                 orderBy: {
                     fechaEgreso: 'asc'
@@ -118,6 +119,10 @@ export async function GET(request: Request) {
             return {
                 id: liq.id,
                 tipo: 'FINAL',
+                estado: liq.estado,
+                motivoAnulacion: liq.motivoAnulacion,
+                anuladoAt: liq.anuladoAt,
+                anuladoPor: liq.anuladoPor,
                 manualData: { 
                     esLiquidacionFinal: true,
                     tipoEgreso: liq.tipoEgreso,

@@ -9,84 +9,85 @@ datasource db {
 }
 
 model Empleado {
-  id                        String                    @id @default(uuid())
-  nombre                    String
-  apellido                  String?
-  dni                       String?                   @unique
-  email                     String?                   @unique
-  password                  String?
-  rol                       String
-  telefono                  String?
-  activo                    Boolean                   @default(true)
-  incluidoNomina            Boolean                   @default(true) @map("incluido_nomina")
-  fechaIngreso              DateTime?                 @map("fecha_ingreso")
-  createdAt                 DateTime                  @default(now())
-  updatedAt                 DateTime                  @updatedAt
-  sueldoBaseMensual         Float                     @default(0) @map("sueldo_base_mensual")
-  jornal                    Float                     @default(0)
-  valorHoraNormal           Float?                    @map("valor_hora_normal")
-  cicloPago                 String                    @default("SEMANAL") @map("ciclo_pago")
-  modalidadPago             String                    @default("SEMANAL_EFECTIVO") @map("modalidad_pago")
-  porcentajeHoraExtra       Float                     @default(50) @map("porcentaje_hora_extra")
-  valorHoraExtra            Float                     @default(0) @map("valor_hora_extra")
-  porcentajeFeriado         Float                     @default(100) @map("porcentaje_feriado")
-  horasTrabajoDiarias       Float                     @default(8) @map("horas_trabajo_diarias")
-  horasTrabajoSabado        Float?                    @map("horas_trabajo_sabado")
-  diasTrabajoSemana         String                    @default("Lunes a Viernes") @map("dias_trabajo_semana")
-  horarioEntrada            String?                   @map("horario_entrada")
-  horarioSalida             String?                   @map("horario_salida")
-  codigoBiometrico          String?                   @unique @map("codigo_biometrico")
-  ubicacionId               String?                   @map("id_ubicacion")
-  rolId                     String?                   @map("id_rol")
-  preferenciasReporte       Json?                     @map("preferencias_reporte")
-  areaId                    String?                   @map("id_area")
-  puestoId                  String?                   @map("id_puesto")
-  turnoId                   String?                   @map("id_turno")
-  areasResponsable          Area[]                    @relation("ResponsableArea")
-  asignaciones              AsignacionOperario[]
-  asignacionesVehiculo      AsignacionVehiculo[]      @relation("AsignacionesVehiculo")
-  documentos                DocumentoEmpleado[]
-  area                      Area?                     @relation("EmpleadoArea", fields: [areaId], references: [id])
-  puesto                    Puesto?                   @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
-  rolRel                    RolEmpleado?              @relation(fields: [rolId], references: [id])
-  turno                     TurnoTrabajo?             @relation("EmpleadoTurno", fields: [turnoId], references: [id])
-  ubicacion                 Ubicacion?                @relation(fields: [ubicacionId], references: [id])
-  evaluaciones              Evaluacion[]              @relation("EmpleadoEvaluado")
-  evaluacionesHechas        Evaluacion[]              @relation("Evaluador")
-  fichadas                  FichadaEmpleado[]
-  horasPendientes           HoraExtraPendiente[]
-  inasistencias             Inasistencia[]
-  liquidacionesFinales      LiquidacionFinal[]
-  liquidaciones             LiquidacionSueldo[]
-  liquidacionesAnuladas     LiquidacionSueldo[]       @relation("LiquidacionAnuladaPor")
-  cierresMensualesMixtos    CierreMensualMixto[]
-  pagosMensualesRegistrados PagoCierreMensual[]       @relation("PagoMensualRegistradoPor")
-  seguimientosDiariosMixtos SeguimientoDiarioMixto[]
-  seguimientosMixtosCreados SeguimientoDiarioMixto[]  @relation("SeguimientoMixtoRegistradoPor")
-  reasignacionesCajaRRHH    ReasignacionCajaRRHH[]    @relation("ReasignacionCajaRRHHUsuario")
-  movimientosCajaCreados    MovimientoCaja[]          @relation("MovimientoCajaCreadoPor")
-  movimientosCajaEditados   MovimientoCaja[]          @relation("MovimientoCajaActualizadoPor")
-  movimientosCajaAnulados   MovimientoCaja[]          @relation("MovimientoCajaAnuladoPor")
-  auditoriasCaja            AuditoriaMovimientoCaja[] @relation("AuditoriaMovimientoCajaUsuario")
-  historialSalarial         HistorialSalarial[]       @relation("HistorialSalarialEmpleado")
-  cambiosSalarialesCreados  HistorialSalarial[]       @relation("HistorialSalarialRegistradoPor")
-  depositosCajaDeclarados   DepositoCaja[]            @relation("DepositoCajaDeclaradoPor")
-  depositosCajaValidados    DepositoCaja[]            @relation("DepositoCajaValidadoPor")
-  lotesCoordinados          Lote[]                    @relation("CoordinadorLote")
-  prestamos                 PrestamoEmpleado[]
-  prestamosAnulados         PrestamoEmpleado[]        @relation("PrestamoAnuladoPor")
-  rendiciones               RendicionChofer[]         @relation("RendicionesChofer")
-  rutasChofer               Ruta[]                    @relation("ChoferRuta")
-  sanciones                 Sancion[]
-  talleUniforme             TalleUniforme?
-  entregasUniforme          EntregaUniforme[]         @relation("EmpleadoEntregasUniforme")
-  entregasUniformeCreadas   EntregaUniforme[]         @relation("EntregaUniformeRegistradaPor")
-  entregasUniformeAnuladas  EntregaUniforme[]         @relation("EntregaUniformeAnuladaPor")
-  movimientosUniforme       MovimientoUniforme[]     @relation("MovimientoUniformeRegistradoPor")
-  conteosInsumo             ConteoInsumo[]            @relation("ResponsableConteoInsumo")
-  plantillasHorario         PlantillaHorarioEmpleado[]
-  excepcionesHorario        ExcepcionHorarioEmpleado[]
-  codigosReloj              CodigoRelojEmpleado[]
+  id                           String                     @id @default(uuid())
+  nombre                       String
+  apellido                     String?
+  dni                          String?                    @unique
+  email                        String?                    @unique
+  password                     String?
+  rol                          String
+  telefono                     String?
+  activo                       Boolean                    @default(true)
+  incluidoNomina               Boolean                    @default(true) @map("incluido_nomina")
+  fechaIngreso                 DateTime?                  @map("fecha_ingreso")
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
+  sueldoBaseMensual            Float                      @default(0) @map("sueldo_base_mensual")
+  jornal                       Float                      @default(0)
+  valorHoraNormal              Float?                     @map("valor_hora_normal")
+  cicloPago                    String                     @default("SEMANAL") @map("ciclo_pago")
+  modalidadPago                String                     @default("SEMANAL_EFECTIVO") @map("modalidad_pago")
+  porcentajeHoraExtra          Float                      @default(50) @map("porcentaje_hora_extra")
+  valorHoraExtra               Float                      @default(0) @map("valor_hora_extra")
+  porcentajeFeriado            Float                      @default(100) @map("porcentaje_feriado")
+  horasTrabajoDiarias          Float                      @default(8) @map("horas_trabajo_diarias")
+  horasTrabajoSabado           Float?                     @map("horas_trabajo_sabado")
+  diasTrabajoSemana            String                     @default("Lunes a Viernes") @map("dias_trabajo_semana")
+  horarioEntrada               String?                    @map("horario_entrada")
+  horarioSalida                String?                    @map("horario_salida")
+  codigoBiometrico             String?                    @unique @map("codigo_biometrico")
+  ubicacionId                  String?                    @map("id_ubicacion")
+  rolId                        String?                    @map("id_rol")
+  preferenciasReporte          Json?                      @map("preferencias_reporte")
+  areaId                       String?                    @map("id_area")
+  puestoId                     String?                    @map("id_puesto")
+  turnoId                      String?                    @map("id_turno")
+  areasResponsable             Area[]                     @relation("ResponsableArea")
+  asignaciones                 AsignacionOperario[]
+  asignacionesVehiculo         AsignacionVehiculo[]       @relation("AsignacionesVehiculo")
+  documentos                   DocumentoEmpleado[]
+  area                         Area?                      @relation("EmpleadoArea", fields: [areaId], references: [id])
+  puesto                       Puesto?                    @relation("EmpleadoPuesto", fields: [puestoId], references: [id])
+  rolRel                       RolEmpleado?               @relation(fields: [rolId], references: [id])
+  turno                        TurnoTrabajo?              @relation("EmpleadoTurno", fields: [turnoId], references: [id])
+  ubicacion                    Ubicacion?                 @relation(fields: [ubicacionId], references: [id])
+  evaluaciones                 Evaluacion[]               @relation("EmpleadoEvaluado")
+  evaluacionesHechas           Evaluacion[]               @relation("Evaluador")
+  fichadas                     FichadaEmpleado[]
+  horasPendientes              HoraExtraPendiente[]
+  inasistencias                Inasistencia[]
+  liquidacionesFinales         LiquidacionFinal[]
+  liquidacionesFinalesAnuladas LiquidacionFinal[]         @relation("LiquidacionFinalAnuladaPor")
+  liquidaciones                LiquidacionSueldo[]
+  liquidacionesAnuladas        LiquidacionSueldo[]        @relation("LiquidacionAnuladaPor")
+  cierresMensualesMixtos       CierreMensualMixto[]
+  pagosMensualesRegistrados    PagoCierreMensual[]        @relation("PagoMensualRegistradoPor")
+  seguimientosDiariosMixtos    SeguimientoDiarioMixto[]
+  seguimientosMixtosCreados    SeguimientoDiarioMixto[]   @relation("SeguimientoMixtoRegistradoPor")
+  reasignacionesCajaRRHH       ReasignacionCajaRRHH[]     @relation("ReasignacionCajaRRHHUsuario")
+  movimientosCajaCreados       MovimientoCaja[]           @relation("MovimientoCajaCreadoPor")
+  movimientosCajaEditados      MovimientoCaja[]           @relation("MovimientoCajaActualizadoPor")
+  movimientosCajaAnulados      MovimientoCaja[]           @relation("MovimientoCajaAnuladoPor")
+  auditoriasCaja               AuditoriaMovimientoCaja[]  @relation("AuditoriaMovimientoCajaUsuario")
+  historialSalarial            HistorialSalarial[]        @relation("HistorialSalarialEmpleado")
+  cambiosSalarialesCreados     HistorialSalarial[]        @relation("HistorialSalarialRegistradoPor")
+  depositosCajaDeclarados      DepositoCaja[]             @relation("DepositoCajaDeclaradoPor")
+  depositosCajaValidados       DepositoCaja[]             @relation("DepositoCajaValidadoPor")
+  lotesCoordinados             Lote[]                     @relation("CoordinadorLote")
+  prestamos                    PrestamoEmpleado[]
+  prestamosAnulados            PrestamoEmpleado[]         @relation("PrestamoAnuladoPor")
+  rendiciones                  RendicionChofer[]          @relation("RendicionesChofer")
+  rutasChofer                  Ruta[]                     @relation("ChoferRuta")
+  sanciones                    Sancion[]
+  talleUniforme                TalleUniforme?
+  entregasUniforme             EntregaUniforme[]          @relation("EmpleadoEntregasUniforme")
+  entregasUniformeCreadas      EntregaUniforme[]          @relation("EntregaUniformeRegistradaPor")
+  entregasUniformeAnuladas     EntregaUniforme[]          @relation("EntregaUniformeAnuladaPor")
+  movimientosUniforme          MovimientoUniforme[]       @relation("MovimientoUniformeRegistradoPor")
+  conteosInsumo                ConteoInsumo[]             @relation("ResponsableConteoInsumo")
+  plantillasHorario            PlantillaHorarioEmpleado[]
+  excepcionesHorario           ExcepcionHorarioEmpleado[]
+  codigosReloj                 CodigoRelojEmpleado[]
 
   @@map("empleados")
 }
@@ -285,26 +286,26 @@ model Lote {
 }
 
 model Ubicacion {
-  id                  String               @id @default(uuid())
-  nombre              String               @unique
-  tipo                String
-  activo              Boolean              @default(true)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  asignaciones        AsignacionOperario[]
-  empleados           Empleado[]
-  gastos              GastoOperativo[]
-  lotes               Lote[]
-  movimientosProducto MovimientoProducto[]
-  movimientosStock    MovimientoStock[]
-  pedidos             Pedido[]
-  rutasOrigen         Ruta[]               @relation("OrigenRuta")
-  stocksInsumo        StockInsumo[]
-  stocks              StockProducto[]
-  conteosInsumo       ConteoInsumo[]
-  compras             Compra[]
-  cajas               SaldoCaja[]
-  integracionesSheet  IntegracionSheetSucursal[]
+  id                    String                     @id @default(uuid())
+  nombre                String                     @unique
+  tipo                  String
+  activo                Boolean                    @default(true)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  asignaciones          AsignacionOperario[]
+  empleados             Empleado[]
+  gastos                GastoOperativo[]
+  lotes                 Lote[]
+  movimientosProducto   MovimientoProducto[]
+  movimientosStock      MovimientoStock[]
+  pedidos               Pedido[]
+  rutasOrigen           Ruta[]                     @relation("OrigenRuta")
+  stocksInsumo          StockInsumo[]
+  stocks                StockProducto[]
+  conteosInsumo         ConteoInsumo[]
+  compras               Compra[]
+  cajas                 SaldoCaja[]
+  integracionesSheet    IntegracionSheetSucursal[]
   movimientosSheetStock MovimientoSheetStock[]
 
   @@map("ubicaciones")
@@ -326,32 +327,32 @@ model StockProducto {
 }
 
 model MovimientoProducto {
-  id             String       @id @default(uuid())
-  tipo           String
-  cantidad       Int
-  signo          String
-  fecha          DateTime     @default(now())
-  observaciones  String?
-  motivoMerma    String?      @map("motivo_merma")
-  costoUnitario  Float?       @map("costo_unitario")
-  costoTotal     Float?       @map("costo_total")
-  createdAt      DateTime     @default(now())
-  ubicacionId    String       @map("id_ubicacion")
-  productoId     String       @map("id_producto")
-  presentacionId String       @map("id_presentacion")
-  loteId         String?      @map("id_lote")
-  entregaId      String?      @map("id_entrega")
-  rutaId         String?      @map("id_ruta")
-  pedidoId       String?      @map("id_pedido")
-  movimientoSheetStockId String? @map("id_movimiento_sheet_stock")
-  entrega        Entrega?     @relation(fields: [entregaId], references: [id])
-  lote           Lote?        @relation(fields: [loteId], references: [id])
-  presentacion   Presentacion @relation(fields: [presentacionId], references: [id])
-  producto       Producto     @relation(fields: [productoId], references: [id])
-  ruta           Ruta?        @relation(fields: [rutaId], references: [id])
-  pedido         Pedido?      @relation(fields: [pedidoId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  movimientoSheetStock MovimientoSheetStock? @relation(fields: [movimientoSheetStockId], references: [id], onDelete: Restrict)
-  ubicacion      Ubicacion    @relation(fields: [ubicacionId], references: [id])
+  id                     String                @id @default(uuid())
+  tipo                   String
+  cantidad               Int
+  signo                  String
+  fecha                  DateTime              @default(now())
+  observaciones          String?
+  motivoMerma            String?               @map("motivo_merma")
+  costoUnitario          Float?                @map("costo_unitario")
+  costoTotal             Float?                @map("costo_total")
+  createdAt              DateTime              @default(now())
+  ubicacionId            String                @map("id_ubicacion")
+  productoId             String                @map("id_producto")
+  presentacionId         String                @map("id_presentacion")
+  loteId                 String?               @map("id_lote")
+  entregaId              String?               @map("id_entrega")
+  rutaId                 String?               @map("id_ruta")
+  pedidoId               String?               @map("id_pedido")
+  movimientoSheetStockId String?               @map("id_movimiento_sheet_stock")
+  entrega                Entrega?              @relation(fields: [entregaId], references: [id])
+  lote                   Lote?                 @relation(fields: [loteId], references: [id])
+  presentacion           Presentacion          @relation(fields: [presentacionId], references: [id])
+  producto               Producto              @relation(fields: [productoId], references: [id])
+  ruta                   Ruta?                 @relation(fields: [rutaId], references: [id])
+  pedido                 Pedido?               @relation(fields: [pedidoId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  movimientoSheetStock   MovimientoSheetStock? @relation(fields: [movimientoSheetStockId], references: [id], onDelete: Restrict)
+  ubicacion              Ubicacion             @relation(fields: [ubicacionId], references: [id])
 
   @@unique([pedidoId, presentacionId, tipo])
   @@unique([movimientoSheetStockId, presentacionId], map: "movimientos_producto_sheet_stock_presentacion_key")
@@ -652,7 +653,7 @@ model MovimientoCaja {
   prestamoId                   String?                   @map("id_prestamo")
   cuotaPrestamoId              String?                   @unique @map("id_cuota_prestamo")
   liquidacionSueldoId          String?                   @map("id_liquidacion_sueldo")
-  liquidacionFinalId           String?                   @unique @map("id_liquidacion_final")
+  liquidacionFinalId           String?                   @map("id_liquidacion_final")
   pagoCierreMensualId          String?                   @unique @map("id_pago_cierre_mensual")
   movimientoReversaDeId        String?                   @unique @map("id_movimiento_reversado")
   pedido                       Pedido?                   @relation(fields: [pedidoId], references: [id])
@@ -680,6 +681,7 @@ model MovimientoCaja {
   movimientoSheet              MovimientoSheetCaja?
 
   @@index([estado, fecha])
+  @@index([liquidacionFinalId])
   @@index([creadoPorId])
   @@index([actualizadoPorId])
   @@index([anuladoPorId])
@@ -778,33 +780,32 @@ model RendicionChofer {
 }
 
 model SaldoCaja {
-  id        String   @id @default(uuid())
-  tipo      String   @unique
-  saldo     Float    @default(0)
-  updatedAt DateTime @updatedAt
-  nombre    String?
-  activo    Boolean @default(true)
-  sistema   Boolean @default(false)
-  ubicacionId String? @map("id_ubicacion")
-  ubicacion Ubicacion? @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
-  recibeDepositos Boolean @default(false) @map("recibe_depositos")
-  conceptoDeposito String @default("Depósito diario") @map("concepto_deposito")
-  auditorias AuditoriaConfiguracionCaja[]
-  integracionesEfectivo       IntegracionSheetSucursal[] @relation("CajaSheetEfectivo")
-  integracionesTransferencia  IntegracionSheetSucursal[] @relation("CajaSheetTransferencia")
+  id                         String                       @id @default(uuid())
+  tipo                       String                       @unique
+  saldo                      Float                        @default(0)
+  updatedAt                  DateTime                     @updatedAt
+  nombre                     String?
+  activo                     Boolean                      @default(true)
+  sistema                    Boolean                      @default(false)
+  ubicacionId                String?                      @map("id_ubicacion")
+  ubicacion                  Ubicacion?                   @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  recibeDepositos            Boolean                      @default(false) @map("recibe_depositos")
+  conceptoDeposito           String                       @default("Depósito diario") @map("concepto_deposito")
+  auditorias                 AuditoriaConfiguracionCaja[]
+  integracionesEfectivo      IntegracionSheetSucursal[]   @relation("CajaSheetEfectivo")
+  integracionesTransferencia IntegracionSheetSucursal[]   @relation("CajaSheetTransferencia")
 
   @@index([ubicacionId, activo])
-
   @@map("saldos_caja")
 }
 
 model WhatsappStatsSource {
-  id         String               @id @default(uuid())
+  id         String                  @id @default(uuid())
   nombre     String
-  tokenHash  String               @unique @map("token_hash")
-  activo     Boolean              @default(true)
-  createdAt  DateTime             @default(now()) @map("created_at")
-  lastSeenAt DateTime?            @map("last_seen_at")
+  tokenHash  String                  @unique @map("token_hash")
+  activo     Boolean                 @default(true)
+  createdAt  DateTime                @default(now()) @map("created_at")
+  lastSeenAt DateTime?               @map("last_seen_at")
   days       WhatsappStatsDaily[]
   links      WhatsappStatsChatLink[]
 
@@ -824,12 +825,12 @@ model WhatsappStatsDaily {
 }
 
 model WhatsappStatsChatLink {
-  sourceId   String              @map("source_id")
-  chatId     String              @map("chat_id")
-  phoneE164  String              @map("phone_e164")
-  createdAt  DateTime            @default(now()) @map("created_at")
-  updatedAt  DateTime            @updatedAt @map("updated_at")
-  source     WhatsappStatsSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  sourceId  String              @map("source_id")
+  chatId    String              @map("chat_id")
+  phoneE164 String              @map("phone_e164")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+  source    WhatsappStatsSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
 
   @@id([sourceId, chatId])
   @@index([phoneE164])
@@ -852,19 +853,19 @@ model CodigoRelojEmpleado {
 }
 
 model IntegracionSheetSucursal {
-  id                   String    @id @default(uuid())
-  ubicacionTexto       String    @map("ubicacion_texto")
-  ubicacionClave       String    @unique @map("ubicacion_clave")
-  activo               Boolean   @default(true)
-  ubicacionId          String    @map("id_ubicacion")
-  cajaEfectivoId       String?   @map("id_caja_efectivo")
-  cajaTransferenciaId  String?   @map("id_caja_transferencia")
-  actualizadoPorId     String    @map("id_actualizado_por")
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  ubicacion            Ubicacion @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
-  cajaEfectivo         SaldoCaja? @relation("CajaSheetEfectivo", fields: [cajaEfectivoId], references: [id], onDelete: Restrict)
-  cajaTransferencia    SaldoCaja? @relation("CajaSheetTransferencia", fields: [cajaTransferenciaId], references: [id], onDelete: Restrict)
+  id                  String     @id @default(uuid())
+  ubicacionTexto      String     @map("ubicacion_texto")
+  ubicacionClave      String     @unique @map("ubicacion_clave")
+  activo              Boolean    @default(true)
+  ubicacionId         String     @map("id_ubicacion")
+  cajaEfectivoId      String?    @map("id_caja_efectivo")
+  cajaTransferenciaId String?    @map("id_caja_transferencia")
+  actualizadoPorId    String     @map("id_actualizado_por")
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  ubicacion           Ubicacion  @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  cajaEfectivo        SaldoCaja? @relation("CajaSheetEfectivo", fields: [cajaEfectivoId], references: [id], onDelete: Restrict)
+  cajaTransferencia   SaldoCaja? @relation("CajaSheetTransferencia", fields: [cajaTransferenciaId], references: [id], onDelete: Restrict)
 
   @@index([ubicacionId, activo])
   @@map("integraciones_sheet_sucursal")
@@ -895,22 +896,22 @@ model MovimientoSheetCaja {
 }
 
 model MovimientoSheetStock {
-  id                  String @id @default(uuid())
-  spreadsheetId       String @map("spreadsheet_id")
+  id                  String               @id @default(uuid())
+  spreadsheetId       String               @map("spreadsheet_id")
   hoja                String
-  externalId          String @map("external_id")
+  externalId          String               @map("external_id")
   fila                Int
-  productoTexto       String @map("producto_texto")
-  cantidadTexto       String @map("cantidad_texto")
-  ubicacionTexto      String @map("ubicacion_texto")
-  ubicacionId         String? @map("id_ubicacion")
-  estadoFuente        String @map("estado_fuente")
-  huellaStock         String @map("huella_stock")
-  estadoProcesamiento String @map("estado_procesamiento")
+  productoTexto       String               @map("producto_texto")
+  cantidadTexto       String               @map("cantidad_texto")
+  ubicacionTexto      String               @map("ubicacion_texto")
+  ubicacionId         String?              @map("id_ubicacion")
+  estadoFuente        String               @map("estado_fuente")
+  huellaStock         String               @map("huella_stock")
+  estadoProcesamiento String               @map("estado_procesamiento")
   detalle             String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  ubicacion           Ubicacion? @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  ubicacion           Ubicacion?           @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
   movimientos         MovimientoProducto[]
 
   @@unique([spreadsheetId, hoja, externalId])
@@ -919,14 +920,14 @@ model MovimientoSheetStock {
 }
 
 model AuditoriaConfiguracionCaja {
-  id String @id @default(uuid())
-  cajaId String @map("id_caja")
-  caja SaldoCaja @relation(fields: [cajaId], references: [id], onDelete: Restrict)
-  usuarioId String @map("id_usuario")
-  accion String
+  id         String    @id @default(uuid())
+  cajaId     String    @map("id_caja")
+  caja       SaldoCaja @relation(fields: [cajaId], references: [id], onDelete: Restrict)
+  usuarioId  String    @map("id_usuario")
+  accion     String
   anteriores Json?
-  nuevos Json
-  createdAt DateTime @default(now())
+  nuevos     Json
+  createdAt  DateTime  @default(now())
 
   @@index([cajaId, createdAt])
   @@map("auditorias_configuracion_caja")
@@ -1071,20 +1072,23 @@ model PrestamoEmpleado {
 }
 
 model CuotaPrestamo {
-  id               String             @id @default(uuid())
-  numeroCuota      Int                @map("numero_cuota")
-  monto            Float
-  estado           String             @default("pendiente")
-  mesAnio          String             @map("mes_anio")
-  fechaVencimiento DateTime           @default(now()) @map("fecha_vencimiento")
-  fechaPago        DateTime?          @map("fecha_pago")
-  prestamoId       String             @map("id_prestamo")
-  liquidacionId    String?            @map("id_liquidacion")
-  origenEntrega    String?            @map("origen_entrega")
-  liquidacion      LiquidacionSueldo? @relation(fields: [liquidacionId], references: [id])
-  prestamo         PrestamoEmpleado   @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
-  movimientoCaja   MovimientoCaja?
+  id                 String             @id @default(uuid())
+  numeroCuota        Int                @map("numero_cuota")
+  monto              Float
+  estado             String             @default("pendiente")
+  mesAnio            String             @map("mes_anio")
+  fechaVencimiento   DateTime           @default(now()) @map("fecha_vencimiento")
+  fechaPago          DateTime?          @map("fecha_pago")
+  prestamoId         String             @map("id_prestamo")
+  liquidacionId      String?            @map("id_liquidacion")
+  liquidacionFinalId String?            @map("id_liquidacion_final")
+  origenEntrega      String?            @map("origen_entrega")
+  liquidacion        LiquidacionSueldo? @relation(fields: [liquidacionId], references: [id])
+  liquidacionFinal   LiquidacionFinal?  @relation(fields: [liquidacionFinalId], references: [id], onDelete: SetNull)
+  prestamo           PrestamoEmpleado   @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+  movimientoCaja     MovimientoCaja?
 
+  @@index([liquidacionFinalId])
   @@map("cuotas_prestamos")
 }
 
@@ -1197,34 +1201,34 @@ model PagoCierreMensual {
 }
 
 model RolEmpleado {
-  id                   String     @id @default(uuid())
-  nombre               String     @unique
-  descripcion          String?
-  color                String?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  permisoCaja          Boolean    @default(false)
-  permisoCostos        Boolean    @default(false)
-  permisoPersonal      Boolean    @default(false)
-  permisoProduccion    Boolean    @default(false)
-  permisoPantallaProduccion Boolean @default(false) @map("permiso_pantalla_produccion")
-  permisoStock         Boolean    @default(false)
-  permisoDashboard     Boolean    @default(false)
-  permisoCompras       Boolean    @default(false) @map("permiso_compras")
-  permisoClientes      Boolean    @default(false) @map("permiso_clientes")
-  permisoPedidos       Boolean    @default(false) @map("permiso_pedidos")
-  permisoLogistica     Boolean    @default(false) @map("permiso_logistica")
-  permisoFlota         Boolean    @default(false) @map("permiso_flota")
-  permisoDiarioErrores Boolean @default(false) @map("permiso_diario_errores")
-  permisoReportes      Boolean    @default(false) @map("permiso_reportes")
-  permisoAtencion      Boolean    @default(false) @map("permiso_atencion")
-  permisoAtencionAdmin Boolean    @default(false) @map("permiso_atencion_admin")
-  jornal               Float      @default(0)
-  valorHoraExtra       Float      @default(0) @map("valor_hora_extra")
-  horasTrabajoDiarias  Float      @default(8) @map("horas_trabajo_diarias")
-  cicloPago            CicloPago  @default(SEMANAL) @map("ciclo_pago")
-  empleados            Empleado[]
-  historialSalarial    HistorialSalarial[]
+  id                        String              @id @default(uuid())
+  nombre                    String              @unique
+  descripcion               String?
+  color                     String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  permisoCaja               Boolean             @default(false)
+  permisoCostos             Boolean             @default(false)
+  permisoPersonal           Boolean             @default(false)
+  permisoProduccion         Boolean             @default(false)
+  permisoPantallaProduccion Boolean             @default(false) @map("permiso_pantalla_produccion")
+  permisoStock              Boolean             @default(false)
+  permisoDashboard          Boolean             @default(false)
+  permisoCompras            Boolean             @default(false) @map("permiso_compras")
+  permisoClientes           Boolean             @default(false) @map("permiso_clientes")
+  permisoPedidos            Boolean             @default(false) @map("permiso_pedidos")
+  permisoLogistica          Boolean             @default(false) @map("permiso_logistica")
+  permisoFlota              Boolean             @default(false) @map("permiso_flota")
+  permisoDiarioErrores      Boolean             @default(false) @map("permiso_diario_errores")
+  permisoReportes           Boolean             @default(false) @map("permiso_reportes")
+  permisoAtencion           Boolean             @default(false) @map("permiso_atencion")
+  permisoAtencionAdmin      Boolean             @default(false) @map("permiso_atencion_admin")
+  jornal                    Float               @default(0)
+  valorHoraExtra            Float               @default(0) @map("valor_hora_extra")
+  horasTrabajoDiarias       Float               @default(8) @map("horas_trabajo_diarias")
+  cicloPago                 CicloPago           @default(SEMANAL) @map("ciclo_pago")
+  empleados                 Empleado[]
+  historialSalarial         HistorialSalarial[]
 
   @@map("roles_empleado")
 }
@@ -1530,19 +1534,28 @@ model PlanificacionDescuento {
 }
 
 model LiquidacionFinal {
-  id               String          @id @default(uuid())
-  empleadoId       String          @map("id_empleado")
-  fechaEgreso      DateTime        @map("fecha_egreso")
-  tipoEgreso       String          @map("tipo_egreso")
-  antiguedadAnios  Int             @map("antiguedad_anios")
-  detalleConceptos Json            @map("detalle_conceptos")
-  totalHaberes     Float           @map("total_haberes")
-  totalDescuentos  Float           @map("total_descuentos")
-  totalNeto        Float           @map("total_neto")
-  createdAt        DateTime        @default(now())
-  empleado         Empleado        @relation(fields: [empleadoId], references: [id])
-  movimientoCaja   MovimientoCaja?
+  id                String           @id @default(uuid())
+  empleadoId        String           @map("id_empleado")
+  fechaEgreso       DateTime         @map("fecha_egreso")
+  tipoEgreso        String           @map("tipo_egreso")
+  antiguedadAnios   Int              @map("antiguedad_anios")
+  detalleConceptos  Json             @map("detalle_conceptos")
+  totalHaberes      Float            @map("total_haberes")
+  totalDescuentos   Float            @map("total_descuentos")
+  totalNeto         Float            @map("total_neto")
+  estado            String           @default("pagado")
+  motivoAnulacion   String?          @map("motivo_anulacion")
+  detalleAnulacion  Json?            @map("detalle_anulacion")
+  anuladoAt         DateTime?        @map("anulado_at")
+  anuladoPorId      String?          @map("id_anulado_por")
+  createdAt         DateTime         @default(now())
+  empleado          Empleado         @relation(fields: [empleadoId], references: [id])
+  anuladoPor        Empleado?        @relation("LiquidacionFinalAnuladaPor", fields: [anuladoPorId], references: [id], onDelete: SetNull)
+  cuotasDescontadas CuotaPrestamo[]
+  movimientosCaja   MovimientoCaja[]
 
+  @@index([estado, fechaEgreso])
+  @@index([anuladoPorId])
   @@map("liquidaciones_finales")
 }
 
@@ -1571,14 +1584,14 @@ enum PrendaUniforme {
 }
 
 model StockUniforme {
-  id          String               @id @default(uuid())
+  id          String                   @id @default(uuid())
   prenda      PrendaUniforme
   talle       String
-  cantidad    Int                  @default(0)
-  tipoModelo  String?              @map("tipo_modelo")
+  cantidad    Int                      @default(0)
+  tipoModelo  String?                  @map("tipo_modelo")
   marca       String?
   certificado Boolean?
-  updatedAt   DateTime             @updatedAt
+  updatedAt   DateTime                 @updatedAt
   detalles    EntregaUniformeDetalle[]
   movimientos MovimientoUniforme[]
 
@@ -1587,63 +1600,63 @@ model StockUniforme {
 }
 
 model EntregaUniforme {
-  id            String   @id @default(uuid())
-  empleadoId    String   @map("id_empleado")
-  fecha         DateTime @default(now())
-  remera        Int      @default(0)
-  buzo          Int      @default(0)
-  observaciones String?
-  nombreEmpleado String? @map("nombre_empleado")
-  dniEmpleado String? @map("dni_empleado")
-  rolEmpleado String? @map("rol_empleado")
-  estado        String   @default("ACTIVA")
-  registradoPorId String? @map("id_registrado_por")
-  anuladaPorId String? @map("id_anulada_por")
-  anuladaAt DateTime? @map("anulada_at")
-  motivoAnulacion String? @map("motivo_anulacion")
-  claveIdempotencia String? @unique @map("clave_idempotencia")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  empleado      Empleado @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
-  registradoPor Empleado? @relation("EntregaUniformeRegistradaPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
-  anuladaPor Empleado? @relation("EntregaUniformeAnuladaPor", fields: [anuladaPorId], references: [id], onDelete: SetNull)
-  detalles EntregaUniformeDetalle[]
-  movimientos MovimientoUniforme[]
+  id                String                   @id @default(uuid())
+  empleadoId        String                   @map("id_empleado")
+  fecha             DateTime                 @default(now())
+  remera            Int                      @default(0)
+  buzo              Int                      @default(0)
+  observaciones     String?
+  nombreEmpleado    String?                  @map("nombre_empleado")
+  dniEmpleado       String?                  @map("dni_empleado")
+  rolEmpleado       String?                  @map("rol_empleado")
+  estado            String                   @default("ACTIVA")
+  registradoPorId   String?                  @map("id_registrado_por")
+  anuladaPorId      String?                  @map("id_anulada_por")
+  anuladaAt         DateTime?                @map("anulada_at")
+  motivoAnulacion   String?                  @map("motivo_anulacion")
+  claveIdempotencia String?                  @unique @map("clave_idempotencia")
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  empleado          Empleado                 @relation("EmpleadoEntregasUniforme", fields: [empleadoId], references: [id], onDelete: Cascade)
+  registradoPor     Empleado?                @relation("EntregaUniformeRegistradaPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  anuladaPor        Empleado?                @relation("EntregaUniformeAnuladaPor", fields: [anuladaPorId], references: [id], onDelete: SetNull)
+  detalles          EntregaUniformeDetalle[]
+  movimientos       MovimientoUniforme[]
 
   @@index([empleadoId, fecha])
   @@map("entregas_uniforme")
 }
 
 model EntregaUniformeDetalle {
-  id        String @id @default(uuid())
-  entregaId String @map("id_entrega")
-  stockId   String @map("id_stock")
-  prenda    PrendaUniforme
-  talle     String
-  cantidad  Int
-  tipoModelo String? @map("tipo_modelo")
-  marca String?
+  id          String          @id @default(uuid())
+  entregaId   String          @map("id_entrega")
+  stockId     String          @map("id_stock")
+  prenda      PrendaUniforme
+  talle       String
+  cantidad    Int
+  tipoModelo  String?         @map("tipo_modelo")
+  marca       String?
   certificado Boolean?
-  entrega   EntregaUniforme @relation(fields: [entregaId], references: [id], onDelete: Restrict)
-  stock     StockUniforme @relation(fields: [stockId], references: [id], onDelete: Restrict)
+  entrega     EntregaUniforme @relation(fields: [entregaId], references: [id], onDelete: Restrict)
+  stock       StockUniforme   @relation(fields: [stockId], references: [id], onDelete: Restrict)
 
   @@unique([entregaId, prenda, talle])
   @@map("entregas_uniforme_detalle")
 }
 
 model MovimientoUniforme {
-  id              String @id @default(uuid())
-  stockId         String @map("id_stock")
-  entregaId       String? @map("id_entrega")
-  registradoPorId String @map("id_registrado_por")
+  id              String           @id @default(uuid())
+  stockId         String           @map("id_stock")
+  entregaId       String?          @map("id_entrega")
+  registradoPorId String           @map("id_registrado_por")
   tipo            String
   delta           Int
-  saldoPosterior  Int @map("saldo_posterior")
+  saldoPosterior  Int              @map("saldo_posterior")
   motivo          String?
-  createdAt       DateTime @default(now())
-  stock           StockUniforme @relation(fields: [stockId], references: [id], onDelete: Restrict)
+  createdAt       DateTime         @default(now())
+  stock           StockUniforme    @relation(fields: [stockId], references: [id], onDelete: Restrict)
   entrega         EntregaUniforme? @relation(fields: [entregaId], references: [id], onDelete: Restrict)
-  registradoPor   Empleado @relation("MovimientoUniformeRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  registradoPor   Empleado         @relation("MovimientoUniformeRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
 
   @@index([stockId, createdAt])
   @@index([entregaId])
@@ -1651,27 +1664,30 @@ model MovimientoUniforme {
 }
 
 model AreaError {
-  id String @id @default(uuid())
-  nombre String
-  clave String @unique
-  activa Boolean @default(true)
+  id        String          @id @default(uuid())
+  nombre    String
+  clave     String          @unique
+  activa    Boolean         @default(true)
   registros RegistroError[]
+
   @@map("areas_error")
 }
+
 model RegistroError {
-  id String @id @default(uuid())
-  fecha String @db.VarChar(10)
-  areaId String
-  area AreaError @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  error String
-  responsable String
-  solucion String @default("")
-  solucionado Boolean?
-  nombreCliente String? @db.VarChar(150)
-  creadoPorId String
+  id              String    @id @default(uuid())
+  fecha           String    @db.VarChar(10)
+  areaId          String
+  area            AreaError @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  error           String
+  responsable     String
+  solucion        String    @default("")
+  solucionado     Boolean?
+  nombreCliente   String?   @db.VarChar(150)
+  creadoPorId     String
   creadoPorNombre String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
   @@index([fecha, createdAt])
   @@index([areaId, fecha])
   @@map("registros_error")

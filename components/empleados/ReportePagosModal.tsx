@@ -2,6 +2,7 @@
 
 import { getPrintLogos } from '@/lib/utils/printLogos'
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
 import { ordenarReportePagosAlfabeticamente } from '@/lib/payroll/reportePagos'
 
@@ -35,6 +36,10 @@ interface ReporteFila {
     descuentos: number
     totalNeto: number
     esMixtoEfectivo?: boolean
+    estado?: string
+    motivoAnulacion?: string | null
+    anuladoAt?: string | null
+    anuladoPor?: { id: string; nombre: string; apellido: string | null } | null
 }
 
 const formatearHoras = (horas: number) => horas.toLocaleString('es-AR', {
@@ -42,6 +47,8 @@ const formatearHoras = (horas: number) => horas.toLocaleString('es-AR', {
 })
 
 export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
+    const { data: session } = useSession()
+    const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
     const [fechaDesde, setFechaDesde] = useState(new Date().toISOString().split('T')[0])
     const [fechaHasta, setFechaHasta] = useState(new Date().toISOString().split('T')[0])
     const [datos, setDatos] = useState<ReporteFila[]>([])
@@ -49,6 +56,10 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [filtroNombre, setFiltroNombre] = useState('')
     const [modeloRecibo, setModeloRecibo] = useState<ModeloRecibo>('A')
+    const [finalAAnular, setFinalAAnular] = useState<ReporteFila | null>(null)
+    const [motivoAnulacion, setMotivoAnulacion] = useState('')
+    const [anulando, setAnulando] = useState(false)
+    const [errorAnulacion, setErrorAnulacion] = useState('')
 
     const fetchReporte = useCallback(async () => {
         setLoading(true)
@@ -78,7 +89,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         return datosOrdenados.filter(d => d.empleado.toLowerCase().includes(low))
     }, [datosOrdenados, filtroNombre])
 
-    const recibosImprimibles = filteredDatos.filter(d => !d.esMixtoEfectivo || d.totalNeto > 0)
+    const recibosImprimibles = filteredDatos.filter(d => d.estado !== 'anulado' && (!d.esMixtoEfectivo || d.totalNeto > 0))
 
     const toggleSelect = (id: string) => {
         const fila = datos.find(d => d.id === id)
@@ -97,7 +108,30 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
         }
     }
 
-    const totalGeneral = datos.reduce((acc, curr) => acc + curr.totalNeto, 0)
+    const datosVigentes = datosOrdenados.filter(fila => fila.estado !== 'anulado')
+    const totalGeneral = datosVigentes.reduce((acc, curr) => acc + curr.totalNeto, 0)
+
+    const confirmarAnulacionFinal = async () => {
+        if (!finalAAnular) return
+        setAnulando(true)
+        setErrorAnulacion('')
+        try {
+            const res = await fetch(`/api/liquidaciones-finales/${finalAAnular.id}/anular`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ motivo: motivoAnulacion }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'No se pudo anular la liquidación final.')
+            setFinalAAnular(null)
+            setMotivoAnulacion('')
+            await fetchReporte()
+        } catch (error) {
+            setErrorAnulacion(error instanceof Error ? error.message : 'No se pudo anular la liquidación final.')
+        } finally {
+            setAnulando(false)
+        }
+    }
 
     const handlePrint = async () => {
         const dImp = new Date()
@@ -153,7 +187,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                         </tr>
                     </thead>
                     <tbody>
-                        ${datosOrdenados.length > 0 ? datosOrdenados.map((row, i) => `
+                        ${datosVigentes.length > 0 ? datosVigentes.map((row, i) => `
                             <tr>
                                 <td>${i + 1}</td>
                                 <td>${row.empleado}</td>
@@ -278,14 +312,16 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                         <th style={{ textAlign: 'right' }}>Ingresos ($)</th>
                                         <th style={{ textAlign: 'right' }}>Descuentos ($)</th>
                                         <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Neto Final ($)</th>
+                                        <th style={{ width: '90px', textAlign: 'right' }}>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredDatos.length > 0 ? (
                                         filteredDatos.map(d => {
-                                            const imprimible = !d.esMixtoEfectivo || d.totalNeto > 0
+                                            const anulada = d.estado === 'anulado'
+                                            const imprimible = !anulada && (!d.esMixtoEfectivo || d.totalNeto > 0)
                                             return (
-                                            <tr key={d.id} onClick={() => toggleSelect(d.id)} style={{ cursor: imprimible ? 'pointer' : 'not-allowed', opacity: imprimible ? 1 : .6 }}>
+                                            <tr key={d.id} onClick={() => toggleSelect(d.id)} style={{ cursor: imprimible ? 'pointer' : 'default', opacity: anulada ? .58 : imprimible ? 1 : .6 }}>
                                                 <td>
                                                     <input 
                                                         type="checkbox" 
@@ -303,6 +339,9 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                         )}
                                                         {d.tipo === 'FINAL' && (
                                                             <span style={{ backgroundColor: 'var(--color-danger-light)', color: 'var(--color-danger)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>FINAL</span>
+                                                        )}
+                                                        {anulada && (
+                                                            <span style={{ backgroundColor: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>ANULADA</span>
                                                         )}
                                                         {d.tipo === 'HORAS_EXTRAS_ADEUDADAS' && (
                                                             <span style={{ backgroundColor: 'var(--color-warning-light)', color: 'var(--color-warning)', padding: '0 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>HS. ADEUDADAS</span>
@@ -330,12 +369,31 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                 <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: 'var(--text-lg)' }}>
                                                     ${d.totalNeto.toLocaleString('es-AR')}
                                                 </td>
+                                                <td style={{ textAlign: 'right' }}>
+                                                    {esAdmin && d.tipo === 'FINAL' && !anulada && (
+                                                        <button
+                                                            className="btn btn-ghost btn-sm"
+                                                            style={{ color: 'var(--color-danger)' }}
+                                                            onClick={evento => {
+                                                                evento.stopPropagation()
+                                                                setFinalAAnular(d)
+                                                                setMotivoAnulacion('')
+                                                                setErrorAnulacion('')
+                                                            }}
+                                                        >
+                                                            Anular
+                                                        </button>
+                                                    )}
+                                                    {anulada && d.motivoAnulacion && (
+                                                        <span title={d.motivoAnulacion} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Ver motivo</span>
+                                                    )}
+                                                </td>
                                             </tr>
                                             )
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
+                                            <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
                                                 No se encontraron recibos que coincidan con la búsqueda.
                                             </td>
                                         </tr>
@@ -344,7 +402,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                 {datos.length > 0 && (
                                     <tfoot>
                                         <tr style={{ backgroundColor: 'var(--color-gray-50)', borderTop: '2px solid var(--color-gray-200)' }}>
-                                            <td colSpan={5} style={{ textAlign: 'right', fontWeight: 'bold', padding: 'var(--space-4)' }}>
+                                            <td colSpan={6} style={{ textAlign: 'right', fontWeight: 'bold', padding: 'var(--space-4)' }}>
                                                 Efectivo a Separar:
                                             </td>
                                             <td style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.4rem', color: 'var(--color-primary)', padding: 'var(--space-4)' }}>
@@ -373,6 +431,43 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                     </button>
                 </div>
             </div>
+            {finalAAnular && (
+                <div className="modal-overlay" onClick={() => !anulando && setFinalAAnular(null)} style={{ zIndex: 2100 }}>
+                    <div className="modal" onClick={evento => evento.stopPropagation()} style={{ width: '95%', maxWidth: '520px' }}>
+                        <div className="modal-header">
+                            <div>
+                                <h3 style={{ margin: 0, color: 'var(--color-danger)' }}>Anular liquidación final</h3>
+                                <p style={{ margin: '5px 0 0', color: 'var(--color-gray-500)', fontSize: 'var(--text-sm)' }}>{finalAAnular.empleado}</p>
+                            </div>
+                            <button className="btn btn-ghost btn-icon" disabled={anulando} onClick={() => setFinalAAnular(null)}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <div style={{ padding: 'var(--space-3)', background: 'var(--color-warning-light)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+                                Se conservará el comprobante como anulado, se devolverá <strong>${finalAAnular.totalNeto.toLocaleString('es-AR')}</strong> a la caja original y se reactivará al empleado si no existe otra liquidación final vigente.
+                            </div>
+                            <label className="form-label" htmlFor="motivo-anulacion-final">Motivo de la anulación</label>
+                            <textarea
+                                id="motivo-anulacion-final"
+                                className="form-input"
+                                rows={4}
+                                maxLength={500}
+                                value={motivoAnulacion}
+                                onChange={evento => setMotivoAnulacion(evento.target.value)}
+                                placeholder="Ej. Liquidación final cargada con una fecha incorrecta"
+                                disabled={anulando}
+                            />
+                            <div style={{ marginTop: 4, color: 'var(--color-gray-500)', fontSize: 'var(--text-xs)' }}>Entre 10 y 500 caracteres · {motivoAnulacion.trim().length}/500</div>
+                            {errorAnulacion && <div style={{ marginTop: 'var(--space-3)', color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>{errorAnulacion}</div>}
+                        </div>
+                        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
+                            <button className="btn btn-outline" disabled={anulando} onClick={() => setFinalAAnular(null)}>Cancelar</button>
+                            <button className="btn btn-primary" style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} disabled={anulando || motivoAnulacion.trim().length < 10} onClick={() => void confirmarAnulacionFinal()}>
+                                {anulando ? 'Anulando…' : 'Confirmar anulación'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <style jsx>{`
                 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(2px); }
                 .modal { background: white; border-radius: var(--radius-lg); display: flex; flex-direction: column; box-shadow: var(--shadow-2xl); }

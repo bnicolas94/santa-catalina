@@ -6,6 +6,8 @@ import {
     calcularVacacionesNoGozadasProporcionales,
     diasVacacionesAnualesPorAntiguedad,
 } from '@/lib/payroll/vacacionesNoGozadas'
+import { validarLiquidacionFinalAnulable } from '@/lib/payroll/anulacionLiquidacionFinal'
+import { validarMotivoAnulacionLiquidacion } from '@/lib/payroll/liquidaciones'
 
 export interface LiquidacionFinalInput {
     empleadoId: string
@@ -214,6 +216,20 @@ export class LiquidacionFinalService {
         const totalNeto = this.redondear(totalHaberes - totalDescuentos)
 
         return await prisma.$transaction(async (tx) => {
+            const cuotasACancelar = totalDescuentos > 0
+                ? await tx.cuotaPrestamo.findMany({
+                    where: {
+                        prestamo: { empleadoId: input.empleadoId, estado: 'activo' },
+                        estado: 'pendiente',
+                    },
+                    select: { id: true, prestamoId: true, numeroCuota: true, monto: true },
+                })
+                : []
+            const totalCuotas = this.redondear(cuotasACancelar.reduce((total, cuota) => total + cuota.monto, 0))
+            if (Math.abs(totalCuotas - totalDescuentos) > 0.009) {
+                throw new Error('El descuento final debe coincidir con las cuotas pendientes para conservar su trazabilidad.')
+            }
+
             // 1. Crear el registro de Liquidación Final
             const liquidacion = await tx.liquidacionFinal.create({
                 data: {
@@ -246,27 +262,125 @@ export class LiquidacionFinalService {
             })
 
             // 4. Cancelar préstamos si hubo descuento
-            if (totalDescuentos > 0) {
-                // Buscamos las cuotas que mencionamos en el cálculo
+            if (cuotasACancelar.length > 0) {
                 await tx.cuotaPrestamo.updateMany({
-                    where: {
-                        prestamo: { empleadoId: input.empleadoId, estado: 'activo' },
-                        estado: 'pendiente'
-                    },
+                    where: { id: { in: cuotasACancelar.map(cuota => cuota.id) }, estado: 'pendiente' },
                     data: {
                         estado: 'pagado',
-                        fechaPago: new Date()
+                        fechaPago: new Date(),
+                        liquidacionFinalId: liquidacion.id,
                     }
                 })
                 
                 // Marcar préstamos como completados
                 await tx.prestamoEmpleado.updateMany({
-                    where: { empleadoId: input.empleadoId, estado: 'activo' },
+                    where: { id: { in: [...new Set(cuotasACancelar.map(cuota => cuota.prestamoId))] } },
                     data: { estado: 'completado' }
                 })
             }
 
             return liquidacion
+        })
+    }
+
+    /**
+     * Anula una liquidación final sin borrar historial: compensa Caja, restaura
+     * préstamos trazables y reactiva al empleado cuando no existe otro egreso vigente.
+     */
+    static async anular(id: string, motivoInformado: unknown, usuarioId: string) {
+        const motivo = validarMotivoAnulacionLiquidacion(motivoInformado)
+
+        return prisma.$transaction(async tx => {
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`anular-liquidacion-final:${id}`}))::text AS lock_result`
+
+            const liquidacion = await tx.liquidacionFinal.findUnique({
+                where: { id },
+                include: {
+                    empleado: { select: { id: true, nombre: true, apellido: true, activo: true } },
+                    cuotasDescontadas: {
+                        select: { id: true, prestamoId: true, numeroCuota: true, monto: true },
+                    },
+                    movimientosCaja: {
+                        where: { movimientoReversaDeId: null },
+                        include: { movimientoReversion: { select: { id: true } } },
+                    },
+                },
+            })
+            if (!liquidacion) throw new Error('Liquidación final no encontrada.')
+
+            const movimiento = liquidacion.movimientosCaja.find(item => item.concepto.toUpperCase() === 'LIQUIDACION_FINAL')
+                || liquidacion.movimientosCaja.find(item => item.tipo === 'egreso')
+                || null
+            validarLiquidacionFinalAnulable({
+                estado: liquidacion.estado,
+                totalNeto: liquidacion.totalNeto,
+                totalDescuentos: liquidacion.totalDescuentos,
+                movimiento,
+                cuotasDescontadas: liquidacion.cuotasDescontadas,
+            })
+
+            const prestamosAfectados = [...new Set(liquidacion.cuotasDescontadas.map(cuota => cuota.prestamoId))]
+            if (liquidacion.cuotasDescontadas.length > 0) {
+                await tx.cuotaPrestamo.updateMany({
+                    where: { liquidacionFinalId: liquidacion.id },
+                    data: {
+                        estado: 'pendiente',
+                        fechaPago: null,
+                        liquidacionFinalId: null,
+                    },
+                })
+                await tx.prestamoEmpleado.updateMany({
+                    where: { id: { in: prestamosAfectados } },
+                    data: { estado: 'activo' },
+                })
+            }
+
+            let movimientoReversaId: string | null = null
+            if (movimiento) {
+                const reversa = await CajaService.createMovimientoEnTx(tx, {
+                    tipo: 'ingreso',
+                    concepto: 'anulacion_liquidacion_final',
+                    monto: movimiento.monto,
+                    cajaOrigen: movimiento.cajaOrigen,
+                    liquidacionFinalId: liquidacion.id,
+                    movimientoReversaDeId: movimiento.id,
+                    usuarioId,
+                    descripcion: `Anulación liquidación final: ${liquidacion.empleado.nombre} ${liquidacion.empleado.apellido || ''} - ${motivo} (Movimiento original: ${movimiento.id})`,
+                })
+                movimientoReversaId = reversa.id
+            }
+
+            const otrosEgresosVigentes = await tx.liquidacionFinal.count({
+                where: {
+                    empleadoId: liquidacion.empleadoId,
+                    id: { not: liquidacion.id },
+                    estado: 'pagado',
+                },
+            })
+            const empleadoReactivado = otrosEgresosVigentes === 0 && !liquidacion.empleado.activo
+            if (empleadoReactivado) {
+                await tx.empleado.update({ where: { id: liquidacion.empleadoId }, data: { activo: true } })
+            }
+
+            return tx.liquidacionFinal.update({
+                where: { id: liquidacion.id },
+                data: {
+                    estado: 'anulado',
+                    motivoAnulacion: motivo,
+                    anuladoAt: new Date(),
+                    anuladoPorId: usuarioId,
+                    detalleAnulacion: {
+                        cuotasRestauradas: liquidacion.cuotasDescontadas,
+                        movimientoOriginalId: movimiento?.id || null,
+                        movimientoReversaId,
+                        empleadoReactivado,
+                    },
+                },
+                include: {
+                    anuladoPor: { select: { id: true, nombre: true, apellido: true } },
+                    movimientosCaja: { orderBy: { createdAt: 'asc' } },
+                },
+            })
         })
     }
 
