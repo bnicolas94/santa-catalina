@@ -337,13 +337,34 @@ export function contenidoReciboFinalRenuncia(recibo: DatosReciboLiquidacion): st
 
     const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
     const dni = recibo.empleado.dni || '________________'
+    const fechaIngreso = fechaCorta(recibo.empleado.fechaIngreso)
 
     return `
         <div class="titulo-especial"><h2>Liquidación final por renuncia</h2></div>
-        <p class="declaracion-renuncia">Quien suscribe, <strong>${escaparHtml(nombre)}</strong>, con DNI <strong>${escaparHtml(dni)}</strong>, manifiesta haber recibido a su entera satisfacción la cantidad de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}), misma es entregada por Eliana Melisa Bassi en efectivo, por concepto de tareas realizadas en Sandwicheria Santa Catalina a la fecha.</p>
+        <p class="declaracion-renuncia">Quien suscribe, <strong>${escaparHtml(nombre)}</strong>, con DNI <strong>${escaparHtml(dni)}</strong>, cuya relación laboral con Sandwicheria Santa Catalina se inició el <strong>${escaparHtml(fechaIngreso)}</strong>, manifiesta haber recibido a su entera satisfacción la cantidad de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}), misma es entregada por Eliana Melisa Bassi en efectivo, por concepto de tareas realizadas en Sandwicheria Santa Catalina a la fecha.</p>
         ${tablaConceptos(recibo)}
         <p class="clausula-renuncia">Por la que sirva el presente como recibo mas amplio y eficaz que en derecho proceda, no reservándome acción legal alguna por ejercer.</p>
         <p class="recibi">Recibí</p>`
+}
+
+export function contenidoReciboFinalGeneral(recibo: DatosReciboLiquidacion): string | null {
+    const calc = datosCalculados(recibo)
+    if (!calc.esFinal) return null
+
+    const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
+    const dni = recibo.empleado.dni || '________________'
+    const fechaIngreso = fechaCorta(recibo.empleado.fechaIngreso)
+    const fechaEgreso = fechaCorta(
+        (calc.desglose.fechaEgreso as string | Date | null) || recibo.fechaGeneracion,
+    )
+    const tipoEgreso = String(calc.desglose.tipoEgreso || 'egreso').replaceAll('_', ' ')
+
+    return `
+        <div class="titulo-especial"><h2>Liquidación final de haberes</h2><p>Ley de Contrato de Trabajo N° 20.744</p></div>
+        <p class="declaracion-pago">Se deja constancia de que la relación laboral de <strong>${escaparHtml(nombre)}</strong>, DNI <strong>${escaparHtml(dni)}</strong>, se inició el <strong>${escaparHtml(fechaIngreso)}</strong> y finalizó el <strong>${escaparHtml(fechaEgreso)}</strong> por <strong>${escaparHtml(tipoEgreso.toLocaleLowerCase('es-AR'))}</strong>.</p>
+        <p class="declaracion-pago">El trabajador recibe la suma total de <strong>$${dinero(calc.totalNeto)}</strong> (pesos ${formatCurrencyToWords(calc.totalNeto)}), correspondiente a los conceptos detallados a continuación.</p>
+        ${tablaConceptos(recibo)}
+        <p class="declaracion-pago">La firma acredita exclusivamente la recepción del importe indicado y no implica renuncia a derechos laborales ni a diferencias que pudieran corresponder.</p>`
 }
 
 export function contenidoReciboFinalPeriodoPrueba(recibo: DatosReciboLiquidacion): string | null {
@@ -420,7 +441,8 @@ function reciboHtml(recibo: DatosReciboLiquidacion, modelo: ModeloRecibo, logo: 
     const nombre = `${recibo.empleado.nombre} ${recibo.empleado.apellido || ''}`.trim()
     const contenidoRenuncia = contenidoReciboFinalRenuncia(recibo)
     const contenidoPeriodoPrueba = contenidoReciboFinalPeriodoPrueba(recibo)
-    const contenidoFinalEspecial = contenidoRenuncia || contenidoPeriodoPrueba
+    const contenidoFinalGeneral = contenidoReciboFinalGeneral(recibo)
+    const contenidoFinalEspecial = contenidoRenuncia || contenidoPeriodoPrueba || contenidoFinalGeneral
     const contenido = contenidoFinalEspecial
         ? `<div class="texto texto-renuncia">${contenidoFinalEspecial}</div>`
         : modelo === 'A'

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
     contenidoEspecialClasico,
+    contenidoReciboFinalGeneral,
     contenidoReciboFinalPeriodoPrueba,
     contenidoReciboFinalRenuncia,
     type DatosReciboLiquidacion,
@@ -13,6 +14,7 @@ const reciboRenuncia: DatosReciboLiquidacion = {
         nombre: 'María',
         apellido: 'Pérez',
         dni: '30111222',
+        fechaIngreso: '2024-03-12',
     },
     periodo: 'Liquidación Final (RENUNCIA)',
     tipo: 'FINAL',
@@ -41,6 +43,7 @@ test('el recibo de renuncia identifica al empleado, el pago en efectivo y la dec
     assert.ok(contenido)
     assert.match(contenido, /Quien suscribe, <strong>María Pérez<\/strong>/)
     assert.match(contenido, /con DNI <strong>30111222<\/strong>/)
+    assert.match(contenido, /se inició el <strong>12\/3\/2024<\/strong>/)
     assert.match(contenido, /<strong>\$150\.000<\/strong> \(pesos ciento cincuenta mil\)/)
     assert.match(contenido, /entregada por Eliana Melisa Bassi en efectivo/)
     assert.match(contenido, /tareas realizadas en Sandwicheria Santa Catalina a la fecha/)
@@ -50,6 +53,34 @@ test('el recibo de renuncia identifica al empleado, el pago en efectivo y la dec
     assert.match(contenido, /Detalle permitido para otro concepto/)
     assert.match(contenido, /no reservándome acción legal alguna por ejercer/)
     assert.match(contenido, /Recibí/)
+})
+
+test('el recibo general de liquidación final informa fecha de ingreso y egreso', () => {
+    const contenido = contenidoReciboFinalGeneral({
+        empleado: {
+            nombre: 'Pedro',
+            apellido: 'Suárez',
+            dni: '32111222',
+            fechaIngreso: '2022-04-18',
+        },
+        periodo: 'Liquidación Final (DESPIDO_CON_CAUSA)',
+        fechaGeneracion: '2026-10-31',
+        tipo: 'FINAL',
+        totalNeto: 420000,
+        desglose: {
+            esLiquidacionFinal: true,
+            tipoEgreso: 'DESPIDO_CON_CAUSA',
+            fechaEgreso: '2026-10-30',
+            conceptos: [{ nombre: 'Haberes pendientes', monto: 420000 }],
+        },
+    })
+
+    assert.ok(contenido)
+    assert.match(contenido, /Pedro Suárez/)
+    assert.match(contenido, /32111222/)
+    assert.match(contenido, /se inició el <strong>18\/4\/2022<\/strong>/)
+    assert.match(contenido, /finalizó el <strong>30\/10\/2026<\/strong>/)
+    assert.match(contenido, /despido con causa/)
 })
 
 test('no aplica el texto de renuncia a otras causas de liquidación final', () => {
