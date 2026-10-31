@@ -4,6 +4,7 @@ import { getPrintLogos } from '@/lib/utils/printLogos'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { imprimirRecibosLiquidacion, MODELOS_RECIBO, type ModeloRecibo } from '@/components/empleados/recibosLiquidacion'
+import { CambiarCajaPagoButton } from '@/components/empleados/CambiarCajaPagoButton'
 import { ordenarReportePagosAlfabeticamente } from '@/lib/payroll/reportePagos'
 
 interface ReportePagosModalProps {
@@ -40,6 +41,7 @@ interface ReporteFila {
     motivoAnulacion?: string | null
     anuladoAt?: string | null
     anuladoPor?: { id: string; nombre: string; apellido: string | null } | null
+    movimientoCaja?: { id: string; cajaOrigen: string | null; estado: string } | null
 }
 
 const formatearHoras = (horas: number) => horas.toLocaleString('es-AR', {
@@ -312,7 +314,7 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                         <th style={{ textAlign: 'right' }}>Ingresos ($)</th>
                                         <th style={{ textAlign: 'right' }}>Descuentos ($)</th>
                                         <th style={{ textAlign: 'right', fontWeight: 'bold' }}>Neto Final ($)</th>
-                                        <th style={{ width: '90px', textAlign: 'right' }}>Acciones</th>
+                                        <th style={{ width: '190px', textAlign: 'right' }}>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -371,18 +373,27 @@ export function ReportePagosModal({ onClose }: ReportePagosModalProps) {
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     {esAdmin && d.tipo === 'FINAL' && !anulada && (
-                                                        <button
-                                                            className="btn btn-ghost btn-sm"
-                                                            style={{ color: 'var(--color-danger)' }}
-                                                            onClick={evento => {
-                                                                evento.stopPropagation()
-                                                                setFinalAAnular(d)
-                                                                setMotivoAnulacion('')
-                                                                setErrorAnulacion('')
-                                                            }}
-                                                        >
-                                                            Anular
-                                                        </button>
+                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }} onClick={evento => evento.stopPropagation()}>
+                                                            {d.movimientoCaja && (
+                                                                <CambiarCajaPagoButton
+                                                                    compact
+                                                                    movimientoId={d.movimientoCaja.id}
+                                                                    cajaActual={d.movimientoCaja.cajaOrigen}
+                                                                    onSuccess={fetchReporte}
+                                                                />
+                                                            )}
+                                                            <button
+                                                                className="btn btn-ghost btn-sm"
+                                                                style={{ color: 'var(--color-danger)' }}
+                                                                onClick={() => {
+                                                                    setFinalAAnular(d)
+                                                                    setMotivoAnulacion('')
+                                                                    setErrorAnulacion('')
+                                                                }}
+                                                            >
+                                                                Anular
+                                                            </button>
+                                                        </div>
                                                     )}
                                                     {anulada && d.motivoAnulacion && (
                                                         <span title={d.motivoAnulacion} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>Ver motivo</span>

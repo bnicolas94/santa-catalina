@@ -59,6 +59,19 @@ export async function GET(request: Request) {
                 include: {
                     empleado: true,
                     anuladoPor: { select: { id: true, nombre: true, apellido: true } },
+                    movimientosCaja: {
+                        where: {
+                            tipo: 'egreso',
+                            movimientoReversaDeId: null,
+                        },
+                        select: {
+                            id: true,
+                            cajaOrigen: true,
+                            concepto: true,
+                            estado: true,
+                        },
+                        orderBy: { createdAt: 'asc' },
+                    },
                 },
                 orderBy: {
                     fechaEgreso: 'asc'
@@ -116,6 +129,10 @@ export async function GET(request: Request) {
         })
 
         const reporteFinales = liquidacionesFinales.map(liq => {
+            const movimientoCaja = liq.movimientosCaja.find(movimiento =>
+                movimiento.concepto.toUpperCase() === 'LIQUIDACION_FINAL'
+            ) || liq.movimientosCaja[0] || null
+
             return {
                 id: liq.id,
                 tipo: 'FINAL',
@@ -123,6 +140,7 @@ export async function GET(request: Request) {
                 motivoAnulacion: liq.motivoAnulacion,
                 anuladoAt: liq.anuladoAt,
                 anuladoPor: liq.anuladoPor,
+                movimientoCaja: liq.estado === 'pagado' ? movimientoCaja : null,
                 manualData: { 
                     esLiquidacionFinal: true,
                     tipoEgreso: liq.tipoEgreso,
