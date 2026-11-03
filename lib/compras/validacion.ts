@@ -9,6 +9,13 @@ export type ItemCompraParaPago = {
     montoPagado: number | null
 }
 
+export type VariacionPrecio = {
+    tipo: 'aumento' | 'descenso' | 'sin_cambio'
+    porcentaje: number
+    precioAnterior: number
+    precioNuevo: number
+}
+
 const CENTAVO = 0.01
 export const IVA_GENERAL_PORCENTAJE = 21
 export const CAJAS_COMPRA = [
@@ -24,6 +31,20 @@ export class CompraValidationError extends Error {}
 
 function redondearMoneda(value: number): number {
     return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
+export function detectarVariacionPrecio(precioAnterior: unknown, precioNuevo: unknown): VariacionPrecio | null {
+    const anterior = Number(precioAnterior)
+    const nuevo = Number(precioNuevo)
+    if (!Number.isFinite(anterior) || anterior <= 0 || !Number.isFinite(nuevo) || nuevo < 0) return null
+
+    const porcentaje = Math.round((Math.abs(nuevo - anterior) / anterior) * 10_000) / 100
+    return {
+        tipo: porcentaje === 0 ? 'sin_cambio' : nuevo > anterior ? 'aumento' : 'descenso',
+        porcentaje,
+        precioAnterior: anterior,
+        precioNuevo: nuevo,
+    }
 }
 
 export function calcularFacturaConIva(costos: number[], aplicarIva: boolean, descuento = 0): {

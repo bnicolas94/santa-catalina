@@ -39,6 +39,11 @@ de stock y de los conceptos de gasto de la factura.
   sobre el neto resultante. Ambos se distribuyen entre los ítems para que la
   cabecera, los costos y el pago conserven el mismo total; si no se activa IVA, los
   importes se toman como valores finales con IVA incluido.
+- Cada ítem de stock compara su costo unitario final (después de descuento e IVA)
+  con el `precioUnitario` vigente del insumo y muestra el porcentaje de aumento,
+  descenso o ausencia de cambio antes de confirmar. Es sólo una vista previa: los
+  históricos no se alteran y el valor vigente se actualiza únicamente si permanece
+  marcada la opción correspondiente del ítem.
 - Un gasto o servicio exige descripción y categoría; nunca crea un `Insumo`.
 - Los conceptos de gasto permiten cantidad opcional positiva (también decimal),
   guardada en `GastoOperativo.cantidad`. Es informativa: no afecta stock ni multiplica

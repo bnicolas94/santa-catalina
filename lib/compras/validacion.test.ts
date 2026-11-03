@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
     calcularFacturaConIva,
+    detectarVariacionPrecio,
     distribuirMontoPagadoPorCostos,
     distribuirPagoEntreItems,
     estadoPagoDesdeMontos,
@@ -11,6 +12,19 @@ import {
     validarPagosDivididos,
     validarIdsEdicionCompra,
 } from './validacion'
+
+test('detecta aumentos y descensos contra el costo unitario vigente', () => {
+    assert.deepEqual(detectarVariacionPrecio(100, 121), {
+        tipo: 'aumento',
+        porcentaje: 21,
+        precioAnterior: 100,
+        precioNuevo: 121,
+    })
+    assert.equal(detectarVariacionPrecio(200, 150)?.tipo, 'descenso')
+    assert.equal(detectarVariacionPrecio(200, 150)?.porcentaje, 25)
+    assert.equal(detectarVariacionPrecio(100, 100.001)?.tipo, 'sin_cambio')
+    assert.equal(detectarVariacionPrecio(0, 100), null)
+})
 
 test('suma IVA 21% al total y lo distribuye sin perder centavos', () => {
     const factura = calcularFacturaConIva([100, 200], true)

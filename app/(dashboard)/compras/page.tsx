@@ -2,13 +2,13 @@
 
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { calcularFacturaConIva, cantidadGastoOpcional, IVA_GENERAL_PORCENTAJE, validarDescuentoFactura } from '@/lib/compras/validacion'
+import { calcularFacturaConIva, cantidadGastoOpcional, detectarVariacionPrecio, IVA_GENERAL_PORCENTAJE, validarDescuentoFactura } from '@/lib/compras/validacion'
 import { filtrarFacturasGasto, paginaFacturasGasto } from '@/lib/compras/listado-gastos'
 
 const FACTURAS_GASTO_POR_PAGINA = 10
 
 interface StockInsumoResumen { ubicacionId: string; cantidad: number }
-interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; activo: boolean; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
+interface Insumo { id: string; nombre: string; unidadMedida: string; stockActual: number; precioUnitario: number; activo: boolean; unidadSecundaria?: string; factorConversion?: number; stockActualSecundario?: number; stocks?: StockInsumoResumen[]; proveedor?: { id: string; nombre: string }; proveedores?: Array<{ proveedor: { id: string; nombre: string } }> }
 interface Proveedor { id: string; nombre: string }
 interface Ubicacion { id: string; nombre: string; tipo: string }
 interface CajaCompra { tipo: string; nombre?: string }
@@ -1760,6 +1760,12 @@ function ComprasContent() {
                                         <tbody>
                                             {facturaForm.items.map((it, idx) => {
                                                 const insData = insumos.find(i => i.id === it.insumoId)
+                                                const cantidadItem = Number(it.cantidad)
+                                                const costoFinalItem = resumenFactura.costosFinales[idx] ?? Number(it.costoTotal || 0)
+                                                const costoUnitarioNuevo = cantidadItem > 0 ? costoFinalItem / cantidadItem : null
+                                                const variacionPrecio = it.tipoItem === 'insumo' && costoUnitarioNuevo !== null
+                                                    ? detectarVariacionPrecio(insData?.precioUnitario, costoUnitarioNuevo)
+                                                    : null
                                                 return (
                                                     <tr key={it.movimientoId || it.gastoId || idx} style={editingFacturaItemIndex === idx ? { backgroundColor: '#EBF5FB' } : undefined}>
                                                         <td>
@@ -1784,7 +1790,27 @@ function ComprasContent() {
                                                         <td>
                                                             {it.tipoItem === 'insumo' && it.costoTotal && it.cantidad ? (
                                                                 <div style={{ fontSize: '0.8rem' }}>
-                                                                    ${(parseFloat(it.costoTotal) / parseFloat(it.cantidad)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {it.unidadMedida}
+                                                                    <div>
+                                                                        {resumenFactura.descuento > 0 || facturaForm.aplicarIva ? 'Costo final estimado: ' : ''}
+                                                                        ${costoUnitarioNuevo?.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {it.unidadMedida}
+                                                                    </div>
+                                                                    {variacionPrecio && (
+                                                                        <div style={{ marginTop: '4px' }}>
+                                                                            <span style={{
+                                                                                display: 'inline-block',
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '999px',
+                                                                                fontWeight: 700,
+                                                                                color: variacionPrecio.tipo === 'aumento' ? '#B42318' : variacionPrecio.tipo === 'descenso' ? '#067647' : '#475467',
+                                                                                background: variacionPrecio.tipo === 'aumento' ? '#FEE4E2' : variacionPrecio.tipo === 'descenso' ? '#DCFAE6' : '#F2F4F7',
+                                                                            }}>
+                                                                                {variacionPrecio.tipo === 'aumento' ? `↑ Aumentó ${variacionPrecio.porcentaje.toLocaleString('es-AR')}%` : variacionPrecio.tipo === 'descenso' ? `↓ Bajó ${variacionPrecio.porcentaje.toLocaleString('es-AR')}%` : '= Sin cambio'}
+                                                                            </span>
+                                                                            <div style={{ marginTop: '2px', fontSize: '0.7rem', color: 'var(--color-gray-500)' }}>
+                                                                                Anterior: ${variacionPrecio.precioAnterior.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             ) : it.tipoItem === 'gasto' ? 'Costo operativo' : '—'}
                                                         </td>
