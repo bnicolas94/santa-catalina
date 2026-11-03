@@ -9,7 +9,7 @@ export async function GET() {
     if (auth.rechazo) return auth.rechazo
     const pruebas = await prisma.pruebaPostulante.findMany({
         orderBy: { createdAt: 'desc' }, take: 100,
-        select: { id: true, nombre: true, email: true, venceAt: true, inicioAt: true, entregaAt: true, anuladaAt: true, createdAt: true, revision: true },
+        select: { id: true, version: true, nombre: true, email: true, venceAt: true, inicioAt: true, entregaAt: true, anuladaAt: true, createdAt: true, revision: true },
     })
     return NextResponse.json(pruebas)
 }
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
     const token = tokenNuevo()
     const prueba = await prisma.pruebaPostulante.create({ data: {
-        nombre, email: email || null, tokenHash: hashToken(token),
+        nombre, email: email || null, version: 2, tokenHash: hashToken(token),
         venceAt: new Date(Date.now() + VIGENCIA_DIAS * 86_400_000), creadoPorId: auth.id!,
     } })
     return NextResponse.json({ id: prueba.id, token }, { status: 201, headers: { 'Cache-Control': 'no-store' } })

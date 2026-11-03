@@ -10,7 +10,7 @@ export async function GET(_request: Request, context: Context) {
     if (auth.rechazo) return auth.rechazo
     const { id } = await context.params
     const prueba = await prisma.pruebaPostulante.findUnique({ where: { id }, select: {
-        id: true, nombre: true, email: true, venceAt: true, inicioAt: true, entregaAt: true,
+        id: true, version: true, nombre: true, email: true, venceAt: true, inicioAt: true, entregaAt: true,
         anuladaAt: true, respuestas: true, revision: true, revisadoAt: true, createdAt: true,
     } })
     if (!prueba) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })

@@ -99,7 +99,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 
 ### Postulaciones
 
-- Las pruebas remotas usan enlaces individuales con token aleatorio guardado sólo como hash, vencimiento de siete días y una ventana de 45 minutos desde el inicio. Las rutas públicas `/prueba/[token]` y `/api/prueba/[token]` no requieren sesión; su único acceso es el token. Sólo Personal o ADMIN crea invitaciones y consulta o revisa respuestas. No conectan con pedidos, clientes ni rutas reales.
+- Las pruebas remotas usan enlaces individuales con token aleatorio guardado sólo como hash, vencimiento de siete días y una ventana de 45 minutos desde el inicio. Las rutas públicas `/prueba/[token]` y `/api/prueba/[token]` no requieren sesión; su único acceso es el token. Sólo Personal o ADMIN crea invitaciones y consulta o revisa respuestas. No conectan con pedidos, clientes ni rutas reales. Cada invitación fija una versión del contenido: las anteriores conservan la versión inicial; las nuevas usan la simulación administrativa general, autocontenida.
 
 ### Fechas, dinero y cantidades
 

@@ -35,7 +35,7 @@ export async function GET(_request: Request, context: Context) {
     const estado = prueba.anuladaAt ? 'anulada' : prueba.entregaAt ? 'entregada'
         : prueba.inicioAt ? (now > vencePrueba(prueba.inicioAt) ? 'agotada' : 'iniciada')
             : now > prueba.venceAt ? 'vencida' : 'pendiente'
-    return NextResponse.json({ nombre: prueba.nombre, estado, inicioAt: prueba.inicioAt, limiteAt: prueba.inicioAt ? vencePrueba(prueba.inicioAt) : null }, { headers: noStore })
+    return NextResponse.json({ nombre: prueba.nombre, version: prueba.version, estado, inicioAt: prueba.inicioAt, limiteAt: prueba.inicioAt ? vencePrueba(prueba.inicioAt) : null }, { headers: noStore })
 }
 
 export async function POST(_request: Request, context: Context) {
