@@ -21,6 +21,11 @@ const menuItems: MenuItem[] = [
         icon: '👥',
     },
     {
+        label: 'Postulaciones',
+        href: process.env.NODE_ENV === 'production' ? 'https://app.santacatalina.online/postulaciones' : '/postulaciones',
+        icon: '📝',
+    },
+    {
         label: 'Nuevo Empleado',
         href: '/empleados?open=new',
         icon: '➕',
