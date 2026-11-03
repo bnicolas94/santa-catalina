@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { CAMPOS_PEDIDO, CASOS_WHATSAPP, DURACION_MINUTOS, PEDIDOS, contenidoPrueba, type Respuestas } from '@/lib/postulaciones/prueba'
+import PruebaHabilidades, { type EstadoHabilidades } from './PruebaHabilidades'
 import styles from './page.module.css'
 
-type Estado = { nombre: string; version: number; estado: 'pendiente' | 'iniciada' | 'entregada' | 'agotada' | 'vencida' | 'anulada'; limiteAt: string | null }
+type Estado = EstadoHabilidades
 const vacias = (): Respuestas => ({ tipeo: '', whatsapp: CASOS_WHATSAPP.map(() => ''), pedidos: PEDIDOS.map(() => Object.fromEntries(CAMPOS_PEDIDO.map(c => [c, ''])) as Respuestas['pedidos'][number]), rutas: '', criterio: '' })
 
 export default function PruebaPage() {
@@ -30,8 +31,8 @@ export default function PruebaPage() {
         return () => clearInterval(timer)
     }, [])
     useEffect(() => {
-        if (estado?.estado === 'iniciada') localStorage.setItem(`prueba:${token}`, JSON.stringify(respuestas))
-    }, [respuestas, estado?.estado, token])
+        if (estado?.estado === 'iniciada' && estado.version < 3) localStorage.setItem(`prueba:${token}`, JSON.stringify(respuestas))
+    }, [respuestas, estado?.estado, estado?.version, token])
 
     async function iniciar() {
         setEnviando(true); setError('')
@@ -61,6 +62,8 @@ export default function PruebaPage() {
     const activa = estado?.estado === 'iniciada' && restante > 0
     const contenido = contenidoPrueba(estado?.version ?? 2)
     const general = (estado?.version ?? 2) >= 2
+
+    if (estado?.version === 3) return <PruebaHabilidades token={token} initial={estado} />
 
     return <main className={styles.page}>
         <header className={styles.header}><span className={styles.brand}>SANTA CATALINA</span><h1>{contenido.titulo}</h1><p>Una simulación para conocer tu forma de comunicar, ordenar datos y resolver situaciones.</p></header>

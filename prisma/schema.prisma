@@ -119,6 +119,10 @@ model PruebaPostulante {
   inicioAt      DateTime? @map("inicio_at")
   entregaAt     DateTime? @map("entrega_at")
   anuladaAt     DateTime? @map("anulada_at")
+  tipeoInicioAt DateTime? @map("tipeo_inicio_at")
+  tipeoFinAt    DateTime? @map("tipeo_fin_at")
+  tipeoTexto    String?   @map("tipeo_texto") @db.VarChar(2000)
+  planilla      Json?
   respuestas    Json?
   revision      Json?
   creadoPorId   String    @map("creado_por_id")

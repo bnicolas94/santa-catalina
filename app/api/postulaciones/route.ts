@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
     const token = tokenNuevo()
     const prueba = await prisma.pruebaPostulante.create({ data: {
-        nombre, email: email || null, version: 2, tokenHash: hashToken(token),
+        nombre, email: email || null, version: 3, tokenHash: hashToken(token),
         venceAt: new Date(Date.now() + VIGENCIA_DIAS * 86_400_000), creadoPorId: auth.id!,
     } })
     return NextResponse.json({ id: prueba.id, token }, { status: 201, headers: { 'Cache-Control': 'no-store' } })

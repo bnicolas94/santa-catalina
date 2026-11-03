@@ -122,6 +122,10 @@
 }
 
 /* --- Reset & Base --- */
+body.operator-production-mode {
+  --main-offset: 0px;
+}
+
 *,
 *::before,
 *::after {
