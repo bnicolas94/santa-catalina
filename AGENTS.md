@@ -66,6 +66,7 @@ Alias TypeScript: `@/*` apunta a la raíz. El `tsconfig.json` raíz excluye `app
 | Caja y pagos | `app/(dashboard)/caja` | `app/api/caja`, `app/api/mercadopago`, `lib/services/caja.service.ts`, `lib/caja`, `lib/mercadopago*` | `MovimientoCaja`, `DepositoCaja`, auditoría, rendiciones, saldos y conceptos; `docs/modules/caja.md` |
 | Costos y reportes | `costos`, `reportes` | `app/api/costos`, `app/api/reportes`, `lib/services/reportes*.ts`, `mermas-costos.ts` | gastos, mermas y configuración de reportes; `docs/modules/reportes.md` |
 | Personal y nómina | `app/empleados`, `components/empleados`, analítica | `app/api/empleados`, `fichadas`, `liquidaciones`, `prestamos`, `licencias`; `lib/payroll`, `lib/rrhh`, servicios de RR. HH. | modelos desde `Empleado` hasta liquidaciones, cierres, sanciones y uniformes; `docs/modules/empleados.md` |
+| Postulaciones | `app/(dashboard)/postulaciones`, `app/prueba/[token]` | `app/api/postulaciones`, `app/api/prueba/[token]`, `lib/postulaciones` | `PruebaPostulante`; invitaciones individuales con token, prueba ficticia y revisión de Personal |
 | CRM WhatsApp | `apps/crm/app/page.tsx`, `metrics`, `settings` | `apps/crm/app/api`, `apps/crm/lib`, `app/api/internal/crm` en el ERP | `apps/crm/prisma/schema.prisma`, `apps/crm/README.md`, `docs/crm-whatsapp-arquitectura.md`, `packages/contracts` |
 
 La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Antes de crear una página o endpoint nuevo, verificar allí y en `lib/access-control.ts` cómo debe quedar expuesto y protegido.
@@ -95,6 +96,10 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - Antes de desplegar cambios de datos o estructura, ejecutar y verificar `npm run db:backup`. Nunca ejecutar `db:reset` sobre una base compartida o productiva.
 - `npm start` ejecuta `prisma migrate deploy` y sólo inicia Next.js si todas las migraciones pendientes terminan correctamente; Railway depende de este orden para no servir código contra un esquema anterior.
 - Mantener operaciones compuestas de caja, stock, compras, pedidos y nómina dentro de transacciones cuando deban ser atómicas.
+
+### Postulaciones
+
+- Las pruebas remotas usan enlaces individuales con token aleatorio guardado sólo como hash, vencimiento de siete días y una ventana de 45 minutos desde el inicio. Las rutas públicas `/prueba/[token]` y `/api/prueba/[token]` no requieren sesión; su único acceso es el token. Sólo Personal o ADMIN crea invitaciones y consulta o revisa respuestas. No conectan con pedidos, clientes ni rutas reales.
 
 ### Fechas, dinero y cantidades
 

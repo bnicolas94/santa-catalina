@@ -30,6 +30,8 @@ type AccessRule = {
 
 // Las reglas más específicas deben declararse primero.
 const accessRules: AccessRule[] = [
+    { path: '/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/caja/google-sheets', legacyRoles: ['ADMIN'] },

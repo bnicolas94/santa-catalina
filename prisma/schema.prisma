@@ -109,6 +109,28 @@ model Evaluacion {
   @@map("evaluaciones_desempeno")
 }
 
+model PruebaPostulante {
+  id            String    @id @default(uuid())
+  nombre        String
+  email         String?
+  tokenHash     String    @unique @map("token_hash")
+  venceAt       DateTime  @map("vence_at")
+  inicioAt      DateTime? @map("inicio_at")
+  entregaAt     DateTime? @map("entrega_at")
+  anuladaAt     DateTime? @map("anulada_at")
+  respuestas    Json?
+  revision      Json?
+  creadoPorId   String    @map("creado_por_id")
+  revisadoPorId String?   @map("revisado_por_id")
+  revisadoAt    DateTime? @map("revisado_at")
+  anuladaPorId  String?   @map("anulada_por_id")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@map("pruebas_postulantes")
+}
+
 model Proveedor {
   id               String            @id @default(uuid())
   nombre           String
