@@ -29,6 +29,7 @@ test('recorrido transaccional: token, lease, respuestas, recuperación y cierre 
     try {
         await assert.rejects(sesionPublica('c'.repeat(64), { accion: 'leer' }), /no disponible/)
         await sesionPublica(token, { accion: 'tomar', lease })
+        assert.equal(intento.respuestas.length, 0, 'Abrir la sesión muestra las instrucciones sin iniciar el reloj de una prueba')
         await assert.rejects(sesionPublica(token, { accion: 'tomar', lease: 'd'.repeat(64) }), /otra sesión/)
         for (const a of plan.modulos) {
             const inicio = await sesionPublica(token, { accion: 'iniciar', lease, modulo: a.modulo })
