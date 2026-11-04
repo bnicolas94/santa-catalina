@@ -1,0 +1,12 @@
+export const NOMBRES = { TIPEO: 'Tipeo y precisión', PLANILLA: 'Planilla tipo Excel', CONVERSACIONES: 'WhatsApp + Excel', DETALLE: 'Atención al detalle', ATENCION: 'Atención al cliente' }
+export type Modulo = keyof typeof NOMBRES
+export type ConfigModulo = { modulo: Modulo; segundos: number; cantidad: number; activo: boolean }
+export type Columna = { nombre: string; tipo?: 'numero' | 'fecha' }
+export type Mensaje = { id: string; texto: string; segundo: number; hora: string; origen: 'cliente' | 'agente'; requiereRegistro?: boolean }
+export type Ejercicio = { id: string; version: number; titulo: string; instrucciones: string; nivel?: string; texto?: string; columnas?: Columna[]; filas?: string[][]; referencia?: string[]; mensajes?: Mensaje[]; cliente?: string }
+export type Asignacion = { modulo: Modulo; segundos: number; ejercicios: Ejercicio[] }
+export type Plan = { version: 2; variante: number; modulos: Asignacion[]; soluciones: Record<string, unknown> }
+export type Vista = { buscar: string; columna: number; filtro: string; orden: number; descendente: boolean }
+export type Respuesta = { texto: string; tablas: Record<string, string[][]>; vistas: Record<string, Vista>; textos: Record<string, string>; marcas: string[] }
+export type Sesion = { inicio: string; fin: string | null; pausa: string | null; pausadoMs: number; revision: number; respuesta: Respuesta; eventos?: string[]; historial: { fecha: string; tipo: string; detalle: string }[]; metricas?: Record<string, number> }
+export type EstadoPractica = { plan: Omit<Plan, 'soluciones'>; sesiones: Partial<Record<Modulo, Sesion>>; ahora: string; estado: string }

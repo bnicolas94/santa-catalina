@@ -140,6 +140,7 @@ model CandidatoEvaluacion {
   id            String                 @id @default(uuid())
   nombre        String
   apellido      String
+  tiempoPorcentaje Int                @default(100) @map("tiempo_porcentaje")
   telefono      String?
   email         String?
   observaciones String?                @db.VarChar(4000)
@@ -176,6 +177,9 @@ model IntentoEvaluacion {
   invitacionId String                @unique @map("invitacion_id")
   invitacion   InvitacionEvaluacion  @relation(fields: [invitacionId], references: [id])
   estado       String                @default("EN_PROGRESO")
+  plan         Json?
+  leaseHash    String?               @map("lease_hash")
+  leaseHasta   DateTime?             @map("lease_hasta")
   inicioAt     DateTime              @default(now()) @map("inicio_at")
   finAt        DateTime?             @map("fin_at")
   aceptacionAt DateTime              @default(now()) @map("aceptacion_at")

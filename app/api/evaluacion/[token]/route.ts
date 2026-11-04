@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashToken, tokenValido } from '@/lib/postulaciones/token'
 import { invitacionAccesible, validarDemo } from '@/lib/evaluacion-candidatos/reglas'
+import { crearPlan, CONFIG_INICIAL } from '@/lib/evaluacion-candidatos/banco.server'
+import { validarConfig } from '@/lib/evaluacion-candidatos/motor'
+import { json } from '@/lib/evaluacion-candidatos/sesion.server'
 
 type Context = { params: Promise<{ token: string }> }
 const headers = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }
@@ -20,7 +23,7 @@ export async function GET(_request: Request, context: Context) {
         intento: { include: { respuestas: { where: { modulo: 'DEMO' }, select: { datos: true } } } },
     } })
     if (!invitacion || !invitacionAccesible(invitacion)) return rechazo()
-    return NextResponse.json({ nombre: invitacion.candidato.nombre, estado: invitacion.intento?.estado ?? 'NO_INICIADO', inicioAt: invitacion.intento?.inicioAt ?? null, finAt: invitacion.intento?.finAt ?? null, texto: (invitacion.intento?.respuestas[0]?.datos as { texto?: string } | undefined)?.texto ?? '' }, { headers })
+    return NextResponse.json({ version: invitacion.intento?.plan ? 2 : invitacion.intento ? 1 : 2, nombre: invitacion.candidato.nombre, estado: invitacion.intento?.estado ?? 'NO_INICIADO', inicioAt: invitacion.intento?.inicioAt ?? null, finAt: invitacion.intento?.finAt ?? null, texto: (invitacion.intento?.respuestas[0]?.datos as { texto?: string } | undefined)?.texto ?? '' }, { headers })
 }
 
 async function operar(context: Context, accion: 'iniciar' | 'guardar' | 'finalizar', input?: unknown) {
@@ -34,14 +37,16 @@ async function operar(context: Context, accion: 'iniciar' | 'guardar' | 'finaliz
         const resultado = await prisma.$transaction(async tx => {
             const filas = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "invitaciones_evaluacion" WHERE "token_hash" = ${hash} FOR UPDATE`
             if (!filas.length) return null
-            const inv = await tx.invitacionEvaluacion.findUnique({ where: { id: filas[0].id }, include: { candidato: { select: { archivadoAt: true } }, intento: true } })
+            const inv = await tx.invitacionEvaluacion.findUnique({ where: { id: filas[0].id }, include: { candidato: { select: { archivadoAt: true, tiempoPorcentaje: true } }, intento: true } })
             if (!inv || !invitacionAccesible(inv)) return null
             if (accion === 'iniciar') {
                 if (inv.intento) return { estado: inv.intento.estado, inicioAt: inv.intento.inicioAt }
-                const intento = await tx.intentoEvaluacion.create({ data: { invitacionId: inv.id } })
+                const config = await tx.configuracionGlobal.findUnique({ where: { clave: 'evaluacion_candidatos_v2' } })
+                const intento = await tx.intentoEvaluacion.create({ data: { invitacionId: inv.id, plan: json(crearPlan((config ? validarConfig(JSON.parse(config.valor)) : CONFIG_INICIAL).map(c => ({ ...c, segundos: Math.round(c.segundos * inv.candidato.tiempoPorcentaje / 100) })))) } })
                 return { estado: intento.estado, inicioAt: intento.inicioAt }
             }
             if (!inv.intento) return { error: 'Primero comenzá la evaluación', status: 409 }
+            if (inv.intento.plan) return { error: 'Utilizá el recorrido de pruebas prácticas', status: 409 }
             if (accion === 'guardar') {
                 if (inv.intento.estado !== 'EN_PROGRESO') return { error: 'La demostración ya fue finalizada', status: 409 }
                 await tx.respuestaEvaluacion.upsert({ where: { intentoId_modulo: { intentoId: inv.intento.id, modulo: 'DEMO' } }, create: { intentoId: inv.intento.id, modulo: 'DEMO', datos: datos! }, update: { datos: datos! } })

@@ -25,6 +25,12 @@ export async function PATCH(request: Request, context: Context) {
     try { input = await request.json() } catch { return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 }) }
     if (!input || typeof input !== 'object' || Array.isArray(input)) return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
     const accion = (input as Record<string, unknown>).accion
+    if (accion === 'tiempo') {
+        const porcentaje = (input as Record<string, unknown>).porcentaje
+        if (typeof porcentaje !== 'number' || !Number.isInteger(porcentaje) || porcentaje < 100 || porcentaje > 300) return NextResponse.json({ error: 'Porcentaje: 100 a 300' }, { status: 400 })
+        await prisma.candidatoEvaluacion.update({ where: { id }, data: { tiempoPorcentaje: porcentaje } })
+        return NextResponse.json({ ok: true })
+    }
     if (accion === 'archivar') {
         const resultado = await prisma.$transaction(async tx => {
             const cambiado = await tx.candidatoEvaluacion.updateMany({ where: { id, archivadoAt: null }, data: { archivadoAt: new Date(), archivadoPorId: auth.id! } })
