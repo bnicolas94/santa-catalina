@@ -30,6 +30,8 @@ type AccessRule = {
 
 // Las reglas más específicas deben declararse primero.
 const accessRules: AccessRule[] = [
+    { path: '/evaluaciones-candidatos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/evaluaciones-candidatos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/api/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },

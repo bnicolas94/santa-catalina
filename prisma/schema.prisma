@@ -136,6 +136,78 @@ model PruebaPostulante {
   @@map("pruebas_postulantes")
 }
 
+model CandidatoEvaluacion {
+  id            String                 @id @default(uuid())
+  nombre        String
+  apellido      String
+  telefono      String?
+  email         String?
+  observaciones String?                @db.VarChar(4000)
+  archivadoAt   DateTime?              @map("archivado_at")
+  archivadoPorId String?               @map("archivado_por_id")
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  invitaciones  InvitacionEvaluacion[]
+
+  @@index([apellido, nombre])
+  @@index([archivadoAt, createdAt])
+  @@map("candidatos_evaluacion")
+}
+
+model InvitacionEvaluacion {
+  id           String               @id @default(uuid())
+  candidatoId  String               @map("candidato_id")
+  candidato    CandidatoEvaluacion  @relation(fields: [candidatoId], references: [id])
+  tokenHash    String               @unique @map("token_hash")
+  venceAt      DateTime             @map("vence_at")
+  revocadaAt   DateTime?            @map("revocada_at")
+  revocadaPorId String?             @map("revocada_por_id")
+  creadaPorId  String               @map("creada_por_id")
+  createdAt    DateTime             @default(now())
+  intento      IntentoEvaluacion?
+
+  @@index([candidatoId, createdAt])
+  @@index([venceAt])
+  @@map("invitaciones_evaluacion")
+}
+
+model IntentoEvaluacion {
+  id           String                @id @default(uuid())
+  invitacionId String                @unique @map("invitacion_id")
+  invitacion   InvitacionEvaluacion  @relation(fields: [invitacionId], references: [id])
+  estado       String                @default("EN_PROGRESO")
+  inicioAt     DateTime              @default(now()) @map("inicio_at")
+  finAt        DateTime?             @map("fin_at")
+  aceptacionAt DateTime              @default(now()) @map("aceptacion_at")
+  respuestas   RespuestaEvaluacion[]
+  resultado    ResultadoEvaluacion?
+
+  @@index([estado, inicioAt])
+  @@map("intentos_evaluacion")
+}
+
+model RespuestaEvaluacion {
+  id         String            @id @default(uuid())
+  intentoId  String            @map("intento_id")
+  intento    IntentoEvaluacion @relation(fields: [intentoId], references: [id])
+  modulo     String
+  datos      Json
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([intentoId, modulo])
+  @@map("respuestas_evaluacion")
+}
+
+model ResultadoEvaluacion {
+  id         String            @id @default(uuid())
+  intentoId  String            @unique @map("intento_id")
+  intento    IntentoEvaluacion @relation(fields: [intentoId], references: [id])
+  datos      Json
+  createdAt  DateTime          @default(now())
+
+  @@map("resultados_evaluacion")
+}
+
 model Proveedor {
   id               String            @id @default(uuid())
   nombre           String

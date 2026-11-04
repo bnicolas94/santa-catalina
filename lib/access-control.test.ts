@@ -10,6 +10,15 @@ test('postulaciones internas exigen permisoPersonal', () => {
     }
 })
 
+test('evaluaciones de candidatos exigen permisoPersonal en página y API', () => {
+    for (const path of ['/evaluaciones-candidatos', '/api/evaluaciones-candidatos', '/api/evaluaciones-candidatos/abc/invitaciones']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoPersonal: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoPedidos: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
+
 test('WhatsApp exige Reportes y sólo ADMIN administra las conexiones', () => {
     for (const path of ['/reportes/whatsapp', '/api/reportes/whatsapp']) {
         assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)

@@ -17,6 +17,7 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
+    { label: 'Evaluación de candidatos', href: '/evaluaciones-candidatos', icon: '📋', roles: ['ADMIN'], permissionKey: 'permisoPersonal' },
     { label: 'Postulaciones', href: process.env.NODE_ENV === 'production' ? 'https://app.santacatalina.online/postulaciones' : '/postulaciones', icon: '📝', roles: ['ADMIN'], permissionKey: 'permisoPersonal' },
     { label: 'Diario de errores', href: '/diario-errores', icon: '📓', roles: ['ADMIN'], permissionKey: 'permisoDiarioErrores' },
     { label: 'Sedes', href: '/sedes', icon: '📍', roles: ['ADMIN'] },

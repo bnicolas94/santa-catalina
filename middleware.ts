@@ -79,6 +79,6 @@ export default withAuth(
 
 export const config = {
     matcher: [
-        '/((?!api/auth|api/webhooks|api/cron|api/prueba/|prueba/|_next/static|_next/image|favicon.ico|images|fonts|login).*)',
+        '/((?!api/auth|api/webhooks|api/cron|api/prueba/|prueba/|api/evaluacion/|evaluacion/|_next/static|_next/image|favicon.ico|images|fonts|login).*)',
     ],
 }
