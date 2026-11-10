@@ -92,6 +92,12 @@ Este módulo resuelve la problemática de control de inventario en una planta de
 
 ---
 
+### Reporte de stock de sucursales
+
+`/stock-sucursales` muestra el catálogo activo a los empleados de una sucursal activa y les permite informar cuánto tienen y cuánto solicitan. Un campo vacío significa que no se revisó o no se solicitó; cero es una cantidad explícita. El borrador se guarda por sede y fecha local argentina con control de versión para evitar que dos sesiones se sobrescriban. Tras enviarlo, queda como historial inmutable. No ajusta el stock ni crea movimientos.
+
+`/stock-sucursales/central` presenta reportes enviados, solicitudes abiertas y stock actual del sistema para comparación. ADMIN o usuarios con `permisoStock` o `permisoCompras` pueden registrar estados `pendiente`, `preparado` y `entregado`; cada cambio deja autor y fecha. La sede de carga sale de la sesión, nunca de un parámetro enviado por el navegador.
+
 ## 🚀 Posibles mejoras
 
 *   **Costo Promedio Ponderado (PPP)**: Actualmente, la actualización del costo en la factura pisa el valor anterior. Sería ideal implementar un cálculo de costo promedio basado en el stock remanente y el nuevo ingreso.

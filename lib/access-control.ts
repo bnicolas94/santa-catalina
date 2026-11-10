@@ -78,6 +78,8 @@ const accessRules: AccessRule[] = [
     { path: '/api/movimientos-producto', permissions: ['permisoProduccion', 'permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
 
     // Catálogo, compras y stock.
+    { path: '/api/stock-sucursales/central', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
+    { path: '/api/stock-sucursales', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
     { path: '/api/compras', permissions: ['permisoCompras'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/familias-insumo', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
@@ -135,6 +137,8 @@ const accessRules: AccessRule[] = [
     { path: '/productos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
+    { path: '/stock-sucursales/central', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
+    { path: '/stock-sucursales', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
     { path: '/compras', permissions: ['permisoCompras'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/stock', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/caja', permissions: ['permisoCaja'], legacyRoles: ['ADMIN'] },
@@ -174,6 +178,9 @@ export function canAccessPath(pathname: string, token: AccessToken): boolean {
     ) {
         return true
     }
+
+    if (token.ubicacionTipo?.toUpperCase() === 'LOCAL'
+        && (pathname === '/stock-sucursales' || pathname === '/api/stock-sucursales')) return true
 
     const rule = getAccessRule(pathname)
     if (!rule) return true

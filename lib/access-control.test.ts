@@ -78,6 +78,19 @@ test('la administración de sedes está reservada a ADMIN', () => {
     }
 })
 
+test('el reporte de sucursal permite al local cargar sólo su panel y reserva la bandeja central', () => {
+    const local = { rol: 'LOCAL', ubicacionTipo: 'LOCAL', permisos: { permisoCaja: true } }
+    for (const path of ['/stock-sucursales', '/api/stock-sucursales']) assert.equal(canAccessPath(path, local), true)
+    for (const path of ['/stock-sucursales/central', '/api/stock-sucursales/central']) {
+        assert.equal(canAccessPath(path, local), false)
+        assert.equal(canAccessPath(path, { permisos: { permisoCompras: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoStock: true } }), true)
+    }
+    assert.equal(canAccessPath('/api/insumos', local), false)
+    assert.equal(canAccessPath('/api/conteos-insumos', local), false)
+    assert.equal(canAccessPath('/stock-sucursales', { rol: 'LOCAL', ubicacionTipo: 'FABRICA' }), false)
+})
+
 test('ADMIN puede acceder a cualquier ruta protegida', () => {
     assert.equal(canAccessPath('/api/empleados/roles', { rol: 'ADMIN' }), true)
     assert.equal(canAccessPath('/api/uniformes/stock', { rol: 'ADMIN' }), true)

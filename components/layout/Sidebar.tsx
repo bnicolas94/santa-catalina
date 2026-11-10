@@ -80,6 +80,8 @@ const menuItems: MenuItem[] = [
         roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
         permissionKey: 'permisoStock',
     },
+    { label: 'Stock del local', href: '/stock-sucursales', icon: '📦', roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
+    { label: 'Pedidos de reposición', href: '/stock-sucursales/central', icon: '📥', roles: ['ADMIN'], permissionKey: 'permisoCompras' },
     {
         label: 'Compras',
         href: '/compras',
@@ -192,8 +194,11 @@ export default function Sidebar() {
     const permisos = (session?.user as any)?.permisos as Record<string, boolean> | null | undefined
 
     const filteredItems = menuItems.filter(item => {
+        if (item.href === '/stock-sucursales') return ubicacionTipo === 'LOCAL'
         // ADMIN siempre ve todo
         if (userRol === 'ADMIN') return true
+
+        if (item.href === '/stock-sucursales/central') return permisos?.permisoCompras === true || permisos?.permisoStock === true
 
         if (ubicacionTipo === 'LOCAL') {
             // Las operaciones de Producción pertenecen a Fábrica; la pantalla de stock es de consulta.

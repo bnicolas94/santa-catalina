@@ -51,6 +51,8 @@ model Empleado {
   rolRel                       RolEmpleado?               @relation(fields: [rolId], references: [id])
   turno                        TurnoTrabajo?              @relation("EmpleadoTurno", fields: [turnoId], references: [id])
   ubicacion                    Ubicacion?                 @relation(fields: [ubicacionId], references: [id])
+  reportesStockSucursal        ReporteStockSucursal[]     @relation("ResponsableReporteStockSucursal")
+  estadosReposicionSucursal    EstadoReposicionSucursal[]
   evaluaciones                 Evaluacion[]               @relation("EmpleadoEvaluado")
   evaluacionesHechas           Evaluacion[]               @relation("Evaluador")
   fichadas                     FichadaEmpleado[]
@@ -137,18 +139,18 @@ model PruebaPostulante {
 }
 
 model CandidatoEvaluacion {
-  id            String                 @id @default(uuid())
-  nombre        String
-  apellido      String
-  tiempoPorcentaje Int                @default(100) @map("tiempo_porcentaje")
-  telefono      String?
-  email         String?
-  observaciones String?                @db.VarChar(4000)
-  archivadoAt   DateTime?              @map("archivado_at")
-  archivadoPorId String?               @map("archivado_por_id")
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  invitaciones  InvitacionEvaluacion[]
+  id               String                 @id @default(uuid())
+  nombre           String
+  apellido         String
+  tiempoPorcentaje Int                    @default(100) @map("tiempo_porcentaje")
+  telefono         String?
+  email            String?
+  observaciones    String?                @db.VarChar(4000)
+  archivadoAt      DateTime?              @map("archivado_at")
+  archivadoPorId   String?                @map("archivado_por_id")
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  invitaciones     InvitacionEvaluacion[]
 
   @@index([apellido, nombre])
   @@index([archivadoAt, createdAt])
@@ -156,16 +158,16 @@ model CandidatoEvaluacion {
 }
 
 model InvitacionEvaluacion {
-  id           String               @id @default(uuid())
-  candidatoId  String               @map("candidato_id")
-  candidato    CandidatoEvaluacion  @relation(fields: [candidatoId], references: [id])
-  tokenHash    String               @unique @map("token_hash")
-  venceAt      DateTime             @map("vence_at")
-  revocadaAt   DateTime?            @map("revocada_at")
+  id            String              @id @default(uuid())
+  candidatoId   String              @map("candidato_id")
+  candidato     CandidatoEvaluacion @relation(fields: [candidatoId], references: [id])
+  tokenHash     String              @unique @map("token_hash")
+  venceAt       DateTime            @map("vence_at")
+  revocadaAt    DateTime?           @map("revocada_at")
   revocadaPorId String?             @map("revocada_por_id")
-  creadaPorId  String               @map("creada_por_id")
-  createdAt    DateTime             @default(now())
-  intento      IntentoEvaluacion?
+  creadaPorId   String              @map("creada_por_id")
+  createdAt     DateTime            @default(now())
+  intento       IntentoEvaluacion?
 
   @@index([candidatoId, createdAt])
   @@index([venceAt])
@@ -191,23 +193,23 @@ model IntentoEvaluacion {
 }
 
 model RespuestaEvaluacion {
-  id         String            @id @default(uuid())
-  intentoId  String            @map("intento_id")
-  intento    IntentoEvaluacion @relation(fields: [intentoId], references: [id])
-  modulo     String
-  datos      Json
-  updatedAt  DateTime          @updatedAt
+  id        String            @id @default(uuid())
+  intentoId String            @map("intento_id")
+  intento   IntentoEvaluacion @relation(fields: [intentoId], references: [id])
+  modulo    String
+  datos     Json
+  updatedAt DateTime          @updatedAt
 
   @@unique([intentoId, modulo])
   @@map("respuestas_evaluacion")
 }
 
 model ResultadoEvaluacion {
-  id         String            @id @default(uuid())
-  intentoId  String            @unique @map("intento_id")
-  intento    IntentoEvaluacion @relation(fields: [intentoId], references: [id])
-  datos      Json
-  createdAt  DateTime          @default(now())
+  id        String            @id @default(uuid())
+  intentoId String            @unique @map("intento_id")
+  intento   IntentoEvaluacion @relation(fields: [intentoId], references: [id])
+  datos     Json
+  createdAt DateTime          @default(now())
 
   @@map("resultados_evaluacion")
 }
@@ -303,28 +305,29 @@ model FamiliaInsumo {
 }
 
 model Insumo {
-  id                    String                @id @default(uuid())
-  nombre                String
-  unidadMedida          String                @map("unidad_medida")
-  stockActual           Float                 @default(0) @map("stock_actual")
-  stockMinimo           Float                 @default(0) @map("stock_minimo")
-  precioUnitario        Float                 @default(0) @map("precio_unitario")
-  diasReposicion        Int                   @default(1) @map("dias_reposicion")
-  activo                Boolean               @default(true)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  proveedorId           String?               @map("id_proveedor")
-  familiaId             String?               @map("id_familia")
-  unidadSecundaria      String?               @map("unidad_secundaria")
-  factorConversion      Float?                @map("factor_conversion")
-  stockActualSecundario Float                 @default(0) @map("stock_actual_secundario")
-  fichasTecnicas        FichaTecnica[]
-  familia               FamiliaInsumo?        @relation(fields: [familiaId], references: [id])
-  proveedor             Proveedor?            @relation(fields: [proveedorId], references: [id])
-  movimientos           MovimientoStock[]
-  stocks                StockInsumo[]
-  detallesConteo        ConteoInsumoDetalle[]
-  proveedores           InsumoProveedor[]
+  id                      String                        @id @default(uuid())
+  nombre                  String
+  unidadMedida            String                        @map("unidad_medida")
+  stockActual             Float                         @default(0) @map("stock_actual")
+  stockMinimo             Float                         @default(0) @map("stock_minimo")
+  precioUnitario          Float                         @default(0) @map("precio_unitario")
+  diasReposicion          Int                           @default(1) @map("dias_reposicion")
+  activo                  Boolean                       @default(true)
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  proveedorId             String?                       @map("id_proveedor")
+  familiaId               String?                       @map("id_familia")
+  unidadSecundaria        String?                       @map("unidad_secundaria")
+  factorConversion        Float?                        @map("factor_conversion")
+  stockActualSecundario   Float                         @default(0) @map("stock_actual_secundario")
+  fichasTecnicas          FichaTecnica[]
+  familia                 FamiliaInsumo?                @relation(fields: [familiaId], references: [id])
+  proveedor               Proveedor?                    @relation(fields: [proveedorId], references: [id])
+  movimientos             MovimientoStock[]
+  stocks                  StockInsumo[]
+  detallesConteo          ConteoInsumoDetalle[]
+  detallesReporteSucursal ReporteStockSucursalDetalle[]
+  proveedores             InsumoProveedor[]
 
   @@map("insumos")
 }
@@ -406,6 +409,7 @@ model Ubicacion {
   stocksInsumo          StockInsumo[]
   stocks                StockProducto[]
   conteosInsumo         ConteoInsumo[]
+  reportesStockSucursal ReporteStockSucursal[]
   compras               Compra[]
   cajas                 SaldoCaja[]
   integracionesSheet    IntegracionSheetSucursal[]
@@ -567,6 +571,56 @@ model ConteoInsumoDetalle {
 
   @@unique([conteoId, insumoId])
   @@map("conteos_insumo_detalle")
+}
+
+model ReporteStockSucursal {
+  id            String                        @id @default(uuid())
+  fechaLocal    String                        @map("fecha_local")
+  estado        String                        @default("borrador")
+  version       Int                           @default(1)
+  observaciones String?
+  enviadoAt     DateTime?                     @map("enviado_at")
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @updatedAt
+  ubicacionId   String                        @map("id_ubicacion")
+  responsableId String?                       @map("id_responsable")
+  ubicacion     Ubicacion                     @relation(fields: [ubicacionId], references: [id])
+  responsable   Empleado?                     @relation("ResponsableReporteStockSucursal", fields: [responsableId], references: [id], onDelete: SetNull)
+  detalles      ReporteStockSucursalDetalle[]
+
+  @@unique([ubicacionId, fechaLocal])
+  @@index([estado, enviadoAt])
+  @@map("reportes_stock_sucursal")
+}
+
+model ReporteStockSucursalDetalle {
+  id                 String                     @id @default(uuid())
+  reporteId          String                     @map("id_reporte")
+  insumoId           String                     @map("id_insumo")
+  cantidadInformada  Float?                     @map("cantidad_informada")
+  cantidadSolicitada Float?                     @map("cantidad_solicitada")
+  estadoReposicion   String?                    @map("estado_reposicion")
+  reporte            ReporteStockSucursal       @relation(fields: [reporteId], references: [id], onDelete: Cascade)
+  insumo             Insumo                     @relation(fields: [insumoId], references: [id])
+  historialEstados   EstadoReposicionSucursal[]
+
+  @@unique([reporteId, insumoId])
+  @@index([estadoReposicion])
+  @@map("reportes_stock_sucursal_detalle")
+}
+
+model EstadoReposicionSucursal {
+  id         String                      @id @default(uuid())
+  detalleId  String                      @map("id_detalle")
+  empleadoId String?                     @map("id_empleado")
+  anterior   String?
+  nuevo      String
+  createdAt  DateTime                    @default(now())
+  detalle    ReporteStockSucursalDetalle @relation(fields: [detalleId], references: [id], onDelete: Cascade)
+  empleado   Empleado?                   @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
+
+  @@index([detalleId, createdAt])
+  @@map("estados_reposicion_sucursal")
 }
 
 model Cliente {
