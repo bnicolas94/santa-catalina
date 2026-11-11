@@ -6,7 +6,7 @@ import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
 import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
 import { AsistenciaService } from '@/lib/services/asistencia.service'
 import { horasJornadaParaFecha } from '@/lib/payroll/jornadaSemanal'
-import { calcularResumenDia } from '@/utils/horas'
+import { resumirJornadaRemota } from '@/lib/rrhh/resumen-jornada-remota'
 
 export class FichadoRemotoError extends Error {
     constructor(message: string, readonly status: number) { super(message) }
@@ -41,15 +41,17 @@ export async function consultarFichadoRemoto(empleadoId: string) {
         entrada: horario?.horaInicio ?? empleado.turno?.horaInicio ?? empleado.horarioEntrada,
         salida: horario?.horaFin ?? empleado.turno?.horaFin ?? empleado.horarioSalida,
     }
-    const resumen = calcularResumenDia(
-        marcas.filter(marca => marca.tipo === 'entrada' || marca.tipo === 'salida').map(marca => ({
-            fechaHora: marca.fechaHora,
-            tipo: marca.tipo as 'entrada' | 'salida',
-        })),
-        horasEsperadas,
-        { horarioEntrada: horario?.esFranco ? null : horario?.horaInicio ?? (diaSemana === 0 ? null : empleado.turno?.horaInicio || empleado.horarioEntrada) },
-    )
-    return { fecha, nombre: empleado.nombre, estado: estadoFichadoRemoto(marcas), marcas, horasEfectivas: resumen.horasTrabajadas, horasEsperadas, horarioPrevisto }
+    const horarioEntradaComputable = horario?.esFranco
+        ? null
+        : horario?.horaInicio ?? (diaSemana === 0 ? null : empleado.turno?.horaInicio || empleado.horarioEntrada)
+    const ahoraServidor = new Date()
+    const resumen = resumirJornadaRemota(marcas, ahoraServidor, horasEsperadas, horarioEntradaComputable)
+    return {
+        fecha, nombre: empleado.nombre, estado: estadoFichadoRemoto(marcas), marcas,
+        horasEfectivas: resumen.minutosEfectivosConfirmados / 60,
+        horasEsperadas, horarioPrevisto, horarioEntradaComputable,
+        ahoraServidor: ahoraServidor.toISOString(),
+    }
 }
 
 export async function registrarFichadoRemoto(empleadoId: string, accion: AccionFichadoRemoto) {
