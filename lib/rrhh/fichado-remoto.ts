@@ -1,7 +1,7 @@
 export type AccionFichadoRemoto = 'entrada' | 'inicio_descanso' | 'fin_descanso' | 'salida'
 export type EstadoFichadoRemoto = 'sin_iniciar' | 'trabajando' | 'descansando' | 'finalizado'
 
-export type MarcaFichado = { tipo: string; origen: string; fechaHora: Date }
+export type MarcaFichado = { tipo: string; origen: string; fechaHora: Date | string }
 
 export const ORIGEN_FICHADO_REMOTO: Record<AccionFichadoRemoto, string> = {
     entrada: 'remoto_entrada',

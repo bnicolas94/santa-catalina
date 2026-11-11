@@ -1,12 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { signOut } from 'next-auth/react'
 import type { AccionFichadoRemoto, EstadoFichadoRemoto } from '@/lib/rrhh/fichado-remoto'
+import { resumirJornadaRemota } from '@/lib/rrhh/resumen-jornada-remota'
 import styles from './page.module.css'
 
 type Marca = { id: string; fechaHora: string; tipo: string; origen: string }
-type Jornada = { fecha: string; nombre: string; estado: EstadoFichadoRemoto; marcas: Marca[]; horasEfectivas: number; horasEsperadas: number; horarioPrevisto: { entrada: string | null; salida: string | null } | null }
+type Jornada = { fecha: string; nombre: string; estado: EstadoFichadoRemoto; marcas: Marca[]; horasEfectivas: number; horasEsperadas: number; horarioPrevisto: { entrada: string | null; salida: string | null } | null; horarioEntradaComputable: string | null; ahoraServidor: string }
 
 const botones: Record<EstadoFichadoRemoto, Array<{ accion: AccionFichadoRemoto; texto: string }>> = {
     sin_iniciar: [{ accion: 'entrada', texto: 'Fichar entrada' }],
@@ -28,8 +29,7 @@ function horaArgentina(fecha: string) {
     return new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(fecha))
 }
 
-function horasMinutos(horas: number) {
-    const minutos = Math.round(horas * 60)
+function minutosLegibles(minutos: number) {
     return `${Math.floor(minutos / 60)} h ${String(minutos % 60).padStart(2, '0')} min`
 }
 
@@ -38,19 +38,51 @@ export default function MiFichadoPage() {
     const [error, setError] = useState('')
     const [cargando, setCargando] = useState(true)
     const [guardando, setGuardando] = useState(false)
+    const [sincronizadoEn, setSincronizadoEn] = useState(0)
+    const [ahoraLocal, setAhoraLocal] = useState(0)
+    const ultimaConsulta = useRef(0)
 
     const actualizar = useCallback(async () => {
+        const consulta = ++ultimaConsulta.current
         try {
             const res = await fetch('/api/mi-fichado', { cache: 'no-store' })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'No se pudo consultar la jornada.')
+            if (consulta !== ultimaConsulta.current) return
+            const recibidoEn = performance.now()
             setJornada(data)
+            setSincronizadoEn(recibidoEn)
+            setAhoraLocal(recibidoEn)
             setError('')
-        } catch (e) { setJornada(null); setError(e instanceof Error ? e.message : 'No se pudo consultar la jornada.') }
-        finally { setCargando(false) }
+        } catch (e) {
+            if (consulta === ultimaConsulta.current) {
+                setJornada(null)
+                setError(e instanceof Error ? e.message : 'No se pudo consultar la jornada.')
+            }
+        } finally { if (consulta === ultimaConsulta.current) setCargando(false) }
     }, [])
 
     useEffect(() => { void actualizar() }, [actualizar])
+    useEffect(() => {
+        const reloj = window.setInterval(() => setAhoraLocal(performance.now()), 1000)
+        return () => window.clearInterval(reloj)
+    }, [])
+    useEffect(() => {
+        if (!jornada) return
+        const refresco = window.setInterval(() => { void actualizar() }, 30_000)
+        const alVolver = () => { void actualizar() }
+        window.addEventListener('focus', alVolver)
+        return () => { window.clearInterval(refresco); window.removeEventListener('focus', alVolver) }
+    }, [actualizar, jornada])
+
+    const resumen = jornada && sincronizadoEn
+        ? resumirJornadaRemota(
+            jornada.marcas,
+            new Date(new Date(jornada.ahoraServidor).getTime() + Math.max(0, ahoraLocal - sincronizadoEn)),
+            jornada.horasEsperadas,
+            jornada.horarioEntradaComputable,
+        )
+        : null
 
     async function fichar(accion: AccionFichadoRemoto) {
         setGuardando(true)
@@ -76,9 +108,15 @@ export default function MiFichadoPage() {
             <p className={styles.intro}>Registrá tu entrada, salida y descansos de home office. La hora se toma del servidor.</p>
             {cargando && <p>Cargando jornada…</p>}
             {error && <p className={styles.error} role="alert">{error}</p>}
-            {jornada && <>
+            {jornada && resumen && <>
                 <div className={styles.status}><span>{jornada.fecha} · Argentina</span><strong>{estados[jornada.estado]}</strong></div>
-                <div className={styles.hours}><span>Trabajo efectivo registrado</span><strong>{horasMinutos(jornada.horasEfectivas)}</strong><small>Jornada prevista: {horasMinutos(jornada.horasEsperadas)}{jornada.horarioPrevisto?.entrada && jornada.horarioPrevisto.salida ? ` · ${jornada.horarioPrevisto.entrada} a ${jornada.horarioPrevisto.salida}` : ''}. El tramo en curso se suma al cerrar con una pausa o la salida.</small></div>
+                <div className={styles.metrics}>
+                    <div className={styles.metricMain}><span>Tiempo efectivamente trabajado</span><strong>{minutosLegibles(resumen.minutosEfectivosActuales)}</strong></div>
+                    <div className={styles.metric}><span>Descansos acumulados</span><strong>{minutosLegibles(resumen.minutosDescanso)}</strong></div>
+                    <div className={styles.metric}><span>Para completar la jornada</span><strong>{minutosLegibles(resumen.minutosRestantes)}</strong></div>
+                </div>
+                <div className={styles.progress} role="progressbar" aria-label="Progreso de la jornada" aria-valuemin={0} aria-valuemax={resumen.minutosMeta} aria-valuenow={Math.min(resumen.minutosMeta, resumen.minutosEfectivosActuales)}><div style={{ width: `${resumen.minutosMeta > 0 ? Math.min(100, resumen.minutosEfectivosActuales / resumen.minutosMeta * 100) : 0}%` }} /></div>
+                <p className={styles.hoursNote}>Jornada prevista: {minutosLegibles(resumen.minutosMeta)}{jornada.horarioPrevisto?.entrada && jornada.horarioPrevisto.salida ? ` · ${jornada.horarioPrevisto.entrada} a ${jornada.horarioPrevisto.salida}` : ''}. {resumen.tramoTrabajoEnCurso ? 'El trabajo en curso se muestra en vivo y se confirma al fichar una pausa o la salida.' : resumen.descansoEnCurso ? 'El descanso actual sigue acumulándose hasta que fiches su fin.' : 'El total confirmado se usa para la liquidación.'}</p>
                 <div className={styles.actions}>{botones[jornada.estado].map(boton =>
                     <button key={boton.accion} type="button" disabled={guardando} onClick={() => fichar(boton.accion)}>{guardando ? 'Guardando…' : boton.texto}</button>
                 )}</div>
