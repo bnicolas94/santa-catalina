@@ -109,6 +109,8 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 
 ### Fechas, dinero y cantidades
 
+- El fichado remoto se habilita individualmente en la ficha del empleado (`fichadoRemotoHabilitado`, desactivado por defecto). `/mi-fichado` y `/api/mi-fichado` requieren sesión propia; la API vuelve a comprobar identidad, actividad y habilitación en la base. La hora la fija el servidor en Argentina. Entrada, inicio/fin de descanso y salida siguen una secuencia única por día, serializada con la importación de relojes. Los descansos se guardan como pares salida/entrada con `origen` remoto específico, por lo que nómina excluye ese tramo. La pantalla muestra horas efectivas de tramos cerrados con el mismo motor que la liquidación y la jornada prevista; los tramos abiertos se suman al cerrarse. El primer ingreso puede registrar tardanza; nunca genera sanciones. Corregir fichadas sigue siendo tarea de RR. HH.
+
 - El negocio opera con fecha local de Argentina. Evitar conversiones implícitas a UTC que desplacen el día; reutilizar las utilidades y patrones existentes del módulo.
 - No introducir una nueva fórmula de costos, stock, presentaciones, horas o liquidaciones en la UI. La regla de negocio debe vivir en `lib/` y tener pruebas.
 - Todo cambio efectivo de sueldo o valor de hora extra debe conservar su traza en `HistorialSalarial`; la actualización salarial y su auditoría deben ser atómicas.

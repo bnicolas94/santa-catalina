@@ -40,6 +40,8 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 5. La lista y la ficha individual permiten imprimir una carátula A4 del legajo con identificación, asignación laboral, control documental y observaciones. Desde la lista se pueden seleccionar varios empleados y emitir una tanda con una hoja por persona. La carátula omite importes salariales.
 
 ### B. Ciclo de Asistencia Diaria
+El fichado de home office se habilita por empleado desde la pestaña Reloj de su ficha. Requiere una cuenta activa con email y contraseña. En `/mi-fichado`, el propio empleado registra entrada, inicio y fin de descanso, y salida; la API usa la sesión y el reloj del servidor, rechaza acciones fuera de orden y muestra los movimientos del día argentino. El comienzo de un descanso se conserva como `salida` y su fin como `entrada`, ambos con un `origen` remoto identificable. Así el tiempo de descanso no se suma en la liquidación. La pantalla muestra las horas efectivas de tramos cerrados y la jornada prevista usando el mismo cálculo de nómina; el tramo abierto se suma al cerrarlo. Una jornada finalizada no se reabre desde el portal; RR. HH. corrige errores desde sus herramientas habituales. La habilitación está desactivada por defecto.
+
 1. El empleado ficha en el reloj biométrico.
 2. Los registros se importan vía `AsistenciaService.importarFichadas`.
 3. El sistema normaliza el código (ej. `00012` -> `12`) y busca el `empleadoId`.

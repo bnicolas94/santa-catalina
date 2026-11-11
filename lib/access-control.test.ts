@@ -2,6 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAccessPath, getAccessRule } from './access-control'
 
+test('el fichado personal no hereda el permiso de RR. HH.', () => {
+    for (const path of ['/mi-fichado', '/api/mi-fichado']) {
+        assert.equal(canAccessPath(path, { rol: 'OPERARIO', permisos: {} }), true)
+        assert.equal(getAccessRule(path)?.path, path)
+    }
+    assert.equal(canAccessPath('/api/fichadas', { rol: 'OPERARIO', permisos: {} }), false)
+})
+
 test('postulaciones internas exigen permisoPersonal', () => {
     for (const path of ['/postulaciones', '/api/postulaciones', '/api/postulaciones/abc']) {
         assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)

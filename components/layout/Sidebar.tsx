@@ -17,6 +17,7 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
+    { label: 'Mi fichado', href: '/mi-fichado', icon: '⏱️', roles: [], },
     { label: 'Evaluación de candidatos', href: '/evaluaciones-candidatos', icon: '📋', roles: ['ADMIN'], permissionKey: 'permisoPersonal' },
     { label: 'Postulaciones', href: process.env.NODE_ENV === 'production' ? 'https://app.santacatalina.online/postulaciones' : '/postulaciones', icon: '📝', roles: ['ADMIN'], permissionKey: 'permisoPersonal' },
     { label: 'Diario de errores', href: '/diario-errores', icon: '📓', roles: ['ADMIN'], permissionKey: 'permisoDiarioErrores' },
@@ -194,6 +195,7 @@ export default function Sidebar() {
     const permisos = (session?.user as any)?.permisos as Record<string, boolean> | null | undefined
 
     const filteredItems = menuItems.filter(item => {
+        if (item.href === '/mi-fichado') return (session?.user as { fichadoRemotoHabilitado?: boolean } | undefined)?.fichadoRemotoHabilitado === true
         if (item.href === '/stock-sucursales') return ubicacionTipo === 'LOCAL'
         // ADMIN siempre ve todo
         if (userRol === 'ADMIN') return true
