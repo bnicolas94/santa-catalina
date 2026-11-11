@@ -4,11 +4,11 @@ import { fechaClaveRRHH, instanteRRHH, rangoDiasRRHH, validarFechaCivilRRHH } fr
 import { validarHorarioEsperado, type DiaPlantillaHorario } from '@/lib/rrhh/horarios'
 import { rangoHistoricoLiquidacion } from '@/lib/payroll/liquidaciones'
 
-export async function cargarPlanHorarios(empleadoIds: string[], desde: string, hasta: string) {
+export async function cargarPlanHorarios(empleadoIds: string[], desde: string, hasta: string, db: Prisma.TransactionClient | typeof prisma = prisma) {
     const rango = rangoDiasRRHH(desde, hasta)
     const [plantillas, excepciones] = await Promise.all([
-        prisma.plantillaHorarioEmpleado.findMany({ where: { empleadoId: { in: empleadoIds }, vigenciaDesde: { lt: rango.lt } } }),
-        prisma.excepcionHorarioEmpleado.findMany({ where: { empleadoId: { in: empleadoIds }, fecha: rango } }),
+        db.plantillaHorarioEmpleado.findMany({ where: { empleadoId: { in: empleadoIds }, vigenciaDesde: { lt: rango.lt } } }),
+        db.excepcionHorarioEmpleado.findMany({ where: { empleadoId: { in: empleadoIds }, fecha: rango } }),
     ])
     return { plantillas, excepciones }
 }

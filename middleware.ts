@@ -20,12 +20,15 @@ export default withAuth(
             // Si ya empieza con /empleados (porque el link lo tiene), lo dejamos pasar
             // Si es /, lo mandamos a /empleados internamente
             if (pathname === '/') {
-                url.pathname = '/empleados'
+                const permisoPersonal = (token?.permisos as Partial<Record<PermissionKey, boolean>> | undefined)?.permisoPersonal === true
+                url.pathname = token?.fichadoRemotoHabilitado === true && token?.rol !== 'ADMIN' && !permisoPersonal
+                    ? '/mi-fichado'
+                    : '/empleados'
                 authorizationPathname = url.pathname
                 shouldRewrite = true
             }
             // Si es /123, lo mandamos a /empleados/123 internamente
-            else if (!pathname.startsWith('/empleados') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
+            else if (!pathname.startsWith('/empleados') && !pathname.startsWith('/mi-fichado') && !pathname.startsWith('/api') && !pathname.startsWith('/_next')) {
                 url.pathname = `/empleados${pathname}`
                 authorizationPathname = url.pathname
                 shouldRewrite = true
@@ -38,7 +41,9 @@ export default withAuth(
             if (isApiRequest) {
                 return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
             }
-            return NextResponse.redirect(new URL('/login', req.url))
+            const login = new URL('/login', req.url)
+            login.searchParams.set('callbackUrl', pathname)
+            return NextResponse.redirect(login)
         }
 
         const accessToken = {

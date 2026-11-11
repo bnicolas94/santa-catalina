@@ -273,7 +273,7 @@ export function FichadasTab({ empleadoId, empleado }: { empleadoId: string, empl
                                                                 {f.tipo === 'entrada' ? 'Entrada' : f.tipo === 'ausencia' ? (f.tipoLicencia ? `Ausencia: ${f.tipoLicencia.nombre}` : 'Ausencia') : 'Salida'}
                                                             </span>
                                                         </td>
-                                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'capitalize' }}>{f.origen}</td>
+                                                        <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{({ remoto_entrada: 'Remoto · entrada', remoto_inicio_descanso: 'Remoto · inicio del descanso', remoto_fin_descanso: 'Remoto · fin del descanso', remoto_salida: 'Remoto · salida' } as Record<string, string>)[f.origen] || f.origen}</td>
                                                         <td style={{ textAlign: 'right' }}>
                                                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
                                                                 <button className="btn btn-icon btn-ghost btn-sm" onClick={(e) => openEditModal(f, e)} title="Editar">✏️</button>

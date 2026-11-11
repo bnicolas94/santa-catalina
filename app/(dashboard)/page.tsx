@@ -117,6 +117,8 @@ export default function DashboardPage() {
                     router.replace('/reportes')
                 } else if (permisos.permisoPersonal) {
                     router.replace('/empleados')
+                } else if (user.fichadoRemotoHabilitado) {
+                    router.replace('/mi-fichado')
                 } else {
                     router.replace('/login')
                 }

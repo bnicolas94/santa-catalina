@@ -63,6 +63,7 @@ interface EmployeeDialogEmployee {
     turnoId?: string | null
     codigosReloj?: Array<{ origen: string; codigo: string }>
     incluidoNomina?: boolean
+    fichadoRemotoHabilitado?: boolean
 }
 
 interface EmployeeFormData {
@@ -94,6 +95,7 @@ interface EmployeeFormData {
     turnoId: string
     codigosReloj: Array<{ origen: OrigenReloj; codigo: string }>
     incluidoNomina: boolean
+    fichadoRemotoHabilitado: boolean
 }
 
 interface LocationOption { id: string; nombre: string; tipo: string }
@@ -170,6 +172,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
             codigo: empleado?.codigosReloj?.find(vinculo => vinculo.origen === origen)?.codigo || '',
         })),
         incluidoNomina: empleado?.incluidoNomina !== false,
+        fichadoRemotoHabilitado: empleado?.fichadoRemotoHabilitado === true,
     })
 
     useEffect(() => {
@@ -806,6 +809,11 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                         {/* Tab 4: Reloj */}
                         {tab === 'reloj' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                    <input type="checkbox" checked={formData.fichadoRemotoHabilitado} onChange={event => setFormData(actual => ({ ...actual, fichadoRemotoHabilitado: event.target.checked }))} />
+                                    <span>Habilitar fichado remoto para este empleado</span>
+                                </label>
+                                <small>Requiere email y contraseña para iniciar sesión. El empleado podrá fichar desde «Mi fichado».</small>
                                 <div style={{ backgroundColor: 'var(--color-info-bg)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-info)' }}>
                                     <h4 style={{ color: 'var(--color-info)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                                         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

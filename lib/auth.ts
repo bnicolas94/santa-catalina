@@ -14,6 +14,7 @@ type UsuarioAutenticado = {
     ubicacionId?: string | null
     ubicacionTipo?: string | null
     permisos?: ReturnType<typeof permisosDesdeRol>
+    fichadoRemotoHabilitado?: boolean
 }
 
 async function resolverRolAsignado(
@@ -100,6 +101,7 @@ export const authOptions: NextAuthOptions = {
                     rol: rolAsignado?.nombre || empleado.rol,
                     ubicacionId: empleado.ubicacionId,
                     ubicacionTipo: empleado.ubicacion?.tipo || null,
+                    fichadoRemotoHabilitado: empleado.fichadoRemotoHabilitado,
                     permisos: aplicarAccesosOperativos(
                         permisosDesdeRol(rolAsignado),
                         empleado.ubicacion?.tipo,
@@ -117,6 +119,7 @@ export const authOptions: NextAuthOptions = {
                 token.ubicacionId = usuario.ubicacionId
                 token.ubicacionTipo = usuario.ubicacionTipo
                 token.permisos = usuario.permisos
+                token.fichadoRemotoHabilitado = usuario.fichadoRemotoHabilitado
             } else if (token.id) {
                 // La sesión JWT puede sobrevivir a un cambio de rol. Volvemos a
                 // leer la asignación para que los accesos marcados se apliquen
@@ -126,6 +129,7 @@ export const authOptions: NextAuthOptions = {
                         where: { id: String(token.id) },
                         select: {
                             activo: true,
+                            fichadoRemotoHabilitado: true,
                             rol: true,
                             ubicacionId: true,
                             ubicacion: { select: { tipo: true } },
@@ -138,6 +142,7 @@ export const authOptions: NextAuthOptions = {
                             empleadoActual.rol,
                         )
                         token.rol = rolAsignado?.nombre || empleadoActual.rol
+                        token.fichadoRemotoHabilitado = empleadoActual.fichadoRemotoHabilitado
                         token.ubicacionId = empleadoActual.ubicacionId
                         token.ubicacionTipo = empleadoActual.ubicacion?.tipo || null
                         token.permisos = aplicarAccesosOperativos(
@@ -168,6 +173,7 @@ export const authOptions: NextAuthOptions = {
                 usuarioSesion.ubicacionId = token.ubicacionId as string | null | undefined
                 usuarioSesion.ubicacionTipo = token.ubicacionTipo as string | null | undefined
                 usuarioSesion.permisos = token.permisos as ReturnType<typeof permisosDesdeRol>
+                usuarioSesion.fichadoRemotoHabilitado = token.fichadoRemotoHabilitado === true
             }
             return session
         },

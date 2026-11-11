@@ -30,6 +30,9 @@ type AccessRule = {
 
 // Las reglas más específicas deben declararse primero.
 const accessRules: AccessRule[] = [
+    // El acceso personal requiere sesión; la API verifica identidad y habilitación en la base.
+    { path: '/api/mi-fichado' },
+    { path: '/mi-fichado' },
     { path: '/evaluaciones-candidatos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/api/evaluaciones-candidatos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
@@ -168,6 +171,7 @@ export function getAccessRule(pathname: string): AccessRule | undefined {
 
 export function canAccessPath(pathname: string, token: AccessToken): boolean {
     if (token.rol === 'ADMIN') return true
+    if (isPathWithin(pathname, '/mi-fichado') || isPathWithin(pathname, '/api/mi-fichado')) return true
 
     // El personal asignado al local necesita Caja para registrar el depósito
     // diario, aunque su rol no tenga el permiso configurado manualmente.
