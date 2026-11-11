@@ -760,6 +760,31 @@ model ConfiguracionGlobal {
   @@map("configuracion_global")
 }
 
+// Cola independiente para llevar los pedidos Delivery del Google Sheet al Excel.
+// El ID externo permite reintentos y cancelaciones sin depender del número de fila.
+model PedidoOnlineExcelSync {
+  id             String   @id @default(uuid())
+  spreadsheetId  String   @map("spreadsheet_id")
+  externalId     String   @map("external_id")
+  sourceRow      Int      @map("source_row")
+  sourceHash     String   @map("source_hash")
+  sourceStatus   String   @map("source_status")
+  modality       String
+  payload        Json?
+  operation      String?
+  state          String
+  version        Int      @default(0)
+  appliedVersion Int      @default(0) @map("applied_version")
+  attempts       Int      @default(0)
+  lastError      String?  @map("last_error")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([spreadsheetId, externalId])
+  @@index([state, updatedAt])
+  @@map("pedidos_online_excel_sync")
+}
+
 model GastoOperativo {
   id               String            @id @default(uuid())
   fecha            DateTime

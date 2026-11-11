@@ -40,6 +40,8 @@ const accessRules: AccessRule[] = [
     { path: '/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/caja/google-sheets', legacyRoles: ['ADMIN'] },
+    { path: '/api/pedidos-online-excel', legacyRoles: ['ADMIN'] },
+    { path: '/pedidos-online-excel', legacyRoles: ['ADMIN'] },
     { path: '/cajas', legacyRoles: ['ADMIN'] },
     { path: '/api/cajas', legacyRoles: ['ADMIN'] },
     { path: '/sedes', legacyRoles: ['ADMIN'] },

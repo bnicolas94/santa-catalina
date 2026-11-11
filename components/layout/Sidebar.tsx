@@ -24,6 +24,7 @@ const menuItems: MenuItem[] = [
     { label: 'Sedes', href: '/sedes', icon: '📍', roles: ['ADMIN'] },
     { label: 'Cajas por sede', href: '/cajas', icon: '💰', roles: ['ADMIN'] },
     { label: 'Entregas y stock', href: '/cajas/google-sheets/stock', icon: '📦', roles: ['ADMIN'] },
+    { label: 'Pedidos online → Excel', href: '/pedidos-online-excel', icon: '🔄', roles: ['ADMIN'] },
     {
         label: 'Dashboard',
         href: '/',

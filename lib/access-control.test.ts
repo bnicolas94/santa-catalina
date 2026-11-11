@@ -86,6 +86,14 @@ test('la administración de sedes está reservada a ADMIN', () => {
     }
 })
 
+test('la administración de la sincronización con Excel exige ADMIN', () => {
+    for (const path of ['/pedidos-online-excel', '/api/pedidos-online-excel']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { rol: 'ADMIN_OPS', permisos: { permisoPedidos: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
+
 test('el reporte de sucursal permite al local cargar sólo su panel y reserva la bandeja central', () => {
     const local = { rol: 'LOCAL', ubicacionTipo: 'LOCAL', permisos: { permisoCaja: true } }
     for (const path of ['/stock-sucursales', '/api/stock-sucursales']) assert.equal(canAccessPath(path, local), true)

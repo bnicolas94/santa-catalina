@@ -12,5 +12,9 @@ export async function register() {
             const { iniciarGoogleSheetsStock } = await import('./lib/google-sheets-stock-worker')
             iniciarGoogleSheetsStock()
         }
+        if (process.env.PEDIDOS_ONLINE_EXCEL_AUTO !== 'false') {
+            const { iniciarPedidosOnlineExcel } = await import('./lib/pedidos-online-excel-worker')
+            iniciarPedidosOnlineExcel()
+        }
     }
 }

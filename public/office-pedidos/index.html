@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pedidos online · Santa Catalina</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script defer src="/office-pedidos/sync.js"></script>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 20px; color: #17212b; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    label, input, button { display: block; width: 100%; box-sizing: border-box; }
+    input { margin: 6px 0 10px; padding: 9px; }
+    button { border: 0; border-radius: 5px; padding: 10px; background: #006c9c; color: white; cursor: pointer; }
+    button:disabled { opacity: .5; }
+    #status { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .muted { color: #58636d; }
+  </style>
+</head>
+<body>
+  <h1>Pedidos online</h1>
+  <p id="workbook" class="muted">Comprobando libro…</p>
+  <label for="token">Clave del complemento</label>
+  <input id="token" type="password" autocomplete="off" spellcheck="false">
+  <button id="save">Guardar clave y sincronizar</button>
+  <p id="status" role="status">Iniciando…</p>
+  <p class="muted">Podés cerrar este panel. La sincronización sigue activa mientras Excel mantenga abierto este libro.</p>
+</body>
+</html>
