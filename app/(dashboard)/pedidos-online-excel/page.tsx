@@ -104,10 +104,10 @@ export default function PedidosOnlineExcelPage() {
                     <thead><tr><th>ID Google</th><th>Estado</th><th>Operación</th><th>Detalle</th><th>Acción</th></tr></thead>
                     <tbody>{data.recientes.map(fila => <tr key={fila.id}>
                         <td>{fila.externalId}</td><td>{fila.state}</td><td>{fila.operation || '—'}</td><td>{fila.lastError || '—'}</td>
-                        <td>{fila.externalId.startsWith('PRUEBA-') && fila.state !== 'CANCELADO' && esCopia
-                            ? <button disabled={ocupado || !data.config.activo} onClick={() => accion('cancelar-prueba', fila.id)}>Cancelar prueba</button>
-                            : fila.state === 'ERROR' && fila.operation
-                                ? <button disabled={ocupado} onClick={() => accion('reintentar', fila.id)}>Reintentar</button>
+                        <td>{fila.state === 'ERROR' && fila.operation
+                            ? <button disabled={ocupado} onClick={() => accion('reintentar', fila.id)}>Reintentar</button>
+                            : fila.externalId.startsWith('PRUEBA-') && fila.state !== 'CANCELADO' && esCopia
+                                ? <button disabled={ocupado || !data.config.activo} onClick={() => accion('cancelar-prueba', fila.id)}>Cancelar prueba</button>
                                 : null}</td>
                     </tr>)}</tbody>
                 </table>

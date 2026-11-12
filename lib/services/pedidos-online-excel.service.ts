@@ -118,8 +118,11 @@ async function registrarCambio(config: ConfiguracionPedidosOnlineExcel, fila: Fi
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pedidos-online-excel:${config.spreadsheetId}:${fila.externalId}`}))`
         const clave = { spreadsheetId_externalId: { spreadsheetId: config.spreadsheetId, externalId: fila.externalId } }
         const existente = await tx.pedidoOnlineExcelSync.findUnique({ where: clave })
-        if (existente?.state === 'ANTERIOR' || existente?.sourceHash === fila.huella) return
+        const errorDeConversion = existente?.state === 'ERROR' && !existente.operation
+        if (existente?.state === 'ANTERIOR' || existente?.sourceHash === fila.huella && !errorDeConversion) return
         const decision = estadoFila(fila, existente)
+        if (errorDeConversion && existente?.sourceHash === fila.huella
+            && decision.state === 'ERROR' && decision.error === existente.lastError) return
         const datos = {
             sourceRow: fila.fila, sourceHash: fila.huella, sourceStatus: fila.estado,
             modality: fila.modalidad, state: decision.state, operation: decision.operation,
@@ -148,12 +151,13 @@ export async function sincronizarPedidosOnlineExcel() {
         if (!filas.length) throw new Error('Google Sheets devolvió una hoja vacía.')
         const existentes = await prisma.pedidoOnlineExcelSync.findMany({
             where: { spreadsheetId: config.spreadsheetId },
-            select: { externalId: true, sourceHash: true, state: true },
+            select: { externalId: true, sourceHash: true, state: true, operation: true },
         })
         const porId = new Map(existentes.map(fila => [fila.externalId, fila]))
         for (const fila of filas) {
             const anterior = porId.get(fila.externalId)
-            if (anterior?.state === 'ANTERIOR' || anterior?.sourceHash === fila.huella) continue
+            if (anterior?.state === 'ANTERIOR' || anterior?.sourceHash === fila.huella
+                && !(anterior?.state === 'ERROR' && !anterior.operation)) continue
             await registrarCambio(config, fila)
         }
         await prisma.configuracionGlobal.upsert({

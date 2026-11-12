@@ -16,6 +16,24 @@ test('traduce un pedido mixto y cuenta planchas sin duplicar los elegidos', () =
     })
 })
 
+test('lee la primera de dos columnas Observaciones con el mismo encabezado', () => {
+    const [origen] = parsearCsvPedidosOnline(`${encabezados},Observaciones\n${fila()},`)
+    assert.match(origen.observaciones, /Turno: Mañana/)
+    assert.match(origen.observaciones, /Sabores \(8\): 8x Zanahoria y Huevo/)
+    assert.equal(convertirPedidoOnline(origen).error, null)
+})
+
+test('traduce Jamón Crudo dentro de los sabores elegidos', () => {
+    const csv = fila()
+        .replace('1x 48 Jamón y Queso + 1x 48 Surtidos Clásicos + 8 Surtidos Elegidos', '1x 48 Surtidos Especiales + 48 Surtidos Elegidos')
+        .replace('Sabores (8): 8x Zanahoria y Huevo', 'Sabores (48): 8x Salame, 8x Ananá, 8x Jamón Crudo, 8x Palmito, 8x Pollo, 8x Roquefort')
+    const [origen] = parsearCsvPedidosOnline(`${encabezados},Observaciones\n${csv},`)
+    const { pedido, error } = convertirPedidoOnline(origen)
+    assert.equal(error, null)
+    assert.equal(pedido?.pedido, '48esp 8salame 8anana 8crudo 8palmito 8pollo 8roque')
+    assert.equal(pedido?.cantidad, 12)
+})
+
 test('detecta cancelación y no toma un ID duplicado', () => {
     const [normal] = parsearCsvPedidosOnline(`${encabezados}\n${fila()}`)
     const [cancelado] = parsearCsvPedidosOnline(`${encabezados}\n${fila('Cancelado')}`)

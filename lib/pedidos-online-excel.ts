@@ -34,7 +34,7 @@ const sabores: Record<string, string> = {
     tomate: 'tom', lechuga: 'lechu', 'zanahoria y huevo': 'zyh',
     'zanahoria y queso': 'zyq', huevo: 'hue', aceituna: 'ace',
     'jamon y queso': 'jyq', choclo: 'cho', anana: 'anana', atun: 'atun',
-    berenjena: 'beren', crudo: 'crudo', roquefort: 'roque', panceta: 'panceta',
+    berenjena: 'beren', crudo: 'crudo', 'jamon crudo': 'crudo', roquefort: 'roque', panceta: 'panceta',
     pacenta: 'panceta', palmito: 'palmito', salame: 'salame',
     morron: 'morron', pollo: 'pollo',
 }
@@ -58,6 +58,9 @@ export function parsearCsvPedidosOnline(csv: string): FilaPedidoOnline[] {
     const matriz = XLSX.utils.sheet_to_json<unknown[]>(libro.Sheets[libro.SheetNames[0]], { header: 1, defval: '', raw: true })
     if (!matriz.length) return []
     const indices = new Map(matriz[0].map((valor, indice) => [clave(valor), indice]))
+    const columnasObservaciones = matriz[0]
+        .map((valor, indice) => ({ nombre: clave(valor), indice }))
+        .filter(({ nombre }) => /^(observacion|observaciones|comentario|comentarios|notas)/.test(nombre))
     for (const campo of ['id', 'fechahora', 'nombre', 'apellido', 'telefono', 'direccion', 'producto', 'modalidad', 'estado', 'fechaentrega']) {
         if (!indices.has(campo)) throw new Error(`Pedidos_online no contiene la columna ${campo}.`)
     }
@@ -68,9 +71,8 @@ export function parsearCsvPedidosOnline(csv: string): FilaPedidoOnline[] {
         if (!externalId) continue
         // El Sheet ha usado encabezados distintos para los comentarios. Se leen
         // todas las columnas de observaciones disponibles, sin mezclar Producto.
-        const observaciones = [...indices.entries()]
-            .filter(([nombre]) => /^(observacion|observaciones|comentario|comentarios|notas)/.test(nombre))
-            .map(([, posicion]) => String(fila[posicion] ?? '').trim())
+        const observaciones = columnasObservaciones
+            .map(({ indice: posicion }) => String(fila[posicion] ?? '').trim())
             .filter(Boolean).join('\n')
         const datos = {
             externalId, fila: indice + 2, fechaHora: obtener('fechahora'), nombre: obtener('nombre'),
