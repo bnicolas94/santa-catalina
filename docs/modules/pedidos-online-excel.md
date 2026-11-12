@@ -10,7 +10,7 @@ La escritura se realiza desde un complemento Office.js instalado en el Excel de 
 
 | Excel | Origen / regla |
 | --- | --- |
-| A Fecha | Fecha/Hora del registro en Google; conserva la fecha ya precargada si coincide. |
+| A Fecha | Fecha/Hora del registro en Google; se escribe en la fila asignada aunque tuviera otra fecha precargada. |
 | B Nombre y Apellido | Nombre + Apellido. |
 | C Pedido | Código de producto normalizado. Ejemplo: `48jyq 48clasicos 8zyh`. |
 | D Cantidad | Total de sándwiches dividido por ocho planchas. |
@@ -20,7 +20,7 @@ La escritura se realiza desde un complemento Office.js instalado en el Excel de 
 | H Entrega | Fecha Entrega. |
 | T ID Google Online | `GOOGLE:<ID>` para reconocer y actualizar la misma fila. |
 
-Los paquetes cerrados conocidos y los sabores personalizados se convierten en `lib/pedidos-online-excel.ts`. Las cantidades y los sabores de `Surtidos Elegidos` deben coincidir con el detalle de comentarios; si no, el pedido queda en ERROR. Las columnas I:S y sus fórmulas no se editan. El complemento sólo toma una fila con A igual a la fecha de creación y B:H y T vacías; si no la hay, puede tomar una fila con A vacía y completar su fecha. Si no existe ninguna, registra un error para revisión.
+Los paquetes cerrados conocidos y los sabores personalizados se convierten en `lib/pedidos-online-excel.ts`. Las cantidades y los sabores de `Surtidos Elegidos` deben coincidir con el detalle de comentarios; si no, el pedido queda en ERROR. Las columnas I:S y sus fórmulas no se editan. El complemento consulta sólo la columna T para localizar un ID existente y las últimas 512 filas de A:H para encontrar una fila libre. Reutiliza una fila con B:H y T vacías, actualiza su fecha A y, si no hay ninguna en ese tramo, agrega una fila al final de la tabla. Así evita leer las siete columnas de pedidos de las casi 30.000 filas históricas en cada operación.
 
 Cuando el estado de Google cambia a cancelado/anulado, o la modalidad deja de ser Delivery, se encola una cancelación. El complemento limpia B:H y T de la fila vinculada. Conserva A, la estructura de la tabla y las fórmulas. Los IDs previos a la activación nunca se alteran.
 
@@ -32,4 +32,4 @@ Cuando el estado de Google cambia a cancelado/anulado, o la modalidad deja de se
 4. Activar la integración. Crear un pedido de prueba desde la página, verificar una sola fila en la copia y cancelarlo; verificar que B:H y T queden vacías. Revisar el estado del pedido en la misma página.
 5. Para pasar al libro operativo, pausar la integración, cambiar el destino a `Pedidos Santa Catalina ultimo.xlsx`, instalar y configurar el complemento en ese libro y volver a activar. La fotografía de IDs ya existentes se conserva. Verificar el nombre mostrado en el panel antes de activar.
 
-El complemento debe poder alcanzar `https://app.santacatalina.online`. Si Excel se cierra, el ERP conserva la cola; al abrir el libro se recuperan las operaciones pendientes. Si el libro se renombra, la tabla cambia o no hay fila libre, se bloquea la escritura y el error aparece en el panel o en la administración. La pestaña `2026` y la tabla `Pedidos2026` deberán adaptarse al cambiar de año.
+El complemento debe poder alcanzar `https://app.santacatalina.online`. Si Excel se cierra, el ERP conserva la cola; al abrir el libro se recuperan las operaciones pendientes. Si el libro se renombra o la tabla cambia, se bloquea la escritura y el error aparece en el panel o en la administración. La pestaña `2026` y la tabla `Pedidos2026` deberán adaptarse al cambiar de año.

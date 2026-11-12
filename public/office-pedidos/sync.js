@@ -6,6 +6,7 @@
   const TOKEN_KEY = 'santa-catalina-pedidos-online-token-v1';
   const MARKER = 'ID Google Online';
   const POLL_MS = 30000;
+  const FREE_ROW_WINDOW = 512;
   const input = document.getElementById('token');
   const status = document.getElementById('status');
   const workbookLabel = document.getElementById('workbook');
@@ -71,14 +72,13 @@
       await context.sync();
       if (body.rowCount < 1) throw new Error('La tabla de pedidos no tiene filas disponibles.');
       const first = body.rowIndex;
-      const count = body.rowCount;
-      const dates = sheet.getRangeByIndexes(first, 0, count, 1);
-      const orderData = sheet.getRangeByIndexes(first, 1, count, 7);
+      let count = body.rowCount;
+      const tailStart = Math.max(0, count - FREE_ROW_WINDOW);
+      const tail = sheet.getRangeByIndexes(first + tailStart, 0, count - tailStart, 8);
       const markers = sheet.getRangeByIndexes(first, 19, count, 1);
-      dates.load('values'); orderData.load('values'); markers.load('values');
+      tail.load('values'); markers.load('values');
       await context.sync();
-      const dateValues = dates.values;
-      const orderValues = orderData.values;
+      const tailRows = tail.values;
       const markerValues = markers.values;
 
       for (const operation of operations) {
@@ -88,12 +88,15 @@
           }
           const id = `GOOGLE:${operation.externalId}`;
           const found = markerValues.findIndex(row => row[0] === id);
+          if (found >= 0 && markerValues.findIndex((row, i) => i > found && row[0] === id) >= 0) {
+            throw new Error('El ID Google aparece duplicado en Excel; revisá la copia antes de continuar.');
+          }
           if (operation.operation === 'CANCELAR') {
             if (found >= 0) {
               sheet.getRangeByIndexes(first + found, 1, 1, 7).clear(Excel.ClearApplyTo.contents);
               sheet.getRangeByIndexes(first + found, 19, 1, 1).clear(Excel.ClearApplyTo.contents);
               markerValues[found][0] = '';
-              orderValues[found] = ['', '', '', '', '', '', ''];
+              if (found >= tailStart) tailRows[found - tailStart].splice(1, 7, '', '', '', '', '', '', '');
             }
             results.push({ operation, success: true });
             continue;
@@ -104,27 +107,27 @@
           const deliveryDate = serial(payload.entrega);
           let index = found;
           if (index < 0) {
-            const free = i => !markerValues[i][0] && orderValues[i].every(cell => cell === '' || cell === null);
-            index = dateValues.findIndex((row, i) => Math.round(Number(row[0])) === date && free(i));
-            if (index < 0) index = dateValues.findIndex((row, i) => !row[0] && free(i));
-            if (index < 0) throw new Error(`No hay una fila libre para ${payload.fecha}.`);
+            const free = tailRows.findIndex((row, i) => !markerValues[tailStart + i][0]
+              && row.slice(1, 8).every(cell => cell === '' || cell === null));
+            if (free >= 0) index = tailStart + free;
+            else {
+              table.rows.add(null);
+              index = count++;
+              markerValues.push(['']);
+              tailRows.push(['', '', '', '', '', '', '', '']);
+            }
           }
           const rowIndex = first + index;
-          if (found < 0 && !dateValues[index][0]) {
-            const created = sheet.getRangeByIndexes(rowIndex, 0, 1, 1);
-            created.values = [[date]];
-            created.numberFormat = [['dd-mmm']];
-            dateValues[index][0] = date;
-          }
           const values = [[safeText(payload.nombre), safeText(payload.pedido), payload.cantidad,
             safeText(payload.calle), safeText(payload.telefono), safeText(payload.horario), deliveryDate]];
-          const target = sheet.getRangeByIndexes(rowIndex, 1, 1, 7);
+          const target = sheet.getRangeByIndexes(rowIndex, 0, 1, 8);
           sheet.getRangeByIndexes(rowIndex, 5, 1, 1).numberFormat = [['@']];
-          target.values = values;
+          target.values = [[date, ...values[0]]];
+          sheet.getRangeByIndexes(rowIndex, 0, 1, 1).numberFormat = [['dd-mmm']];
           sheet.getRangeByIndexes(rowIndex, 7, 1, 1).numberFormat = [['dd-mmm']];
           sheet.getRangeByIndexes(rowIndex, 19, 1, 1).values = [[id]];
           markerValues[index][0] = id;
-          orderValues[index] = values[0];
+          if (index >= tailStart) tailRows[index - tailStart] = [date, ...values[0]];
           results.push({ operation, success: true });
         } catch (error) {
           results.push({ operation, success: false, error: error instanceof Error ? error.message : String(error) });
@@ -143,6 +146,7 @@
       if (!sameBook(queue.workbookName)) throw new Error(`Este libro es «${workbookName}». El destino configurado es «${queue.workbookName}».`);
       if (!queue.activo) { show('Sincronización pausada desde el ERP.'); return; }
       if (!queue.operaciones.length) { show(`Conectado · ${new Date().toLocaleTimeString('es-AR')} · sin pedidos pendientes`); return; }
+      show(`Aplicando ${queue.operaciones.length} operación(es) en Excel…`);
       let results;
       try { results = await applyOperations(queue.operaciones); }
       catch (error) {
