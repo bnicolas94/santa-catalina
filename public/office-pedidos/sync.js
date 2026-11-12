@@ -4,6 +4,7 @@
 
   const API = '/api/pedidos-online-excel/device';
   const TOKEN_KEY = 'santa-catalina-pedidos-online-token-v1';
+  const ADDON_VERSION = '3';
   const MARKER = 'ID Google Online';
   const POLL_MS = 30000;
   const FREE_ROW_WINDOW = 512;
@@ -144,7 +145,7 @@
     try {
       const queue = await api('GET');
       if (!sameBook(queue.workbookName)) throw new Error(`Este libro es «${workbookName}». El destino configurado es «${queue.workbookName}».`);
-      if (!queue.activo) { show('Sincronización pausada desde el ERP.'); return; }
+      if (!queue.activo) { show(`Sincronización pausada desde el ERP. Complemento v${ADDON_VERSION}.`); return; }
       if (!queue.operaciones.length) { show(`Conectado · ${new Date().toLocaleTimeString('es-AR')} · sin pedidos pendientes`); return; }
       show(`Aplicando ${queue.operaciones.length} operación(es) en Excel…`);
       let results;
