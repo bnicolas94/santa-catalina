@@ -75,11 +75,13 @@ export default function PedidosOnlineExcelPage() {
                 </select>{' '}
                 <button disabled={ocupado || data.config.activo || destino === data.config.workbookName} onClick={guardarDestino}>Guardar destino</button>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                    <button disabled={ocupado || data.config.activo} onClick={() => accion('activar')}>Activar desde ahora</button>
+                    <button disabled={ocupado || data.config.activo} onClick={() => accion('activar')}>
+                        {data.config.activadoEn ? 'Reanudar' : 'Activar desde ahora'}
+                    </button>
                     <button disabled={ocupado || !data.config.activo} onClick={() => accion('desactivar')}>Pausar</button>
                     <button disabled={ocupado || !data.config.activo} onClick={() => accion('sincronizar')}>Leer Google ahora</button>
                 </div>
-                <p>Al activar, los IDs que ya están en Google se registran como anteriores y no se cargan.</p>
+                <p>La primera activación excluye los IDs que ya están en Google. Al reanudar después de una pausa se conserva ese punto de inicio.</p>
             </section>
             <section style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
                 <h2>Complemento de Excel</h2>

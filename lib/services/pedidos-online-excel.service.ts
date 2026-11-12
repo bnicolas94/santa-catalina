@@ -55,6 +55,14 @@ export async function configurarDestinoPedidosOnlineExcel(nombre: unknown, usuar
 export async function activarPedidosOnlineExcel(usuarioId: string) {
     const actual = await obtenerConfiguracionPedidosOnlineExcel()
     if (actual.activo) return actual
+    if (actual.activadoEn) {
+        const config = { ...actual, activo: true, actualizadoPorId: usuarioId }
+        await prisma.configuracionGlobal.upsert({
+            where: { clave: CONFIG_KEY }, create: { clave: CONFIG_KEY, valor: JSON.stringify(config) },
+            update: { valor: JSON.stringify(config) },
+        })
+        return config
+    }
     const csv = await descargarHoja(actual.spreadsheetId, actual.gid)
     const filas = parsearCsvPedidosOnline(csv)
     if (!filas.length) throw new Error('La hoja está vacía; no se puede fijar una línea de inicio segura.')

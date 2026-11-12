@@ -4,6 +4,8 @@
 
 La integración toma la hoja pública `Pedidos_online` del Google Sheet configurado en `lib/services/pedidos-online-excel.service.ts`. Sólo procesa pedidos con `Modalidad = Delivery` cuyo ID no estaba en el Sheet cuando ADMIN activó la integración. La activación guarda una fotografía de los IDs existentes en PostgreSQL. El worker del ERP vuelve a leer la hoja cada dos minutos; `PEDIDOS_ONLINE_EXCEL_AUTO=false` desactiva sólo ese worker.
 
+Pausar detiene la lectura y entrega de operaciones sin cambiar la fecha de primera activación. Reanudar conserva la fotografía inicial y procesa también los IDs nuevos que aparecieron durante la pausa.
+
 La escritura se realiza desde un complemento Office.js instalado en el Excel de escritorio que permanece abierto y tiene Autoguardado. Usa un token aleatorio que ADMIN genera en `/pedidos-online-excel` y que se guarda como hash en `ConfiguracionGlobal`. El complemento consulta operaciones cada 30 segundos, comprueba el nombre del libro y escribe en la tabla `Pedidos2026` de la hoja `2026`. En OneDrive personal, Graph Excel REST no es una alternativa para esta escritura. El ERP no necesita controlar la ventana de Excel ni bloquear a la persona que toma pedidos.
 
 ## Mapeo
