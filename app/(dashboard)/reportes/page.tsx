@@ -301,7 +301,12 @@ export default function ReportesPage() {
     // --- Render ---
     return (
         <div className="fade-in">
-            <div style={{ padding: '12px 20px' }}><Link href="/reportes/whatsapp">Ver estadísticas de WhatsApp →</Link></div>
+            <div style={{ padding: '12px 20px', display: 'flex', flexWrap: 'wrap', gap: 20 }}>
+                <Link href="/reportes/pedidos-online">Pedidos online →</Link>
+                <Link href="/reportes/pedidos-local">Pedidos de local →</Link>
+                <Link href="/reportes/pedidos-conjunto">Pedidos de local + online →</Link>
+                <Link href="/reportes/whatsapp">Estadísticas de WhatsApp →</Link>
+            </div>
             <PeriodoSelector
                 granularidad={granularidad} rango={rangoFechas} ubicacionId={ubicacionId}
                 activeSection={activeSection} loading={loading}

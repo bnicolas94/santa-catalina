@@ -57,6 +57,22 @@ test('pedidos de local exige permiso de Reportes en página y API', () => {
         assert.equal(canAccessPath(path, {}), false)
     }
 })
+test('pedidos online exige permiso de Reportes en página y API', () => {
+    for (const path of ['/reportes/pedidos-online', '/api/reportes/pedidos-online']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
+test('pedidos conjuntos exige permiso de Reportes en página y API', () => {
+    for (const path of ['/reportes/pedidos-conjunto', '/api/reportes/pedidos-conjunto']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
 test('planificar horarios requiere acceso a Personal', () => {
     assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN' }), true)
     assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }), true)
