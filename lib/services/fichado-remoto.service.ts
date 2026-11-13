@@ -5,8 +5,7 @@ import { accionPermitida, estadoFichadoRemoto, ORIGEN_FICHADO_REMOTO, tipoParaAc
 import { cargarPlanHorarios } from '@/lib/services/horarios-empleado.service'
 import { resolverHorarioPlanificado, minutosTardanzaHorario } from '@/lib/rrhh/horarios'
 import { AsistenciaService } from '@/lib/services/asistencia.service'
-import { horasJornadaParaFecha } from '@/lib/payroll/jornadaSemanal'
-import { resumirJornadaRemota } from '@/lib/rrhh/resumen-jornada-remota'
+import { configurarJornadaRemota, resumirJornadaRemota } from '@/lib/rrhh/resumen-jornada-remota'
 
 export class FichadoRemotoError extends Error {
     constructor(message: string, readonly status: number) { super(message) }
@@ -33,17 +32,7 @@ export async function consultarFichadoRemoto(empleadoId: string) {
     })
     const plan = await cargarPlanHorarios([empleadoId], fecha, fecha)
     const horario = resolverHorarioPlanificado(plan, empleadoId, fecha)
-    const diaSemana = new Date(`${fecha}T12:00:00-03:00`).getUTCDay()
-    const horasEsperadas = horario && !horario.esFranco
-        ? horario.horasEsperadas
-        : horasJornadaParaFecha(fecha, empleado.horasTrabajoDiarias, empleado.horasTrabajoSabado)
-    const horarioPrevisto = horario?.esFranco ? null : {
-        entrada: horario?.horaInicio ?? empleado.turno?.horaInicio ?? empleado.horarioEntrada,
-        salida: horario?.horaFin ?? empleado.turno?.horaFin ?? empleado.horarioSalida,
-    }
-    const horarioEntradaComputable = horario?.esFranco
-        ? null
-        : horario?.horaInicio ?? (diaSemana === 0 ? null : empleado.turno?.horaInicio || empleado.horarioEntrada)
+    const { horasEsperadas, horarioPrevisto, horarioEntradaComputable } = configurarJornadaRemota(empleado, horario, fecha)
     const ahoraServidor = new Date()
     const resumen = resumirJornadaRemota(marcas, ahoraServidor, horasEsperadas, horarioEntradaComputable)
     return {

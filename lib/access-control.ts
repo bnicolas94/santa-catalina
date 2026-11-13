@@ -48,6 +48,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/sedes', legacyRoles: ['ADMIN'] },
     // La administración de roles puede escalar privilegios y queda reservada a ADMIN.
     { path: '/api/empleados/roles', legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/remotos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/api/admin', legacyRoles: ['ADMIN'] },
     { path: '/api/internal/crm', permissions: ['permisoAtencion', 'permisoAtencionAdmin'], legacyRoles: ['ADMIN'] },
     { path: '/api/pedidos/entregar-masivo', legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
@@ -135,6 +136,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/uniformes', legacyRoles: ['ADMIN'] },
 
     // Páginas protegidas existentes.
+    { path: '/empleados/remotos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/empleados', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/produccion-v2', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO'] },
     { path: '/produccion/pantalla', permissions: ['permisoPantallaProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO', 'PRODUCCION', 'ADMIN_OPS'] },
