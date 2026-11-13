@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resumirJornadaRemota } from './resumen-jornada-remota'
+import { configurarJornadaRemota, resumirJornadaRemota } from './resumen-jornada-remota'
 import { ORIGEN_FICHADO_REMOTO, tipoParaAccionRemota, type AccionFichadoRemoto } from './fichado-remoto'
 
 function marca(accion: AccionFichadoRemoto, hora: string) {
@@ -46,4 +46,23 @@ test('el trabajo anticipado no aumenta las horas computables', () => {
         [marca('entrada', '08:50')], new Date('2026-11-11T09:20:00-03:00'), 8, '09:00',
     )
     assert.equal(resumen.minutosEfectivosActuales, 20)
+})
+
+test('la vista de RR. HH. usa la misma jornada prevista que Mi fichado', () => {
+    const empleado = { horarioEntrada: '09:00', horarioSalida: '18:00', horasTrabajoDiarias: 8, horasTrabajoSabado: null, turno: null }
+    assert.deepEqual(configurarJornadaRemota(empleado, null, '2026-11-13'), {
+        horasEsperadas: 8,
+        horarioPrevisto: { entrada: '09:00', salida: '18:00' },
+        horarioEntradaComputable: '09:00',
+    })
+    assert.deepEqual(configurarJornadaRemota(empleado, { horaInicio: '10:00', horaFin: '17:00', horasEsperadas: 6, toleranciaMinutos: 0 }, '2026-11-13'), {
+        horasEsperadas: 6,
+        horarioPrevisto: { entrada: '10:00', salida: '17:00' },
+        horarioEntradaComputable: '10:00',
+    })
+    assert.deepEqual(configurarJornadaRemota(empleado, { esFranco: true, horaInicio: '00:00', horaFin: '00:00', horasEsperadas: 0, toleranciaMinutos: 0 }, '2026-11-13'), {
+        horasEsperadas: 0,
+        horarioPrevisto: null,
+        horarioEntradaComputable: null,
+    })
 })

@@ -1,5 +1,32 @@
 import { calcularResumenDia } from '@/utils/horas'
+import { horasJornadaParaFecha } from '@/lib/payroll/jornadaSemanal'
+import type { HorarioEsperado } from './horarios'
 import { estadoFichadoRemoto, ORIGEN_FICHADO_REMOTO, type MarcaFichado } from './fichado-remoto'
+
+type EmpleadoJornadaRemota = {
+    horarioEntrada: string | null
+    horarioSalida: string | null
+    horasTrabajoDiarias: number
+    horasTrabajoSabado: number | null
+    turno: { horaInicio: string; horaFin: string } | null
+}
+
+/** La ficha personal y la vista de RR. HH. comparten la jornada prevista. */
+export function configurarJornadaRemota(empleado: EmpleadoJornadaRemota, horario: HorarioEsperado | null, fecha: string) {
+    const domingo = new Date(`${fecha}T12:00:00-03:00`).getUTCDay() === 0
+    return {
+        horasEsperadas: horario?.esFranco
+            ? 0
+            : horario?.horasEsperadas ?? horasJornadaParaFecha(fecha, empleado.horasTrabajoDiarias, empleado.horasTrabajoSabado),
+        horarioPrevisto: horario?.esFranco ? null : {
+            entrada: horario?.horaInicio ?? empleado.turno?.horaInicio ?? empleado.horarioEntrada,
+            salida: horario?.horaFin ?? empleado.turno?.horaFin ?? empleado.horarioSalida,
+        },
+        horarioEntradaComputable: horario?.esFranco
+            ? null
+            : horario?.horaInicio ?? (domingo ? null : empleado.turno?.horaInicio || empleado.horarioEntrada),
+    }
+}
 
 export interface ResumenJornadaRemota {
     minutosEfectivosConfirmados: number
