@@ -91,19 +91,19 @@ export function WeeklyPayrollResults(props: Props) {
                 return <span key={cajaId} style={{ fontSize: 'var(--text-sm)' }}><strong>{caja?.nombre || cajaId}:</strong> ${monto.toLocaleString()}</span>
             })}</div>
         </div>}
-        <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflowX: 'auto', background: 'white', scrollbarGutter: 'stable' }}>
-        <table className="table table-sm" style={{ minWidth: '1190px', tableLayout: 'fixed' }}>
+        <div className="table-container shadow-sm weekly-payroll-table" style={{ width: '100%', maxWidth: '100%', minWidth: 0, border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflowX: 'auto', background: 'white', scrollbarGutter: 'stable' }}>
+        <table className="table table-sm" style={{ width: '100%', minWidth: '1060px', tableLayout: 'fixed' }}>
             <colgroup>
-                <col style={{ width: 38 }} />
                 <col style={{ width: 34 }} />
-                <col style={{ width: 270 }} />
-                <col style={{ width: 62 }} />
-                <col style={{ width: 125 }} />
+                <col style={{ width: 30 }} />
+                <col style={{ width: 240 }} />
+                <col style={{ width: 50 }} />
+                <col style={{ width: 105 }} />
+                <col style={{ width: 105 }} />
                 <col style={{ width: 120 }} />
-                <col style={{ width: 145 }} />
-                <col style={{ width: 115 }} />
-                <col style={{ width: 135 }} />
-                <col style={{ width: 140 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 130 }} />
             </colgroup>
             <thead style={{ backgroundColor: 'var(--color-gray-50)' }}><tr>
                 <th style={{ textAlign: 'center' }}><input type="checkbox" aria-label="Seleccionar todos los empleados" checked={todosSeleccionados} onChange={props.onToggleTodos} /></th><th></th><th>Empleado y caja de pago</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>Neto a Pagar</th>
@@ -132,7 +132,7 @@ export function WeeklyPayrollResults(props: Props) {
                         {advertencias > 0 && <span className="badge badge-warning" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{advertencias} REVISAR</span>}
                         {!resultado.error && <div onClick={evento => evento.stopPropagation()} style={{ marginTop: '7px' }}>{resultado.esSeguimientoMensualMixto
                             ? <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>No genera egreso de caja</span>
-                            : <select aria-label={`Caja de pago de ${resultado.empleadoNombre}`} className="form-select" value={props.cajasPorEmpleado[resultado.empleadoId] || ''} onChange={evento => props.onCajaEmpleadoChange(resultado.empleadoId, evento.target.value)} style={{ width: '100%', maxWidth: '238px', padding: '5px 8px', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+                            : <select aria-label={`Caja de pago de ${resultado.empleadoNombre}`} className="form-select" value={props.cajasPorEmpleado[resultado.empleadoId] || ''} onChange={evento => props.onCajaEmpleadoChange(resultado.empleadoId, evento.target.value)} style={{ width: '100%', maxWidth: '220px', padding: '5px 8px', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
                                 <option value="">Seleccionar caja…</option>
                                 {props.cajas.map(caja => <option key={caja.tipo} value={caja.tipo}>{caja.nombre || caja.tipo}{caja.ubicacion?.nombre ? ` · ${caja.ubicacion.nombre}` : ''}</option>)}
                             </select>}
@@ -171,5 +171,12 @@ export function WeeklyPayrollResults(props: Props) {
             </tfoot>
         </table>
         </div>
+        <style jsx>{`
+            .weekly-payroll-table :global(.table th),
+            .weekly-payroll-table :global(.table td) {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+        `}</style>
     </>
 }

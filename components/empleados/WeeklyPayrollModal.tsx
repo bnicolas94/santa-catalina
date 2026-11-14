@@ -589,7 +589,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess, mode = 'moda
 
     const contenido = <>
                 <WeeklyPayrollHeader onClose={onClose} pageMode={mode === 'page'} />
-                <div className="modal-body" style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+                <div className="modal-body" style={{ overflowY: 'auto', overflowX: 'hidden', flex: 1, minHeight: 0, minWidth: 0 }}>
                     <WeeklyPayrollControls
                         fechaInicio={fechaInicio}
                         fechaFin={fechaFin}
@@ -648,8 +648,8 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess, mode = 'moda
         return <section className="weekly-payroll-page">
             {contenido}
             <style jsx>{`
-                .weekly-payroll-page { width: 100%; height: calc(100vh - var(--header-height) - var(--space-12)); min-height: 560px; background: white; border: 1px solid var(--color-gray-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; }
-                @media (max-width: 768px) { .weekly-payroll-page { height: calc(100vh - var(--header-height) - var(--space-8)); min-height: 500px; border-radius: var(--radius-lg); } }
+                .weekly-payroll-page { width: 100%; max-width: 100%; min-width: 0; margin-top: var(--header-height); height: calc(100vh - var(--header-height) - var(--space-12)); min-height: 560px; background: white; border: 1px solid var(--color-gray-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; }
+                @media (max-width: 768px) { .weekly-payroll-page { margin-top: 56px; height: calc(100vh - 56px - var(--space-8)); min-height: 500px; border-radius: var(--radius-lg); } }
             `}</style>
         </section>
     }
