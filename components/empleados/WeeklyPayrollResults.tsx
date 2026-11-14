@@ -91,10 +91,22 @@ export function WeeklyPayrollResults(props: Props) {
                 return <span key={cajaId} style={{ fontSize: 'var(--text-sm)' }}><strong>{caja?.nombre || cajaId}:</strong> ${monto.toLocaleString()}</span>
             })}</div>
         </div>}
-        <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'white' }}>
-        <table className="table table-sm">
+        <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflowX: 'auto', background: 'white', scrollbarGutter: 'stable' }}>
+        <table className="table table-sm" style={{ minWidth: '1190px', tableLayout: 'fixed' }}>
+            <colgroup>
+                <col style={{ width: 38 }} />
+                <col style={{ width: 34 }} />
+                <col style={{ width: 270 }} />
+                <col style={{ width: 62 }} />
+                <col style={{ width: 125 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 145 }} />
+                <col style={{ width: 115 }} />
+                <col style={{ width: 135 }} />
+                <col style={{ width: 140 }} />
+            </colgroup>
             <thead style={{ backgroundColor: 'var(--color-gray-50)' }}><tr>
-                <th style={{ width: '38px', textAlign: 'center' }}><input type="checkbox" aria-label="Seleccionar todos los empleados" checked={todosSeleccionados} onChange={props.onToggleTodos} /></th><th style={{ width: '30px' }}></th><th style={{ minWidth: '230px' }}>Empleado y caja de pago</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '110px' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ minWidth: '115px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>Neto a Pagar</th>
+                <th style={{ textAlign: 'center' }}><input type="checkbox" aria-label="Seleccionar todos los empleados" checked={todosSeleccionados} onChange={props.onToggleTodos} /></th><th></th><th>Empleado y caja de pago</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>Neto a Pagar</th>
             </tr></thead>
             <tbody>{resultadosVisibles.map(resultado => {
                 const alertas = obtenerAlertasLiquidacion(resultado)
@@ -110,7 +122,7 @@ export function WeeklyPayrollResults(props: Props) {
                         ? <span title="Sólo seguimiento">—</span>
                         : <input type="checkbox" aria-label={`Seleccionar a ${resultado.empleadoNombre}`} checked={seleccionado} disabled={Boolean(resultado.error)} onChange={() => props.onToggleEmpleado(resultado.empleadoId)} />}</td>
                     <td>{!resultado.error && (expandedRow === resultado.empleadoId ? '▼' : '▶')}</td>
-                    <td style={{ fontWeight: 600, minWidth: '230px' }}>
+                    <td style={{ fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span>{resultado.empleadoNombre || props.empleados.find(empleado => empleado.id === resultado.empleadoId)?.nombre || 'Empleado'}</span>{!resultado.error && !resultado.esSeguimientoMensualMixto && <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 7px', fontSize: 10 }} onClick={evento => { evento.stopPropagation(); props.onSeleccionarSolo(resultado.empleadoId) }}>Sólo este</button>}</div>
                         {resultado.error && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '10px' }}>ERROR</span>}
                         {resultado.esSeguimientoMensualMixto && <span className="badge badge-info" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>
@@ -120,7 +132,7 @@ export function WeeklyPayrollResults(props: Props) {
                         {advertencias > 0 && <span className="badge badge-warning" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>{advertencias} REVISAR</span>}
                         {!resultado.error && <div onClick={evento => evento.stopPropagation()} style={{ marginTop: '7px' }}>{resultado.esSeguimientoMensualMixto
                             ? <span style={{ color: 'var(--color-gray-400)', fontSize: 'var(--text-xs)', fontWeight: 500 }}>No genera egreso de caja</span>
-                            : <select aria-label={`Caja de pago de ${resultado.empleadoNombre}`} className="form-select" value={props.cajasPorEmpleado[resultado.empleadoId] || ''} onChange={evento => props.onCajaEmpleadoChange(resultado.empleadoId, evento.target.value)} style={{ width: '100%', maxWidth: '205px', padding: '5px 8px', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
+                            : <select aria-label={`Caja de pago de ${resultado.empleadoNombre}`} className="form-select" value={props.cajasPorEmpleado[resultado.empleadoId] || ''} onChange={evento => props.onCajaEmpleadoChange(resultado.empleadoId, evento.target.value)} style={{ width: '100%', maxWidth: '238px', padding: '5px 8px', fontSize: 'var(--text-xs)', fontWeight: 500 }}>
                                 <option value="">Seleccionar caja…</option>
                                 {props.cajas.map(caja => <option key={caja.tipo} value={caja.tipo}>{caja.nombre || caja.tipo}{caja.ubicacion?.nombre ? ` · ${caja.ubicacion.nombre}` : ''}</option>)}
                             </select>}
@@ -140,7 +152,7 @@ export function WeeklyPayrollResults(props: Props) {
                         </td>
                         <td style={{ textAlign: 'right' }}>{resultado.montoHorasFeriado > 0 && <span className="badge badge-warning" style={{ fontSize: '9px' }}>FER</span>}${resultado.montoHorasFeriado.toLocaleString()}</td>
                         <td style={{ textAlign: 'right', color: 'var(--color-danger)' }}>{resultado.descuentoPrestamos > 0 && <span style={{ fontSize: '10px' }}>Préstamos</span>}-${resultado.descuentoPrestamos.toLocaleString()}</td>
-                        <td style={{ minWidth: '115px', textAlign: 'right', fontWeight: 800, whiteSpace: 'nowrap', color: 'var(--color-gray-900)' }}>${resultado.totalNeto.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 800, whiteSpace: 'nowrap', color: 'var(--color-gray-900)' }}>${resultado.totalNeto.toLocaleString()}</td>
                     </>}
                 </tr>
                 {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={10} style={{ padding: 'var(--space-4)' }}>
@@ -154,7 +166,7 @@ export function WeeklyPayrollResults(props: Props) {
                 </td></tr>}
             </Fragment>})}</tbody>
             <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}>
-                <tr><td colSpan={9} style={{ textAlign: 'right' }}>TOTAL SELECCIONADO A PAGAR:</td><td style={{ minWidth: '115px', textAlign: 'right', whiteSpace: 'nowrap', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'right' }}>TOTAL SELECCIONADO A PAGAR:</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
                 {seguimientos.length > 0 && <tr><td colSpan={9} style={{ textAlign: 'right', color: 'var(--color-info)' }}>SEGUIMIENTO MENSUAL MIXTO (NO SE PAGA AHORA):</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--color-info)' }}>${totalSeguimiento.toLocaleString()}</td></tr>}
             </tfoot>
         </table>
