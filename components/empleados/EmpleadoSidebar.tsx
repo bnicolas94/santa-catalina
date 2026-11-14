@@ -44,9 +44,8 @@ const menuItems: MenuItem[] = [
     },
     {
         label: 'Liquidación Semanal',
-        href: '/empleados?open=weekly',
+        href: '/empleados/liquidacion-semanal',
         icon: '💰',
-        openModal: 'weekly'
     },
     {
         label: 'Cierres Mensuales Mixtos',

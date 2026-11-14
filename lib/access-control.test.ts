@@ -20,6 +20,14 @@ test('la vista de trabajadores remotos exige acceso a Personal en página y API'
     }
 })
 
+test('la liquidación semanal como página exige acceso a Personal', () => {
+    const path = '/empleados/liquidacion-semanal'
+    assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath(path, { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }), true)
+    assert.equal(canAccessPath(path, { rol: 'OPERARIO', permisos: { permisoProduccion: true } }), false)
+    assert.equal(canAccessPath(path, {}), false)
+})
+
 test('postulaciones internas exigen permisoPersonal', () => {
     for (const path of ['/postulaciones', '/api/postulaciones', '/api/postulaciones/abc']) {
         assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)

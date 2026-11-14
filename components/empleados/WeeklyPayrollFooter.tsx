@@ -8,6 +8,7 @@ interface Props {
     onGuardarBorrador: () => void
     onConfirmar: () => void
     onClose: () => void
+    closeLabel?: string
 }
 
 export function WeeklyPayrollFooter(props: Props) {
@@ -24,7 +25,7 @@ export function WeeklyPayrollFooter(props: Props) {
             </button>}
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <button className="btn btn-outline" onClick={props.onClose} disabled={props.confirmando}>Cerrar</button>
+            <button className="btn btn-outline" onClick={props.onClose} disabled={props.confirmando}>{props.closeLabel || 'Cerrar'}</button>
             <button className="btn btn-primary" style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)', minWidth: '200px' }} onClick={props.onConfirmar} disabled={props.cantidadLiquidables === 0 || props.confirmando}>
                 {props.confirmando ? 'Procesando...' : `Confirmar seleccionadas (${props.cantidadLiquidables})`}
             </button>

@@ -13,7 +13,6 @@ import { ExpressLiquidationModal } from '@/components/empleados/ExpressLiquidati
 import { ConfigLicenciasModal } from '@/components/empleados/ConfigLicenciasModal'
 import { ReportePagosModal } from '@/components/empleados/ReportePagosModal'
 import FeriadosConfigModal from '@/components/empleados/FeriadosConfigModal'
-import { WeeklyPayrollModal } from '@/components/empleados/WeeklyPayrollModal'
 import { HorasExtrasAdeudadasModal } from '@/components/empleados/HorasExtrasAdeudadasModal'
 import { FeriadosAdeudadosModal } from '@/components/empleados/FeriadosAdeudadosModal'
 import { CierresMensualesMixtosModal } from '@/components/empleados/CierresMensualesMixtosModal'
@@ -67,7 +66,6 @@ function EmpleadosContent() {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [reviewModalOpen, setReviewModalOpen] = useState(false)
     const [massLiquidationOpen, setMassLiquidationOpen] = useState(false)
-    const [weeklyPayrollOpen, setWeeklyPayrollOpen] = useState(false)
     const [horasAdeudadasOpen, setHorasAdeudadasOpen] = useState(false)
     const [feriadosAdeudadosOpen, setFeriadosAdeudadosOpen] = useState(false)
     const [cierresMensualesOpen, setCierresMensualesOpen] = useState(false)
@@ -132,7 +130,10 @@ function EmpleadosContent() {
         if (!openParam) return
 
         // Sincronizar parámetros de URL con estados de modales
-        if (openParam === 'weekly') setWeeklyPayrollOpen(true)
+        if (openParam === 'weekly') {
+            router.replace('/empleados/liquidacion-semanal')
+            return
+        }
         if (openParam === 'horas-adeudadas') setHorasAdeudadasOpen(true)
         if (openParam === 'feriados-adeudados') setFeriadosAdeudadosOpen(true)
         if (openParam === 'cierres-mensuales') setCierresMensualesOpen(true)
@@ -161,7 +162,6 @@ function EmpleadosContent() {
         router.push(`/empleados?${params.toString()}`)
         
         // También cerramos los estados locales
-        setWeeklyPayrollOpen(false)
         setHorasAdeudadasOpen(false)
         setFeriadosAdeudadosOpen(false)
         setCierresMensualesOpen(false)
@@ -745,13 +745,6 @@ function EmpleadosContent() {
             )}
             {showFeriadosModal && (
                 <FeriadosConfigModal onClose={closeModal} />
-            )}
-            {weeklyPayrollOpen && (
-                <WeeklyPayrollModal 
-                    empleados={empleadosOrdenados}
-                    onClose={closeModal} 
-                    onSuccess={() => { fetchEmpleados(); closeModal(); }} 
-                />
             )}
             {horasAdeudadasOpen && (
                 <HorasExtrasAdeudadasModal empleados={empleadosOrdenados} onClose={closeModal} />

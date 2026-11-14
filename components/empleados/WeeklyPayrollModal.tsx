@@ -22,9 +22,10 @@ interface WeeklyPayrollModalProps {
     empleados: EmpleadoLiquidable[]
     onClose: () => void
     onSuccess: () => void
+    mode?: 'modal' | 'page'
 }
 
-export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayrollModalProps) {
+export function WeeklyPayrollModal({ empleados, onClose, onSuccess, mode = 'modal' }: WeeklyPayrollModalProps) {
     const [fechaInicio, setFechaInicio] = useState(() => {
         const d = new Date()
         const day = d.getDay()
@@ -586,11 +587,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setEmpleadosSeleccionados(new Set(todosSeleccionados ? [] : idsDisponibles))
     }
 
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh' }}>
-                <WeeklyPayrollHeader onClose={onClose} />
-                <div className="modal-body" style={{ overflowY: 'auto' }}>
+    const contenido = <>
+                <WeeklyPayrollHeader onClose={onClose} pageMode={mode === 'page'} />
+                <div className="modal-body" style={{ overflowY: mode === 'page' ? 'visible' : 'auto', flex: 1 }}>
                     <WeeklyPayrollControls
                         fechaInicio={fechaInicio}
                         fechaFin={fechaFin}
@@ -641,7 +640,23 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                     onGuardarBorrador={handleGuardarTodoBorrador}
                     onConfirmar={handleConfirmarTodo}
                     onClose={onClose}
+                    closeLabel={mode === 'page' ? 'Volver' : 'Cerrar'}
                 />
+    </>
+
+    if (mode === 'page') {
+        return <section className="weekly-payroll-page">
+            {contenido}
+            <style jsx>{`
+                .weekly-payroll-page { width: 100%; min-height: calc(100vh - 110px); background: white; border: 1px solid var(--color-gray-200); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: clip; display: flex; flex-direction: column; }
+            `}</style>
+        </section>
+    }
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal" style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh' }}>
+                {contenido}
             </div>
             <style jsx>{`
                 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(4px); }
