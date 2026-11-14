@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calcularTotalNeto, cambiarIngresoAnticipado, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resumirDesglose, sumarAdicionales, toTimeInputValue } from '../../components/empleados/weeklyPayroll.utils'
+import { calcularTotalNeto, cambiarIngresoAnticipado, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resultadosLiquidablesSeleccionados, resumirDesglose, sumarAdicionales, toTimeInputValue } from '../../components/empleados/weeklyPayroll.utils'
 import type { DiaLiquidacionUI, ResultadoLiquidacionUI } from '../../components/empleados/weeklyPayroll.types'
+
+test('confirma únicamente los empleados semanales seleccionados', () => {
+    const base = { empleadoNombre: 'Empleado', desglosePorDia: [], adicionales: [] } as unknown as ResultadoLiquidacionUI
+    const resultados = [
+        { ...base, empleadoId: 'viernes' },
+        { ...base, empleadoId: 'sabado' },
+        { ...base, empleadoId: 'mixto', esSeguimientoMensualMixto: true },
+        { ...base, empleadoId: 'error', error: 'Fichadas incompletas' },
+    ]
+
+    assert.deepEqual(
+        resultadosLiquidablesSeleccionados(resultados, new Set(['viernes', 'mixto', 'error'])).map(resultado => resultado.empleadoId),
+        ['viernes'],
+    )
+})
 
 test('interpreta horarios de 24 y 12 horas', () => {
     assert.equal(parseTimeToMinutes('14:30'), 870)

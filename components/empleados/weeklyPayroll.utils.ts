@@ -7,6 +7,17 @@ export interface AlertaLiquidacionUI {
     fecha?: string
 }
 
+export function resultadosLiquidablesSeleccionados(
+    resultados: ResultadoLiquidacionUI[],
+    empleadosSeleccionados: ReadonlySet<string>,
+) {
+    return resultados.filter(resultado =>
+        empleadosSeleccionados.has(resultado.empleadoId)
+        && !resultado.error
+        && !resultado.esSeguimientoMensualMixto
+    )
+}
+
 export function recalcularDiaPorHoras(
     dia: DiaLiquidacionUI,
     horasTrabajadas: number,

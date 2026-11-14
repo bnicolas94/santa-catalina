@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react'
 import { WeeklyPayrollAdditionals } from './WeeklyPayrollAdditionals'
 import { WeeklyPayrollDayCard } from './WeeklyPayrollDayCard'
 import type { CajaLiquidacionUI, ConceptoSalarialUI, DiaLiquidacionUI, EmpleadoLiquidable, ResultadoLiquidacionUI } from './weeklyPayroll.types'
-import { obtenerAlertasLiquidacion } from './weeklyPayroll.utils'
+import { obtenerAlertasLiquidacion, resultadosLiquidablesSeleccionados } from './weeklyPayroll.utils'
 
 interface Props {
     resultados: ResultadoLiquidacionUI[]
@@ -12,6 +12,7 @@ interface Props {
     conceptos: ConceptoSalarialUI[]
     cajas: CajaLiquidacionUI[]
     cajasPorEmpleado: Record<string, string>
+    empleadosSeleccionados: ReadonlySet<string>
     updatingStatusDate: string | null
     getDiaStatus: (dia: DiaLiquidacionUI) => string
     onAjusteChange: (empleadoId: string, valor: string) => void
@@ -24,6 +25,9 @@ interface Props {
     onAddAdicional: (empleadoId: string, conceptoId: string, monto: number) => void
     onRemoveAdicional: (empleadoId: string, index: number) => void
     onCajaEmpleadoChange: (empleadoId: string, cajaId: string) => void
+    onToggleEmpleado: (empleadoId: string) => void
+    onSeleccionarSolo: (empleadoId: string) => void
+    onToggleTodos: () => void
 }
 
 export function WeeklyPayrollResults(props: Props) {
@@ -33,16 +37,19 @@ export function WeeklyPayrollResults(props: Props) {
         <p>Presiona &quot;Calcular Sueldos&quot; para generar la previsualización del periodo.</p>
     </div>
 
-    const liquidables = props.resultados.filter(resultado => !resultado.esSeguimientoMensualMixto)
+    const liquidablesDisponibles = props.resultados.filter(resultado => !resultado.error && !resultado.esSeguimientoMensualMixto)
+    const liquidables = resultadosLiquidablesSeleccionados(props.resultados, props.empleadosSeleccionados)
     const seguimientos = props.resultados.filter(resultado => resultado.esSeguimientoMensualMixto)
     const licenciasCompletas = props.resultados.filter(resultado => resultado.licenciaPagaPeriodoCompleto)
     const resultadosVisibles = props.resultados.filter(resultado => !resultado.licenciaPagaPeriodoCompleto)
+    const todosSeleccionados = liquidablesDisponibles.length > 0
+        && liquidablesDisponibles.every(resultado => props.empleadosSeleccionados.has(resultado.empleadoId))
     const totalGeneral = liquidables.reduce((total, resultado) => total + resultado.totalNeto, 0)
     const totalSeguimiento = seguimientos.reduce((total, resultado) => total + resultado.totalNeto, 0)
     const totalBase = liquidables.reduce((total, resultado) => total + resultado.sueldoBase, 0)
     const totalExtras = liquidables.reduce((total, resultado) => total + resultado.montoHorasExtras + resultado.montoHorasFeriado, 0)
     const totalDeducciones = liquidables.reduce((total, resultado) => total + resultado.descuentoPrestamos, 0)
-    const ajustesManuales = props.resultados.reduce((total, resultado) => total + resultado.desglosePorDia.filter(dia => dia.ajusteManual).length, 0)
+    const ajustesManuales = liquidables.reduce((total, resultado) => total + resultado.desglosePorDia.filter(dia => dia.ajusteManual).length, 0)
     const resumenCajas = liquidables.reduce<Record<string, number>>((resumen, resultado) => {
         const cajaId = props.cajasPorEmpleado[resultado.empleadoId]
         if (cajaId) resumen[cajaId] = (resumen[cajaId] || 0) + resultado.totalNeto
@@ -53,7 +60,15 @@ export function WeeklyPayrollResults(props: Props) {
             Seguimiento mensual mixto: {seguimientos.length} empleado{seguimientos.length === 1 ? '' : 's'} · {totalSeguimiento.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })} devengados como referencia. No se incluyen en el total a pagar de esta semana.
         </div>}
         {licenciasCompletas.length > 0 && <div style={{ marginBottom: 'var(--space-4)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-success-bg)', color: 'var(--color-success)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>
-            Licencia remunerada durante todo el período: {licenciasCompletas.map(resultado => resultado.empleadoNombre).join(', ')}. Se procesa automáticamente y se oculta de la revisión diaria.
+            <div style={{ marginBottom: 6 }}>Licencia remunerada durante todo el período. Se oculta la revisión diaria, pero vos decidís si se paga ahora:</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>{licenciasCompletas.map(resultado => <label key={resultado.empleadoId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: resultado.error ? 'not-allowed' : 'pointer' }}>
+                <input type="checkbox" checked={props.empleadosSeleccionados.has(resultado.empleadoId)} disabled={Boolean(resultado.error) || Boolean(resultado.esSeguimientoMensualMixto)} onChange={() => props.onToggleEmpleado(resultado.empleadoId)} />
+                {resultado.empleadoNombre}
+            </label>)}</div>
+        </div>}
+        {liquidablesDisponibles.length > 0 && <div style={{ marginBottom: 'var(--space-3)', padding: '10px 14px', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', background: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}><span style={{ color: 'var(--color-primary)' }}>{liquidables.length}</span> de {liquidablesDisponibles.length} empleados seleccionados para pagar</div>
+            <button type="button" className="btn btn-outline btn-sm" onClick={props.onToggleTodos}>{todosSeleccionados ? 'Quitar selección' : 'Seleccionar todos'}</button>
         </div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
             {[
@@ -79,7 +94,7 @@ export function WeeklyPayrollResults(props: Props) {
         <div className="table-container shadow-sm" style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'white' }}>
         <table className="table table-sm">
             <thead style={{ backgroundColor: 'var(--color-gray-50)' }}><tr>
-                <th style={{ width: '30px' }}></th><th style={{ minWidth: '210px' }}>Empleado y caja de pago</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '110px' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ minWidth: '115px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>Neto a Pagar</th>
+                <th style={{ width: '38px', textAlign: 'center' }}><input type="checkbox" aria-label="Seleccionar todos los empleados" checked={todosSeleccionados} onChange={props.onToggleTodos} /></th><th style={{ width: '30px' }}></th><th style={{ minWidth: '230px' }}>Empleado y caja de pago</th><th style={{ textAlign: 'center' }}>Días</th><th style={{ textAlign: 'right' }}>Sueldo Base</th><th style={{ textAlign: 'center', width: '110px' }} title="Horas de ajuste o adeudadas que se agregan manualmente a esta liquidación.">Hs. adeudadas</th><th style={{ textAlign: 'right' }}>Hs. Extras</th><th style={{ textAlign: 'right' }}>Recargo Fer.</th><th style={{ textAlign: 'right' }}>Deducciones</th><th style={{ minWidth: '115px', textAlign: 'right', fontWeight: 800, color: 'var(--color-primary)', whiteSpace: 'nowrap' }}>Neto a Pagar</th>
             </tr></thead>
             <tbody>{resultadosVisibles.map(resultado => {
                 const alertas = obtenerAlertasLiquidacion(resultado)
@@ -88,11 +103,15 @@ export function WeeklyPayrollResults(props: Props) {
                 const horasAdeudadas = resultado.ajusteHorasExtras || 0
                 const montoHorasAdeudadas = Math.round(horasAdeudadas * resultado.valorHoraExtra)
                 const montoExtrasSemana = resultado.montoHorasExtras - montoHorasAdeudadas
+                const seleccionado = props.empleadosSeleccionados.has(resultado.empleadoId)
                 return <Fragment key={resultado.empleadoId}>
-                <tr onClick={() => !resultado.error && setExpandedRow(expandedRow === resultado.empleadoId ? null : resultado.empleadoId)} style={{ cursor: resultado.error ? 'default' : 'pointer', backgroundColor: expandedRow === resultado.empleadoId ? 'var(--color-info-bg)' : 'transparent', opacity: resultado.error ? 0.7 : 1 }}>
+                <tr onClick={() => !resultado.error && setExpandedRow(expandedRow === resultado.empleadoId ? null : resultado.empleadoId)} style={{ cursor: resultado.error ? 'default' : 'pointer', backgroundColor: expandedRow === resultado.empleadoId ? 'var(--color-info-bg)' : seleccionado ? 'transparent' : 'var(--color-gray-50)', opacity: resultado.error ? 0.7 : seleccionado || resultado.esSeguimientoMensualMixto ? 1 : 0.62 }}>
+                    <td style={{ textAlign: 'center' }} onClick={evento => evento.stopPropagation()}>{resultado.esSeguimientoMensualMixto
+                        ? <span title="Sólo seguimiento">—</span>
+                        : <input type="checkbox" aria-label={`Seleccionar a ${resultado.empleadoNombre}`} checked={seleccionado} disabled={Boolean(resultado.error)} onChange={() => props.onToggleEmpleado(resultado.empleadoId)} />}</td>
                     <td>{!resultado.error && (expandedRow === resultado.empleadoId ? '▼' : '▶')}</td>
-                    <td style={{ fontWeight: 600, minWidth: '210px' }}>
-                        <div>{resultado.empleadoNombre || props.empleados.find(empleado => empleado.id === resultado.empleadoId)?.nombre || 'Empleado'}</div>
+                    <td style={{ fontWeight: 600, minWidth: '230px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span>{resultado.empleadoNombre || props.empleados.find(empleado => empleado.id === resultado.empleadoId)?.nombre || 'Empleado'}</span>{!resultado.error && !resultado.esSeguimientoMensualMixto && <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 7px', fontSize: 10 }} onClick={evento => { evento.stopPropagation(); props.onSeleccionarSolo(resultado.empleadoId) }}>Sólo este</button>}</div>
                         {resultado.error && <span className="badge badge-danger" style={{ marginLeft: 'var(--space-2)', fontSize: '10px' }}>ERROR</span>}
                         {resultado.esSeguimientoMensualMixto && <span className="badge badge-info" style={{ marginLeft: 'var(--space-2)', fontSize: '9px' }}>
                             {resultado.seguimientoGuardado ? 'SEGUIMIENTO GUARDADO' : 'SOLO SEGUIMIENTO'}
@@ -124,7 +143,7 @@ export function WeeklyPayrollResults(props: Props) {
                         <td style={{ minWidth: '115px', textAlign: 'right', fontWeight: 800, whiteSpace: 'nowrap', color: 'var(--color-gray-900)' }}>${resultado.totalNeto.toLocaleString()}</td>
                     </>}
                 </tr>
-                {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={9} style={{ padding: 'var(--space-4)' }}>
+                {expandedRow === resultado.empleadoId && <tr style={{ backgroundColor: 'var(--color-gray-50)' }}><td colSpan={10} style={{ padding: 'var(--space-4)' }}>
                     {alertas.length > 0 && <div style={{ display: 'grid', gap: '6px', marginBottom: 'var(--space-3)' }}>{alertas.map((alerta, indice) => <div key={`${alerta.fecha || 'general'}-${indice}`} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', background: alerta.nivel === 'error' ? 'var(--color-danger-bg)' : 'var(--color-warning-bg)', color: alerta.nivel === 'error' ? 'var(--color-danger)' : 'var(--color-warning)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{alerta.fecha ? `${alerta.fecha}: ` : ''}{alerta.mensaje}</div>)}</div>}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--space-3)' }}>{resultado.desglosePorDia.map(dia => <WeeklyPayrollDayCard key={dia.fecha} dia={dia} empleadoId={resultado.empleadoId} actualizandoEstado={props.updatingStatusDate === `${resultado.empleadoId}-${dia.fecha}`} estado={props.getDiaStatus(dia)} onTimeChange={props.onTimeChange} onHoursChange={props.onHoursChange} onEarlyEntryChange={props.onEarlyEntryChange} onJustificar={props.onJustificar} onQuitarJustificacion={props.onQuitarJustificacion} onStatusChange={props.onStatusChange} />)}</div>
                     {resultado.esSeguimientoMensualMixto
@@ -135,8 +154,8 @@ export function WeeklyPayrollResults(props: Props) {
                 </td></tr>}
             </Fragment>})}</tbody>
             <tfoot style={{ backgroundColor: 'var(--color-gray-100)', fontWeight: 'bold' }}>
-                <tr><td colSpan={8} style={{ textAlign: 'right' }}>TOTAL A PAGAR:</td><td style={{ minWidth: '115px', textAlign: 'right', whiteSpace: 'nowrap', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
-                {seguimientos.length > 0 && <tr><td colSpan={8} style={{ textAlign: 'right', color: 'var(--color-info)' }}>SEGUIMIENTO MENSUAL MIXTO (NO SE PAGA AHORA):</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--color-info)' }}>${totalSeguimiento.toLocaleString()}</td></tr>}
+                <tr><td colSpan={9} style={{ textAlign: 'right' }}>TOTAL SELECCIONADO A PAGAR:</td><td style={{ minWidth: '115px', textAlign: 'right', whiteSpace: 'nowrap', fontSize: 'var(--text-lg)', color: 'var(--color-primary)' }}>${totalGeneral.toLocaleString()}</td></tr>
+                {seguimientos.length > 0 && <tr><td colSpan={9} style={{ textAlign: 'right', color: 'var(--color-info)' }}>SEGUIMIENTO MENSUAL MIXTO (NO SE PAGA AHORA):</td><td style={{ textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--color-info)' }}>${totalSeguimiento.toLocaleString()}</td></tr>}
             </tfoot>
         </table>
         </div>

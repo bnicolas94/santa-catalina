@@ -10,7 +10,7 @@ import type {
     LiquidacionPagadaUI,
     ResultadoLiquidacionUI,
 } from './weeklyPayroll.types'
-import { cambiarIngresoAnticipado, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado } from './weeklyPayroll.utils'
+import { cambiarIngresoAnticipado, fusionarRecalculoEmpleado, minutesToTimeDisplay, obtenerAlertasLiquidacion, parseTimeToMinutes, recalcularDiaPorHoras, recalcularResultado, resultadosLiquidablesSeleccionados } from './weeklyPayroll.utils'
 import { WeeklyPayrollControls } from './WeeklyPayrollControls'
 import { WeeklyPayrollHeader } from './WeeklyPayrollHeader'
 import { WeeklyPayrollFooter } from './WeeklyPayrollFooter'
@@ -50,6 +50,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     const [empleadosDeVacaciones, setEmpleadosDeVacaciones] = useState<EmpleadoLiquidable[]>([])
     const [conceptos, setConceptos] = useState<ConceptoSalarialUI[]>([])
     const [updatingStatusDate, setUpdatingStatusDate] = useState<string | null>(null)
+    const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState<Set<string>>(new Set())
 
     useEffect(() => {
         fetch('/api/conceptos').then(res => res.json()).then(setConceptos).catch(console.error)
@@ -97,6 +98,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         }
         setLoading(true)
         setResultados([])
+        setEmpleadosSeleccionados(new Set())
         setEmpleadosExcluidos([])
         setEmpleadosDeVacaciones([])
         
@@ -168,6 +170,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                 .map(resultado => resultado.empleadoId))
             const vacaciones = empleadosSemanales.filter(empleado => idsDeVacaciones.has(empleado.id))
             const dataLiquidable = dataConModalidad.filter(resultado => resultado.esSeguimientoMensualMixto || !resultado.excluirLiquidacionSemanal)
+            setEmpleadosSeleccionados(new Set(dataLiquidable
+                .filter(resultado => !resultado.error && !resultado.esSeguimientoMensualMixto)
+                .map(resultado => resultado.empleadoId)))
             setEmpleadosDeVacaciones(vacaciones)
 
             if (dataLiquidable.length === 0) {
@@ -226,9 +231,9 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
     }
 
     const handleConfirmarTodo = async () => {
-        const validResults = resultados.filter(r => !r.error && !r.esSeguimientoMensualMixto)
+        const validResults = resultadosLiquidablesSeleccionados(resultados, empleadosSeleccionados)
         if (validResults.length === 0) {
-            alert('No hay liquidaciones semanales para pagar. Guardá los seguimientos mixtos desde el botón de la izquierda.')
+            alert('Seleccioná al menos un empleado para confirmar su liquidación semanal.')
             return
         }
 
@@ -255,7 +260,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
             const caja = cajas.find(item => item.tipo === tipo)
             return `${caja?.nombre || tipo}: $${monto.toLocaleString()}`
         }).join('\n')
-        if (!confirm(`¿Confirmás la liquidación final de ${validResults.length} empleados?\n\nEgresos por caja:\n${detalleCajas}`)) return
+        if (!confirm(`¿Confirmás la liquidación semanal de ${validResults.length} empleado${validResults.length === 1 ? '' : 's'} seleccionado${validResults.length === 1 ? '' : 's'}?\n\nEgresos por caja:\n${detalleCajas}`)) return
 
         setConfirmando(true)
         try {
@@ -563,6 +568,24 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
         setBorradorCargado(false)
     }
 
+    const handleToggleEmpleado = (empleadoId: string) => {
+        setEmpleadosSeleccionados(actual => {
+            const siguiente = new Set(actual)
+            if (siguiente.has(empleadoId)) siguiente.delete(empleadoId)
+            else siguiente.add(empleadoId)
+            return siguiente
+        })
+    }
+
+    const handleSeleccionarTodos = () => {
+        const idsDisponibles = resultados
+            .filter(resultado => !resultado.error && !resultado.esSeguimientoMensualMixto)
+            .map(resultado => resultado.empleadoId)
+        const todosSeleccionados = idsDisponibles.length > 0
+            && idsDisponibles.every(id => empleadosSeleccionados.has(id))
+        setEmpleadosSeleccionados(new Set(todosSeleccionados ? [] : idsDisponibles))
+    }
+
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1200px', width: '95%', maxHeight: '90vh' }}>
@@ -590,6 +613,7 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         conceptos={conceptos}
                         cajas={cajas}
                         cajasPorEmpleado={cajasPorEmpleado}
+                        empleadosSeleccionados={empleadosSeleccionados}
                         updatingStatusDate={updatingStatusDate}
                         getDiaStatus={getDiaStatus}
                         onAjusteChange={handleAjusteChange}
@@ -602,11 +626,14 @@ export function WeeklyPayrollModal({ empleados, onClose, onSuccess }: WeeklyPayr
                         onAddAdicional={handleAddAdicional}
                         onRemoveAdicional={handleRemoveAdicional}
                         onCajaEmpleadoChange={(empleadoId, nuevaCajaId) => setCajasPorEmpleado(actual => ({ ...actual, [empleadoId]: nuevaCajaId }))}
+                        onToggleEmpleado={handleToggleEmpleado}
+                        onSeleccionarSolo={empleadoId => setEmpleadosSeleccionados(new Set([empleadoId]))}
+                        onToggleTodos={handleSeleccionarTodos}
                     />
                 </div>
                 <WeeklyPayrollFooter
                     cantidadResultados={resultados.length}
-                    cantidadLiquidables={resultados.filter(resultado => !resultado.error && !resultado.esSeguimientoMensualMixto).length}
+                    cantidadLiquidables={resultadosLiquidablesSeleccionados(resultados, empleadosSeleccionados).length}
                     cantidadSeguimientos={resultados.filter(resultado => !resultado.error && resultado.esSeguimientoMensualMixto).length}
                     confirmando={confirmando}
                     guardandoBorrador={guardandoBorrador}
