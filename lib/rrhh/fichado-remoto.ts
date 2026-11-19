@@ -1,7 +1,14 @@
+import { fechaClaveRRHH } from './fechas'
+
 export type AccionFichadoRemoto = 'entrada' | 'inicio_descanso' | 'fin_descanso' | 'salida'
 export type EstadoFichadoRemoto = 'sin_iniciar' | 'trabajando' | 'descansando' | 'finalizado'
 
 export type MarcaFichado = { tipo: string; origen: string; fechaHora: Date | string }
+
+/** Evita mostrar como vigente una jornada anterior al cambiar el día en Argentina. */
+export function jornadaRemotaEsDeHoy(fecha: string, ahoraServidor: Date): boolean {
+    return fecha === fechaClaveRRHH(ahoraServidor)
+}
 
 export const ORIGEN_FICHADO_REMOTO: Record<AccionFichadoRemoto, string> = {
     entrada: 'remoto_entrada',
