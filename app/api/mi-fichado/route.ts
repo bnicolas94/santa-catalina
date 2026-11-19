@@ -18,7 +18,7 @@ function respuestaError(error: unknown) {
 export async function GET() {
     const empleadoId = await identidad()
     if (!empleadoId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-    try { return NextResponse.json(await consultarFichadoRemoto(empleadoId)) }
+    try { return NextResponse.json(await consultarFichadoRemoto(empleadoId), { headers: { 'Cache-Control': 'private, no-store' } }) }
     catch (error) { return respuestaError(error) }
 }
 

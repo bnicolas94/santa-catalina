@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { signOut } from 'next-auth/react'
-import type { AccionFichadoRemoto, EstadoFichadoRemoto } from '@/lib/rrhh/fichado-remoto'
+import { jornadaRemotaEsDeHoy, type AccionFichadoRemoto, type EstadoFichadoRemoto } from '@/lib/rrhh/fichado-remoto'
 import { resumirJornadaRemota } from '@/lib/rrhh/resumen-jornada-remota'
 import styles from './page.module.css'
 
@@ -40,20 +40,27 @@ export default function MiFichadoPage() {
     const [guardando, setGuardando] = useState(false)
     const [sincronizadoEn, setSincronizadoEn] = useState(0)
     const [ahoraLocal, setAhoraLocal] = useState(0)
+    const [sesionVencida, setSesionVencida] = useState(false)
     const ultimaConsulta = useRef(0)
+    const fechaSolicitada = useRef<string | null>(null)
 
     const actualizar = useCallback(async () => {
         const consulta = ++ultimaConsulta.current
         try {
-            const res = await fetch('/api/mi-fichado', { cache: 'no-store' })
+            const res = await fetch(`/api/mi-fichado?actualizado=${Date.now()}`, { cache: 'no-store' })
             const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'No se pudo consultar la jornada.')
             if (consulta !== ultimaConsulta.current) return
+            if (res.status === 401) {
+                setSesionVencida(true)
+                throw new Error('Tu sesión venció. Volvé a ingresar para continuar fichando.')
+            }
+            if (!res.ok) throw new Error(data.error || 'No se pudo consultar la jornada.')
             const recibidoEn = performance.now()
             setJornada(data)
             setSincronizadoEn(recibidoEn)
             setAhoraLocal(recibidoEn)
             setError('')
+            setSesionVencida(false)
         } catch (e) {
             if (consulta === ultimaConsulta.current) {
                 setJornada(null)
@@ -65,20 +72,41 @@ export default function MiFichadoPage() {
     useEffect(() => { void actualizar() }, [actualizar])
     useEffect(() => {
         const reloj = window.setInterval(() => setAhoraLocal(performance.now()), 1000)
-        return () => window.clearInterval(reloj)
-    }, [])
-    useEffect(() => {
-        if (!jornada) return
         const refresco = window.setInterval(() => { void actualizar() }, 30_000)
         const alVolver = () => { void actualizar() }
+        const alMostrar = () => { if (document.visibilityState === 'visible') void actualizar() }
+        const alRestaurar = (evento: PageTransitionEvent) => { if (evento.persisted) void actualizar() }
         window.addEventListener('focus', alVolver)
-        return () => { window.clearInterval(refresco); window.removeEventListener('focus', alVolver) }
-    }, [actualizar, jornada])
+        window.addEventListener('online', alVolver)
+        window.addEventListener('pageshow', alRestaurar)
+        document.addEventListener('visibilitychange', alMostrar)
+        return () => {
+            window.clearInterval(reloj)
+            window.clearInterval(refresco)
+            window.removeEventListener('focus', alVolver)
+            window.removeEventListener('online', alVolver)
+            window.removeEventListener('pageshow', alRestaurar)
+            document.removeEventListener('visibilitychange', alMostrar)
+        }
+    }, [actualizar])
 
-    const resumen = jornada && sincronizadoEn
+    const ahoraServidorMs = jornada && sincronizadoEn
+        ? new Date(jornada.ahoraServidor).getTime() + Math.max(0, ahoraLocal - sincronizadoEn)
+        : null
+    const fechaJornada = jornada?.fecha
+    const jornadaVigente = fechaJornada && ahoraServidorMs !== null && jornadaRemotaEsDeHoy(fechaJornada, new Date(ahoraServidorMs))
+
+    useEffect(() => {
+        if (!fechaJornada || ahoraServidorMs === null) return
+        if (jornadaRemotaEsDeHoy(fechaJornada, new Date(ahoraServidorMs)) || fechaSolicitada.current === fechaJornada) return
+        fechaSolicitada.current = fechaJornada
+        void actualizar()
+    }, [fechaJornada, ahoraServidorMs, actualizar])
+
+    const resumen = jornadaVigente && jornada && ahoraServidorMs !== null
         ? resumirJornadaRemota(
             jornada.marcas,
-            new Date(new Date(jornada.ahoraServidor).getTime() + Math.max(0, ahoraLocal - sincronizadoEn)),
+            new Date(ahoraServidorMs),
             jornada.horasEsperadas,
             jornada.horarioEntradaComputable,
         )
@@ -108,7 +136,9 @@ export default function MiFichadoPage() {
             <p className={styles.intro}>Registrá tu entrada, salida y descansos de home office. La hora se toma del servidor.</p>
             {cargando && <p>Cargando jornada…</p>}
             {error && <p className={styles.error} role="alert">{error}</p>}
-            {jornada && resumen && <>
+            {sesionVencida && <button type="button" className={styles.refresh} onClick={() => signOut({ callbackUrl: '/login' })}>Volver a ingresar</button>}
+            {jornada && !jornadaVigente && <p>Actualizando la jornada del nuevo día…</p>}
+            {jornadaVigente && resumen && <>
                 <div className={styles.status}><span>{jornada.fecha} · Argentina</span><strong>{estados[jornada.estado]}</strong></div>
                 <div className={styles.metrics}>
                     <div className={styles.metricMain}><span>Tiempo efectivamente trabajado</span><strong>{minutosLegibles(resumen.minutosEfectivosActuales)}</strong></div>

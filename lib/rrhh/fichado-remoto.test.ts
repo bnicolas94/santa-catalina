@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { accionPermitida, esAccionFichadoRemoto, estadoFichadoRemoto, ORIGEN_FICHADO_REMOTO, tipoParaAccionRemota } from './fichado-remoto'
+import { accionPermitida, esAccionFichadoRemoto, estadoFichadoRemoto, jornadaRemotaEsDeHoy, ORIGEN_FICHADO_REMOTO, tipoParaAccionRemota } from './fichado-remoto'
+import { rangoDiaRRHH } from './fechas'
 import { calcularResumenDia } from '../../utils/horas'
 import { calcularDiaSemanal } from '../payroll/calculoDiaSemanal'
 
@@ -27,6 +28,17 @@ test('las acciones siguen una sola jornada sin duplicados', () => {
     assert.equal(accionPermitida('descansando', 'salida'), false)
     assert.equal(accionPermitida('descansando', 'fin_descanso'), true)
     assert.equal(accionPermitida('finalizado', 'entrada'), false)
+})
+
+test('una jornada finalizada deja de bloquear la entrada al comenzar el día siguiente argentino', () => {
+    const salidaAyer = new Date('2026-11-19T02:50:00Z')
+    const ahoraHoy = new Date('2026-11-19T03:01:00Z')
+    const rangoHoy = rangoDiaRRHH('2026-11-19')
+    assert.equal(jornadaRemotaEsDeHoy('2026-11-18', salidaAyer), true)
+    assert.equal(jornadaRemotaEsDeHoy('2026-11-18', ahoraHoy), false)
+    assert.equal(salidaAyer < rangoHoy.gte, true)
+    assert.equal(estadoFichadoRemoto([]), 'sin_iniciar')
+    assert.equal(accionPermitida('sin_iniciar', 'entrada'), true)
 })
 
 test('dos pausas descuentan tiempo real y el jornal usa las horas efectivas', () => {
