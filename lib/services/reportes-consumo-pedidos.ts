@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { normalizarTexto } from '@/lib/google-sheets-caja'
 import { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
+import { calcularProductMix } from '@/lib/reportes/product-mix'
 import { obtenerReportePedidosConjunto } from './reportes-pedidos-conjunto'
 
 export async function obtenerConsumoPedidos(input: {
@@ -43,6 +44,7 @@ export async function obtenerConsumoPedidos(input: {
     ])
     return {
         ...calcularConsumoPedidos(reporte, productos),
+        productMix: calcularProductMix(reporte, productos),
         calidad: reporte.calidad,
         porSaborElegido: reporte.porSaborElegido,
         opciones: { origenes: reporte.opciones.origenes, modalidades: reporte.opciones.modalidades },

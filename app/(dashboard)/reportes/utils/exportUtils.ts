@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
+import type { calcularProductMix } from '@/lib/reportes/product-mix'
 import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
 
 /**
@@ -44,7 +45,7 @@ export async function exportReportToExcel(
     XLSX.writeFile(wb, `Reporte_SantaCatalina_${tipo}_${mes}_${anio}.xlsx`)
 }
 
-function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcularConsumoPedidos> & { filtros: { desde: string; hasta: string }; porSaborElegido: ReportePedidosOnline['porSaborElegido'] }) {
+function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcularConsumoPedidos> & { filtros: { desde: string; hasta: string }; porSaborElegido: ReportePedidosOnline['porSaborElegido']; productMix: ReturnType<typeof calcularProductMix> }) {
     const r = data.resumen
     const resumen = XLSX.utils.aoa_to_sheet([
         ['Pedidos e insumos', `${data.filtros.desde} a ${data.filtros.hasta}`],
@@ -90,6 +91,29 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
     ])
     setColumnWidths(sabores, [35, 16, 22, 28])
     XLSX.utils.book_append_sheet(wb, sabores, 'Sabores elegidos')
+    const mix = data.productMix
+    const matriz = XLSX.utils.aoa_to_sheet([
+        ['Producto', 'Presentación', 'Paquetes vendidos', 'Ingreso esperado', 'Pendientes',
+            ...mix.totales.map(item => `${item.nombre} (${item.unidad})`)],
+        ...mix.filas.map(fila => {
+            const insumos = new Map(fila.insumos.map(item => [item.id, item.cantidad]))
+            return [fila.nombre, fila.presentacion, fila.paquetes, fila.ingresoAtribuido, fila.faltantes.join('; '),
+                ...mix.totales.map(item => insumos.get(item.id) ?? null)]
+        }),
+        ['TOTAL UTILIZADO', null, mix.paquetes,
+            mix.filas.reduce((total, fila) => total + fila.ingresoAtribuido, 0), null,
+            ...mix.totales.map(item => item.cantidad)],
+    ])
+    setColumnWidths(matriz, [35, 16, 20, 20, 50, ...mix.totales.map(() => 22)])
+    XLSX.utils.book_append_sheet(wb, matriz, 'Product Mix')
+    const detalleMix = XLSX.utils.aoa_to_sheet([
+        ['Producto', 'Presentación', 'Paquetes', 'Insumo', 'Cantidad teórica', 'Unidad', 'Costo identificable', 'Pendientes'],
+        ...mix.filas.flatMap(fila => fila.insumos.map(item => [fila.nombre, fila.presentacion, fila.paquetes,
+            item.nombre, item.cantidad, item.unidad, item.costoIdentificado, fila.faltantes.join('; ')])),
+        ...mix.totales.map(item => ['TOTAL UTILIZADO', null, null, item.nombre, item.cantidad, item.unidad, item.costoIdentificado, null]),
+    ])
+    setColumnWidths(detalleMix, [35, 16, 14, 40, 22, 14, 22, 50])
+    XLSX.utils.book_append_sheet(wb, detalleMix, 'Detalle Product Mix')
 }
 
 function exportEconomico(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {

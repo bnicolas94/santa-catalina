@@ -6,11 +6,14 @@ import { Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js'
 import type { RangoFechas } from '../utils/dateUtils'
 import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
+import type { calcularProductMix } from '@/lib/reportes/product-mix'
 import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
+import ProductMixTable from './ProductMixTable'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 type Data = ReturnType<typeof calcularConsumoPedidos> & {
+    productMix: ReturnType<typeof calcularProductMix>
     calidad: ReportePedidosOnline['calidad']
     porSaborElegido: ReportePedidosOnline['porSaborElegido']
     opciones: { origenes: string[]; modalidades: string[] }
@@ -31,6 +34,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
     const [modalidades, setModalidades] = useState<string[]>([])
     const [revisionRecetas, setRevisionRecetas] = useState(0)
     const [saborDetalle, setSaborDetalle] = useState('')
+    const [vistaMix, setVistaMix] = useState(false)
     const params = new URLSearchParams({ desde: diaArgentina(rango.desde), hasta: diaArgentina(rango.hasta),
         origen, modalidad, ubicacionId })
     const clave = `${params}:${revision}:${revisionRecetas}`
@@ -82,12 +86,14 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
             <label>Modalidad<select className="form-select" value={modalidad} onChange={e => onModalidadChange(e.target.value)}>
                 <option value="">Todas</option>{modalidades.map(x => <option key={x} value={x}>{x}</option>)}
             </select></label>
+            <button type="button" className={`btn btn-sm ${vistaMix ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setVistaMix(false)}>Resumen</button>
+            <button type="button" className={`btn btn-sm ${vistaMix ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setVistaMix(true)}>Product Mix</button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRevisionRecetas(valor => valor + 1)}>Actualizar cálculo</button>
             <Link href="/reportes/pedidos-conjunto" className="btn btn-secondary btn-sm">Ver detalle de pedidos</Link>
         </div>
         {cargando && <div className="empty-state"><div className="spinner" /><p>Calculando consumo de insumos...</p></div>}
         {!cargando && resultado?.error && <div className="card" style={{ padding: 20, color: 'var(--color-danger)' }}>{resultado.error}</div>}
-        {data && <>
+        {data && (vistaMix ? <ProductMixTable mix={data.productMix} /> : <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 18 }}>
                 {[
                     ['Ingreso esperado', dinero(data.resumen.ingresoEsperado)],
@@ -143,6 +149,6 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                     {data.porTipo.map(x => <tr key={x.clave}><td>{x.nombre} · {x.presentacion}{x.motivo && x.motivo !== 'Completa' && <small style={{ display: 'block' }}>{x.motivo}</small>}</td><td>{cantidad(x.paquetes)}</td><td>{cantidad(x.paquetesConCosto)}</td><td>{cantidad(x.paquetesConPrecio)}</td><td>{dinero(x.ingresoAtribuido)}</td><td>{x.costoPorPaquete === null ? 'Pendiente' : dinero(x.costoPorPaquete)}</td><td>{x.costoEstimado === null ? 'Pendiente' : dinero(x.costoEstimado)}</td><td>{x.margenComparable === null ? 'Pendiente' : dinero(x.margenComparable)}</td><td>{cantidad(x.paquetesAnteriores)} paquetes</td></tr>)}
                 </tbody></table></div>{!data.porTipo.length && <p>No hay paquetes clasificables en este período.</p>}
             </div>
-        </>}
+        </>)}
     </div>
 }
