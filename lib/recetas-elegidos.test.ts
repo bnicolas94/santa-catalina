@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { saboresConfigurables, validarLineaElegidos } from './recetas-elegidos'
+import { planificarCargaMasiva, saboresConfigurables, validarCargaMasivaElegidos, validarLineaElegidos } from './recetas-elegidos'
 import { cantidadParaPlancha } from './recetas-elegidos-unidades'
 
 test('el editor ofrece todos los sabores del Sheet una sola vez', () => {
@@ -24,4 +24,15 @@ test('las líneas históricas de base se muestran por plancha sin modificarlas',
     assert.equal(cantidadParaPlancha('base', cantidadHistoricaPorSandwich), 0.64)
     assert.equal(cantidadParaPlancha('sabor', 0.64), 0.64)
     assert.equal(cantidadParaPlancha('empaque', 1), 1)
+})
+
+test('la carga múltiple valida sabores y conserva las recetas existentes', () => {
+    const carga = validarCargaMasivaElegidos({ insumoId: 'pan', cantidad: 0.4, merma: 2,
+        codigosSabor: ['tom', 'roque', 'tom'] })
+    assert.deepEqual(carga.codigosSabor, ['tom', 'roque'])
+    assert.deepEqual(planificarCargaMasiva(carga.codigosSabor, ['sabor:tom']),
+        { nuevos: ['roque'], omitidos: ['tom'] })
+    assert.throws(() => validarCargaMasivaElegidos({ insumoId: 'pan', cantidad: 0.4, merma: 0, codigosSabor: [] }))
+    assert.throws(() => validarCargaMasivaElegidos({ insumoId: 'pan', cantidad: 0.4, merma: 0,
+        codigosSabor: ['tom', 'desconocido'] }))
 })

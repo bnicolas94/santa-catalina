@@ -30,6 +30,26 @@ export function validarLineaElegidos(input: {
     }
 }
 
+export function validarCargaMasivaElegidos(raw: unknown) {
+    if (!raw || typeof raw !== 'object') throw new Error('Datos de carga múltiple inválidos.')
+    const body = raw as Record<string, unknown>
+    if (!Array.isArray(body.codigosSabor) || !body.codigosSabor.length) throw new Error('Seleccioná al menos un sabor.')
+    const codigosSabor = [...new Set(body.codigosSabor.map(codigo => String(codigo)))]
+    for (const codigoSabor of codigosSabor) validarLineaElegidos({
+        alcance: 'sabor', codigoSabor, insumoId: String(body.insumoId ?? ''),
+        cantidad: Number(body.cantidad), merma: Number(body.merma ?? 0),
+    })
+    return { codigosSabor, insumoId: String(body.insumoId), cantidad: Number(body.cantidad), merma: Number(body.merma ?? 0) }
+}
+
+export function planificarCargaMasiva(codigosSabor: string[], clavesExistentes: string[]) {
+    const existentes = new Set(clavesExistentes)
+    return {
+        nuevos: codigosSabor.filter(codigo => !existentes.has(`sabor:${codigo}`)),
+        omitidos: codigosSabor.filter(codigo => existentes.has(`sabor:${codigo}`)),
+    }
+}
+
 export async function obtenerRecetasElegidos(productoId: string) {
     const producto = await prisma.producto.findUnique({
         where: { id: productoId },
@@ -84,6 +104,36 @@ export async function guardarLineaElegidos(productoId: string, raw: unknown, id?
         const linea = id ? await tx.recetaElegidosInsumo.update({ where: { id }, data })
             : await tx.recetaElegidosInsumo.create({ data })
         return { ...linea, cantidad: cantidadParaPlancha(linea.alcance, linea.cantidad) }
+    })
+}
+
+export async function guardarInsumoVariosSabores(productoId: string, raw: unknown) {
+    const input = validarCargaMasivaElegidos(raw)
+    return prisma.$transaction(async tx => {
+        const [producto, insumo, existentes] = await Promise.all([
+            tx.producto.findUnique({ where: { id: productoId }, select: { codigoInterno: true } }),
+            tx.insumo.findUnique({ where: { id: input.insumoId }, select: { activo: true } }),
+            tx.recetaElegidosInsumo.findMany({ where: { productoId, insumoId: input.insumoId,
+                claveAlcance: { in: input.codigosSabor.map(codigo => `sabor:${codigo}`) } }, select: { claveAlcance: true } }),
+        ])
+        if (!producto || producto.codigoInterno !== 'ELE') throw new Error('Este producto no es Elegidos.')
+        if (!insumo?.activo) throw new Error('El insumo no existe o está inactivo.')
+        const plan = planificarCargaMasiva(input.codigosSabor, existentes.map(linea => linea.claveAlcance))
+        const nuevasLineas = [] as Array<{ productoId: string; insumoId: string; varianteId: string;
+            alcance: string; claveAlcance: string; cantidad: number; merma: number }>
+        for (const codigo of plan.nuevos) {
+            const nombre = saboresConfigurables.find(sabor => sabor.codigo === codigo)!.nombre
+            const variante = await tx.varianteProducto.upsert({
+                where: { productoId_codigo: { productoId, codigo } },
+                create: { productoId, codigo, nombre }, update: { nombre, activo: true }, select: { id: true },
+            })
+            nuevasLineas.push({ productoId, insumoId: input.insumoId, varianteId: variante.id,
+                alcance: 'sabor', claveAlcance: `sabor:${codigo}`, cantidad: input.cantidad, merma: input.merma })
+        }
+        const resultado = nuevasLineas.length
+            ? await tx.recetaElegidosInsumo.createMany({ data: nuevasLineas, skipDuplicates: true })
+            : { count: 0 }
+        return { creados: resultado.count, omitidos: input.codigosSabor.length - resultado.count }
     })
 }
 

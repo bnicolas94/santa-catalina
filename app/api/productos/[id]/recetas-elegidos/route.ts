@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { tienePermisoEnSesion } from '@/lib/auth/permisosSesion'
-import { guardarLineaElegidos, mensajeRecetaElegidos, obtenerRecetasElegidos, quitarLineaElegidos } from '@/lib/recetas-elegidos'
+import { guardarInsumoVariosSabores, guardarLineaElegidos, mensajeRecetaElegidos, obtenerRecetasElegidos, quitarLineaElegidos } from '@/lib/recetas-elegidos'
 
 type Contexto = { params: Promise<{ id: string }> }
 
@@ -26,7 +26,10 @@ export async function POST(request: Request, contexto: Contexto) {
     const denegado = await permiso()
     if (denegado) return denegado
     try {
-        const linea = await guardarLineaElegidos((await contexto.params).id, await request.json())
+        const body = await request.json()
+        const linea = Array.isArray(body?.codigosSabor)
+            ? await guardarInsumoVariosSabores((await contexto.params).id, body)
+            : await guardarLineaElegidos((await contexto.params).id, body)
         return NextResponse.json(linea, { status: 201 })
     } catch (error) { return NextResponse.json({ error: mensajeRecetaElegidos(error) }, { status: 400 }) }
 }

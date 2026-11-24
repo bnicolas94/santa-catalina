@@ -23,6 +23,8 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
     const [error, setError] = useState('')
     const [mensaje, setMensaje] = useState('')
     const [guardando, setGuardando] = useState(false)
+    const [masivo, setMasivo] = useState({ insumoId: '', cantidad: '', merma: '0', codigosSabor: [] as string[] })
+    const [guardandoMasivo, setGuardandoMasivo] = useState(false)
 
     const cargar = useCallback(async () => {
         const res = await fetch(`/api/productos/${productoId}/recetas-elegidos`)
@@ -44,6 +46,32 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
     const referencia = alcance === 'sabor' ? '1 plancha de 8 sándwiches'
         : `1 paquete x${datos?.presentaciones.find(p => p.id === presentacionId)?.cantidad ?? '—'}`
     const costo = (linea: Receta) => linea.cantidad / (1 - linea.merma / 100) * linea.insumo.precioUnitario
+    const yaTieneInsumo = (codigo: string) => datos?.recetasElegidos.some(linea =>
+        linea.alcance === 'sabor' && linea.variante?.codigo === codigo && linea.insumo.id === masivo.insumoId) ?? false
+    const nuevosMasivo = masivo.codigosSabor.filter(codigo => !yaTieneInsumo(codigo)).length
+
+    function alternarSabor(codigo: string) {
+        setMasivo(actual => ({ ...actual, codigosSabor: actual.codigosSabor.includes(codigo)
+            ? actual.codigosSabor.filter(item => item !== codigo) : [...actual.codigosSabor, codigo] }))
+    }
+
+    async function guardarMasivo(event: React.FormEvent) {
+        event.preventDefault()
+        if (guardandoMasivo) return
+        setGuardandoMasivo(true); setError(''); setMensaje('')
+        try {
+            const res = await fetch(`/api/productos/${productoId}/recetas-elegidos`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...masivo, cantidad: Number(masivo.cantidad), merma: Number(masivo.merma) }),
+            })
+            const json = await res.json()
+            if (!res.ok) throw new Error(json.error || 'No se pudo aplicar el insumo a los sabores.')
+            await cargar()
+            setMasivo(actual => ({ ...actual, insumoId: '', cantidad: '' }))
+            setMensaje(`Insumo agregado a ${json.creados} sabores. ${json.omitidos} ya lo tenían y quedaron sin cambios.`)
+        } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar.') }
+        finally { setGuardandoMasivo(false) }
+    }
 
     function nuevaLinea() {
         setEditando(null)
@@ -112,6 +140,36 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
             </div>
             {alcance === 'sabor' && <label className="form-group"><span className="form-label">Sabor del Sheet</span><select className="form-select" value={codigoSabor} onChange={e => { setCodigoSabor(e.target.value); setForm({ ...inicial, alcance, codigoSabor: e.target.value, presentacionId }); setEditando(null) }}>
                 {datos.sabores.map(sabor => <option key={sabor.codigo} value={sabor.codigo}>{sabor.nombre}</option>)}</select></label>}
+            {alcance === 'sabor' && <details style={{ margin: '14px 0', padding: 14, border: '1px solid var(--color-gray-200)', borderRadius: 8 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Agregar un insumo a varios sabores</summary>
+                <p>Se usa la misma cantidad neta y merma por plancha de 8 en los sabores marcados. Si el insumo ya está en una ficha, esa línea no se modifica.</p>
+                <form onSubmit={guardarMasivo}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+                        <label>Insumo<select className="form-select" value={masivo.insumoId} onChange={e => setMasivo({ ...masivo, insumoId: e.target.value })} required>
+                            <option value="">Seleccionar...</option>{datos.insumos.map(x => <option key={x.id} value={x.id}>{x.nombre} · {x.unidadMedida}</option>)}
+                        </select></label>
+                        <label>Cantidad neta por plancha<input className="form-input" type="number" min="0.000001" step="any" value={masivo.cantidad}
+                            onChange={e => setMasivo({ ...masivo, cantidad: e.target.value })} required /></label>
+                        <label>Merma %<input className="form-input" type="number" min="0" max="99.99" step="0.01" value={masivo.merma}
+                            onChange={e => setMasivo({ ...masivo, merma: e.target.value })} required /></label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMasivo(actual => ({ ...actual,
+                            codigosSabor: datos.sabores.map(sabor => sabor.codigo) }))}>Marcar todos</button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setMasivo(actual => ({ ...actual, codigosSabor: [] }))}>Limpiar</button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8, marginBottom: 14 }}>
+                        {datos.sabores.map(sabor => <label key={sabor.codigo} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input type="checkbox" checked={masivo.codigosSabor.includes(sabor.codigo)} onChange={() => alternarSabor(sabor.codigo)} />
+                            {sabor.nombre}{masivo.insumoId && yaTieneInsumo(sabor.codigo) && <small>· ya cargado</small>}
+                        </label>)}
+                    </div>
+                    <p>{masivo.codigosSabor.length} sabores seleccionados: {nuevosMasivo} nuevos y {masivo.codigosSabor.length - nuevosMasivo} sin cambios.</p>
+                    <button className="btn btn-primary btn-sm" disabled={guardandoMasivo || !masivo.codigosSabor.length || !nuevosMasivo}>
+                        {guardandoMasivo ? 'Guardando...' : 'Agregar a los sabores seleccionados'}
+                    </button>
+                </form>
+            </details>}
             {alcance === 'empaque' && <label className="form-group"><span className="form-label">Presentación</span><select className="form-select" value={presentacionId} onChange={e => { setPresentacionId(e.target.value); setForm({ ...inicial, alcance, codigoSabor, presentacionId: e.target.value }); setEditando(null) }}>
                 {datos.presentaciones.map(p => <option key={p.id} value={p.id}>Paquete x{p.cantidad}</option>)}</select></label>}
             <h3>{titulo}</h3><p>Las cantidades de esta sección corresponden a {referencia}. La merma se agrega al consumo estimado.</p>
