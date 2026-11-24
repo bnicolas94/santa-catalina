@@ -97,8 +97,6 @@ export async function guardarSucursalesSheet(input: unknown, usuarioId: string) 
             if (cajas.length !== new Set(idsCaja).size) throw new Error(`Una caja configurada para ${ubicacionTexto} no existe o está inactiva.`)
             const cajaEfectivo = cajas.find(c => c.id === fila.cajaEfectivoId)
             if (cajaEfectivo && cajaEfectivo.ubicacionId !== fila.ubicacionId) throw new Error(`La caja de efectivo de ${ubicacionTexto} debe pertenecer a esa sede.`)
-            const cajaDeliveryEfectivo = cajas.find(c => c.id === fila.cajaDeliveryEfectivoId)
-            if (cajaDeliveryEfectivo && cajaDeliveryEfectivo.ubicacionId !== fila.ubicacionId) throw new Error(`La caja de efectivo delivery de ${ubicacionTexto} debe pertenecer a esa sede.`)
             const data = { ubicacionTexto, ubicacionClave, ubicacionId: fila.ubicacionId, cajaEfectivoId: fila.cajaEfectivoId || null, cajaTransferenciaId: fila.cajaTransferenciaId || null, cajaDeliveryEfectivoId: fila.cajaDeliveryEfectivoId || null, cajaDeliveryTransferenciaId: fila.cajaDeliveryTransferenciaId || null, activo: Boolean(fila.activo), actualizadoPorId: usuarioId }
             if (fila.id) await tx.integracionSheetSucursal.update({ where: { id: fila.id }, data })
             else await tx.integracionSheetSucursal.upsert({ where: { ubicacionClave }, create: data, update: data })
