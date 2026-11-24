@@ -21,7 +21,6 @@ const equivalenciasConocidas: Record<string, string> = {
     'jamon y queso': 'JQ',
     'surtido clasico': 'CLA', 'surtidos clasicos': 'CLA',
     'surtido especial': 'ESP', 'surtidos especiales': 'ESP',
-    'surtidos elegidos': 'ELE',
 }
 
 export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos: ProductoConReceta[]) {
@@ -44,6 +43,13 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         for (const producto of porNombre.get(nombre) ?? []) candidatos.set(producto.id, producto)
         for (const producto of porCodigo.get(equivalenciasConocidas[nombre] ?? '') ?? []) candidatos.set(producto.id, producto)
         const producto = candidatos.size === 1 ? [...candidatos.values()][0] : null
+        // El Sheet define los sabores elegidos en Observaciones. La ficha genérica
+        // de ELE no identifica los insumos variables de cada plancha.
+        if (nombre === 'surtidos elegidos' || nombre === 'personalizado' || producto?.codigoInterno === 'ELE') {
+            paquetesSinCosto += tipo.paquetes
+            return { ...tipo, productoErp: producto?.nombre ?? null, costoPorPaquete: null, costoEstimado: null,
+                margenComparable: null, motivo: 'Sin receta por sabor para las planchas elegidas' }
+        }
         const presentaciones = producto?.presentaciones.filter(p => p.cantidad === tipo.presentacion) ?? []
         const presentacion = presentaciones.length === 1 ? presentaciones[0] : null
         const fichas = producto && presentacion

@@ -39,6 +39,7 @@ export async function obtenerConsumoPedidos(input: {
     return {
         ...calcularConsumoPedidos(reporte, productos),
         calidad: reporte.calidad,
+        porSaborElegido: reporte.porSaborElegido,
         opciones: { origenes: reporte.opciones.origenes, modalidades: reporte.opciones.modalidades },
         actualizado: reporte.actualizado,
         filtros: input,

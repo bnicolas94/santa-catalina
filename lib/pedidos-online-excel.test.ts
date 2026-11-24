@@ -48,3 +48,8 @@ test('rechaza sabores que no completan la cantidad elegida', () => {
     const [origen] = parsearCsvPedidosOnline(`${encabezados}\n${fila().replace('Sabores (8): 8x Zanahoria y Huevo', 'Sabores (8): 8x Tomate + 8x Huevo')}`)
     assert.match(convertirPedidoOnline(origen).error || '', /sabores elegidos/)
 })
+
+test('rechaza un encabezado Sabores con cantidad distinta al detalle', () => {
+    const [origen] = parsearCsvPedidosOnline(`${encabezados}\n${fila().replace('Sabores (8): 8x Zanahoria y Huevo', 'Sabores (16): 8x Zanahoria y Huevo')}`)
+    assert.match(convertirPedidoOnline(origen).error || '', /sabores elegidos/)
+})

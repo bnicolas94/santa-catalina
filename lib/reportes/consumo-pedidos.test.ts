@@ -78,3 +78,24 @@ test('el período anterior incluye tipos que ya no se vendieron en el período e
     assert.equal(r.resumen.paquetesAnteriores, 1)
     assert.deepEqual(r.porTipo, [])
 })
+
+test('no atribuye la ficha genérica de ELE a sabores elegidos del Sheet', () => {
+    const csv = [cabecera, fila('1', '8 Surtidos Elegidos', '8', '100')
+        .replace('13/11/2026,,100', '13/11/2026,"Sabores (8): 8x Huevo",100')].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const productos: ProductoConReceta[] = [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele8', cantidad: 8 }], fichasTecnicas: [ficha('relleno', 10, 1)] }]
+    const r = calcularConsumoPedidos(reporte, productos)
+    assert.equal(r.resumen.costoEstimado, 0)
+    assert.equal(r.resumen.ingresoSinCosto, 100)
+    assert.equal(r.porTipo[0].motivo, 'Sin receta por sabor para las planchas elegidas')
+    assert.deepEqual(reporte.porSaborElegido.map(x => ({ codigo: x.codigo, planchas: x.planchas })), [{ codigo: 'hue', planchas: 1 }])
+    assert.equal(reporte.calidad.sinSaboresElegidos, 0)
+})
+
+test('si Observaciones no detalla los sabores, informa la falta sin inventar planchas', () => {
+    const csv = [cabecera, fila('1', '8 Surtidos Elegidos', '8', '100')].join('\n')
+    const reporte = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
+    assert.deepEqual(reporte.porSaborElegido, [])
+    assert.equal(reporte.calidad.sinSaboresElegidos, 1)
+})

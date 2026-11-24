@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
+import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
 
 /**
  * Exporta reportes a Excel con formato profesional.
@@ -43,7 +44,7 @@ export async function exportReportToExcel(
     XLSX.writeFile(wb, `Reporte_SantaCatalina_${tipo}_${mes}_${anio}.xlsx`)
 }
 
-function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcularConsumoPedidos> & { filtros: { desde: string; hasta: string } }) {
+function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcularConsumoPedidos> & { filtros: { desde: string; hasta: string }; porSaborElegido: ReportePedidosOnline['porSaborElegido'] }) {
     const r = data.resumen
     const resumen = XLSX.utils.aoa_to_sheet([
         ['Pedidos e insumos', `${data.filtros.desde} a ${data.filtros.hasta}`],
@@ -68,6 +69,12 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
     ])
     setColumnWidths(paquetes, [35, 16, 14, 14, 20, 20, 18, 20, 18, 40])
     XLSX.utils.book_append_sheet(wb, paquetes, 'Paquetes')
+    const sabores = XLSX.utils.aoa_to_sheet([
+        ['Sabor elegido', 'Planchas', 'Sándwiches'],
+        ...data.porSaborElegido.map(x => [x.nombre, x.planchas, x.sandwiches]),
+    ])
+    setColumnWidths(sabores, [35, 16, 18])
+    XLSX.utils.book_append_sheet(wb, sabores, 'Sabores elegidos')
 }
 
 function exportEconomico(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {

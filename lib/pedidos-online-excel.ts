@@ -108,12 +108,12 @@ function codigoCerrado(nombre: string) {
     return null
 }
 
-function parsearElegidos(observaciones: string, cantidadEsperada: number): string[] | null {
+export function interpretarSaboresElegidos(observaciones: string, cantidadEsperada: number): { codigo: string; nombre: string; sandwiches: number }[] | null {
     const texto = observaciones.split(/\r?\n/).map(normalizarTexto).join('\n')
-    const seccion = texto.match(/sabores\s*\(\s*\d+\s*\)\s*:\s*([^\n]+)/)?.[1]
-    if (!seccion) return null
-    const partes = seccion.split(/\s*(?:\+|,|;)\s*/).filter(Boolean)
-    const codigos: string[] = []
+    const seccion = texto.match(/sabores\s*\(\s*(\d+)\s*\)\s*:\s*([^\n]+)/)
+    if (!seccion || Number(seccion[1]) !== cantidadEsperada) return null
+    const partes = seccion[2].split(/\s*(?:\+|,|;)\s*/).filter(Boolean)
+    const saboresElegidos: { codigo: string; nombre: string; sandwiches: number }[] = []
     let total = 0
     for (const parte of partes) {
         const match = parte.match(/^(\d+)\s*x\s*(.+)$/)
@@ -121,10 +121,14 @@ function parsearElegidos(observaciones: string, cantidadEsperada: number): strin
         const cantidad = Number(match[1])
         const codigo = sabores[match[2].trim()]
         if (!codigo || !Number.isSafeInteger(cantidad) || cantidad < 1 || cantidad % 8 !== 0) return null
-        codigos.push(`${cantidad}${codigo}`)
+        saboresElegidos.push({ codigo, nombre: match[2].trim(), sandwiches: cantidad })
         total += cantidad
     }
-    return total === cantidadEsperada ? codigos : null
+    return total === cantidadEsperada ? saboresElegidos : null
+}
+
+function parsearElegidos(observaciones: string, cantidadEsperada: number): string[] | null {
+    return interpretarSaboresElegidos(observaciones, cantidadEsperada)?.map(sabor => `${sabor.sandwiches}${sabor.codigo}`) ?? null
 }
 
 export function convertirPedidoOnline(fila: FilaPedidoOnline): { pedido: PedidoExcel | null; error: string | null } {
