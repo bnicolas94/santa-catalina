@@ -110,6 +110,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
     }
     let elegidosValorados = 0, elegidosSinCosto = 0, costoElegidos = 0, ingresoElegidos = 0
     let costoSaboresIdentificados = 0, planchasConCosto = 0
+    const faltantesPorPedido: Array<{ origen: string; id: string; motivos: string[] }> = []
     const faltantesElegidos = new Map<string, number>()
     const porSaborCosto = new Map<string, { codigo: string; nombre: string; planchasValoradas: number; costoEstimado: number }>()
     const porSaborInsumo = new Map<string, { codigo: string; sabor: string; insumoId: string; insumo: string;
@@ -134,6 +135,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
                 elegidosSinCosto += paquetes
                 registrarFalta('Sin sabores válidos en el Sheet', paquetes)
                 tipoUnico?.motivos.add('Sin sabores válidos en el Sheet')
+                faltantesPorPedido.push({ origen: pedido.origen, id: pedido.id, motivos: ['Sin sabores válidos en el Sheet'] })
             }
             continue
         }
@@ -184,6 +186,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         if (motivos.size) {
             if (pedido.periodo === 'actual') {
                 elegidosSinCosto += paquetes
+                faltantesPorPedido.push({ origen: pedido.origen, id: pedido.id, motivos: [...motivos] })
                 for (const motivo of motivos) registrarFalta(motivo, paquetes)
                 for (const motivo of motivos) tipoUnico?.motivos.add(motivo)
                 for (const item of insumosValidosDelPedido.values()) {
@@ -275,5 +278,6 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         porInsumoIdentificado: [...insumosIdentificados.values()].sort((a, b) => b.costoEstimado - a.costoEstimado),
         porSaborCosto: [...porSaborCosto.values()].sort((a, b) => b.costoEstimado - a.costoEstimado || a.codigo.localeCompare(b.codigo)),
         porSaborInsumo: [...porSaborInsumo.values()].sort((a, b) => a.sabor.localeCompare(b.sabor, 'es') || b.costoEstimado - a.costoEstimado),
+        faltantesPorPedido,
     }
 }

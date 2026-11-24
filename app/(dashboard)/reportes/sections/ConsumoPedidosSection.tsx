@@ -8,13 +8,16 @@ import type { RangoFechas } from '../utils/dateUtils'
 import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
 import type { calcularProductMix } from '@/lib/reportes/product-mix'
 import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
+import type { calcularAuditoriaPedidos } from '@/lib/reportes/auditoria-pedidos'
 import ProductMixTable from './ProductMixTable'
+import AuditoriaPedidosPanel from './AuditoriaPedidosPanel'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 type Data = ReturnType<typeof calcularConsumoPedidos> & {
     productMix: ReturnType<typeof calcularProductMix>
     calidad: ReportePedidosOnline['calidad']
+    auditoria: ReturnType<typeof calcularAuditoriaPedidos>
     porSaborElegido: ReportePedidosOnline['porSaborElegido']
     opciones: { origenes: string[]; modalidades: string[] }
     actualizado: string
@@ -121,6 +124,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                 <p>Período anterior equivalente: {cantidad(data.resumen.paquetesAnteriores)} paquetes clasificables y {dinero(data.resumen.costoAnterior)} de consumo valorado con las mismas recetas y precios actuales.</p>
                 <small>El costo usa la ficha técnica y el precio actual de cada insumo, incluida la merma configurada. Es una estimación de insumos asociados a los paquetes vendidos: no equivale a compras, stock consumido real ni dinero cobrado. En pedidos mixtos, el precio se atribuye por cantidad de sándwiches. Los importes históricos pueden cambiar si cambian las recetas o los precios.</small>
             </div>}
+            {vista === 'calidad' && <AuditoriaPedidosPanel auditoria={data.auditoria} />}
             {vista === 'indicadores' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, marginBottom: 18 }}>
                 <div className="card" style={{ padding: 20 }}><h3>Insumos con mayor costo identificable</h3><div style={{ height: 320 }}><Bar data={{ labels: topInsumos.map(x => x.nombre), datasets: [{ label: 'Costo identificable', data: topInsumos.map(x => x.costoEstimado), backgroundColor: '#ef9f32' }] }} options={chartOptions} /></div></div>
                 <div className="card" style={{ padding: 20 }}><h3>Paquetes con mayor costo estimado</h3><div style={{ height: 320 }}><Bar data={{ labels: topTipos.map(x => `${x.nombre} · ${x.presentacion}`), datasets: [{ label: 'Costo estimado', data: topTipos.map(x => x.costoEstimado ?? 0), backgroundColor: '#7c3aed' }] }} options={chartOptions} /></div></div>
@@ -137,7 +141,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                 {data.resumen.elegidos.faltantes.length > 0 && <><p>Faltantes para completar paquetes (un mismo pedido puede aparecer en varios motivos):</p><ul>{data.resumen.elegidos.faltantes.map(x => <li key={x.motivo}>{x.motivo}: {cantidad(x.paquetes)} paquetes afectados</li>)}</ul></>}
             </div>}
             {vista === 'insumos' && <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Planchas y costo por sabor</h3>
-                <p>Las planchas salen de «Sabores» en Observaciones del Sheet. Una ficha con insumos y precios válidos muestra su costo aunque el paquete siga pendiente por otros sabores o empaque. El empaque sólo integra el costo completo del paquete.</p>
+                <p>Las planchas salen de los sabores indicados en el Sheet, ya sea en Observaciones o en Producto para ventas rápidas. Una ficha con insumos y precios válidos muestra su costo aunque el paquete siga pendiente por otros sabores o empaque. El empaque sólo integra el costo completo del paquete.</p>
                 <div style={{ maxHeight: 340, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Sabor</th><th>Planchas</th><th>Con costo</th><th>Costo de insumos</th></tr></thead><tbody>
                     {data.porSaborElegido.map(x => { const costo = data.porSaborCosto.find(item => item.codigo === x.codigo); return <tr key={x.codigo}><td>{x.nombre}</td><td>{cantidad(x.planchas)}</td><td>{cantidad(costo?.planchasValoradas ?? 0)}</td><td>{costo ? dinero(costo.costoEstimado) : 'Pendiente'}</td></tr> })}
                 </tbody></table></div>{!data.porSaborElegido.length && <p>No hay sabores elegidos identificados para estos filtros.</p>}

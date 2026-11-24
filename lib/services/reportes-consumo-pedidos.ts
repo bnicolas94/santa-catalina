@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { normalizarTexto } from '@/lib/google-sheets-caja'
 import { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
 import { calcularProductMix } from '@/lib/reportes/product-mix'
+import { calcularAuditoriaPedidos } from '@/lib/reportes/auditoria-pedidos'
 import { obtenerReportePedidosConjunto } from './reportes-pedidos-conjunto'
 
 export async function obtenerConsumoPedidos(input: {
@@ -24,7 +25,7 @@ export async function obtenerConsumoPedidos(input: {
     const [reporte, productos] = await Promise.all([
         obtenerReportePedidosConjunto({
             desde: input.desde, hasta: input.hasta, origen: input.origen,
-            modalidad: input.modalidad, ubicaciones, pagina: 1,
+            modalidad: input.modalidad, ubicaciones, pagina: 1, todos: true, auditar: true,
         }),
         prisma.producto.findMany({
             select: {
@@ -42,9 +43,11 @@ export async function obtenerConsumoPedidos(input: {
             },
         }),
     ])
+    const consumo = calcularConsumoPedidos(reporte, productos)
     return {
-        ...calcularConsumoPedidos(reporte, productos),
+        ...consumo,
         productMix: calcularProductMix(reporte, productos),
+        auditoria: calcularAuditoriaPedidos(reporte, consumo),
         calidad: reporte.calidad,
         porSaborElegido: reporte.porSaborElegido,
         opciones: { origenes: reporte.opciones.origenes, modalidades: reporte.opciones.modalidades },

@@ -3,7 +3,7 @@ import { normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet } from '@/
 import { interpretarSaboresElegidos, saboresSheetOnline } from '@/lib/pedidos-online-excel'
 
 export type FiltrosPedidosOnline = {
-    desde: string; hasta: string; fechaComparacion?: string; origen?: string; modalidad?: string; ubicacion?: string; ubicaciones?: string[]; estado?: string; buscar?: string; pagina?: number; todos?: boolean
+    desde: string; hasta: string; fechaComparacion?: string; origen?: string; modalidad?: string; ubicacion?: string; ubicaciones?: string[]; estado?: string; buscar?: string; pagina?: number; todos?: boolean; auditar?: boolean
 }
 
 export function validarFiltrosPedidosOnline(f: FiltrosPedidosOnline) {
@@ -159,6 +159,8 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         direccion: string; producto: string; observaciones: string; modalidad: string; ubicacion: string;
         estado: string; pago: string; precio: number | null; duplicado: boolean; conflicto: boolean; fila: number; cantidad: string; paquetes: number | null
     }>
+    const registrosSinFechaEntrega: Array<{ origen: string; id: string; fila: number; fecha: string;
+        fechaEntrega: string; estado: string; producto: string; cantidad: string; ubicacion: string }> = []
     const calidad = { duplicados: 0, conflictos: 0, sinFechaEntrega: 0, sinPrecio: 0,
         sinPaquetes: 0, sinSaboresElegidos: 0, ventasRapidasPersonalizadas: 0 }
     let anteriorPedidos = 0, anteriorCentavos = 0
@@ -209,7 +211,13 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         if (f.estado && fila.estadoClave !== normalizarTexto(f.estado)) continue
         if (buscar && !normalizarTexto([id, detalle?.nombre, detalle?.apellido, detalle?.telefono, detalle?.direccion, detalle?.producto].join(' ')).includes(buscar)) continue
         const fecha = fechaEntregaIso(detalle?.fechaEntrega ?? '')
-        if (!fecha) { calidad.sinFechaEntrega++; continue }
+        if (!fecha) {
+            calidad.sinFechaEntrega++
+            if (f.auditar) registrosSinFechaEntrega.push({ origen, id, fila: fila.fila, fecha: fila.fechaTexto,
+                fechaEntrega: detalle?.fechaEntrega ?? '', estado: fila.estado, producto: detalle?.producto ?? '',
+                cantidad: detalle?.cantidad ?? '', ubicacion: fila.ubicacion })
+            continue
+        }
         const precioValido = Number.isFinite(fila.precio) && fila.precio > 0
         const importe = precioValido ? Math.round(fila.precio * 100) : 0
         const esEntregado = fila.estadoClave === 'entregado'
@@ -336,6 +344,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         porSaborElegido: [...saboresElegidos.values()].map(sabor => ({ ...sabor, planchas: sabor.sandwiches / 8 }))
             .sort((a, b) => b.planchas - a.planchas || a.codigo.localeCompare(b.codigo)),
         pedidosElegidos,
+        registrosSinFechaEntrega,
         totalFilas: registros.length, pagina, paginas: Math.ceil(registros.length / paginaTamano),
         registros: f.todos ? registros : registros.slice((pagina - 1) * paginaTamano, pagina * paginaTamano),
     }
