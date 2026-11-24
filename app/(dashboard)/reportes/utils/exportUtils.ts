@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
 
 /**
  * Exporta reportes a Excel con formato profesional.
@@ -6,7 +7,7 @@ import * as XLSX from 'xlsx'
  */
 export async function exportReportToExcel(
     data: any,
-    tipo: 'economico' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja',
+    tipo: 'economico' | 'produccion' | 'ventas' | 'costos' | 'pedidos-insumos' | 'desperdicio' | 'performance' | 'caja',
     mes: string,
     anio: string
 ) {
@@ -25,6 +26,9 @@ export async function exportReportToExcel(
         case 'costos':
             exportCostos(wb, data, mes, anio)
             break
+        case 'pedidos-insumos':
+            exportPedidosInsumos(wb, data)
+            break
         case 'desperdicio':
             exportDesperdicio(wb, data, mes, anio)
             break
@@ -37,6 +41,33 @@ export async function exportReportToExcel(
     }
 
     XLSX.writeFile(wb, `Reporte_SantaCatalina_${tipo}_${mes}_${anio}.xlsx`)
+}
+
+function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcularConsumoPedidos> & { filtros: { desde: string; hasta: string } }) {
+    const r = data.resumen
+    const resumen = XLSX.utils.aoa_to_sheet([
+        ['Pedidos e insumos', `${data.filtros.desde} a ${data.filtros.hasta}`],
+        ['Ingreso esperado', r.ingresoEsperado], ['Paquetes vendidos', r.paquetesVendidos],
+        ['Costo teórico valorado', r.costoEstimado], ['Paquetes valorados', r.paquetesValorados],
+        ['Paquetes sin costo calculable', r.paquetesSinCosto], ['Ingreso sin costo comparable', r.ingresoSinCosto],
+        ['Margen bruto comparable', r.margenComparable],
+        ['Criterio', 'Recetas y precios actuales de insumos; no equivale a compras, stock consumido real ni cobros.'],
+    ])
+    setColumnWidths(resumen, [35, 45])
+    XLSX.utils.book_append_sheet(wb, resumen, 'Resumen')
+    const insumos = XLSX.utils.aoa_to_sheet([
+        ['Insumo', 'Cantidad estimada', 'Unidad', 'Costo estimado'],
+        ...data.porInsumo.map(x => [x.nombre, x.cantidad, x.unidad, x.costoEstimado]),
+    ])
+    setColumnWidths(insumos, [40, 22, 14, 22])
+    XLSX.utils.book_append_sheet(wb, insumos, 'Insumos')
+    const paquetes = XLSX.utils.aoa_to_sheet([
+        ['Paquete', 'Presentación', 'Paquetes', 'Con precio', 'Ingreso atribuido', 'Costo por paquete', 'Costo total', 'Margen comparable', 'Paquetes previos', 'Cobertura'],
+        ...data.porTipo.map(x => [x.nombre, x.presentacion, x.paquetes, x.paquetesConPrecio, x.ingresoAtribuido,
+            x.costoPorPaquete, x.costoEstimado, x.margenComparable, x.paquetesAnteriores, x.motivo ?? 'Completa']),
+    ])
+    setColumnWidths(paquetes, [35, 16, 14, 14, 20, 20, 18, 20, 18, 40])
+    XLSX.utils.book_append_sheet(wb, paquetes, 'Paquetes')
 }
 
 function exportEconomico(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {

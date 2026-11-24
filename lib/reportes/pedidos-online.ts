@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx'
 import { normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet } from '@/lib/google-sheets-caja'
 
 export type FiltrosPedidosOnline = {
-    desde: string; hasta: string; fechaComparacion?: string; origen?: string; modalidad?: string; ubicacion?: string; estado?: string; buscar?: string; pagina?: number; todos?: boolean
+    desde: string; hasta: string; fechaComparacion?: string; origen?: string; modalidad?: string; ubicacion?: string; ubicaciones?: string[]; estado?: string; buscar?: string; pagina?: number; todos?: boolean
 }
 
 export function validarFiltrosPedidosOnline(f: FiltrosPedidosOnline) {
@@ -170,6 +170,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         if (f.origen && origen !== f.origen) continue
         if (f.modalidad && normalizarTexto(detalle?.modalidad) !== normalizarTexto(f.modalidad)) continue
         if (f.ubicacion && fila.ubicacionClave !== normalizarTexto(f.ubicacion)) continue
+        if (f.ubicaciones && !f.ubicaciones.includes(fila.ubicacionClave)) continue
         if (f.estado && fila.estadoClave !== normalizarTexto(f.estado)) continue
         if (buscar && !normalizarTexto([id, detalle?.nombre, detalle?.apellido, detalle?.telefono, detalle?.direccion, detalle?.producto].join(' ')).includes(buscar)) continue
         const fecha = fechaEntregaIso(detalle?.fechaEntrega ?? '')

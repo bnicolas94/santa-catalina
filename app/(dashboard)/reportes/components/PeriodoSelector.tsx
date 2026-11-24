@@ -6,7 +6,7 @@ import { MESES, GranularidadTemporal, RangoFechas, getDateRange } from '../utils
 
 const InclusionToggleBorder = (active: boolean) => active ? '1px solid var(--color-warning)' : '1px solid var(--color-gray-200)'
 
-export type SeccionReporte = 'dashboard' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
+export type SeccionReporte = 'dashboard' | 'pedidos' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
 
 interface Ubicacion {
     id: string
@@ -34,10 +34,11 @@ interface PeriodoSelectorProps {
 }
 
 const SECCIONES: { key: SeccionReporte; label: string; icon: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { key: 'pedidos', label: 'Pedidos e insumos', icon: '📦' },
+    { key: 'dashboard', label: 'Dashboard ERP', icon: '📊' },
     { key: 'produccion', label: 'Producción', icon: '🏭' },
-    { key: 'ventas', label: 'Ventas', icon: '💰' },
-    { key: 'costos', label: 'Costos', icon: '📉' },
+    { key: 'ventas', label: 'Ventas ERP', icon: '💰' },
+    { key: 'costos', label: 'Costos ERP', icon: '📉' },
     { key: 'desperdicio', label: 'Desperdicio', icon: '🗑️' },
     { key: 'performance', label: 'Performance', icon: '⚡' },
     { key: 'caja', label: 'Flujo de Caja', icon: '💸' },
@@ -234,7 +235,7 @@ export default function PeriodoSelector({
                     Mostrando datos para: <strong>{rango.label}</strong>
                 </div>
 
-                <div style={{ 
+                {activeSection !== 'pedidos' && <div style={{
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: 'var(--space-2)',
@@ -263,7 +264,7 @@ export default function PeriodoSelector({
                         />
                         🚀 MODO PRE-OPERATIVO
                     </label>
-                </div>
+                </div>}
             </div>
 
             <div style={{

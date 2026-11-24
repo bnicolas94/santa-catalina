@@ -79,6 +79,7 @@ export default function CostosSection({ rango, ubicacionId, incluirTodo = false 
 
     return (
         <div className="fade-in">
+            <p style={{ color: 'var(--color-gray-600)', fontSize: 'var(--text-sm)' }}>Esta sección usa compras de insumos y pedidos registrados en el ERP. El consumo teórico de los paquetes vendidos en las hojas de local y online está en «Pedidos e insumos».</p>
 
             {/* KPIs */}
             <div style={{

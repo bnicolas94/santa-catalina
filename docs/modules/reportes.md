@@ -1,5 +1,13 @@
 # Especificaciones Técnicas: Módulo de Reportes
 
+## Pedidos e insumos del Google Sheet
+
+La sección **Pedidos e insumos** es la entrada predeterminada del Reportes convencional. Consulta `Pedidos_comunes` y `Pedidos_online` mediante la misma fuente y caché de dos minutos del reporte conjunto. Filtra por `Fecha Entrega` local de Argentina, origen, modalidad y sede; para la sede usa los vínculos activos de `IntegracionSheetSucursal` y asocia `Fábrica` a Central. Requiere `permisoReportes` en página y API. El detalle de IDs y otros filtros permanece disponible en `/reportes/pedidos-conjunto`. Las secciones históricas de Ventas y Costos se identifican como datos del ERP para distinguir sus fuentes.
+
+El consumo estimado se calcula con los paquetes entregados clasificables y la presentación coincidente de `Producto`, las `FichaTecnica` aplicables y `Insumo.precioUnitario` **actual**. Aplica `tipoConsumo` y `merma` con el mismo cálculo de producción. Sólo suma costos de tipos con equivalencia inequívoca, receta y todos los precios válidos; muestra por separado paquetes sin costo y el ingreso que no tiene costo comparable. Los paquetes entregados sin precio válido cuentan en consumo, pero el margen bruto comparable sólo incluye paquetes con precio y costo. Las compras reales de insumos del reporte de Costos siguen siendo un indicador distinto y no se suman al costo teórico de esta sección. Tampoco representa egreso de Caja, stock consumido efectivamente ni cobro confirmado. Si se cambian recetas o precios, las estimaciones de fechas anteriores cambian; no existen snapshots históricos de esos valores en el Sheet.
+
+La vista y la exportación Excel presentan resumen, consumo por insumo y desglose por tipo de paquete con estado de cobertura. No modifican pedidos, recetas, stock, Caja ni el Sheet.
+
 ## 1. 📌 Descripción General
 
 ### Qué hace
