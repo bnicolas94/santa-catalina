@@ -16,6 +16,8 @@ La vista y la exportación Excel presentan resumen, consumo identificable por in
 
 **Product Mix** usa los mismos filtros y el mismo rango por `Fecha Entrega`. La matriz agrupa los paquetes entregados por tipo/presentación y muestra cada insumo teóricamente utilizado, con una fila final de totales por insumo. Para Elegidos toma las planchas de cada sabor del Sheet y agrega el empaque por presentación; cuando un pedido mezcla tipos personalizados sin distribución de sabores por tipo, lo muestra como «Personalizados mixtos». Las fichas y mermas actuales determinan cantidades; un insumo sin precio conserva su cantidad y señala el faltante. Las fichas incompletas muestran sólo consumo identificable. El total no implica descuento real de stock. La exportación añade una matriz `Product Mix` y un `Detalle Product Mix` con cantidades y costos identificables.
 
+La sección presenta cuatro vistas bajo los mismos filtros: **Product Mix** (predeterminada, con lista de productos y detalle de sus insumos, matriz opcional y totales al pie), **Indicadores**, **Insumos y sabores** y **Datos pendientes**. La navegación evita apilar todas las tablas y explicaciones en una sola página. La matriz y la exportación conservan el desglose completo para quien necesite auditarlo.
+
 ## 1. 📌 Descripción General
 
 ### Qué hace
