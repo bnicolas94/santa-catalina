@@ -3,18 +3,19 @@
 import { useCallback, useEffect, useState } from 'react'
 
 type Alcance = 'base' | 'sabor' | 'empaque'
+type AlcanceEditable = 'sabor' | 'empaque'
 type Insumo = { id: string; nombre: string; unidadMedida: string; precioUnitario: number }
 type Receta = { id: string; alcance: Alcance; cantidad: number; merma: number; insumo: Insumo;
     variante: { codigo: string } | null; presentacion: { cantidad: number } | null; presentacionId: string | null }
 type Datos = { recetasElegidos: Receta[]; sabores: { codigo: string; nombre: string }[];
     insumos: Insumo[]; presentaciones: { id: string; cantidad: number }[] }
-type Formulario = { alcance: Alcance; codigoSabor: string; presentacionId: string; insumoId: string; cantidad: string; merma: string }
-const inicial: Formulario = { alcance: 'base', codigoSabor: '', presentacionId: '', insumoId: '', cantidad: '', merma: '0' }
+type Formulario = { alcance: AlcanceEditable; codigoSabor: string; presentacionId: string; insumoId: string; cantidad: string; merma: string }
+const inicial: Formulario = { alcance: 'sabor', codigoSabor: '', presentacionId: '', insumoId: '', cantidad: '', merma: '0' }
 const dinero = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 
 export default function RecetaElegidosEditor({ productoId }: { productoId: string }) {
     const [datos, setDatos] = useState<Datos | null>(null)
-    const [alcance, setAlcance] = useState<Alcance>('base')
+    const [alcance, setAlcance] = useState<AlcanceEditable>('sabor')
     const [codigoSabor, setCodigoSabor] = useState('')
     const [presentacionId, setPresentacionId] = useState('')
     const [form, setForm] = useState<Formulario>(inicial)
@@ -30,6 +31,8 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
         setDatos(json)
         setCodigoSabor(actual => actual || json.sabores[0]?.codigo || '')
         setPresentacionId(actual => actual || json.presentaciones[0]?.id || '')
+        setForm(actual => ({ ...actual, codigoSabor: actual.codigoSabor || json.sabores[0]?.codigo || '',
+            presentacionId: actual.presentacionId || json.presentaciones[0]?.id || '' }))
     }, [productoId])
 
     useEffect(() => { void cargar().catch(e => setError(e instanceof Error ? e.message : 'Error al cargar recetas.')) }, [cargar])
@@ -37,8 +40,8 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
     const visibles = datos?.recetasElegidos.filter(linea => linea.alcance === alcance &&
         (alcance !== 'sabor' || linea.variante?.codigo === codigoSabor) &&
         (alcance !== 'empaque' || linea.presentacionId === presentacionId)) ?? []
-    const titulo = alcance === 'base' ? 'Base común por plancha de 8' : alcance === 'sabor' ? 'Ingredientes por plancha de 8' : 'Empaque por paquete'
-    const referencia = alcance === 'base' || alcance === 'sabor' ? '1 plancha de 8 sándwiches'
+    const titulo = alcance === 'sabor' ? 'Ficha completa por plancha de 8' : 'Empaque por paquete'
+    const referencia = alcance === 'sabor' ? '1 plancha de 8 sándwiches'
         : `1 paquete x${datos?.presentaciones.find(p => p.id === presentacionId)?.cantidad ?? '—'}`
     const costo = (linea: Receta) => linea.cantidad / (1 - linea.merma / 100) * linea.insumo.precioUnitario
 
@@ -49,6 +52,7 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
     }
 
     function editar(linea: Receta) {
+        if (linea.alcance === 'base') return
         setEditando(linea.id)
         setForm({ alcance: linea.alcance, codigoSabor: linea.variante?.codigo ?? '',
             presentacionId: linea.presentacionId ?? '', insumoId: linea.insumo.id,
@@ -88,13 +92,21 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
     }
 
     return <div className="card" style={{ marginBottom: 'var(--space-6)' }}><div className="card-body">
-        <h2>Recetas de Elegidos por sabor</h2>
-        <p>Configurá una base común, los ingredientes variables de cada sabor y el empaque de cada presentación. El Sheet define cuántas planchas hubo de cada sabor; el ERP aporta las cantidades de insumos. No copies un mismo ingrediente en base y sabor.</p>
+        <h2>Fichas por sabor: Elegidos y Premium</h2>
+        <p>Cargá en cada sabor todos los insumos necesarios para una plancha completa de 8 sándwiches. El Sheet indica cuántas planchas se pidieron de Tomate, Huevo o un sabor premium; Reportes multiplica la ficha de cada sabor por esas planchas. El empaque se configura por presentación.</p>
         {error && <div className="toast toast-error" style={{ position: 'static', marginBottom: 12 }}>{error}</div>}
         {mensaje && <div className="toast toast-success" style={{ position: 'static', marginBottom: 12 }}>{mensaje}</div>}
         {!datos ? <p>Cargando recetas...</p> : <>
+            {datos.recetasElegidos.some(linea => linea.alcance === 'base') && <details style={{ marginBottom: 14 }}>
+                <summary>Base común anterior: ya no se suma al costo</summary>
+                <p>Estas líneas se conservaron para revisión. Incluí los insumos que correspondan en la ficha completa de cada sabor; después podés quitar las líneas anteriores.</p>
+                <ul>{datos.recetasElegidos.filter(linea => linea.alcance === 'base').map(linea => <li key={linea.id}>
+                    {linea.insumo.nombre}: {linea.cantidad.toLocaleString('es-AR', { maximumFractionDigits: 6 })} {linea.insumo.unidadMedida} por plancha
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void quitar(linea)}>Quitar</button>
+                </li>)}</ul>
+            </details>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                {([['base', 'Base común'], ['sabor', 'Por sabor'], ['empaque', 'Empaque']] as const).map(([valor, nombre]) =>
+                {([['sabor', 'Ficha por sabor'], ['empaque', 'Empaque']] as const).map(([valor, nombre]) =>
                     <button type="button" key={valor} className={`btn btn-sm ${alcance === valor ? 'btn-primary' : 'btn-ghost'}`}
                         onClick={() => { setAlcance(valor); setForm({ ...inicial, alcance: valor, codigoSabor, presentacionId }); setEditando(null) }}>{nombre}</button>)}
             </div>
@@ -113,7 +125,7 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
                 <button className="btn btn-primary btn-sm" disabled={guardando}>{guardando ? 'Guardando...' : editando ? 'Guardar cambios' : 'Agregar insumo'}</button>
                 {editando && <button type="button" className="btn btn-ghost btn-sm" onClick={nuevaLinea}>Cancelar edición</button>}
             </form>
-            <p style={{ marginTop: 14, fontSize: 12 }}>Un sabor sin receta completa o un insumo sin precio seguirá sin costo en Reportes. Los cambios de receta y precio recalculan las estimaciones históricas; no descuentan stock ni registran compras.</p>
+            <p style={{ marginTop: 14, fontSize: 12 }}>Reportes detecta sabores sin insumos o sin precio, pero no puede saber si omitiste un ingrediente: revisá cada ficha antes de usar el costo. Los cambios de receta y precio recalculan las estimaciones históricas; no descuentan stock ni registran compras.</p>
         </>}
     </div></div>
 }

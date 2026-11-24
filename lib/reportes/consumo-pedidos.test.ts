@@ -100,28 +100,52 @@ test('si Observaciones no detalla los sabores, informa la falta sin inventar pla
     assert.equal(reporte.calidad.sinSaboresElegidos, 1)
 })
 
-test('valora Elegidos por base, cada sabor y empaque de la presentación', () => {
+test('valora cada ficha completa por plancha, incluido un sabor premium, sin sumar la base anterior', () => {
     const csv = [cabecera, fila('1', '24 Surtidos Elegidos', '24', '240')
-        .replace('13/11/2026,,240', '13/11/2026,"Sabores (24): 16x Tomate + 8x Huevo",240')].join('\n')
+        .replace('13/11/2026,,240', '13/11/2026,"Sabores (24): 16x Tomate + 8x Roquefort",240')].join('\n')
     const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
     const insumo = (nombre: string, precioUnitario: number) => ({ nombre, unidadMedida: 'kg', precioUnitario })
     const productos: ProductoConReceta[] = [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
         presentaciones: [{ id: 'ele24', cantidad: 24 }], fichasTecnicas: [ficha('generico', 999, 1)],
         recetasElegidos: [
             { alcance: 'base', cantidad: .5, merma: 0, insumoId: 'pan', variante: null, presentacion: null, insumo: insumo('Pan', 2) },
+            { alcance: 'sabor', cantidad: .5, merma: 0, insumoId: 'pan', variante: { codigo: 'tom' }, presentacion: null, insumo: insumo('Pan', 2) },
             { alcance: 'sabor', cantidad: 3, merma: 0, insumoId: 'tomate', variante: { codigo: 'tom' }, presentacion: null, insumo: insumo('Tomate', 10) },
-            { alcance: 'sabor', cantidad: 1, merma: 0, insumoId: 'huevo', variante: { codigo: 'hue' }, presentacion: null, insumo: insumo('Huevo', 20) },
+            { alcance: 'sabor', cantidad: .5, merma: 0, insumoId: 'pan', variante: { codigo: 'roque' }, presentacion: null, insumo: insumo('Pan', 2) },
+            { alcance: 'sabor', cantidad: 1, merma: 0, insumoId: 'roque', variante: { codigo: 'roque' }, presentacion: null, insumo: insumo('Roquefort', 20) },
             { alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'bandeja', variante: null, presentacion: { cantidad: 24 }, insumo: insumo('Bandeja', 5) },
         ] }]
     const r = calcularConsumoPedidos(reporte, productos)
-    assert.equal(r.resumen.costoEstimado, 109)
+    assert.equal(r.resumen.costoEstimado, 88)
     assert.equal(r.resumen.ingresoConCosto, 240)
-    assert.equal(r.resumen.margenComparable, 131)
+    assert.equal(r.resumen.margenComparable, 152)
     assert.equal(r.resumen.paquetesValorados, 1)
     assert.equal(r.resumen.paquetesSinCosto, 0)
     assert.equal(r.resumen.elegidos.paquetesValorados, 1)
     assert.equal(r.porInsumo.find(x => x.id === 'tomate')?.cantidad, 6)
+    assert.equal(r.porInsumo.find(x => x.id === 'pan')?.cantidad, 1.5)
+    assert.deepEqual(r.porSaborCosto.map(x => ({ codigo: x.codigo, planchas: x.planchasValoradas, costo: x.costoEstimado })), [
+        { codigo: 'tom', planchas: 2, costo: 62 },
+        { codigo: 'roque', planchas: 1, costo: 21 },
+    ])
     assert.equal(r.porInsumo.some(x => x.id === 'generico'), false)
+})
+
+test('Personalizado usa las fichas de sus sabores como Elegidos', () => {
+    const csv = [cabecera, fila('1', 'Personalizado x16 (2 planchas)', '16', '160')
+        .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 8x Tomate + 8x Roquefort",160')].join('\n')
+    const reporte = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
+    assert.deepEqual(reporte.pedidosElegidos[0]?.sabores?.map(x => x.codigo), ['tom', 'roque'])
+    assert.deepEqual(reporte.pedidosElegidos[0]?.presentaciones, [{ cantidad: 16, paquetes: 1 }])
+    const insumo = (nombre: string, precioUnitario: number) => ({ nombre, unidadMedida: 'u', precioUnitario })
+    const calculo = calcularConsumoPedidos(reporte, [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele16', cantidad: 16 }], fichasTecnicas: [], recetasElegidos: [
+            { alcance: 'sabor', cantidad: 2, merma: 0, insumoId: 'tomate', variante: { codigo: 'tom' }, presentacion: null, insumo: insumo('Tomate', 3) },
+            { alcance: 'sabor', cantidad: 1, merma: 0, insumoId: 'roque', variante: { codigo: 'roque' }, presentacion: null, insumo: insumo('Roquefort', 10) },
+            { alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'caja', variante: null, presentacion: { cantidad: 16 }, insumo: insumo('Caja', 4) },
+        ] }])
+    assert.equal(calculo.resumen.elegidos.costoEstimado, 20)
+    assert.equal(calculo.resumen.margenComparable, 140)
 })
 
 test('un sabor sin receta deja pendiente todo el pedido Elegidos', () => {

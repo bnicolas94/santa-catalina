@@ -85,7 +85,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                 <h3 style={{ marginTop: 0 }}>Cobertura del cálculo</h3>
                 <p>{cantidad(data.resumen.paquetesValorados)} paquetes con receta y precio completo; {cantidad(data.resumen.paquetesSinCosto)} paquetes sin costo calculable. {data.calidad.sinPaquetes} pedidos entregados tienen Producto o Cantidad sin clasificar.</p>
                 <p>Calidad del Sheet: {data.calidad.sinPrecio} filas sin precio válido, {data.calidad.duplicados} IDs duplicados y {data.calidad.conflictos} IDs con datos contradictorios en el período. {data.calidad.sinFechaEntrega} IDs sin Fecha Entrega válida quedan fuera de los períodos.</p>
-                <p>Planchas elegidas: {data.porSaborElegido.reduce((total, sabor) => total + sabor.planchas, 0).toLocaleString('es-AR')} con sabor identificado; {data.calidad.sinSaboresElegidos} pedidos de Elegidos sin detalle de sabores válido. Los pedidos sólo se valoran cuando tienen base, todos sus sabores, empaque y precios completos.</p>
+                <p>Planchas personalizadas: {data.porSaborElegido.reduce((total, sabor) => total + sabor.planchas, 0).toLocaleString('es-AR')} con sabor identificado; {data.calidad.sinSaboresElegidos} pedidos sin detalle de sabores válido. Los pedidos se valoran cuando cada sabor tiene insumos cargados, junto con el empaque y los precios; revisá que las fichas incluyan todos los ingredientes.</p>
                 <p>De {dinero(data.resumen.ingresoEsperado)} esperados, {dinero(data.resumen.ingresoConCosto)} corresponden a paquetes con costo calculable y {dinero(data.resumen.ingresoSinCosto)} no tienen costo comparable. El margen usa sólo paquetes con precio y costo calculables; el consumo incluye además paquetes entregados sin precio.</p>
                 <p>Período anterior equivalente: {cantidad(data.resumen.paquetesAnteriores)} paquetes clasificables y {dinero(data.resumen.costoAnterior)} de consumo valorado con las mismas recetas y precios actuales.</p>
                 <small>El costo usa la ficha técnica y el precio actual de cada insumo, incluida la merma configurada. Es una estimación de insumos asociados a los paquetes vendidos: no equivale a compras, stock consumido real ni dinero cobrado. En pedidos mixtos, el precio se atribuye por cantidad de sándwiches. Los importes históricos pueden cambiar si cambian las recetas o los precios.</small>
@@ -99,14 +99,14 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                     {data.porInsumo.map(x => <tr key={x.id}><td>{x.nombre}</td><td>{cantidad(x.cantidad)}</td><td>{x.unidad}</td><td>{dinero(x.costoEstimado)}</td></tr>)}
                 </tbody></table></div>{!data.porInsumo.length && <p>No hay insumos valorados en este período.</p>}
             </div>
-            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Elegidos: costo según la mezcla real</h3>
-                <p>{cantidad(data.resumen.elegidos.paquetesValorados)} paquetes valorados · {dinero(data.resumen.elegidos.costoEstimado)} de insumos estimados. {cantidad(data.resumen.elegidos.paquetesSinCosto)} paquetes siguen pendientes. Se suman base común, recetas de las planchas indicadas en el Sheet y empaque de cada presentación.</p>
+            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Personalizados: costo según los sabores elegidos</h3>
+                <p>{cantidad(data.resumen.elegidos.paquetesValorados)} paquetes valorados · {dinero(data.resumen.elegidos.costoEstimado)} de insumos estimados. {cantidad(data.resumen.elegidos.paquetesSinCosto)} paquetes siguen pendientes. Se multiplica la ficha completa de cada sabor, común o premium, por sus planchas del Sheet y se agrega el empaque de cada presentación.</p>
                 {data.resumen.elegidos.faltantes.length > 0 && <ul>{data.resumen.elegidos.faltantes.map(x => <li key={x.motivo}>{x.motivo}: {cantidad(x.paquetes)} paquetes</li>)}</ul>}
             </div>
-            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Planchas elegidas por sabor</h3>
-                <p>El desglose sale de «Sabores» en Observaciones del Sheet. Se valida contra los sándwiches elegidos del pedido; las recetas del ERP permiten atribuir los insumos.</p>
-                <div style={{ maxHeight: 340, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Sabor</th><th>Planchas</th><th>Sándwiches</th></tr></thead><tbody>
-                    {data.porSaborElegido.map(x => <tr key={x.codigo}><td>{x.nombre}</td><td>{cantidad(x.planchas)}</td><td>{cantidad(x.sandwiches)}</td></tr>)}
+            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Planchas y costo por sabor</h3>
+                <p>Las planchas salen de «Sabores» en Observaciones del Sheet. El costo de sabor suma su ficha completa sólo en pedidos con todas las recetas y precios disponibles; el empaque se agrega al total de Personalizados.</p>
+                <div style={{ maxHeight: 340, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Sabor</th><th>Planchas</th><th>Con costo</th><th>Costo de insumos</th></tr></thead><tbody>
+                    {data.porSaborElegido.map(x => { const costo = data.porSaborCosto.find(item => item.codigo === x.codigo); return <tr key={x.codigo}><td>{x.nombre}</td><td>{cantidad(x.planchas)}</td><td>{cantidad(costo?.planchasValoradas ?? 0)}</td><td>{costo ? dinero(costo.costoEstimado) : 'Pendiente'}</td></tr> })}
                 </tbody></table></div>{!data.porSaborElegido.length && <p>No hay sabores elegidos identificados para estos filtros.</p>}
             </div>
             <div className="card" style={{ padding: 20 }}><h3>Paquetes y margen por tipo</h3>

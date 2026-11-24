@@ -52,9 +52,9 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
         ['Costo teórico valorado', r.costoEstimado], ['Paquetes valorados', r.paquetesValorados],
         ['Paquetes sin costo calculable', r.paquetesSinCosto], ['Ingreso sin costo comparable', r.ingresoSinCosto],
         ['Margen bruto comparable', r.margenComparable],
-        ['Elegidos valorados', r.elegidos.paquetesValorados],
-        ['Elegidos pendientes', r.elegidos.paquetesSinCosto],
-        ['Costo de Elegidos', r.elegidos.costoEstimado],
+        ['Personalizados valorados', r.elegidos.paquetesValorados],
+        ['Personalizados pendientes', r.elegidos.paquetesSinCosto],
+        ['Costo de Personalizados', r.elegidos.costoEstimado],
         ['Criterio', 'Recetas y precios actuales de insumos; no equivale a compras, stock consumido real ni cobros.'],
     ])
     setColumnWidths(resumen, [35, 45])
@@ -73,10 +73,13 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
     setColumnWidths(paquetes, [35, 16, 14, 14, 20, 20, 18, 20, 18, 40])
     XLSX.utils.book_append_sheet(wb, paquetes, 'Paquetes')
     const sabores = XLSX.utils.aoa_to_sheet([
-        ['Sabor elegido', 'Planchas', 'Sándwiches'],
-        ...data.porSaborElegido.map(x => [x.nombre, x.planchas, x.sandwiches]),
+        ['Sabor elegido', 'Planchas', 'Planchas con costo', 'Costo de insumos del sabor'],
+        ...data.porSaborElegido.map(x => {
+            const costo = data.porSaborCosto.find(item => item.codigo === x.codigo)
+            return [x.nombre, x.planchas, costo?.planchasValoradas ?? 0, costo?.costoEstimado ?? null]
+        }),
     ])
-    setColumnWidths(sabores, [35, 16, 18])
+    setColumnWidths(sabores, [35, 16, 22, 28])
     XLSX.utils.book_append_sheet(wb, sabores, 'Sabores elegidos')
 }
 

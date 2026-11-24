@@ -230,7 +230,7 @@ export default function ProductoDetallePage() {
 
         <div className="card">
             <div className="card-header" style={{ alignItems: 'flex-start' }}>
-                <div><h3>📝 {producto.codigoInterno === 'ELE' ? 'Ficha general de producción' : 'Ficha técnica'} · paquete x{presentacion.cantidad}</h3><p style={{ margin: '5px 0 0', color: 'var(--color-gray-500)', fontSize: 13 }}>{producto.codigoInterno === 'ELE' ? 'Esta ficha no se usa para valorar los sabores del Sheet. Cargá base, sabores y empaque en el editor de arriba.' : `Los insumos generales escalan con la presentación; los envases pueden asignarse sólo a x${presentacion.cantidad}.`}</p></div>
+                <div><h3>📝 {producto.codigoInterno === 'ELE' ? 'Ficha general de producción' : 'Ficha técnica'} · paquete x{presentacion.cantidad}</h3><p style={{ margin: '5px 0 0', color: 'var(--color-gray-500)', fontSize: 13 }}>{producto.codigoInterno === 'ELE' ? 'Esta ficha no se usa para valorar los sabores del Sheet. Cargá la ficha completa de cada sabor y el empaque en el editor de arriba.' : `Los insumos generales escalan con la presentación; los envases pueden asignarse sólo a x${presentacion.cantidad}.`}</p></div>
                 <button className="btn btn-primary btn-sm" onClick={abrirNuevaFicha}>+ Agregar insumo</button>
             </div>
             <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>

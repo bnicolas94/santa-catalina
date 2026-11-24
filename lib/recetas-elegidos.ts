@@ -1,9 +1,9 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { saboresSheetOnline } from '@/lib/pedidos-online-excel'
-import { cantidadParaGuardar, cantidadParaPlancha } from '@/lib/recetas-elegidos-unidades'
+import { cantidadParaPlancha } from '@/lib/recetas-elegidos-unidades'
 
-export type AlcanceRecetaElegidos = 'base' | 'sabor' | 'empaque'
+export type AlcanceRecetaElegidos = 'sabor' | 'empaque'
 
 const saboresPorCodigo = new Map<string, { codigo: string; nombre: string }>()
 for (const [nombre, codigo] of Object.entries(saboresSheetOnline)) {
@@ -16,7 +16,7 @@ export function validarLineaElegidos(input: {
     alcance: string; codigoSabor?: string; presentacionId?: string; insumoId?: string;
     cantidad?: number; merma?: number
 }) {
-    if (!['base', 'sabor', 'empaque'].includes(input.alcance)) throw new Error('Elegí base, sabor o empaque.')
+    if (!['sabor', 'empaque'].includes(input.alcance)) throw new Error('Elegí sabor o empaque.')
     if (!input.insumoId) throw new Error('Seleccioná un insumo.')
     if (!Number.isFinite(input.cantidad) || (input.cantidad ?? 0) <= 0) throw new Error('La cantidad debe ser mayor a cero.')
     if (!Number.isFinite(input.merma) || (input.merma ?? 0) < 0 || (input.merma ?? 0) >= 100) throw new Error('La merma debe estar entre 0 y 99,99%.')
@@ -77,11 +77,10 @@ export async function guardarLineaElegidos(productoId: string, raw: unknown, id?
             const presentacion = await tx.presentacion.findFirst({ where: { id: input.presentacionId, productoId }, select: { id: true } })
             if (!presentacion) throw new Error('La presentación no pertenece a Elegidos.')
         }
-        const claveAlcance = input.alcance === 'base' ? 'base'
-            : input.alcance === 'sabor' ? `sabor:${input.codigoSabor}` : `empaque:${input.presentacionId}`
+        const claveAlcance = input.alcance === 'sabor' ? `sabor:${input.codigoSabor}` : `empaque:${input.presentacionId}`
         const data = { productoId, insumoId: input.insumoId, alcance: input.alcance, claveAlcance,
             varianteId, presentacionId: input.presentacionId,
-            cantidad: cantidadParaGuardar(input.alcance, input.cantidad), merma: input.merma }
+            cantidad: input.cantidad, merma: input.merma }
         const linea = id ? await tx.recetaElegidosInsumo.update({ where: { id }, data })
             : await tx.recetaElegidosInsumo.create({ data })
         return { ...linea, cantidad: cantidadParaPlancha(linea.alcance, linea.cantidad) }

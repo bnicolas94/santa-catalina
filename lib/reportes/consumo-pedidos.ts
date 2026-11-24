@@ -101,6 +101,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
     const recetaElegidos = elegidos.length === 1 ? elegidos[0].recetasElegidos ?? [] : []
     let elegidosValorados = 0, elegidosSinCosto = 0, costoElegidos = 0, ingresoElegidos = 0
     const faltantesElegidos = new Map<string, number>()
+    const porSaborCosto = new Map<string, { codigo: string; nombre: string; planchasValoradas: number; costoEstimado: number }>()
     const registrarFalta = (motivo: string, paquetes: number) => faltantesElegidos.set(motivo, (faltantesElegidos.get(motivo) ?? 0) + paquetes)
     for (const pedido of reporte.pedidosElegidos) {
         const paquetes = pedido.presentaciones.reduce((total, p) => total + p.paquetes, 0)
@@ -108,11 +109,9 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             if (pedido.periodo === 'actual') { elegidosSinCosto += paquetes; registrarFalta('Sin sabores válidos en el Sheet', paquetes) }
             continue
         }
-        const base = recetaElegidos.filter(r => r.alcance === 'base')
         const sabor = (codigo: string) => recetaElegidos.filter(r => r.alcance === 'sabor' && r.variante?.codigo === codigo)
         const empaque = (cantidad: number) => recetaElegidos.filter(r => r.alcance === 'empaque' && r.presentacion?.cantidad === cantidad)
-        const motivo = !base.length ? 'Falta receta de base común'
-            : pedido.sabores.find(s => !sabor(s.codigo).length) ? `Falta receta de sabor ${pedido.sabores.find(s => !sabor(s.codigo).length)!.nombre}`
+        const motivo = pedido.sabores.find(s => !sabor(s.codigo).length) ? `Falta receta de sabor ${pedido.sabores.find(s => !sabor(s.codigo).length)!.nombre}`
             : pedido.presentaciones.find(p => !empaque(p.cantidad).length) ? `Falta receta de empaque x${pedido.presentaciones.find(p => !empaque(p.cantidad).length)!.cantidad}`
             : null
         if (motivo) {
@@ -125,8 +124,6 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             const previo = cantidades.get(receta.insumoId)
             cantidades.set(receta.insumoId, { receta, cantidad: (previo?.cantidad ?? 0) + cantidad })
         }
-        const sandwiches = pedido.sabores.reduce((total, s) => total + s.sandwiches, 0)
-        for (const receta of base) agregar(receta, sandwiches)
         for (const s of pedido.sabores) for (const receta of sabor(s.codigo)) agregar(receta, s.sandwiches / 8)
         for (const p of pedido.presentaciones) for (const receta of empaque(p.cantidad)) agregar(receta, p.paquetes)
         const sinPrecio = [...cantidades.values()].find(x => !Number.isFinite(x.receta.cantidad) || x.receta.cantidad <= 0 ||
@@ -138,6 +135,17 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         const costoPedido = [...cantidades.values()].reduce((total, x) => total + x.cantidad * x.receta.insumo.precioUnitario, 0)
         if (pedido.periodo === 'anterior') { costoAnterior += costoPedido; continue }
         elegidosValorados += paquetes
+        for (const elegido of pedido.sabores) {
+            const planchas = elegido.sandwiches / 8
+            const costoSabor = sabor(elegido.codigo).reduce((total, receta) => total +
+                receta.cantidad / (1 - Math.min(Math.max(receta.merma, 0), 99.99) / 100) *
+                receta.insumo.precioUnitario * planchas, 0)
+            const actual = porSaborCosto.get(elegido.codigo) ?? { codigo: elegido.codigo, nombre: elegido.nombre,
+                planchasValoradas: 0, costoEstimado: 0 }
+            actual.planchasValoradas += planchas
+            actual.costoEstimado += costoSabor
+            porSaborCosto.set(elegido.codigo, actual)
+        }
         costoElegidos += costoPedido
         ingresoElegidos += pedido.ingresoAtribuido
         costoEstimado += costoPedido
@@ -169,5 +177,6 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         },
         porTipo: porTipo.sort((a, b) => b.paquetes - a.paquetes || a.clave.localeCompare(b.clave)),
         porInsumo: [...insumos.values()].sort((a, b) => b.costoEstimado - a.costoEstimado),
+        porSaborCosto: [...porSaborCosto.values()].sort((a, b) => b.costoEstimado - a.costoEstimado || a.codigo.localeCompare(b.codigo)),
     }
 }
