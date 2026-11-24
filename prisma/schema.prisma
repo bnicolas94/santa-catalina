@@ -1003,6 +1003,8 @@ model SaldoCaja {
   auditorias                 AuditoriaConfiguracionCaja[]
   integracionesEfectivo      IntegracionSheetSucursal[]   @relation("CajaSheetEfectivo")
   integracionesTransferencia IntegracionSheetSucursal[]   @relation("CajaSheetTransferencia")
+  integracionesDeliveryEfectivo IntegracionSheetSucursal[] @relation("CajaSheetDeliveryEfectivo")
+  integracionesDeliveryTransferencia IntegracionSheetSucursal[] @relation("CajaSheetDeliveryTransferencia")
 
   @@index([ubicacionId, activo])
   @@map("saldos_caja")
@@ -1069,12 +1071,16 @@ model IntegracionSheetSucursal {
   ubicacionId         String     @map("id_ubicacion")
   cajaEfectivoId      String?    @map("id_caja_efectivo")
   cajaTransferenciaId String?    @map("id_caja_transferencia")
+  cajaDeliveryEfectivoId String? @map("id_caja_delivery_efectivo")
+  cajaDeliveryTransferenciaId String? @map("id_caja_delivery_transferencia")
   actualizadoPorId    String     @map("id_actualizado_por")
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   ubicacion           Ubicacion  @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
   cajaEfectivo        SaldoCaja? @relation("CajaSheetEfectivo", fields: [cajaEfectivoId], references: [id], onDelete: Restrict)
   cajaTransferencia   SaldoCaja? @relation("CajaSheetTransferencia", fields: [cajaTransferenciaId], references: [id], onDelete: Restrict)
+  cajaDeliveryEfectivo SaldoCaja? @relation("CajaSheetDeliveryEfectivo", fields: [cajaDeliveryEfectivoId], references: [id], onDelete: Restrict)
+  cajaDeliveryTransferencia SaldoCaja? @relation("CajaSheetDeliveryTransferencia", fields: [cajaDeliveryTransferenciaId], references: [id], onDelete: Restrict)
 
   @@index([ubicacionId, activo])
   @@map("integraciones_sheet_sucursal")
@@ -1089,6 +1095,7 @@ model MovimientoSheetCaja {
   fechaExterna        DateTime?       @map("fecha_externa")
   precio              Float
   pago                String
+  modalidad           String          @default("")
   ubicacion           String
   estadoFuente        String          @map("estado_fuente")
   huellaFinanciera    String          @map("huella_financiera")

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { construirUrlDescargaSheet, evaluarFilaSheet, normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet, type FilaSheetCaja } from '@/lib/google-sheets-caja'
+import { construirUrlDescargaSheet, elegirCajaSheet, evaluarFilaSheet, normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet, type FilaSheetCaja } from '@/lib/google-sheets-caja'
 import { CajaService } from '@/lib/services/caja.service'
 
 const CONFIG_KEY = 'google-sheets:caja:config:v1'
@@ -75,6 +75,8 @@ export interface ConfiguracionSucursalInput {
     ubicacionId: string
     cajaEfectivoId?: string | null
     cajaTransferenciaId?: string | null
+    cajaDeliveryEfectivoId?: string | null
+    cajaDeliveryTransferenciaId?: string | null
     activo: boolean
 }
 
@@ -90,16 +92,18 @@ export async function guardarSucursalesSheet(input: unknown, usuarioId: string) 
             claves.add(ubicacionClave)
             const sede = await tx.ubicacion.findUnique({ where: { id: fila.ubicacionId } })
             if (!sede || !sede.activo) throw new Error(`Seleccioná una sede activa para ${ubicacionTexto}.`)
-            const idsCaja = [fila.cajaEfectivoId, fila.cajaTransferenciaId].filter((id): id is string => Boolean(id))
+            const idsCaja = [fila.cajaEfectivoId, fila.cajaTransferenciaId, fila.cajaDeliveryEfectivoId, fila.cajaDeliveryTransferenciaId].filter((id): id is string => Boolean(id))
             const cajas = idsCaja.length ? await tx.saldoCaja.findMany({ where: { id: { in: idsCaja }, activo: true }, select: { id: true, ubicacionId: true } }) : []
             if (cajas.length !== new Set(idsCaja).size) throw new Error(`Una caja configurada para ${ubicacionTexto} no existe o está inactiva.`)
             const cajaEfectivo = cajas.find(c => c.id === fila.cajaEfectivoId)
             if (cajaEfectivo && cajaEfectivo.ubicacionId !== fila.ubicacionId) throw new Error(`La caja de efectivo de ${ubicacionTexto} debe pertenecer a esa sede.`)
-            const data = { ubicacionTexto, ubicacionClave, ubicacionId: fila.ubicacionId, cajaEfectivoId: fila.cajaEfectivoId || null, cajaTransferenciaId: fila.cajaTransferenciaId || null, activo: Boolean(fila.activo), actualizadoPorId: usuarioId }
+            const cajaDeliveryEfectivo = cajas.find(c => c.id === fila.cajaDeliveryEfectivoId)
+            if (cajaDeliveryEfectivo && cajaDeliveryEfectivo.ubicacionId !== fila.ubicacionId) throw new Error(`La caja de efectivo delivery de ${ubicacionTexto} debe pertenecer a esa sede.`)
+            const data = { ubicacionTexto, ubicacionClave, ubicacionId: fila.ubicacionId, cajaEfectivoId: fila.cajaEfectivoId || null, cajaTransferenciaId: fila.cajaTransferenciaId || null, cajaDeliveryEfectivoId: fila.cajaDeliveryEfectivoId || null, cajaDeliveryTransferenciaId: fila.cajaDeliveryTransferenciaId || null, activo: Boolean(fila.activo), actualizadoPorId: usuarioId }
             if (fila.id) await tx.integracionSheetSucursal.update({ where: { id: fila.id }, data })
             else await tx.integracionSheetSucursal.upsert({ where: { ubicacionClave }, create: data, update: data })
         }
-        return tx.integracionSheetSucursal.findMany({ include: { ubicacion: true, cajaEfectivo: true, cajaTransferencia: true }, orderBy: { ubicacionTexto: 'asc' } })
+        return tx.integracionSheetSucursal.findMany({ include: { ubicacion: true, cajaEfectivo: true, cajaTransferencia: true, cajaDeliveryEfectivo: true, cajaDeliveryTransferencia: true }, orderBy: { ubicacionTexto: 'asc' } })
     }, { isolationLevel: 'Serializable' })
 }
 
@@ -119,14 +123,15 @@ export async function descargarHoja(spreadsheetId: string, gid: string) {
 function datosRegistro(config: ConfiguracionSheetCaja, hoja: string, fila: FilaSheetCaja, estadoProcesamiento: string, detalle: string | null) {
     return {
         spreadsheetId: config.spreadsheetId, hoja, externalId: fila.externalId, fila: fila.fila,
-        fechaExterna: fila.fecha, precio: Number.isFinite(fila.precio) ? fila.precio : 0, pago: fila.pago,
+        fechaExterna: fila.fecha, precio: Number.isFinite(fila.precio) ? fila.precio : 0, pago: fila.pago, modalidad: fila.modalidad,
         ubicacion: fila.ubicacion, estadoFuente: fila.estadoClave, huellaFinanciera: fila.huellaFinanciera,
         estadoProcesamiento, detalle,
     }
 }
 
 async function registrarFila(config: ConfiguracionSheetCaja, hoja: string, fila: FilaSheetCaja, mapeos: Map<string, {
-    activo: boolean; cajaEfectivo: { id: string; tipo: string; activo: boolean } | null; cajaTransferencia: { id: string; tipo: string; activo: boolean } | null
+    activo: boolean; cajaEfectivo: { id: string; tipo: string; activo: boolean } | null; cajaTransferencia: { id: string; tipo: string; activo: boolean } | null;
+    cajaDeliveryEfectivo: { id: string; tipo: string; activo: boolean } | null; cajaDeliveryTransferencia: { id: string; tipo: string; activo: boolean } | null
 }>) {
     const clave = { spreadsheetId_hoja_externalId: { spreadsheetId: config.spreadsheetId, hoja, externalId: fila.externalId } }
     return prisma.$transaction(async tx => {
@@ -144,15 +149,15 @@ async function registrarFila(config: ConfiguracionSheetCaja, hoja: string, fila:
             return estado
         }
         const mapeo = mapeos.get(fila.ubicacionClave)
-        const caja = fila.pagoClave === 'efectivo' ? mapeo?.cajaEfectivo : mapeo?.cajaTransferencia
+        const caja = mapeo ? elegirCajaSheet(fila, mapeo) : null
         if (!mapeo?.activo || !caja?.activo) {
-            await tx.movimientoSheetCaja.upsert({ where: clave, create: datosRegistro(config, hoja, fila, 'PENDIENTE_CONFIGURACION', 'Falta configurar una caja activa para esta sucursal y medio de pago.'), update: datosRegistro(config, hoja, fila, 'PENDIENTE_CONFIGURACION', 'Falta configurar una caja activa para esta sucursal y medio de pago.') })
+            await tx.movimientoSheetCaja.upsert({ where: clave, create: datosRegistro(config, hoja, fila, 'PENDIENTE_CONFIGURACION', 'Falta configurar una caja activa para esta sucursal, modalidad y medio de pago.'), update: datosRegistro(config, hoja, fila, 'PENDIENTE_CONFIGURACION', 'Falta configurar una caja activa para esta sucursal, modalidad y medio de pago.') })
             return 'PENDIENTE_CONFIGURACION'
         }
         const movimiento = await CajaService.createMovimiento({
             tipo: 'ingreso', concepto: 'Venta externa entregada', monto: fila.precio,
             medioPago: fila.pagoClave, cajaOrigen: caja.tipo,
-            descripcion: `Google Sheets · ${hoja} · Pedido #${fila.externalId} · ${fila.ubicacion}`,
+            descripcion: `Google Sheets · ${hoja} · Pedido #${fila.externalId} · ${fila.ubicacion} · ${fila.modalidad}`,
             fecha: fila.fecha,
         }, tx)
         await tx.movimientoSheetCaja.upsert({
@@ -184,7 +189,7 @@ export async function sincronizarGoogleSheetsCaja(forzar = false) {
     const estado: EstadoSheetCaja = { filasLeidas: 0, incorporados: 0, pendientes: 0, revisiones: 0, ultimaEjecucion: new Date().toISOString() }
     try {
         const configuraciones = await prisma.integracionSheetSucursal.findMany({
-            include: { cajaEfectivo: { select: { id: true, tipo: true, activo: true } }, cajaTransferencia: { select: { id: true, tipo: true, activo: true } } },
+            include: { cajaEfectivo: { select: { id: true, tipo: true, activo: true } }, cajaTransferencia: { select: { id: true, tipo: true, activo: true } }, cajaDeliveryEfectivo: { select: { id: true, tipo: true, activo: true } }, cajaDeliveryTransferencia: { select: { id: true, tipo: true, activo: true } } },
         })
         const mapeos = new Map(configuraciones.map(m => [m.ubicacionClave, m]))
         for (const hoja of config.hojas) {
@@ -192,7 +197,7 @@ export async function sincronizarGoogleSheetsCaja(forzar = false) {
             estado.filasLeidas += filas.length
             const observadas = await prisma.movimientoSheetCaja.findMany({
                 where: { spreadsheetId: config.spreadsheetId, hoja: hoja.nombre, externalId: { in: filas.map(f => f.externalId) } },
-                select: { externalId: true, estadoFuente: true, huellaFinanciera: true, estadoProcesamiento: true },
+                select: { externalId: true, estadoFuente: true, huellaFinanciera: true, estadoProcesamiento: true, modalidad: true },
             })
             const porId = new Map(observadas.map(o => [o.externalId, o]))
             const baselined = new Set<string>()
@@ -212,7 +217,7 @@ export async function sincronizarGoogleSheetsCaja(forzar = false) {
                 if (baselined.has(fila.externalId)) continue
                 const observada = porId.get(fila.externalId)
                 const reintentar = observada && ['PENDIENTE_CONFIGURACION', 'PENDIENTE_DATOS'].includes(observada.estadoProcesamiento)
-                if (observada && !reintentar && observada.estadoFuente === fila.estadoClave && observada.huellaFinanciera === fila.huellaFinanciera) continue
+                if (observada && !reintentar && observada.estadoFuente === fila.estadoClave && observada.huellaFinanciera === fila.huellaFinanciera && (!observada.modalidad || normalizarTexto(observada.modalidad) === fila.modalidadClave)) continue
                 const resultado = await registrarFila(config, hoja.nombre, fila, mapeos)
                 if (resultado === 'REGISTRADO') estado.incorporados++
                 if (String(resultado).startsWith('PENDIENTE')) estado.pendientes++
@@ -253,7 +258,7 @@ export async function resumenGoogleSheetsCaja(filtros: FiltrosResumenSheetCaja =
     }
     const [config, estado, sucursales, total, totalesPorHoja, ubicaciones, pagos] = await Promise.all([
         obtenerConfiguracionSheetCaja(), obtenerEstadoSheetCaja(),
-        prisma.integracionSheetSucursal.findMany({ include: { ubicacion: true, cajaEfectivo: true, cajaTransferencia: true }, orderBy: { ubicacionTexto: 'asc' } }),
+        prisma.integracionSheetSucursal.findMany({ include: { ubicacion: true, cajaEfectivo: true, cajaTransferencia: true, cajaDeliveryEfectivo: true, cajaDeliveryTransferencia: true }, orderBy: { ubicacionTexto: 'asc' } }),
         prisma.movimientoSheetCaja.count({ where }),
         prisma.movimientoSheetCaja.groupBy({ by: ['hoja'], _count: { _all: true } }),
         prisma.movimientoSheetCaja.findMany({ where: { ubicacion: { not: '' } }, distinct: ['ubicacion'], select: { ubicacion: true }, orderBy: { ubicacion: 'asc' } }),

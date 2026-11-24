@@ -9,6 +9,8 @@ export interface FilaSheetCaja {
     precio: number
     pago: string
     pagoClave: string
+    modalidad: string
+    modalidadClave: string
     ubicacion: string
     ubicacionClave: string
     estado: string
@@ -80,12 +82,13 @@ export function parsearCsvSheetCaja(csv: string): FilaSheetCaja[] {
         if (!externalId) return []
         const precio = normalizarImporte(obtener('precio'))
         const pago = String(obtener('pago') ?? '').trim()
+        const modalidad = String(indices.has('modalidad') ? obtener('modalidad') ?? '' : '').trim()
         const ubicacion = String(obtener('ubicacion') ?? '').trim()
         const estado = String(obtener('estado') ?? '').trim()
         const fechaTexto = String(obtener('fechahora') ?? '').trim()
         const datos = {
             externalId, fila: offset + 2, fechaTexto, fecha: parsearFechaArgentina(fechaTexto), precio,
-            pago, pagoClave: normalizarTexto(pago), ubicacion, ubicacionClave: normalizarTexto(ubicacion),
+            pago, pagoClave: normalizarTexto(pago), modalidad, modalidadClave: normalizarTexto(modalidad), ubicacion, ubicacionClave: normalizarTexto(ubicacion),
             estado, estadoClave: normalizarTexto(estado),
         }
         const huellaFinanciera = createHash('sha256').update(JSON.stringify({
@@ -100,21 +103,33 @@ export function esPagoSoportado(pagoClave: string) {
     return pagoClave === 'efectivo' || pagoClave === 'transferencia'
 }
 
+export function elegirCajaSheet<T extends { id: string; activo: boolean }>(fila: Pick<FilaSheetCaja, 'pagoClave' | 'modalidadClave'>, mapeo: {
+    cajaEfectivo: T | null
+    cajaTransferencia: T | null
+    cajaDeliveryEfectivo: T | null
+    cajaDeliveryTransferencia: T | null
+}) {
+    const delivery = fila.modalidadClave === 'delivery'
+    if (fila.pagoClave === 'efectivo') return delivery ? mapeo.cajaDeliveryEfectivo : mapeo.cajaEfectivo
+    return delivery ? mapeo.cajaDeliveryTransferencia : mapeo.cajaTransferencia
+}
+
 export function evaluarFilaSheet(input: {
     fila: FilaSheetCaja
     fechaInicio: Date
-    existente?: { estadoFuente: string; huellaFinanciera: string; movimientoCajaId: string | null; estadoProcesamiento: string } | null
+    existente?: { estadoFuente: string; huellaFinanciera: string; movimientoCajaId: string | null; estadoProcesamiento: string; modalidad?: string } | null
 }) {
     const { fila, existente } = input
     if (!Number.isFinite(fila.precio) || fila.precio <= 0) return { accion: 'PENDIENTE' as const, detalle: 'Precio inválido.' }
     if (!fila.fecha) return { accion: 'PENDIENTE' as const, detalle: 'Fecha/Hora inválida.' }
     if (!fila.ubicacionClave) return { accion: 'PENDIENTE' as const, detalle: 'Ubicación vacía.' }
     if (!esPagoSoportado(fila.pagoClave)) return { accion: 'IGNORAR' as const, detalle: `Medio de pago no soportado: ${fila.pago || 'vacío'}.` }
-    if (existente?.movimientoCajaId && (existente.huellaFinanciera !== fila.huellaFinanciera || fila.estadoClave !== 'entregado')) {
+    if (existente?.movimientoCajaId && (existente.huellaFinanciera !== fila.huellaFinanciera || fila.estadoClave !== 'entregado' || (existente.modalidad && normalizarTexto(existente.modalidad) !== fila.modalidadClave))) {
         return { accion: 'REVISION' as const, detalle: 'La fila cambió después de haberse registrado en Caja.' }
     }
-    if (fila.estadoClave !== 'entregado') return { accion: 'OBSERVAR' as const, detalle: null }
     if (existente?.movimientoCajaId) return { accion: 'NINGUNA' as const, detalle: null }
+    if (!['retiro', 'entrega', 'delivery'].includes(fila.modalidadClave)) return { accion: 'PENDIENTE' as const, detalle: 'Modalidad inválida o vacía.' }
+    if (fila.estadoClave !== 'entregado') return { accion: 'OBSERVAR' as const, detalle: null }
     if (fila.fecha < input.fechaInicio) return { accion: 'OBSERVAR' as const, detalle: 'Anterior al inicio de la integración.' }
     return { accion: 'REGISTRAR' as const, detalle: null }
 }

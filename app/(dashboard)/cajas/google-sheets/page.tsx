@@ -6,12 +6,12 @@ import useSWR from 'swr'
 
 interface Caja { id: string; tipo: string; nombre: string | null; activo: boolean; ubicacionId: string | null; ubicacion?: { nombre: string } | null }
 interface Sede { id: string; nombre: string; activo: boolean; tipo: string }
-interface Sucursal { id?: string; ubicacionTexto: string; ubicacionId: string; cajaEfectivoId: string | null; cajaTransferenciaId: string | null; activo: boolean; ubicacion?: { nombre: string } | null }
+interface Sucursal { id?: string; ubicacionTexto: string; ubicacionId: string; cajaEfectivoId: string | null; cajaTransferenciaId: string | null; cajaDeliveryEfectivoId: string | null; cajaDeliveryTransferenciaId: string | null; activo: boolean; ubicacion?: { nombre: string } | null }
 interface Resumen {
     config: { activo: boolean; spreadsheetId: string; intervaloMinutos: number; fechaInicio: string | null }
     estado: { ultimaSincronizacion?: string; filasLeidas: number; incorporados: number; pendientes: number; revisiones: number; error?: string }
     sucursales: Sucursal[]
-    recientes: { id: string; externalId: string; hoja: string; precio: number; pago: string; ubicacion: string; estadoFuente: string; estadoProcesamiento: string; detalle: string | null; fechaExterna: string | null; updatedAt: string }[]
+    recientes: { id: string; externalId: string; hoja: string; precio: number; pago: string; modalidad: string; ubicacion: string; estadoFuente: string; estadoProcesamiento: string; detalle: string | null; fechaExterna: string | null; updatedAt: string }[]
     totalesPorHoja: { hoja: string; _count: { _all: number } }[]
     paginacion: { pagina: number; porPagina: number; total: number; totalPaginas: number }
     opcionesFiltros: { ubicaciones: string[]; pagos: string[] }
@@ -42,7 +42,7 @@ export default function IntegracionGoogleSheetsPage() {
     const [ocupado, setOcupado] = useState(false)
     const [error, setError] = useState('')
     const [mensaje, setMensaje] = useState('')
-    useEffect(() => { if (data) setSucursales(data.sucursales.map(s => ({ ...s, cajaEfectivoId: s.cajaEfectivoId || null, cajaTransferenciaId: s.cajaTransferenciaId || null }))) }, [data])
+    useEffect(() => { if (data) setSucursales(data.sucursales.map(s => ({ ...s, cajaEfectivoId: s.cajaEfectivoId || null, cajaTransferenciaId: s.cajaTransferenciaId || null, cajaDeliveryEfectivoId: s.cajaDeliveryEfectivoId || null, cajaDeliveryTransferenciaId: s.cajaDeliveryTransferenciaId || null }))) }, [data])
 
     async function guardar() {
         setOcupado(true); setError(''); setMensaje('')
@@ -117,18 +117,20 @@ export default function IntegracionGoogleSheetsPage() {
                 <button className={`btn ${data.config.activo ? 'btn-secondary' : 'btn-primary'}`} disabled={ocupado} onClick={() => void cambiarEstado(!data.config.activo)}>{data.config.activo ? 'Pausar integración' : 'Activar integración'}</button>
             </section>
 
-            <section><h2>Destino por sucursal</h2><p>Escribí exactamente el valor que aparece en la columna Ubicación. Efectivo y Transferencia pueden ir a cajas diferentes.</p>
-                <div className="table-container"><table className="table"><thead><tr><th>Ubicación en Sheet</th><th>Sede</th><th>Efectivo</th><th>Transferencia</th><th>Activa</th></tr></thead><tbody>
+            <section><h2>Destino por sucursal</h2><p>Configurá una caja para cada modalidad y medio de pago. Entrega/Retiro conserva los destinos actuales; Delivery requiere destinos propios. Sólo se acredita al pasar a Entregado.</p>
+                <div className="table-container"><table className="table"><thead><tr><th>Ubicación en Sheet</th><th>Sede</th><th>Entrega/Retiro · Efectivo</th><th>Entrega/Retiro · Transferencia</th><th>Delivery · Efectivo</th><th>Delivery · Transferencia</th><th>Activa</th></tr></thead><tbody>
                     {sucursales.map((fila, indice) => <tr key={fila.id || `nueva-${indice}`}>
                         <td><input className="form-input" required value={fila.ubicacionTexto} onChange={e => actualizar(indice, { ubicacionTexto: e.target.value })} /></td>
-                        <td><select className="form-select" value={fila.ubicacionId} onChange={e => actualizar(indice, { ubicacionId: e.target.value, cajaEfectivoId: null })}><option value="">Seleccionar</option>{sedes?.filter(s => s.activo && s.tipo === 'LOCAL').map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select></td>
+                        <td><select className="form-select" value={fila.ubicacionId} onChange={e => actualizar(indice, { ubicacionId: e.target.value, cajaEfectivoId: null, cajaDeliveryEfectivoId: null })}><option value="">Seleccionar</option>{sedes?.filter(s => s.activo && s.tipo === 'LOCAL').map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select></td>
                         <td><select className="form-select" value={fila.cajaEfectivoId || ''} onChange={e => actualizar(indice, { cajaEfectivoId: e.target.value || null })}><option value="">Sin configurar</option>{cajasActivas.filter(c => c.ubicacionId === fila.ubicacionId).map(c => <option key={c.id} value={c.id}>{c.nombre || c.tipo}</option>)}</select></td>
                         <td><select className="form-select" value={fila.cajaTransferenciaId || ''} onChange={e => actualizar(indice, { cajaTransferenciaId: e.target.value || null })}><option value="">Sin configurar</option>{cajasActivas.map(c => <option key={c.id} value={c.id}>{c.nombre || c.tipo}{c.ubicacion?.nombre ? ` · ${c.ubicacion.nombre}` : ''}</option>)}</select></td>
+                        <td><select className="form-select" value={fila.cajaDeliveryEfectivoId || ''} onChange={e => actualizar(indice, { cajaDeliveryEfectivoId: e.target.value || null })}><option value="">Sin configurar</option>{cajasActivas.filter(c => c.ubicacionId === fila.ubicacionId).map(c => <option key={c.id} value={c.id}>{c.nombre || c.tipo}</option>)}</select></td>
+                        <td><select className="form-select" value={fila.cajaDeliveryTransferenciaId || ''} onChange={e => actualizar(indice, { cajaDeliveryTransferenciaId: e.target.value || null })}><option value="">Sin configurar</option>{cajasActivas.map(c => <option key={c.id} value={c.id}>{c.nombre || c.tipo}{c.ubicacion?.nombre ? ` · ${c.ubicacion.nombre}` : ''}</option>)}</select></td>
                         <td><input type="checkbox" checked={fila.activo} onChange={e => actualizar(indice, { activo: e.target.checked })} /></td>
                     </tr>)}
-                    {!sucursales.length && <tr><td colSpan={5}>Agregá la primera relación entre el Sheet y una sede.</td></tr>}
+                    {!sucursales.length && <tr><td colSpan={7}>Agregá la primera relación entre el Sheet y una sede.</td></tr>}
                 </tbody></table></div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn btn-secondary" disabled={ocupado} onClick={() => setSucursales([...sucursales, { ubicacionTexto: '', ubicacionId: '', cajaEfectivoId: null, cajaTransferenciaId: null, activo: true }])}>+ Agregar ubicación</button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn btn-secondary" disabled={ocupado} onClick={() => setSucursales([...sucursales, { ubicacionTexto: '', ubicacionId: '', cajaEfectivoId: null, cajaTransferenciaId: null, cajaDeliveryEfectivoId: null, cajaDeliveryTransferenciaId: null, activo: true }])}>+ Agregar ubicación</button>
                     <button className="btn btn-primary" disabled={ocupado || !sucursales.length} onClick={() => void guardar()}>Guardar destinos</button></div>
             </section>
 
@@ -159,9 +161,9 @@ export default function IntegracionGoogleSheetsPage() {
                         {totalMovimientos} {totalMovimientos === 1 ? 'movimiento' : 'movimientos'}
                     </div>
                 </div>
-                <div className="table-container"><table className="table"><thead><tr><th>Pedido</th><th>Hoja</th><th>Estado Sheet</th><th>Ubicación</th><th>Pago</th><th>Importe</th><th>Resultado</th></tr></thead><tbody>
-                    {movimientosPagina.map(r => <tr key={r.id}><td>#{r.externalId}</td><td>{r.hoja}</td><td>{r.estadoFuente || '—'}</td><td>{nombreSucursal(r.ubicacion)}</td><td>{r.pago || '—'}</td><td>{r.precio.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</td><td>{resultadoVisible(r)}{r.detalle && <small style={{ display: 'block' }}>{r.detalle}</small>}</td></tr>)}
-                    {!movimientosPagina.length && <tr><td colSpan={7}>{data.totalesPorHoja.length ? 'No hay movimientos que coincidan con estos filtros.' : 'Todavía no hay movimientos procesados.'}</td></tr>}
+                <div className="table-container"><table className="table"><thead><tr><th>Pedido</th><th>Hoja</th><th>Estado Sheet</th><th>Ubicación</th><th>Modalidad</th><th>Pago</th><th>Importe</th><th>Resultado</th></tr></thead><tbody>
+                    {movimientosPagina.map(r => <tr key={r.id}><td>#{r.externalId}</td><td>{r.hoja}</td><td>{r.estadoFuente || '—'}</td><td>{nombreSucursal(r.ubicacion)}</td><td>{r.modalidad || '—'}</td><td>{r.pago || '—'}</td><td>{r.precio.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</td><td>{resultadoVisible(r)}{r.detalle && <small style={{ display: 'block' }}>{r.detalle}</small>}</td></tr>)}
+                    {!movimientosPagina.length && <tr><td colSpan={8}>{data.totalesPorHoja.length ? 'No hay movimientos que coincidan con estos filtros.' : 'Todavía no hay movimientos procesados.'}</td></tr>}
                 </tbody></table></div>
                 {totalMovimientos > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
                     <span style={{ color: 'var(--color-gray-500)', fontSize: '0.8rem' }}>
