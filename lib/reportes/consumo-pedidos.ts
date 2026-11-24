@@ -100,52 +100,68 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
     const elegidos = productos.filter(producto => producto.codigoInterno === 'ELE')
     const recetaElegidos = elegidos.length === 1 ? elegidos[0].recetasElegidos ?? [] : []
     let elegidosValorados = 0, elegidosSinCosto = 0, costoElegidos = 0, ingresoElegidos = 0
+    let costoSaboresIdentificados = 0, planchasConCosto = 0
     const faltantesElegidos = new Map<string, number>()
     const porSaborCosto = new Map<string, { codigo: string; nombre: string; planchasValoradas: number; costoEstimado: number }>()
     const registrarFalta = (motivo: string, paquetes: number) => faltantesElegidos.set(motivo, (faltantesElegidos.get(motivo) ?? 0) + paquetes)
+    const sabor = (codigo: string) => recetaElegidos.filter(r => r.alcance === 'sabor' && r.variante?.codigo === codigo)
+    const empaque = (cantidad: number) => recetaElegidos.filter(r => r.alcance === 'empaque' && r.presentacion?.cantidad === cantidad)
+    const recetaInvalida = (receta: typeof recetaElegidos[number]) =>
+        !Number.isFinite(receta.cantidad) || receta.cantidad <= 0 ||
+        !Number.isFinite(receta.merma) || receta.merma < 0 || receta.merma >= 100 ||
+        !Number.isFinite(receta.insumo.precioUnitario) || receta.insumo.precioUnitario <= 0
+    const cantidadConMerma = (receta: typeof recetaElegidos[number]) => receta.cantidad / (1 - receta.merma / 100)
     for (const pedido of reporte.pedidosElegidos) {
         const paquetes = pedido.presentaciones.reduce((total, p) => total + p.paquetes, 0)
         if (!pedido.sabores) {
             if (pedido.periodo === 'actual') { elegidosSinCosto += paquetes; registrarFalta('Sin sabores válidos en el Sheet', paquetes) }
             continue
         }
-        const sabor = (codigo: string) => recetaElegidos.filter(r => r.alcance === 'sabor' && r.variante?.codigo === codigo)
-        const empaque = (cantidad: number) => recetaElegidos.filter(r => r.alcance === 'empaque' && r.presentacion?.cantidad === cantidad)
-        const motivo = pedido.sabores.find(s => !sabor(s.codigo).length) ? `Falta receta de sabor ${pedido.sabores.find(s => !sabor(s.codigo).length)!.nombre}`
-            : pedido.presentaciones.find(p => !empaque(p.cantidad).length) ? `Falta receta de empaque x${pedido.presentaciones.find(p => !empaque(p.cantidad).length)!.cantidad}`
-            : null
-        if (motivo) {
-            if (pedido.periodo === 'actual') { elegidosSinCosto += paquetes; registrarFalta(motivo, paquetes) }
+        const motivos = new Set<string>()
+        for (const elegido of pedido.sabores) {
+            const fichas = sabor(elegido.codigo)
+            if (!fichas.length) { motivos.add(`Falta receta de sabor ${elegido.nombre}`); continue }
+            const invalidas = fichas.filter(recetaInvalida)
+            if (invalidas.length) {
+                for (const invalida of invalidas) motivos.add(`Cantidad, merma o precio inválido: ${invalida.insumo.nombre}`)
+                continue
+            }
+            if (pedido.periodo === 'actual') {
+                const planchas = elegido.sandwiches / 8
+                const costoSabor = fichas.reduce((total, receta) => total +
+                    cantidadConMerma(receta) * receta.insumo.precioUnitario * planchas, 0)
+                const actual = porSaborCosto.get(elegido.codigo) ?? { codigo: elegido.codigo, nombre: elegido.nombre,
+                    planchasValoradas: 0, costoEstimado: 0 }
+                actual.planchasValoradas += planchas
+                actual.costoEstimado += costoSabor
+                porSaborCosto.set(elegido.codigo, actual)
+                planchasConCosto += planchas
+                costoSaboresIdentificados += costoSabor
+            }
+        }
+        for (const presentacion of pedido.presentaciones) {
+            const fichas = empaque(presentacion.cantidad)
+            if (!fichas.length) { motivos.add(`Falta receta de empaque x${presentacion.cantidad}`); continue }
+            for (const invalida of fichas.filter(recetaInvalida)) motivos.add(`Cantidad, merma o precio inválido: ${invalida.insumo.nombre}`)
+        }
+        if (motivos.size) {
+            if (pedido.periodo === 'actual') {
+                elegidosSinCosto += paquetes
+                for (const motivo of motivos) registrarFalta(motivo, paquetes)
+            }
             continue
         }
         const cantidades = new Map<string, { receta: typeof recetaElegidos[number]; cantidad: number }>()
         const agregar = (receta: typeof recetaElegidos[number], veces: number) => {
-            const cantidad = receta.cantidad / (1 - Math.min(Math.max(receta.merma, 0), 99.99) / 100) * veces
+            const cantidad = cantidadConMerma(receta) * veces
             const previo = cantidades.get(receta.insumoId)
             cantidades.set(receta.insumoId, { receta, cantidad: (previo?.cantidad ?? 0) + cantidad })
         }
         for (const s of pedido.sabores) for (const receta of sabor(s.codigo)) agregar(receta, s.sandwiches / 8)
         for (const p of pedido.presentaciones) for (const receta of empaque(p.cantidad)) agregar(receta, p.paquetes)
-        const sinPrecio = [...cantidades.values()].find(x => !Number.isFinite(x.receta.cantidad) || x.receta.cantidad <= 0 ||
-            !Number.isFinite(x.receta.insumo.precioUnitario) || x.receta.insumo.precioUnitario <= 0)
-        if (sinPrecio) {
-            if (pedido.periodo === 'actual') { elegidosSinCosto += paquetes; registrarFalta(`Falta cantidad o precio de ${sinPrecio.receta.insumo.nombre}`, paquetes) }
-            continue
-        }
         const costoPedido = [...cantidades.values()].reduce((total, x) => total + x.cantidad * x.receta.insumo.precioUnitario, 0)
         if (pedido.periodo === 'anterior') { costoAnterior += costoPedido; continue }
         elegidosValorados += paquetes
-        for (const elegido of pedido.sabores) {
-            const planchas = elegido.sandwiches / 8
-            const costoSabor = sabor(elegido.codigo).reduce((total, receta) => total +
-                receta.cantidad / (1 - Math.min(Math.max(receta.merma, 0), 99.99) / 100) *
-                receta.insumo.precioUnitario * planchas, 0)
-            const actual = porSaborCosto.get(elegido.codigo) ?? { codigo: elegido.codigo, nombre: elegido.nombre,
-                planchasValoradas: 0, costoEstimado: 0 }
-            actual.planchasValoradas += planchas
-            actual.costoEstimado += costoSabor
-            porSaborCosto.set(elegido.codigo, actual)
-        }
         costoElegidos += costoPedido
         ingresoElegidos += pedido.ingresoAtribuido
         costoEstimado += costoPedido
@@ -173,6 +189,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             paquetesAnteriores, costoAnterior,
             elegidos: { paquetesValorados: elegidosValorados, paquetesSinCosto: elegidosSinCosto,
                 costoEstimado: costoElegidos, ingresoAtribuido: ingresoElegidos,
+                costoSaboresIdentificados, planchasConCosto,
                 faltantes: [...faltantesElegidos].map(([motivo, paquetes]) => ({ motivo, paquetes })) },
         },
         porTipo: porTipo.sort((a, b) => b.paquetes - a.paquetes || a.clave.localeCompare(b.clave)),

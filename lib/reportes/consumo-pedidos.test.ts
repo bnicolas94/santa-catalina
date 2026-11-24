@@ -134,7 +134,7 @@ test('valora cada ficha completa por plancha, incluido un sabor premium, sin sum
 test('Personalizado usa las fichas de sus sabores como Elegidos', () => {
     const csv = [cabecera, fila('1', 'Personalizado x16 (2 planchas)', '16', '160')
         .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 8x Tomate + 8x Roquefort",160')].join('\n')
-    const reporte = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
     assert.deepEqual(reporte.pedidosElegidos[0]?.sabores?.map(x => x.codigo), ['tom', 'roque'])
     assert.deepEqual(reporte.pedidosElegidos[0]?.presentaciones, [{ cantidad: 16, paquetes: 1 }])
     const insumo = (nombre: string, precioUnitario: number) => ({ nombre, unidadMedida: 'u', precioUnitario })
@@ -162,7 +162,30 @@ test('un sabor sin receta deja pendiente todo el pedido Elegidos', () => {
     assert.equal(r.resumen.costoEstimado, 0)
     assert.equal(r.resumen.ingresoSinCosto, 160)
     assert.deepEqual(r.porInsumo, [])
+    assert.equal(r.resumen.elegidos.costoSaboresIdentificados, 10)
+    assert.deepEqual(r.porSaborCosto.map(x => ({ codigo: x.codigo, planchas: x.planchasValoradas, costo: x.costoEstimado })),
+        [{ codigo: 'tom', planchas: 1, costo: 10 }])
     assert.deepEqual(r.resumen.elegidos.faltantes, [{ motivo: 'Falta receta de sabor Huevo', paquetes: 1 }])
+})
+
+test('muestra el costo de sabores cargados aunque falte empaque y enumera todos los faltantes', () => {
+    const csv = [cabecera, fila('1', '16 Surtidos Elegidos', '16', '160')
+        .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 8x Tomate + 8x Huevo",160')].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const r = calcularConsumoPedidos(reporte, [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele16', cantidad: 16 }], fichasTecnicas: [], recetasElegidos: [
+            { alcance: 'sabor', cantidad: 2, merma: 0, insumoId: 'tomate', variante: { codigo: 'tom' }, presentacion: null,
+                insumo: { nombre: 'Tomate', unidadMedida: 'kg', precioUnitario: 5 } },
+        ] }])
+    assert.equal(r.resumen.elegidos.paquetesValorados, 0)
+    assert.equal(r.resumen.elegidos.paquetesSinCosto, 1)
+    assert.equal(r.resumen.elegidos.planchasConCosto, 1)
+    assert.equal(r.resumen.elegidos.costoSaboresIdentificados, 10)
+    assert.equal(r.resumen.costoEstimado, 0)
+    assert.deepEqual(r.resumen.elegidos.faltantes, [
+        { motivo: 'Falta receta de sabor Huevo', paquetes: 1 },
+        { motivo: 'Falta receta de empaque x16', paquetes: 1 },
+    ])
 })
 
 test('un pedido mixto atribuye a Elegidos sólo su parte del precio', () => {

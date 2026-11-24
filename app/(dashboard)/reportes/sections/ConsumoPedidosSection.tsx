@@ -100,11 +100,12 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                 </tbody></table></div>{!data.porInsumo.length && <p>No hay insumos valorados en este período.</p>}
             </div>
             <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Personalizados: costo según los sabores elegidos</h3>
-                <p>{cantidad(data.resumen.elegidos.paquetesValorados)} paquetes valorados · {dinero(data.resumen.elegidos.costoEstimado)} de insumos estimados. {cantidad(data.resumen.elegidos.paquetesSinCosto)} paquetes siguen pendientes. Se multiplica la ficha completa de cada sabor, común o premium, por sus planchas del Sheet y se agrega el empaque de cada presentación.</p>
-                {data.resumen.elegidos.faltantes.length > 0 && <ul>{data.resumen.elegidos.faltantes.map(x => <li key={x.motivo}>{x.motivo}: {cantidad(x.paquetes)} paquetes</li>)}</ul>}
+                <p><strong>Fichas de sabor ya cargadas:</strong> {cantidad(data.resumen.elegidos.planchasConCosto)} planchas con {dinero(data.resumen.elegidos.costoSaboresIdentificados)} de insumos identificados. Este desglose incluye sabores de pedidos cuyo empaque u otro sabor todavía falta; no se suma otra vez al total ni al margen.</p>
+                <p><strong>Paquetes con costo completo:</strong> {cantidad(data.resumen.elegidos.paquetesValorados)} · {dinero(data.resumen.elegidos.costoEstimado)} de insumos y empaque. {cantidad(data.resumen.elegidos.paquetesSinCosto)} paquetes siguen pendientes.</p>
+                {data.resumen.elegidos.faltantes.length > 0 && <><p>Faltantes para completar paquetes (un mismo pedido puede aparecer en varios motivos):</p><ul>{data.resumen.elegidos.faltantes.map(x => <li key={x.motivo}>{x.motivo}: {cantidad(x.paquetes)} paquetes afectados</li>)}</ul></>}
             </div>
             <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Planchas y costo por sabor</h3>
-                <p>Las planchas salen de «Sabores» en Observaciones del Sheet. El costo de sabor suma su ficha completa sólo en pedidos con todas las recetas y precios disponibles; el empaque se agrega al total de Personalizados.</p>
+                <p>Las planchas salen de «Sabores» en Observaciones del Sheet. Una ficha con insumos y precios válidos muestra su costo aunque el paquete siga pendiente por otros sabores o empaque. El empaque sólo integra el costo completo del paquete.</p>
                 <div style={{ maxHeight: 340, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Sabor</th><th>Planchas</th><th>Con costo</th><th>Costo de insumos</th></tr></thead><tbody>
                     {data.porSaborElegido.map(x => { const costo = data.porSaborCosto.find(item => item.codigo === x.codigo); return <tr key={x.codigo}><td>{x.nombre}</td><td>{cantidad(x.planchas)}</td><td>{cantidad(costo?.planchasValoradas ?? 0)}</td><td>{costo ? dinero(costo.costoEstimado) : 'Pendiente'}</td></tr> })}
                 </tbody></table></div>{!data.porSaborElegido.length && <p>No hay sabores elegidos identificados para estos filtros.</p>}

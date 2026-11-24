@@ -5,6 +5,12 @@ import Link from 'next/link'
 import { MESES, GranularidadTemporal, RangoFechas, getDateRange } from '../utils/dateUtils'
 
 const InclusionToggleBorder = (active: boolean) => active ? '1px solid var(--color-warning)' : '1px solid var(--color-gray-200)'
+const fechaInput = (fecha: Date) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
+const diasEntre = (desde: string, hasta: string) => {
+    const [anioDesde, mesDesde, diaDesde] = desde.split('-').map(Number)
+    const [anioHasta, mesHasta, diaHasta] = hasta.split('-').map(Number)
+    return (Date.UTC(anioHasta, mesHasta - 1, diaHasta) - Date.UTC(anioDesde, mesDesde - 1, diaDesde)) / 86_400_000 + 1
+}
 
 export type SeccionReporte = 'dashboard' | 'pedidos' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
 
@@ -66,10 +72,22 @@ export default function PeriodoSelector({
     // Helper states for individual selectors
     const [mesTemp, setMesTemp] = useState(rango.desde.getMonth() + 1)
     const [anioTemp, setAnioTemp] = useState(rango.desde.getFullYear())
-    const [fechaDia, setFechaDia] = useState(rango.desde.toISOString().slice(0,10))
-    const [fechaSemana, setFechaSemana] = useState(rango.desde.toISOString().slice(0,10))
-    const [customDesde, setCustomDesde] = useState(rango.desde.toISOString().slice(0,10))
-    const [customHasta, setCustomHasta] = useState(rango.hasta.toISOString().slice(0,10))
+    const [fechaDia, setFechaDia] = useState(fechaInput(rango.desde))
+    const [fechaSemana, setFechaSemana] = useState(fechaInput(rango.desde))
+    const [customDesde, setCustomDesde] = useState(fechaInput(rango.desde))
+    const [customHasta, setCustomHasta] = useState(fechaInput(rango.hasta))
+    const errorRango = customDesde && customHasta && customDesde > customHasta
+        ? 'La fecha Desde debe ser anterior o igual a Hasta.'
+        : activeSection === 'pedidos' && customDesde && customHasta && diasEntre(customDesde, customHasta) > 366
+            ? 'Pedidos e insumos admite períodos de hasta 366 días.' : ''
+
+    const cambiarGranularidad = (valor: GranularidadTemporal) => {
+        if (valor === 'rango' && granularidad !== 'rango') {
+            setCustomDesde(fechaInput(rango.desde))
+            setCustomHasta(fechaInput(rango.hasta))
+        }
+        onGranularidadChange(valor)
+    }
 
     // Automatically recalculate Rango when temps change
     useEffect(() => {
@@ -80,12 +98,12 @@ export default function PeriodoSelector({
         } else if (granularidad === 'semana') {
             onRangoChange(getDateRange('semana', { fecha: fechaSemana })) // Re-using fecha as reference for week
         } else if (granularidad === 'rango') {
-            if (customDesde && customHasta) {
+            if (customDesde && customHasta && !errorRango) {
                 onRangoChange(getDateRange('rango', { rangoDesde: customDesde, rangoHasta: customHasta }))
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mesTemp, anioTemp, fechaDia, fechaSemana, customDesde, customHasta])
+    }, [granularidad, mesTemp, anioTemp, fechaDia, fechaSemana, customDesde, customHasta, activeSection, errorRango])
 
     return (
         <div style={{ marginBottom: 'var(--space-6)' }}>
@@ -115,14 +133,14 @@ export default function PeriodoSelector({
                     <select
                         className="form-select"
                         value={granularidad}
-                        onChange={e => onGranularidadChange(e.target.value as GranularidadTemporal)}
-                        style={{ width: 110 }}
+                        onChange={e => cambiarGranularidad(e.target.value as GranularidadTemporal)}
+                        style={{ width: 150 }}
                         disabled={loading}
                     >
                         <option value="dia">Por Día</option>
                         <option value="semana">Por Semana</option>
                         <option value="mes">Por Mes</option>
-                        <option value="rango">Rango</option>
+                        <option value="rango">Rango de fechas</option>
                     </select>
 
                     {granularidad === 'mes' && (
@@ -171,26 +189,6 @@ export default function PeriodoSelector({
                         />
                     )}
 
-                    {granularidad === 'rango' && (
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                            <input 
-                                type="date"
-                                className="form-input"
-                                value={customDesde}
-                                onChange={e => setCustomDesde(e.target.value)}
-                                disabled={loading}
-                            />
-                            <span>a</span>
-                            <input 
-                                type="date"
-                                className="form-input"
-                                value={customHasta}
-                                onChange={e => setCustomHasta(e.target.value)}
-                                disabled={loading}
-                            />
-                        </div>
-                    )}
-
                     <button
                         className="btn btn-ghost btn-sm"
                         onClick={onRefresh}
@@ -235,6 +233,9 @@ export default function PeriodoSelector({
                     Mostrando datos para: <strong>{rango.label}</strong>
                 </div>
 
+                {activeSection === 'pedidos' && granularidad !== 'rango' && <button type="button" className="btn btn-secondary btn-sm"
+                    onClick={() => cambiarGranularidad('rango')} disabled={loading}>Elegir rango de fechas</button>}
+
                 {activeSection !== 'pedidos' && <div style={{
                     display: 'flex', 
                     alignItems: 'center', 
@@ -266,6 +267,14 @@ export default function PeriodoSelector({
                     </label>
                 </div>}
             </div>
+
+            {granularidad === 'rango' && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+                <label>Desde{activeSection === 'pedidos' ? ' (Fecha Entrega)' : ''}<input type="date" className="form-input"
+                    value={customDesde} onChange={e => setCustomDesde(e.target.value)} disabled={loading} /></label>
+                <label>Hasta{activeSection === 'pedidos' ? ' (Fecha Entrega)' : ''}<input type="date" className="form-input"
+                    value={customHasta} onChange={e => setCustomHasta(e.target.value)} disabled={loading} min={customDesde || undefined} /></label>
+                {errorRango && <span role="alert" style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>{errorRango}</span>}
+            </div>}
 
             <div style={{
                 display: 'flex',

@@ -55,6 +55,8 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
         ['Personalizados valorados', r.elegidos.paquetesValorados],
         ['Personalizados pendientes', r.elegidos.paquetesSinCosto],
         ['Costo de Personalizados', r.elegidos.costoEstimado],
+        ['Planchas de sabor con costo', r.elegidos.planchasConCosto],
+        ['Costo identificado de sabores', r.elegidos.costoSaboresIdentificados],
         ['Criterio', 'Recetas y precios actuales de insumos; no equivale a compras, stock consumido real ni cobros.'],
     ])
     setColumnWidths(resumen, [35, 45])
