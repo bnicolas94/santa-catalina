@@ -12,6 +12,7 @@ type Datos = { recetasElegidos: Receta[]; sabores: { codigo: string; nombre: str
 type Formulario = { alcance: AlcanceEditable; codigoSabor: string; presentacionId: string; insumoId: string; cantidad: string; merma: string }
 const inicial: Formulario = { alcance: 'sabor', codigoSabor: '', presentacionId: '', insumoId: '', cantidad: '', merma: '0' }
 const dinero = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
+const avisarCambioReceta = () => { try { window.localStorage.setItem('recetas-elegidos-actualizadas', `${Date.now()}:${Math.random()}`) } catch { /* almacenamiento deshabilitado */ } }
 
 export default function RecetaElegidosEditor({ productoId }: { productoId: string }) {
     const [datos, setDatos] = useState<Datos | null>(null)
@@ -67,6 +68,7 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || 'No se pudo aplicar el insumo a los sabores.')
             await cargar()
+            avisarCambioReceta()
             setMasivo(actual => ({ ...actual, insumoId: '', cantidad: '' }))
             setMensaje(`Insumo agregado a ${json.creados} sabores. ${json.omitidos} ya lo tenían y quedaron sin cambios.`)
         } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar.') }
@@ -100,6 +102,7 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || 'No se pudo guardar la línea.')
             await cargar()
+            avisarCambioReceta()
             setForm({ ...inicial, alcance, codigoSabor, presentacionId })
             setEditando(null)
             setMensaje('Receta guardada.')
@@ -115,6 +118,7 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
             const json = await res.json()
             if (!res.ok) throw new Error(json.error || 'No se pudo quitar.')
             await cargar()
+            avisarCambioReceta()
             setMensaje('Insumo quitado de la receta.')
         } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo quitar.') }
     }

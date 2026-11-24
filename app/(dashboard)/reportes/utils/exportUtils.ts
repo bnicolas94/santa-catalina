@@ -62,11 +62,18 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
     setColumnWidths(resumen, [35, 45])
     XLSX.utils.book_append_sheet(wb, resumen, 'Resumen')
     const insumos = XLSX.utils.aoa_to_sheet([
-        ['Insumo', 'Cantidad estimada', 'Unidad', 'Costo estimado'],
-        ...data.porInsumo.map(x => [x.nombre, x.cantidad, x.unidad, x.costoEstimado]),
+        ['Insumo', 'Cantidad identificable', 'Paquetes completos', 'Sabores pendientes', 'Unidad', 'Costo identificable'],
+        ...data.porInsumoIdentificado.map(x => [x.nombre, x.cantidad, x.cantidadCompleta,
+            x.cantidadPendiente, x.unidad, x.costoEstimado]),
     ])
-    setColumnWidths(insumos, [40, 22, 14, 22])
+    setColumnWidths(insumos, [40, 24, 22, 22, 14, 24])
     XLSX.utils.book_append_sheet(wb, insumos, 'Insumos')
+    const insumosPorSabor = XLSX.utils.aoa_to_sheet([
+        ['Sabor', 'Insumo', 'Cantidad', 'Unidad', 'Costo estimado'],
+        ...data.porSaborInsumo.map(x => [x.sabor, x.insumo, x.cantidad, x.unidad, x.costoEstimado]),
+    ])
+    setColumnWidths(insumosPorSabor, [28, 40, 18, 14, 22])
+    XLSX.utils.book_append_sheet(wb, insumosPorSabor, 'Insumos por sabor')
     const paquetes = XLSX.utils.aoa_to_sheet([
         ['Paquete', 'Presentación', 'Paquetes', 'Con precio', 'Ingreso atribuido', 'Costo por paquete', 'Costo total', 'Margen comparable', 'Paquetes previos', 'Cobertura'],
         ...data.porTipo.map(x => [x.nombre, x.presentacion, x.paquetes, x.paquetesConPrecio, x.ingresoAtribuido,

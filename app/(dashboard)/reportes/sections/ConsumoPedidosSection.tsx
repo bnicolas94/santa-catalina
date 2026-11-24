@@ -29,11 +29,25 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
 }) {
     const [resultado, setResultado] = useState<{ clave: string; data: Data | null; error: string } | null>(null)
     const [modalidades, setModalidades] = useState<string[]>([])
+    const [revisionRecetas, setRevisionRecetas] = useState(0)
+    const [saborDetalle, setSaborDetalle] = useState('')
     const params = new URLSearchParams({ desde: diaArgentina(rango.desde), hasta: diaArgentina(rango.hasta),
         origen, modalidad, ubicacionId })
-    const clave = `${params}:${revision}`
+    const clave = `${params}:${revision}:${revisionRecetas}`
     const cargando = resultado?.clave !== clave
     const data = cargando ? null : resultado?.data
+
+    useEffect(() => {
+        const leerRevision = () => { try { return window.localStorage.getItem('recetas-elegidos-actualizadas') } catch { return null } }
+        let ultima = leerRevision()
+        const comprobar = () => {
+            const actual = leerRevision()
+            if (actual !== ultima) { ultima = actual; setRevisionRecetas(valor => valor + 1) }
+        }
+        window.addEventListener('focus', comprobar)
+        window.addEventListener('storage', comprobar)
+        return () => { window.removeEventListener('focus', comprobar); window.removeEventListener('storage', comprobar) }
+    }, [])
 
     useEffect(() => {
         const controller = new AbortController()
@@ -53,7 +67,9 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
 
     const tiposConCosto = data?.porTipo.filter(tipo => tipo.costoEstimado !== null) ?? []
     const topTipos = [...tiposConCosto].sort((a, b) => (b.costoEstimado ?? 0) - (a.costoEstimado ?? 0)).slice(0, 10)
-    const topInsumos = data?.porInsumo.slice(0, 10) ?? []
+    const topInsumos = data?.porInsumoIdentificado.slice(0, 10) ?? []
+    const saborDetalleActivo = data?.porSaborCosto.some(item => item.codigo === saborDetalle)
+        ? saborDetalle : data?.porSaborCosto[0]?.codigo ?? ''
     const chartOptions = { responsive: true, maintainAspectRatio: false, indexAxis: 'y' as const,
         plugins: { legend: { display: false } } }
 
@@ -66,6 +82,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
             <label>Modalidad<select className="form-select" value={modalidad} onChange={e => onModalidadChange(e.target.value)}>
                 <option value="">Todas</option>{modalidades.map(x => <option key={x} value={x}>{x}</option>)}
             </select></label>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRevisionRecetas(valor => valor + 1)}>Actualizar cálculo</button>
             <Link href="/reportes/pedidos-conjunto" className="btn btn-secondary btn-sm">Ver detalle de pedidos</Link>
         </div>
         {cargando && <div className="empty-state"><div className="spinner" /><p>Calculando consumo de insumos...</p></div>}
@@ -91,13 +108,14 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                 <small>El costo usa la ficha técnica y el precio actual de cada insumo, incluida la merma configurada. Es una estimación de insumos asociados a los paquetes vendidos: no equivale a compras, stock consumido real ni dinero cobrado. En pedidos mixtos, el precio se atribuye por cantidad de sándwiches. Los importes históricos pueden cambiar si cambian las recetas o los precios.</small>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, marginBottom: 18 }}>
-                <div className="card" style={{ padding: 20 }}><h3>Insumos con mayor costo estimado</h3><div style={{ height: 320 }}><Bar data={{ labels: topInsumos.map(x => x.nombre), datasets: [{ label: 'Costo estimado', data: topInsumos.map(x => x.costoEstimado), backgroundColor: '#ef9f32' }] }} options={chartOptions} /></div></div>
+                <div className="card" style={{ padding: 20 }}><h3>Insumos con mayor costo identificable</h3><div style={{ height: 320 }}><Bar data={{ labels: topInsumos.map(x => x.nombre), datasets: [{ label: 'Costo identificable', data: topInsumos.map(x => x.costoEstimado), backgroundColor: '#ef9f32' }] }} options={chartOptions} /></div></div>
                 <div className="card" style={{ padding: 20 }}><h3>Paquetes con mayor costo estimado</h3><div style={{ height: 320 }}><Bar data={{ labels: topTipos.map(x => `${x.nombre} · ${x.presentacion}`), datasets: [{ label: 'Costo estimado', data: topTipos.map(x => x.costoEstimado ?? 0), backgroundColor: '#7c3aed' }] }} options={chartOptions} /></div></div>
             </div>
-            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Consumo estimado por insumo</h3>
-                <div style={{ maxHeight: 420, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Insumo</th><th>Cantidad</th><th>Unidad</th><th>Costo estimado</th></tr></thead><tbody>
-                    {data.porInsumo.map(x => <tr key={x.id}><td>{x.nombre}</td><td>{cantidad(x.cantidad)}</td><td>{x.unidad}</td><td>{dinero(x.costoEstimado)}</td></tr>)}
-                </tbody></table></div>{!data.porInsumo.length && <p>No hay insumos valorados en este período.</p>}
+            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Consumo identificable por insumo</h3>
+                <p>El total incluye paquetes completos y fichas de sabor válidas de paquetes aún pendientes. La columna pendiente informa consumo conocido, pero no se suma al costo completo ni al margen hasta completar el pedido.</p>
+                <div style={{ maxHeight: 420, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Insumo</th><th>Total identificable</th><th>Paquetes completos</th><th>Sabores pendientes</th><th>Unidad</th><th>Costo identificable</th></tr></thead><tbody>
+                    {data.porInsumoIdentificado.map(x => <tr key={x.id}><td>{x.nombre}</td><td>{cantidad(x.cantidad)}</td><td>{cantidad(x.cantidadCompleta)}</td><td>{cantidad(x.cantidadPendiente)}</td><td>{x.unidad}</td><td>{dinero(x.costoEstimado)}</td></tr>)}
+                </tbody></table></div>{!data.porInsumoIdentificado.length && <p>No hay insumos identificables en este período.</p>}
             </div>
             <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Personalizados: costo según los sabores elegidos</h3>
                 <p><strong>Fichas de sabor ya cargadas:</strong> {cantidad(data.resumen.elegidos.planchasConCosto)} planchas con {dinero(data.resumen.elegidos.costoSaboresIdentificados)} de insumos identificados. Este desglose incluye sabores de pedidos cuyo empaque u otro sabor todavía falta; no se suma otra vez al total ni al margen.</p>
@@ -109,6 +127,15 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
                 <div style={{ maxHeight: 340, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Sabor</th><th>Planchas</th><th>Con costo</th><th>Costo de insumos</th></tr></thead><tbody>
                     {data.porSaborElegido.map(x => { const costo = data.porSaborCosto.find(item => item.codigo === x.codigo); return <tr key={x.codigo}><td>{x.nombre}</td><td>{cantidad(x.planchas)}</td><td>{cantidad(costo?.planchasValoradas ?? 0)}</td><td>{costo ? dinero(costo.costoEstimado) : 'Pendiente'}</td></tr> })}
                 </tbody></table></div>{!data.porSaborElegido.length && <p>No hay sabores elegidos identificados para estos filtros.</p>}
+            </div>
+            <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3>Insumos aplicados por sabor</h3>
+                <p>Elegí un sabor para ver el consumo de cada insumo según sus planchas y la cantidad vigente en su ficha. Incluye sabores válidos aunque el paquete esté pendiente.</p>
+                <label>Sabor<select className="form-select" value={saborDetalleActivo} onChange={e => setSaborDetalle(e.target.value)}>
+                    {data.porSaborCosto.map(item => <option key={item.codigo} value={item.codigo}>{item.nombre}</option>)}
+                </select></label>
+                <div style={{ maxHeight: 340, overflow: 'auto', marginTop: 12 }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Insumo</th><th>Cantidad</th><th>Unidad</th><th>Costo estimado</th></tr></thead><tbody>
+                    {data.porSaborInsumo.filter(item => item.codigo === saborDetalleActivo).map(item => <tr key={item.insumoId}><td>{item.insumo}</td><td>{cantidad(item.cantidad)}</td><td>{item.unidad}</td><td>{dinero(item.costoEstimado)}</td></tr>)}
+                </tbody></table></div>{!saborDetalleActivo && <p>No hay fichas de sabor valorables en este período.</p>}
             </div>
             <div className="card" style={{ padding: 20 }}><h3>Paquetes y margen por tipo</h3>
                 <p>La comparación de costos usa los mismos precios y recetas actuales para ambos períodos de igual duración.</p>

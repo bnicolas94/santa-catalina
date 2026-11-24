@@ -38,6 +38,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
     }
 
     const insumos = new Map<string, { id: string; nombre: string; unidad: string; cantidad: number; costoEstimado: number }>()
+    const insumosSaboresPendientes = new Map<string, { id: string; nombre: string; unidad: string; cantidad: number; costoEstimado: number }>()
     let costoEstimado = 0, costoAnterior = 0, ingresoConCosto = 0, costoComparable = 0
     let paquetesValorados = 0, paquetesSinCosto = 0, paquetesAnteriores = 0
 
@@ -103,6 +104,8 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
     let costoSaboresIdentificados = 0, planchasConCosto = 0
     const faltantesElegidos = new Map<string, number>()
     const porSaborCosto = new Map<string, { codigo: string; nombre: string; planchasValoradas: number; costoEstimado: number }>()
+    const porSaborInsumo = new Map<string, { codigo: string; sabor: string; insumoId: string; insumo: string;
+        unidad: string; cantidad: number; costoEstimado: number }>()
     const registrarFalta = (motivo: string, paquetes: number) => faltantesElegidos.set(motivo, (faltantesElegidos.get(motivo) ?? 0) + paquetes)
     const sabor = (codigo: string) => recetaElegidos.filter(r => r.alcance === 'sabor' && r.variante?.codigo === codigo)
     const empaque = (cantidad: number) => recetaElegidos.filter(r => r.alcance === 'empaque' && r.presentacion?.cantidad === cantidad)
@@ -118,6 +121,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             continue
         }
         const motivos = new Set<string>()
+        const insumosValidosDelPedido = new Map<string, { id: string; nombre: string; unidad: string; cantidad: number; costoEstimado: number }>()
         for (const elegido of pedido.sabores) {
             const fichas = sabor(elegido.codigo)
             if (!fichas.length) { motivos.add(`Falta receta de sabor ${elegido.nombre}`); continue }
@@ -128,8 +132,24 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             }
             if (pedido.periodo === 'actual') {
                 const planchas = elegido.sandwiches / 8
-                const costoSabor = fichas.reduce((total, receta) => total +
-                    cantidadConMerma(receta) * receta.insumo.precioUnitario * planchas, 0)
+                let costoSabor = 0
+                for (const receta of fichas) {
+                    const cantidad = cantidadConMerma(receta) * planchas
+                    const costo = cantidad * receta.insumo.precioUnitario
+                    costoSabor += costo
+                    const clave = `${elegido.codigo}:${receta.insumoId}`
+                    const porSabor = porSaborInsumo.get(clave) ?? { codigo: elegido.codigo, sabor: elegido.nombre,
+                        insumoId: receta.insumoId, insumo: receta.insumo.nombre, unidad: receta.insumo.unidadMedida,
+                        cantidad: 0, costoEstimado: 0 }
+                    porSabor.cantidad += cantidad
+                    porSabor.costoEstimado += costo
+                    porSaborInsumo.set(clave, porSabor)
+                    const porPedido = insumosValidosDelPedido.get(receta.insumoId) ?? { id: receta.insumoId,
+                        nombre: receta.insumo.nombre, unidad: receta.insumo.unidadMedida, cantidad: 0, costoEstimado: 0 }
+                    porPedido.cantidad += cantidad
+                    porPedido.costoEstimado += costo
+                    insumosValidosDelPedido.set(receta.insumoId, porPedido)
+                }
                 const actual = porSaborCosto.get(elegido.codigo) ?? { codigo: elegido.codigo, nombre: elegido.nombre,
                     planchasValoradas: 0, costoEstimado: 0 }
                 actual.planchasValoradas += planchas
@@ -148,6 +168,12 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             if (pedido.periodo === 'actual') {
                 elegidosSinCosto += paquetes
                 for (const motivo of motivos) registrarFalta(motivo, paquetes)
+                for (const item of insumosValidosDelPedido.values()) {
+                    const acumulado = insumosSaboresPendientes.get(item.id) ?? { ...item, cantidad: 0, costoEstimado: 0 }
+                    acumulado.cantidad += item.cantidad
+                    acumulado.costoEstimado += item.costoEstimado
+                    insumosSaboresPendientes.set(item.id, acumulado)
+                }
             }
             continue
         }
@@ -177,6 +203,22 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         }
     }
 
+    const insumosIdentificados = new Map<string, { id: string; nombre: string; unidad: string;
+        cantidadCompleta: number; cantidadPendiente: number; cantidad: number;
+        costoCompleto: number; costoPendiente: number; costoEstimado: number }>()
+    for (const item of insumos.values()) insumosIdentificados.set(item.id, { id: item.id, nombre: item.nombre,
+        unidad: item.unidad, cantidadCompleta: item.cantidad, cantidadPendiente: 0, cantidad: item.cantidad,
+        costoCompleto: item.costoEstimado, costoPendiente: 0, costoEstimado: item.costoEstimado })
+    for (const item of insumosSaboresPendientes.values()) {
+        const actual = insumosIdentificados.get(item.id) ?? { id: item.id, nombre: item.nombre, unidad: item.unidad,
+            cantidadCompleta: 0, cantidadPendiente: 0, cantidad: 0, costoCompleto: 0, costoPendiente: 0, costoEstimado: 0 }
+        actual.cantidadPendiente += item.cantidad
+        actual.costoPendiente += item.costoEstimado
+        actual.cantidad += item.cantidad
+        actual.costoEstimado += item.costoEstimado
+        insumosIdentificados.set(item.id, actual)
+    }
+
     return {
         resumen: {
             ingresoEsperado: reporte.resumen.ingresoEsperado,
@@ -194,6 +236,8 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         },
         porTipo: porTipo.sort((a, b) => b.paquetes - a.paquetes || a.clave.localeCompare(b.clave)),
         porInsumo: [...insumos.values()].sort((a, b) => b.costoEstimado - a.costoEstimado),
+        porInsumoIdentificado: [...insumosIdentificados.values()].sort((a, b) => b.costoEstimado - a.costoEstimado),
         porSaborCosto: [...porSaborCosto.values()].sort((a, b) => b.costoEstimado - a.costoEstimado || a.codigo.localeCompare(b.codigo)),
+        porSaborInsumo: [...porSaborInsumo.values()].sort((a, b) => a.sabor.localeCompare(b.sabor, 'es') || b.costoEstimado - a.costoEstimado),
     }
 }

@@ -188,6 +188,41 @@ test('muestra el costo de sabores cargados aunque falte empaque y enumera todos 
     ])
 })
 
+test('editar Mayonesa de Huevo cambia el consumo identificable aun con empaque pendiente', () => {
+    const csv = [cabecera, fila('1', '16 Surtidos Elegidos', '16', '160')
+        .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 8x Huevo + 8x Tomate",160')].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const calcular = (mayonesa: number, conEmpaque = false) => calcularConsumoPedidos(reporte, [{
+        id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE', presentaciones: [{ id: 'ele16', cantidad: 16 }],
+        fichasTecnicas: [], recetasElegidos: [
+            { alcance: 'sabor', cantidad: mayonesa, merma: 0, insumoId: 'mayonesa',
+                variante: { codigo: 'hue' }, presentacion: null,
+                insumo: { nombre: 'Mayonesa', unidadMedida: 'kg', precioUnitario: 100 } },
+            { alcance: 'sabor', cantidad: 1, merma: 0, insumoId: 'tomate',
+                variante: { codigo: 'tom' }, presentacion: null,
+                insumo: { nombre: 'Tomate', unidadMedida: 'kg', precioUnitario: 10 } },
+            ...(conEmpaque ? [{ alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'caja',
+                variante: null, presentacion: { cantidad: 16 },
+                insumo: { nombre: 'Caja', unidadMedida: 'u', precioUnitario: 5 } }] : []),
+        ],
+    }])
+
+    const antes = calcular(.08)
+    const despues = calcular(.1)
+    assert.equal(antes.resumen.costoEstimado, 0)
+    assert.deepEqual(antes.porInsumo, [])
+    assert.equal(antes.porInsumoIdentificado.find(x => x.id === 'mayonesa')?.cantidadPendiente, .08)
+    assert.equal(despues.porInsumoIdentificado.find(x => x.id === 'mayonesa')?.cantidad, .1)
+    assert.equal(despues.porSaborInsumo.find(x => x.codigo === 'hue' && x.insumoId === 'mayonesa')?.cantidad, .1)
+    assert.equal(despues.resumen.costoEstimado, 0)
+
+    const completo = calcular(.1, true)
+    assert.equal(completo.porInsumoIdentificado.find(x => x.id === 'mayonesa')?.cantidad, .1)
+    assert.equal(completo.porInsumoIdentificado.find(x => x.id === 'mayonesa')?.cantidadPendiente, 0)
+    assert.equal(completo.porInsumoIdentificado.find(x => x.id === 'mayonesa')?.cantidadCompleta, .1)
+    assert.equal(completo.resumen.costoEstimado, 25)
+})
+
 test('un pedido mixto atribuye a Elegidos sólo su parte del precio', () => {
     const csv = [cabecera, fila('1', '24 Surtidos Elegidos + 24 Jamón y Queso', '48', '100')
         .replace('13/11/2026,,100', '13/11/2026,"Sabores (24): 24x Tomate",100')].join('\n')
