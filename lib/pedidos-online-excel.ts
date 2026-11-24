@@ -30,7 +30,7 @@ export type PedidoExcel = {
     entrega: string
 }
 
-const sabores: Record<string, string> = {
+export const saboresSheetOnline: Record<string, string> = {
     tomate: 'tom', lechuga: 'lechu', 'zanahoria y huevo': 'zyh',
     'zanahoria y queso': 'zyq', huevo: 'hue', aceituna: 'ace',
     'jamon y queso': 'jyq', choclo: 'cho', anana: 'anana', atun: 'atun',
@@ -38,6 +38,8 @@ const sabores: Record<string, string> = {
     pacenta: 'panceta', palmito: 'palmito', salame: 'salame',
     morron: 'morron', pollo: 'pollo',
 }
+
+const sabores = saboresSheetOnline
 
 function clave(valor: unknown) {
     return normalizarTexto(valor).replace(/[^a-z0-9]/g, '')
@@ -121,7 +123,7 @@ export function interpretarSaboresElegidos(observaciones: string, cantidadEspera
         const cantidad = Number(match[1])
         const codigo = sabores[match[2].trim()]
         if (!codigo || !Number.isSafeInteger(cantidad) || cantidad < 1 || cantidad % 8 !== 0) return null
-        saboresElegidos.push({ codigo, nombre: match[2].trim(), sandwiches: cantidad })
+        saboresElegidos.push({ codigo, nombre: match[2].trim().replace(/\b\w/g, letra => letra.toUpperCase()), sandwiches: cantidad })
         total += cantidad
     }
     return total === cantidadEsperada ? saboresElegidos : null

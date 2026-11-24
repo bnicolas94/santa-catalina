@@ -164,6 +164,9 @@ function isPathWithin(pathname: string, prefix: string) {
 }
 
 export function getAccessRule(pathname: string): AccessRule | undefined {
+    if (/^\/api\/productos\/[^/]+\/recetas-elegidos(?:\/|$)/.test(pathname)) {
+        return { path: pathname, permissions: ['permisoStock', 'permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] }
+    }
     if (/^\/api\/empleados\/[^/]+\/uniformes(?:\/|$)/.test(pathname)) {
         return { path: pathname, legacyRoles: ['ADMIN'] }
     }

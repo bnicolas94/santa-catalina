@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import RecetaElegidosEditor from './RecetaElegidosEditor'
 
 interface Insumo {
     id: string
@@ -209,6 +210,8 @@ export default function ProductoDetallePage() {
         {success && <div className="toast toast-success">{success}</div>}
         {error && !showForm && <div className="toast toast-error">{error}</div>}
 
+        {producto.codigoInterno === 'ELE' && <RecetaElegidosEditor productoId={producto.id} />}
+
         <div className="card" style={{ marginBottom: 'var(--space-5)' }}>
             <div className="card-body">
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', color: 'var(--color-gray-500)' }}>Presentación que querés revisar</div>
@@ -220,14 +223,14 @@ export default function ProductoDetallePage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
             <Summary label="Precio de venta" value={precioVenta ? `$${formatoDinero(precioVenta)}` : '—'} detail={`Paquete x${presentacion.cantidad}`} />
-            <Summary label="Costo de insumos" value={costoPaquete ? `$${formatoDinero(costoPaquete)}` : '—'} detail="Contenido + empaque + merma" />
-            <Summary label="Margen bruto" value={margen === null ? '—' : `${margen.toFixed(1)}%`} detail={margen === null ? 'Falta precio de venta' : `$${formatoDinero(precioVenta - costoPaquete)} por paquete`} />
-            <Summary label="Costo por ronda" value={costoPaquete ? `$${formatoDinero(costoPaquete * 7)}` : '—'} detail="7 paquetes" />
+            {producto.codigoInterno === 'ELE'
+                ? <><Summary label="Costo de insumos" value="Por mezcla" detail="Ver recetas por sabor y Reportes" /><Summary label="Margen bruto" value="Por mezcla" detail="Depende de los sabores del Sheet" /><Summary label="Costo por ronda" value="Por mezcla" detail="No hay sabor único" /></>
+                : <><Summary label="Costo de insumos" value={costoPaquete ? `$${formatoDinero(costoPaquete)}` : '—'} detail="Contenido + empaque + merma" /><Summary label="Margen bruto" value={margen === null ? '—' : `${margen.toFixed(1)}%`} detail={margen === null ? 'Falta precio de venta' : `$${formatoDinero(precioVenta - costoPaquete)} por paquete`} /><Summary label="Costo por ronda" value={costoPaquete ? `$${formatoDinero(costoPaquete * 7)}` : '—'} detail="7 paquetes" /></>}
         </div>
 
         <div className="card">
             <div className="card-header" style={{ alignItems: 'flex-start' }}>
-                <div><h3>📝 Ficha técnica · paquete x{presentacion.cantidad}</h3><p style={{ margin: '5px 0 0', color: 'var(--color-gray-500)', fontSize: 13 }}>Los insumos generales escalan con la presentación; los envases pueden asignarse sólo a x{presentacion.cantidad}.</p></div>
+                <div><h3>📝 {producto.codigoInterno === 'ELE' ? 'Ficha general de producción' : 'Ficha técnica'} · paquete x{presentacion.cantidad}</h3><p style={{ margin: '5px 0 0', color: 'var(--color-gray-500)', fontSize: 13 }}>{producto.codigoInterno === 'ELE' ? 'Esta ficha no se usa para valorar los sabores del Sheet. Cargá base, sabores y empaque en el editor de arriba.' : `Los insumos generales escalan con la presentación; los envases pueden asignarse sólo a x${presentacion.cantidad}.`}</p></div>
                 <button className="btn btn-primary btn-sm" onClick={abrirNuevaFicha}>+ Agregar insumo</button>
             </div>
             <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>

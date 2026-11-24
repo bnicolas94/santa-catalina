@@ -88,7 +88,7 @@ test('no atribuye la ficha genérica de ELE a sabores elegidos del Sheet', () =>
     const r = calcularConsumoPedidos(reporte, productos)
     assert.equal(r.resumen.costoEstimado, 0)
     assert.equal(r.resumen.ingresoSinCosto, 100)
-    assert.equal(r.porTipo[0].motivo, 'Sin receta por sabor para las planchas elegidas')
+    assert.equal(r.porTipo[0].motivo, 'Costo según mezcla de sabores en el resumen')
     assert.deepEqual(reporte.porSaborElegido.map(x => ({ codigo: x.codigo, planchas: x.planchas })), [{ codigo: 'hue', planchas: 1 }])
     assert.equal(reporte.calidad.sinSaboresElegidos, 0)
 })
@@ -98,4 +98,53 @@ test('si Observaciones no detalla los sabores, informa la falta sin inventar pla
     const reporte = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
     assert.deepEqual(reporte.porSaborElegido, [])
     assert.equal(reporte.calidad.sinSaboresElegidos, 1)
+})
+
+test('valora Elegidos por base, cada sabor y empaque de la presentación', () => {
+    const csv = [cabecera, fila('1', '24 Surtidos Elegidos', '24', '240')
+        .replace('13/11/2026,,240', '13/11/2026,"Sabores (24): 16x Tomate + 8x Huevo",240')].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const insumo = (nombre: string, precioUnitario: number) => ({ nombre, unidadMedida: 'kg', precioUnitario })
+    const productos: ProductoConReceta[] = [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele24', cantidad: 24 }], fichasTecnicas: [ficha('generico', 999, 1)],
+        recetasElegidos: [
+            { alcance: 'base', cantidad: .5, merma: 0, insumoId: 'pan', variante: null, presentacion: null, insumo: insumo('Pan', 2) },
+            { alcance: 'sabor', cantidad: 3, merma: 0, insumoId: 'tomate', variante: { codigo: 'tom' }, presentacion: null, insumo: insumo('Tomate', 10) },
+            { alcance: 'sabor', cantidad: 1, merma: 0, insumoId: 'huevo', variante: { codigo: 'hue' }, presentacion: null, insumo: insumo('Huevo', 20) },
+            { alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'bandeja', variante: null, presentacion: { cantidad: 24 }, insumo: insumo('Bandeja', 5) },
+        ] }]
+    const r = calcularConsumoPedidos(reporte, productos)
+    assert.equal(r.resumen.costoEstimado, 109)
+    assert.equal(r.resumen.ingresoConCosto, 240)
+    assert.equal(r.resumen.margenComparable, 131)
+    assert.equal(r.resumen.paquetesValorados, 1)
+    assert.equal(r.resumen.paquetesSinCosto, 0)
+    assert.equal(r.resumen.elegidos.paquetesValorados, 1)
+    assert.equal(r.porInsumo.find(x => x.id === 'tomate')?.cantidad, 6)
+    assert.equal(r.porInsumo.some(x => x.id === 'generico'), false)
+})
+
+test('un sabor sin receta deja pendiente todo el pedido Elegidos', () => {
+    const csv = [cabecera, fila('1', '16 Surtidos Elegidos', '16', '160')
+        .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 8x Tomate + 8x Huevo",160')].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const productos: ProductoConReceta[] = [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele16', cantidad: 16 }], fichasTecnicas: [], recetasElegidos: [
+            { alcance: 'base', cantidad: .5, merma: 0, insumoId: 'pan', variante: null, presentacion: null, insumo: { nombre: 'Pan', unidadMedida: 'kg', precioUnitario: 2 } },
+            { alcance: 'sabor', cantidad: 1, merma: 0, insumoId: 'tomate', variante: { codigo: 'tom' }, presentacion: null, insumo: { nombre: 'Tomate', unidadMedida: 'kg', precioUnitario: 10 } },
+            { alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'bandeja', variante: null, presentacion: { cantidad: 16 }, insumo: { nombre: 'Bandeja', unidadMedida: 'u', precioUnitario: 5 } },
+        ] }]
+    const r = calcularConsumoPedidos(reporte, productos)
+    assert.equal(r.resumen.costoEstimado, 0)
+    assert.equal(r.resumen.ingresoSinCosto, 160)
+    assert.deepEqual(r.porInsumo, [])
+    assert.deepEqual(r.resumen.elegidos.faltantes, [{ motivo: 'Falta receta de sabor Huevo', paquetes: 1 }])
+})
+
+test('un pedido mixto atribuye a Elegidos sólo su parte del precio', () => {
+    const csv = [cabecera, fila('1', '24 Surtidos Elegidos + 24 Jamón y Queso', '48', '100')
+        .replace('13/11/2026,,100', '13/11/2026,"Sabores (24): 24x Tomate",100')].join('\n')
+    const reporte = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
+    assert.equal(reporte.pedidosElegidos[0].ingresoAtribuido, 50)
+    assert.deepEqual(reporte.pedidosElegidos[0].presentaciones, [{ cantidad: 24, paquetes: 1 }])
 })

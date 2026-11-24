@@ -52,6 +52,9 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
         ['Costo teórico valorado', r.costoEstimado], ['Paquetes valorados', r.paquetesValorados],
         ['Paquetes sin costo calculable', r.paquetesSinCosto], ['Ingreso sin costo comparable', r.ingresoSinCosto],
         ['Margen bruto comparable', r.margenComparable],
+        ['Elegidos valorados', r.elegidos.paquetesValorados],
+        ['Elegidos pendientes', r.elegidos.paquetesSinCosto],
+        ['Costo de Elegidos', r.elegidos.costoEstimado],
         ['Criterio', 'Recetas y precios actuales de insumos; no equivale a compras, stock consumido real ni cobros.'],
     ])
     setColumnWidths(resumen, [35, 45])

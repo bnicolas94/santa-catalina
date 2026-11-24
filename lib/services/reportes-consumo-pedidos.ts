@@ -33,6 +33,11 @@ export async function obtenerConsumoPedidos(input: {
                     insumoId: true, cantidadPorUnidad: true, merma: true, tipoConsumo: true, presentacionId: true,
                     insumo: { select: { nombre: true, unidadMedida: true, precioUnitario: true } },
                 } },
+                recetasElegidos: { select: {
+                    alcance: true, cantidad: true, merma: true, insumoId: true,
+                    variante: { select: { codigo: true } }, presentacion: { select: { cantidad: true } },
+                    insumo: { select: { nombre: true, unidadMedida: true, precioUnitario: true } },
+                } },
             },
         }),
     ])

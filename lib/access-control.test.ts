@@ -89,6 +89,14 @@ test('consumo de pedidos exige permiso de Reportes', () => {
     assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
     assert.equal(canAccessPath(path, {}), false)
 })
+
+test('las recetas de Elegidos se reservan a Stock o Producción', () => {
+    const path = '/api/productos/ele/recetas-elegidos'
+    assert.equal(canAccessPath(path, { permisos: { permisoStock: true } }), true)
+    assert.equal(canAccessPath(path, { permisos: { permisoProduccion: true } }), true)
+    assert.equal(canAccessPath(path, { permisos: { permisoPedidos: true } }), false)
+    assert.equal(canAccessPath(path, {}), false)
+})
 test('planificar horarios requiere acceso a Personal', () => {
     assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN' }), true)
     assert.equal(canAccessPath('/api/empleados/horarios', { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }), true)

@@ -254,6 +254,7 @@ model Producto {
   requerimientos      RequerimientoProduccion[]
   stockUbicaciones    StockProducto[]
   variantes           VarianteProducto[]
+  recetasElegidos     RecetaElegidosInsumo[]
 
   @@map("productos")
 }
@@ -268,6 +269,7 @@ model VarianteProducto {
   updatedAt  DateTime @updatedAt @map("updated_at")
   productoId String   @map("id_producto")
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  recetasElegidos RecetaElegidosInsumo[]
 
   @@unique([productoId, codigo])
   @@index([productoId, activo, orden])
@@ -289,6 +291,7 @@ model Presentacion {
   requerimientos RequerimientoProduccion[]
   stocks         StockProducto[]
   fichasTecnicas FichaTecnica[]
+  recetasElegidos RecetaElegidosInsumo[]
 
   @@unique([productoId, cantidad])
   @@map("presentaciones")
@@ -322,6 +325,7 @@ model Insumo {
   factorConversion        Float?                        @map("factor_conversion")
   stockActualSecundario   Float                         @default(0) @map("stock_actual_secundario")
   fichasTecnicas          FichaTecnica[]
+  recetasElegidos         RecetaElegidosInsumo[]
   familia                 FamiliaInsumo?                @relation(fields: [familiaId], references: [id])
   proveedor               Proveedor?                    @relation(fields: [proveedorId], references: [id])
   movimientos             MovimientoStock[]
@@ -363,6 +367,28 @@ model FichaTecnica {
   @@unique([productoId, insumoId, claveAlcance])
   @@index([productoId, tipoConsumo, presentacionId])
   @@map("fichas_tecnicas")
+}
+
+model RecetaElegidosInsumo {
+  id             String           @id @default(uuid())
+  productoId     String           @map("id_producto")
+  varianteId     String?          @map("id_variante")
+  presentacionId String?          @map("id_presentacion")
+  insumoId       String           @map("id_insumo")
+  alcance        String
+  claveAlcance   String           @map("clave_alcance")
+  cantidad       Float
+  merma          Float            @default(0)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  producto       Producto         @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  variante       VarianteProducto? @relation(fields: [varianteId], references: [id], onDelete: Restrict)
+  presentacion   Presentacion?    @relation(fields: [presentacionId], references: [id], onDelete: Restrict)
+  insumo         Insumo           @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+
+  @@unique([productoId, insumoId, claveAlcance])
+  @@index([productoId, alcance, varianteId, presentacionId])
+  @@map("recetas_elegidos_insumo")
 }
 
 model Lote {

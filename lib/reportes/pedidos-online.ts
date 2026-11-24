@@ -142,6 +142,10 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
     const porOrigen = new Map<string, { nombre: string; pedidos: number; centavos: number }>()
     const paquetesPorFecha = new Map<string, { paquetes: number; sinClasificar: number }>()
     const saboresElegidos = new Map<string, { codigo: string; nombre: string; sandwiches: number }>()
+    const pedidosElegidos: Array<{ periodo: 'actual' | 'anterior'; origen: string; id: string;
+        presentaciones: { cantidad: number; paquetes: number }[];
+        sabores: ReturnType<typeof interpretarSaboresElegidos>;
+        ingresoAtribuido: number; precioValido: boolean }> = []
     type TotalTipo = { clave: string; nombre: string; presentacion: number; paquetes: number; paquetesConPrecio: number; centavos: number }
     const tiposActual = new Map<string, TotalTipo>()
     const tiposAnterior = new Map<string, TotalTipo>()
@@ -183,9 +187,19 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         const esCancelado = /^(cancelad[oa]|anulad[oa])$/.test(fila.estadoClave)
         const lineas = interpretarLineasPaquetes(detalle?.producto ?? '', detalle?.cantidad ?? '')
         const paquetes = lineas?.reduce((total, linea) => total + linea.paquetes, 0) ?? null
-        const sandwichesElegidos = lineas?.filter(linea => ['surtidos elegidos', 'personalizado'].includes(normalizarTexto(linea.nombre)))
+        const lineasElegidas = lineas?.filter(linea => ['surtidos elegidos', 'personalizado', 'elegidos'].includes(normalizarTexto(linea.nombre))) ?? []
+        const sandwichesElegidos = lineasElegidas
             .reduce((total, linea) => total + linea.sandwiches, 0) ?? 0
         const sabores = sandwichesElegidos ? interpretarSaboresElegidos(detalle?.observaciones ?? '', sandwichesElegidos) : null
+        if (esEntregado && !duplicado && !conflicto && lineasElegidas.length && fecha >= anteriorInicio && fecha <= f.hasta) {
+            const periodo = fecha < f.desde ? 'anterior' : 'actual'
+            const importes = precioValido && lineas ? distribuirImportePaquetes(lineas, importe) : []
+            const ingresoAtribuido = lineas?.reduce((total, linea, i) =>
+                ['surtidos elegidos', 'personalizado', 'elegidos'].includes(normalizarTexto(linea.nombre)) ? total + (importes[i] ?? 0) : total, 0) ?? 0
+            pedidosElegidos.push({ periodo, origen, id,
+                presentaciones: lineasElegidas.map(linea => ({ cantidad: linea.presentacion, paquetes: linea.paquetes })),
+                sabores, ingresoAtribuido: ingresoAtribuido / 100, precioValido })
+        }
         if (!duplicado && !conflicto && esEntregado) {
             const volumen = paquetesPorFecha.get(fecha) ?? { paquetes: 0, sinClasificar: 0 }
             if (paquetes === null) volumen.sinClasificar++
@@ -285,6 +299,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         porTipoPaquete,
         porSaborElegido: [...saboresElegidos.values()].map(sabor => ({ ...sabor, planchas: sabor.sandwiches / 8 }))
             .sort((a, b) => b.planchas - a.planchas || a.codigo.localeCompare(b.codigo)),
+        pedidosElegidos,
         totalFilas: registros.length, pagina, paginas: Math.ceil(registros.length / paginaTamano),
         registros: f.todos ? registros : registros.slice((pagina - 1) * paginaTamano, pagina * paginaTamano),
     }
