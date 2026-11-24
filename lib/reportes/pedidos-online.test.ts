@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { calcularReportePedidosFuentes, calcularReportePedidosOnline, contarPaquetesPedido, fechaEntregaIso, validarFiltrosPedidosOnline } from './pedidos-online'
+import { calcularReportePedidosFuentes, calcularReportePedidosOnline, contarPaquetesPedido, distribuirImportePaquetes, fechaEntregaIso, interpretarLineasPaquetes, validarFiltrosPedidosOnline } from './pedidos-online'
 
 const cabecera = 'ID,Fecha/Hora,Nombre,Apellido,Telefono,Direccion,Producto,Modalidad,Estado,Fecha Entrega,Observaciones,Precio,Pago,Ubicacion'
 const fila = (id: string, fecha: string, modalidad: string, estado: string, precio: string, ubicacion = 'Centro', fechaEntrega = '13/11/2026') =>
@@ -82,6 +82,10 @@ test('paquetes usa presentaciones del producto y valida los sándwiches del Shee
     assert.equal(contarPaquetesPedido('48 Jamón y Queso', '24'), null)
     assert.equal(contarPaquetesPedido('#ERROR!', '8'), null)
     assert.equal(contarPaquetesPedido('48 Jamón y Queso', ''), null)
+    assert.equal(contarPaquetesPedido('Personalizado x24 (3 planchas)', '24'), 1)
+    assert.equal(contarPaquetesPedido('Personalizado x48 (6 planchas)', '48'), 1)
+    assert.equal(contarPaquetesPedido('Personalizado x48 (3 planchas)', '48'), null)
+    assert.equal(contarPaquetesPedido('Personalizado x72 (9 planchas)', '72'), null)
 })
 
 test('compara paquetes del día elegido y dos ventanas consecutivas de siete días', () => {
@@ -124,4 +128,41 @@ test('Fecha Entrega se valida como día local sin corrimiento UTC', () => {
     assert.equal(fechaEntregaIso('2026-11-13'), '2026-11-13')
     assert.equal(fechaEntregaIso('31/02/2026'), null)
     assert.equal(fechaEntregaIso(''), null)
+})
+
+test('distribuye el precio mixto en centavos por sándwich sin perder importe', () => {
+    const lineas = interpretarLineasPaquetes('24 Jamón y Queso + 48 Surtidos Clásicos', '72')
+    assert.ok(lineas)
+    assert.deepEqual(distribuirImportePaquetes(lineas, 10001), [3334, 6667])
+    assert.equal(distribuirImportePaquetes(lineas, 10001).reduce((a, b) => a + b, 0), 10001)
+})
+
+test('desglosa paquetes e ingreso atribuido por producto y presentación', () => {
+    const encabezados = `${cabecera},Cantidad`
+    const linea = (id: string, producto: string, cantidad: string, precio: string, entrega = '13/11/2026', estado = 'Entregado') =>
+        `${fila(id, '12/11/2026 10:00', 'Delivery', estado, precio, 'Centro', entrega).replace('48 Jamon y Queso', producto)},${cantidad}`
+    const csv = [encabezados,
+        linea('mixto', '24 Jamón y Queso + 48 Surtidos Clásicos', '72', '100.01'),
+        linea('dos', '2x 24 Jamón y Queso', '48', '80'),
+        linea('error', '#ERROR!', '8', '25'),
+        linea('sin-precio', '48 Jamón y Queso', '48', ''),
+        linea('pendiente', '48 Jamón y Queso', '48', '200', '13/11/2026', 'Pendiente'),
+        linea('previo', '48 Surtidos Clásicos', '48', '60', '12/11/2026'),
+    ].join('\n')
+    const r = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
+    assert.equal(r.resumen.paquetesVendidos, 5)
+    assert.equal(r.resumen.ingresoEsperado, 205.01)
+    assert.equal(r.resumen.ingresoAtribuidoPaquetes, 180.01)
+    assert.equal(r.resumen.ingresoSinAsignarPaquetes, 25)
+    const jq24 = r.porTipoPaquete.find(x => x.nombre === 'Jamón y Queso' && x.presentacion === 24)
+    const clasicos48 = r.porTipoPaquete.find(x => x.nombre === 'Surtidos Clásicos' && x.presentacion === 48)
+    const jq48 = r.porTipoPaquete.find(x => x.nombre === 'Jamón y Queso' && x.presentacion === 48)
+    assert.equal(jq24?.paquetes, 3)
+    assert.equal(jq24?.ingresoAtribuido, 113.34)
+    assert.equal(clasicos48?.ingresoAtribuido, 66.67)
+    assert.equal(clasicos48?.paquetesAnteriores, 1)
+    assert.equal(clasicos48?.ingresoAnterior, 60)
+    assert.equal(jq48?.paquetes, 1)
+    assert.equal(jq48?.precioPromedioPaquete, null)
+    assert.equal(r.calidad.sinPaquetes, 1)
 })

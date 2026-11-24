@@ -16,23 +16,56 @@ export function validarFiltrosPedidosOnline(f: FiltrosPedidosOnline) {
     return { inicio, fin, dias }
 }
 
-// En el Sheet, Cantidad expresa sándwiches; Producto indica la presentación
-// (8/16/24/32/40/48) y cuántos paquetes se pidieron de cada una.
-export function contarPaquetesPedido(producto: string, cantidadTexto: string): number | null {
-    const partes = normalizarTexto(producto).split(/\s*\+\s*/)
+export type LineaPaquetePedido = { clave: string; nombre: string; presentacion: number; paquetes: number; sandwiches: number }
+
+// Cantidad expresa sándwiches; Producto indica la presentación y el número de paquetes.
+export function interpretarLineasPaquetes(producto: string, cantidadTexto: string): LineaPaquetePedido[] | null {
+    const partes = producto.trim().split(/\s*\+\s*/)
     if (!partes.length || !cantidadTexto.trim()) return null
-    let paquetes = 0, sandwiches = 0
+    const lineas: LineaPaquetePedido[] = []
+    let sandwiches = 0
     for (const parte of partes) {
-        const match = parte.match(/^(?:(\d+)\s*x\s*)?(\d+)\s+(.+)$/)
+        const personalizado = normalizarTexto(parte).match(/^personalizad[oa]\s*x\s*(\d+)\s*\(\s*(\d+)\s*planchas?\s*\)$/)
+        if (personalizado) {
+            const presentacion = Number(personalizado[1])
+            if (![8, 16, 24, 32, 40, 48].includes(presentacion) || Number(personalizado[2]) !== presentacion / 8) return null
+            sandwiches += presentacion
+            lineas.push({ clave: `${presentacion}:personalizado`, nombre: 'Personalizado', presentacion, paquetes: 1, sandwiches: presentacion })
+            continue
+        }
+        const match = parte.trim().match(/^(?:(\d+)\s*x\s*)?(\d+)\s+(.+)$/i)
         if (!match || !match[3].trim()) return null
         const numero = Number(match[1] ?? 1)
         const presentacion = Number(match[2])
         if (!Number.isSafeInteger(numero) || numero < 1 || numero > 100 || ![8, 16, 24, 32, 40, 48].includes(presentacion)) return null
-        paquetes += numero
         sandwiches += numero * presentacion
+        const nombre = match[3].trim()
+        lineas.push({ clave: `${presentacion}:${normalizarTexto(nombre)}`, nombre, presentacion,
+            paquetes: numero, sandwiches: numero * presentacion })
     }
     const cantidad = Number(cantidadTexto.trim())
-    return Number.isSafeInteger(cantidad) && cantidad === sandwiches ? paquetes : null
+    return Number.isSafeInteger(cantidad) && cantidad === sandwiches ? lineas : null
+}
+
+export function contarPaquetesPedido(producto: string, cantidadTexto: string): number | null {
+    const lineas = interpretarLineasPaquetes(producto, cantidadTexto)
+    return lineas ? lineas.reduce((total, linea) => total + linea.paquetes, 0) : null
+}
+
+// Redondeo en centavos con restos mayores: la suma atribuida es exactamente el precio del pedido.
+export function distribuirImportePaquetes(lineas: LineaPaquetePedido[], centavos: number): number[] {
+    const sandwiches = lineas.reduce((total, linea) => total + linea.sandwiches, 0)
+    if (!sandwiches || !Number.isSafeInteger(centavos) || centavos < 0) return lineas.map(() => 0)
+    const cuotas = lineas.map(linea => centavos * linea.sandwiches / sandwiches)
+    const asignados = cuotas.map(Math.floor)
+    let resto = centavos - asignados.reduce((total, importe) => total + importe, 0)
+    const orden = cuotas.map((cuota, i) => i).sort((a, b) => (cuotas[b] - asignados[b]) - (cuotas[a] - asignados[a]) || a - b)
+    for (const i of orden) {
+        if (resto === 0) break
+        asignados[i]++
+        resto--
+    }
+    return asignados
 }
 
 function moverDia(fecha: string, dias: number) {
@@ -107,6 +140,20 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
     const porPago = new Map<string, { nombre: string; pedidos: number; centavos: number }>()
     const porOrigen = new Map<string, { nombre: string; pedidos: number; centavos: number }>()
     const paquetesPorFecha = new Map<string, { paquetes: number; sinClasificar: number }>()
+    type TotalTipo = { clave: string; nombre: string; presentacion: number; paquetes: number; paquetesConPrecio: number; centavos: number }
+    const tiposActual = new Map<string, TotalTipo>()
+    const tiposAnterior = new Map<string, TotalTipo>()
+    const agregarTipos = (destino: Map<string, TotalTipo>, lineas: LineaPaquetePedido[], importe: number, precioValido: boolean) => {
+        const importes = precioValido ? distribuirImportePaquetes(lineas, importe) : lineas.map(() => 0)
+        lineas.forEach((linea, i) => {
+            const total = destino.get(linea.clave) ?? { clave: linea.clave, nombre: linea.nombre,
+                presentacion: linea.presentacion, paquetes: 0, paquetesConPrecio: 0, centavos: 0 }
+            total.paquetes += linea.paquetes
+            if (precioValido) total.paquetesConPrecio += linea.paquetes
+            total.centavos += importes[i]
+            destino.set(linea.clave, total)
+        })
+    }
     const agregar = (mapa: Map<string, { nombre: string; pedidos: number; centavos: number }>, nombre: string, importe: number) => {
         const actual = mapa.get(nombre) ?? { nombre, pedidos: 0, centavos: 0 }
         actual.pedidos++
@@ -131,7 +178,8 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         const importe = precioValido ? Math.round(fila.precio * 100) : 0
         const esEntregado = fila.estadoClave === 'entregado'
         const esCancelado = /^(cancelad[oa]|anulad[oa])$/.test(fila.estadoClave)
-        const paquetes = contarPaquetesPedido(detalle?.producto ?? '', detalle?.cantidad ?? '')
+        const lineas = interpretarLineasPaquetes(detalle?.producto ?? '', detalle?.cantidad ?? '')
+        const paquetes = lineas?.reduce((total, linea) => total + linea.paquetes, 0) ?? null
         if (!duplicado && !conflicto && esEntregado) {
             const volumen = paquetesPorFecha.get(fecha) ?? { paquetes: 0, sinClasificar: 0 }
             if (paquetes === null) volumen.sinClasificar++
@@ -141,6 +189,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         if (fecha >= anteriorInicio && fecha < f.desde && !conflicto && !duplicado && esEntregado) {
             anteriorPedidos++
             anteriorCentavos += importe
+            if (lineas) agregarTipos(tiposAnterior, lineas, importe, precioValido)
         }
         if (fecha < f.desde || fecha > f.hasta) continue
         if (duplicado) calidad.duplicados += grupo.length - 1
@@ -156,7 +205,11 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         if (esEntregado) {
             entregados++; centavos += importe
             if (precioValido) conPrecio++
-            if (paquetes !== null) { paquetesVendidos += paquetes; conPaquetes++ }
+            if (paquetes !== null && lineas) {
+                paquetesVendidos += paquetes
+                conPaquetes++
+                agregarTipos(tiposActual, lineas, importe, precioValido)
+            }
         }
         else if (esCancelado) cancelados++
         else { pendientes++; potencialCentavos += importe }
@@ -185,12 +238,24 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         return { fecha, pedidos: monetario?.pedidos ?? 0, ingresoEsperado: (monetario?.centavos ?? 0) / 100,
             paquetes: volumen?.paquetes ?? 0, sinClasificar: volumen?.sinClasificar ?? 0 }
     })
+    const porTipoPaquete = [...new Set([...tiposActual.keys(), ...tiposAnterior.keys()])].map(clave => {
+        const actual = tiposActual.get(clave)
+        const anterior = tiposAnterior.get(clave)
+        return { clave, nombre: actual?.nombre ?? anterior!.nombre, presentacion: actual?.presentacion ?? anterior!.presentacion,
+            paquetes: actual?.paquetes ?? 0, paquetesConPrecio: actual?.paquetesConPrecio ?? 0,
+            ingresoAtribuido: (actual?.centavos ?? 0) / 100,
+            precioPromedioPaquete: actual?.paquetesConPrecio ? actual.centavos / 100 / actual.paquetesConPrecio : null,
+            paquetesAnteriores: anterior?.paquetes ?? 0, ingresoAnterior: (anterior?.centavos ?? 0) / 100 }
+    }).sort((a, b) => b.paquetes - a.paquetes || b.ingresoAtribuido - a.ingresoAtribuido || a.clave.localeCompare(b.clave))
+    const ingresoAtribuidoCentavos = [...tiposActual.values()].reduce((total, tipo) => total + tipo.centavos, 0)
     return {
         filtros: f, opciones, calidad,
         resumen: { pedidos: entregados + pendientes + cancelados,
             entregados, pendientes, cancelados, ingresoEsperado: centavos / 100, ingresoPotencial: potencialCentavos / 100,
             conPrecio, ticketPromedio: conPrecio ? centavos / 100 / conPrecio : null,
             paquetesVendidos, conPaquetes,
+            ingresoAtribuidoPaquetes: ingresoAtribuidoCentavos / 100,
+            ingresoSinAsignarPaquetes: (centavos - ingresoAtribuidoCentavos) / 100,
             anterior: { pedidos: anteriorPedidos, ingresoEsperado: anteriorCentavos / 100 } },
         porDia: porDiaCompleto,
         comparacionPaquetes: {
@@ -205,6 +270,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
             }),
         },
         porModalidad: serie(porModalidad), porUbicacion: serie(porUbicacion), porEstado: serie(porEstado), porPago: serie(porPago), porOrigen: serie(porOrigen),
+        porTipoPaquete,
         totalFilas: registros.length, pagina, paginas: Math.ceil(registros.length / paginaTamano),
         registros: f.todos ? registros : registros.slice((pagina - 1) * paginaTamano, pagina * paginaTamano),
     }

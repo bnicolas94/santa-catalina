@@ -95,6 +95,24 @@ export default function PedidosAnalitica({ conjunto = false }: { conjunto?: bool
                 <div className="card" style={{ padding: 20 }}><h2 style={{ fontSize: 18 }}>Estados</h2><div style={{ height: 280 }}><Bar data={{ labels: data.porEstado.map(x => x.nombre), datasets: [{ label: 'Pedidos', data: data.porEstado.map(x => x.pedidos), backgroundColor: '#fbbf24' }] }} options={chartOptions} /></div></div>
             </div>
             <div className="card" style={{ padding: 20, marginTop: 20 }}>
+                <h2 style={{ fontSize: 18 }}>Paquetes vendidos por producto y presentación</h2>
+                <p style={{ color: 'var(--color-gray-600)', fontSize: 13 }}>En pedidos entregados, cada tipo combina el nombre de Producto y su presentación de 8 a 48 sándwiches. Los filtros y el período de Fecha Entrega se aplican también a este desglose.</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, margin: '16px 0' }}>
+                    <div><span>Ingreso atribuido a paquetes</span><strong style={{ display: 'block', fontSize: 24 }}>{moneda(data.resumen.ingresoAtribuidoPaquetes)}</strong></div>
+                    <div><span>Ingreso sin asignar a un tipo</span><strong style={{ display: 'block', fontSize: 24 }}>{moneda(data.resumen.ingresoSinAsignarPaquetes)}</strong></div>
+                </div>
+                <p style={{ color: 'var(--color-gray-600)', fontSize: 13 }}>Cuando un pedido incluye varios tipos, el Precio total se prorratea según los sándwiches de cada uno y se redondea en centavos sin alterar el total del pedido. Es un importe atribuido, no el precio de lista de cada paquete; si el total incluye envío o descuentos, también se reparten. Los pedidos con Producto o Cantidad inválidos quedan sin asignar.</p>
+                {data.porTipoPaquete.length ? <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, marginTop: 18 }}>
+                        <div><h3 style={{ fontSize: 16 }}>Tipos con más paquetes</h3><div style={{ height: 330 }}><Bar data={{ labels: data.porTipoPaquete.filter(x => x.paquetes > 0).slice(0, 10).map(x => `${x.nombre} · ${x.presentacion}`), datasets: [{ label: 'Paquetes', data: data.porTipoPaquete.filter(x => x.paquetes > 0).slice(0, 10).map(x => x.paquetes), backgroundColor: '#7c3aed' }] }} options={{ ...chartOptions, indexAxis: 'y' as const }} /></div></div>
+                        <div><h3 style={{ fontSize: 16 }}>Ingreso atribuido por tipo</h3><div style={{ height: 330 }}><Bar data={{ labels: [...data.porTipoPaquete].filter(x => x.paquetes > 0).sort((a, b) => b.ingresoAtribuido - a.ingresoAtribuido).slice(0, 10).map(x => `${x.nombre} · ${x.presentacion}`), datasets: [{ label: 'Ingreso atribuido', data: [...data.porTipoPaquete].filter(x => x.paquetes > 0).sort((a, b) => b.ingresoAtribuido - a.ingresoAtribuido).slice(0, 10).map(x => x.ingresoAtribuido), backgroundColor: '#047857' }] }} options={{ ...chartOptions, indexAxis: 'y' as const }} /></div></div>
+                    </div>
+                    <div style={{ overflowX: 'auto', maxHeight: 450, overflowY: 'auto', marginTop: 20 }}><table className="table" style={{ width: '100%', minWidth: 860 }}><thead><tr><th>Producto</th><th>Presentación</th><th>Paquetes</th><th>Con precio</th><th>Ingreso atribuido</th><th>Promedio por paquete con precio</th><th>Período anterior</th></tr></thead><tbody>
+                        {data.porTipoPaquete.map(x => <tr key={x.clave}><td>{x.nombre}</td><td>{x.presentacion} sándwiches</td><td>{x.paquetes.toLocaleString('es-AR')}</td><td>{x.paquetesConPrecio.toLocaleString('es-AR')}</td><td>{moneda(x.ingresoAtribuido)}</td><td>{moneda(x.precioPromedioPaquete)}</td><td>{x.paquetesAnteriores.toLocaleString('es-AR')} paquetes · {moneda(x.ingresoAnterior)}</td></tr>)}
+                    </tbody></table></div>
+                </> : <p>No hay paquetes clasificables para estos filtros.</p>}
+            </div>
+            <div className="card" style={{ padding: 20, marginTop: 20 }}>
                 <h2 style={{ fontSize: 18 }}>Detalle de pedidos</h2>
                 <p>{data.totalFilas.toLocaleString('es-AR')} IDs coinciden con los filtros. Página {data.pagina} de {Math.max(data.paginas, 1)}.</p>
                 <div style={{ overflowX: 'auto' }}><table className="table" style={{ width: '100%', minWidth: 1150 }}><thead><tr>{conjunto && <th>Origen</th>}<th>Fecha Entrega</th><th>Registro</th><th>ID</th><th>Cliente</th><th>Producto</th><th>Cantidad</th><th>Paquetes</th><th>Modalidad</th><th>Ubicación</th><th>Estado</th><th>Pago</th><th>Precio</th><th>Contacto</th><th>Observaciones</th></tr></thead><tbody>
