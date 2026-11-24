@@ -88,7 +88,7 @@ test('no atribuye la ficha genérica de ELE a sabores elegidos del Sheet', () =>
     const r = calcularConsumoPedidos(reporte, productos)
     assert.equal(r.resumen.costoEstimado, 0)
     assert.equal(r.resumen.ingresoSinCosto, 100)
-    assert.equal(r.porTipo[0].motivo, 'Costo según mezcla de sabores en el resumen')
+    assert.match(r.porTipo[0].motivo ?? '', /Falta receta de sabor Huevo/)
     assert.deepEqual(reporte.porSaborElegido.map(x => ({ codigo: x.codigo, planchas: x.planchas })), [{ codigo: 'hue', planchas: 1 }])
     assert.equal(reporte.calidad.sinSaboresElegidos, 0)
 })
@@ -124,6 +124,9 @@ test('valora cada ficha completa por plancha, incluido un sabor premium, sin sum
     assert.equal(r.resumen.elegidos.paquetesValorados, 1)
     assert.equal(r.porInsumo.find(x => x.id === 'tomate')?.cantidad, 6)
     assert.equal(r.porInsumo.find(x => x.id === 'pan')?.cantidad, 1.5)
+    assert.equal(r.porTipo.find(x => x.nombre === 'Surtidos Elegidos')?.costoEstimado, 88)
+    assert.equal(r.porTipo.find(x => x.nombre === 'Surtidos Elegidos')?.costoPorPaquete, 88)
+    assert.equal(r.porTipo.find(x => x.nombre === 'Surtidos Elegidos')?.margenComparable, 152)
     assert.deepEqual(r.porSaborCosto.map(x => ({ codigo: x.codigo, planchas: x.planchasValoradas, costo: x.costoEstimado })), [
         { codigo: 'tom', planchas: 2, costo: 62 },
         { codigo: 'roque', planchas: 1, costo: 21 },
@@ -136,7 +139,7 @@ test('Personalizado usa las fichas de sus sabores como Elegidos', () => {
         .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 8x Tomate + 8x Roquefort",160')].join('\n')
     const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
     assert.deepEqual(reporte.pedidosElegidos[0]?.sabores?.map(x => x.codigo), ['tom', 'roque'])
-    assert.deepEqual(reporte.pedidosElegidos[0]?.presentaciones, [{ cantidad: 16, paquetes: 1 }])
+    assert.deepEqual(reporte.pedidosElegidos[0]?.presentaciones, [{ clave: '16:personalizado', cantidad: 16, paquetes: 1 }])
     const insumo = (nombre: string, precioUnitario: number) => ({ nombre, unidadMedida: 'u', precioUnitario })
     const calculo = calcularConsumoPedidos(reporte, [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
         presentaciones: [{ id: 'ele16', cantidad: 16 }], fichasTecnicas: [], recetasElegidos: [
@@ -163,6 +166,8 @@ test('un sabor sin receta deja pendiente todo el pedido Elegidos', () => {
     assert.equal(r.resumen.ingresoSinCosto, 160)
     assert.deepEqual(r.porInsumo, [])
     assert.equal(r.resumen.elegidos.costoSaboresIdentificados, 10)
+    assert.equal(r.porTipo.find(x => x.nombre === 'Surtidos Elegidos')?.paquetesConCosto, 0)
+    assert.match(r.porTipo.find(x => x.nombre === 'Surtidos Elegidos')?.motivo ?? '', /Falta receta de sabor Huevo/)
     assert.deepEqual(r.porSaborCosto.map(x => ({ codigo: x.codigo, planchas: x.planchasValoradas, costo: x.costoEstimado })),
         [{ codigo: 'tom', planchas: 1, costo: 10 }])
     assert.deepEqual(r.resumen.elegidos.faltantes, [{ motivo: 'Falta receta de sabor Huevo', paquetes: 1 }])
@@ -223,10 +228,55 @@ test('editar Mayonesa de Huevo cambia el consumo identificable aun con empaque p
     assert.equal(completo.resumen.costoEstimado, 25)
 })
 
+test('la tabla por tipo muestra el costo promedio sólo de Elegidos completos', () => {
+    const csv = [cabecera,
+        fila('1', '16 Surtidos Elegidos', '16', '160')
+            .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 16x Huevo",160'),
+        fila('2', '16 Surtidos Elegidos', '16', '160'),
+    ].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const r = calcularConsumoPedidos(reporte, [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele16', cantidad: 16 }], fichasTecnicas: [], recetasElegidos: [
+            { alcance: 'sabor', cantidad: .1, merma: 0, insumoId: 'mayonesa', variante: { codigo: 'hue' },
+                presentacion: null, insumo: { nombre: 'Mayonesa', unidadMedida: 'kg', precioUnitario: 100 } },
+            { alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'caja', variante: null,
+                presentacion: { cantidad: 16 }, insumo: { nombre: 'Caja', unidadMedida: 'u', precioUnitario: 5 } },
+        ] }])
+    const tipo = r.porTipo.find(x => x.nombre === 'Surtidos Elegidos')
+    assert.equal(tipo?.paquetes, 2)
+    assert.equal(tipo?.paquetesConCosto, 1)
+    assert.equal(tipo?.ingresoAtribuido, 320)
+    assert.equal(tipo?.costoPorPaquete, 25)
+    assert.equal(tipo?.costoEstimado, 25)
+    assert.equal(tipo?.margenComparable, 135)
+    assert.match(tipo?.motivo ?? '', /1\/2 con costo; Sin sabores válidos en el Sheet/)
+    assert.equal(r.resumen.costoEstimado, 25)
+})
+
+test('no reparte el costo entre dos tipos personalizados sin sabores por tipo', () => {
+    const csv = [cabecera, fila('1', '8 Surtidos Elegidos + Personalizado x8 (1 plancha)', '16', '160')
+        .replace('13/11/2026,,160', '13/11/2026,"Sabores (16): 16x Huevo",160')].join('\n')
+    const reporte = { ...calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' }), actualizado: '' }
+    const r = calcularConsumoPedidos(reporte, [{ id: 'ele', nombre: 'Elegidos', codigoInterno: 'ELE',
+        presentaciones: [{ id: 'ele8', cantidad: 8 }], fichasTecnicas: [], recetasElegidos: [
+            { alcance: 'sabor', cantidad: .1, merma: 0, insumoId: 'mayonesa', variante: { codigo: 'hue' },
+                presentacion: null, insumo: { nombre: 'Mayonesa', unidadMedida: 'kg', precioUnitario: 100 } },
+            { alcance: 'empaque', cantidad: 1, merma: 0, insumoId: 'caja', variante: null,
+                presentacion: { cantidad: 8 }, insumo: { nombre: 'Caja', unidadMedida: 'u', precioUnitario: 5 } },
+        ] }])
+    assert.equal(r.resumen.costoEstimado, 30)
+    assert.equal(r.resumen.margenComparable, 130)
+    for (const tipo of r.porTipo) {
+        assert.equal(tipo.paquetesConCosto, 0)
+        assert.equal(tipo.costoEstimado, null)
+        assert.match(tipo.motivo ?? '', /varios tipos personalizados/)
+    }
+})
+
 test('un pedido mixto atribuye a Elegidos sólo su parte del precio', () => {
     const csv = [cabecera, fila('1', '24 Surtidos Elegidos + 24 Jamón y Queso', '48', '100')
         .replace('13/11/2026,,100', '13/11/2026,"Sabores (24): 24x Tomate",100')].join('\n')
     const reporte = calcularReportePedidosOnline(csv, { desde: '2026-11-13', hasta: '2026-11-13' })
     assert.equal(reporte.pedidosElegidos[0].ingresoAtribuido, 50)
-    assert.deepEqual(reporte.pedidosElegidos[0].presentaciones, [{ cantidad: 24, paquetes: 1 }])
+    assert.deepEqual(reporte.pedidosElegidos[0].presentaciones, [{ clave: '24:surtidos elegidos', cantidad: 24, paquetes: 1 }])
 })

@@ -75,11 +75,11 @@ function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcula
     setColumnWidths(insumosPorSabor, [28, 40, 18, 14, 22])
     XLSX.utils.book_append_sheet(wb, insumosPorSabor, 'Insumos por sabor')
     const paquetes = XLSX.utils.aoa_to_sheet([
-        ['Paquete', 'Presentación', 'Paquetes', 'Con precio', 'Ingreso atribuido', 'Costo por paquete', 'Costo total', 'Margen comparable', 'Paquetes previos', 'Cobertura'],
-        ...data.porTipo.map(x => [x.nombre, x.presentacion, x.paquetes, x.paquetesConPrecio, x.ingresoAtribuido,
+        ['Paquete', 'Presentación', 'Paquetes', 'Con costo', 'Con precio', 'Ingreso atribuido', 'Costo promedio por paquete', 'Costo total', 'Margen comparable', 'Paquetes previos', 'Cobertura'],
+        ...data.porTipo.map(x => [x.nombre, x.presentacion, x.paquetes, x.paquetesConCosto, x.paquetesConPrecio, x.ingresoAtribuido,
             x.costoPorPaquete, x.costoEstimado, x.margenComparable, x.paquetesAnteriores, x.motivo ?? 'Completa']),
     ])
-    setColumnWidths(paquetes, [35, 16, 14, 14, 20, 20, 18, 20, 18, 40])
+    setColumnWidths(paquetes, [35, 16, 14, 14, 14, 20, 25, 18, 20, 18, 40])
     XLSX.utils.book_append_sheet(wb, paquetes, 'Paquetes')
     const sabores = XLSX.utils.aoa_to_sheet([
         ['Sabor elegido', 'Planchas', 'Planchas con costo', 'Costo de insumos del sabor'],

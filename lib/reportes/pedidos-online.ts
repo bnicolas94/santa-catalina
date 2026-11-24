@@ -143,7 +143,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
     const paquetesPorFecha = new Map<string, { paquetes: number; sinClasificar: number }>()
     const saboresElegidos = new Map<string, { codigo: string; nombre: string; sandwiches: number }>()
     const pedidosElegidos: Array<{ periodo: 'actual' | 'anterior'; origen: string; id: string;
-        presentaciones: { cantidad: number; paquetes: number }[];
+        presentaciones: { clave: string; cantidad: number; paquetes: number }[];
         sabores: ReturnType<typeof interpretarSaboresElegidos>;
         ingresoAtribuido: number; precioValido: boolean }> = []
     type TotalTipo = { clave: string; nombre: string; presentacion: number; paquetes: number; paquetesConPrecio: number; centavos: number }
@@ -197,7 +197,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
             const ingresoAtribuido = lineas?.reduce((total, linea, i) =>
                 ['surtidos elegidos', 'personalizado', 'elegidos'].includes(normalizarTexto(linea.nombre)) ? total + (importes[i] ?? 0) : total, 0) ?? 0
             pedidosElegidos.push({ periodo, origen, id,
-                presentaciones: lineasElegidas.map(linea => ({ cantidad: linea.presentacion, paquetes: linea.paquetes })),
+                presentaciones: lineasElegidas.map(linea => ({ clave: linea.clave, cantidad: linea.presentacion, paquetes: linea.paquetes })),
                 sabores, ingresoAtribuido: ingresoAtribuido / 100, precioValido })
         }
         if (!duplicado && !conflicto && esEntregado) {

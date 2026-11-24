@@ -53,7 +53,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         // de ELE no identifica los insumos variables de cada plancha.
         if (nombre === 'surtidos elegidos' || nombre === 'personalizado' || nombre === 'elegidos' || producto?.codigoInterno === 'ELE') {
             paquetesSinCosto += tipo.paquetes
-            return { ...tipo, productoErp: producto?.nombre ?? null, costoPorPaquete: null, costoEstimado: null,
+            return { ...tipo, productoErp: producto?.nombre ?? null, paquetesConCosto: 0, costoPorPaquete: null, costoEstimado: null,
                 margenComparable: null, motivo: 'Costo según mezcla de sabores en el resumen' }
         }
         const presentaciones = producto?.presentaciones.filter(p => p.cantidad === tipo.presentacion) ?? []
@@ -73,7 +73,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
                 : !fichas.length ? 'Sin ficha técnica aplicable'
                 : sinPrecio.length ? `Sin precio de insumo: ${sinPrecio.join(', ')}`
                 : 'Cantidad inválida en ficha técnica'
-            return { ...tipo, productoErp: producto?.nombre ?? null, costoPorPaquete: null, costoEstimado: null,
+            return { ...tipo, productoErp: producto?.nombre ?? null, paquetesConCosto: 0, costoPorPaquete: null, costoEstimado: null,
                 margenComparable: null, motivo }
         }
 
@@ -93,13 +93,21 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         costoComparable += costoPorPaquete * tipo.paquetesConPrecio
         ingresoConCosto += tipo.ingresoAtribuido
         paquetesValorados += tipo.paquetes
-        return { ...tipo, productoErp: producto!.nombre, costoPorPaquete, costoEstimado: costoTipo,
+        return { ...tipo, productoErp: producto!.nombre, paquetesConCosto: tipo.paquetes, costoPorPaquete, costoEstimado: costoTipo,
             margenComparable: tipo.paquetesConPrecio ? tipo.ingresoAtribuido - costoPorPaquete * tipo.paquetesConPrecio : null,
             motivo: null }
     }).filter(tipo => tipo.paquetes > 0)
 
     const elegidos = productos.filter(producto => producto.codigoInterno === 'ELE')
     const recetaElegidos = elegidos.length === 1 ? elegidos[0].recetasElegidos ?? [] : []
+    const costosElegidosPorTipo = new Map<string, { paquetesConCosto: number; costo: number;
+        ingresoComparable: number; costoComparable: number; motivos: Set<string> }>()
+    const datosTipoElegido = (clave: string) => {
+        const actual = costosElegidosPorTipo.get(clave) ?? { paquetesConCosto: 0, costo: 0,
+            ingresoComparable: 0, costoComparable: 0, motivos: new Set<string>() }
+        costosElegidosPorTipo.set(clave, actual)
+        return actual
+    }
     let elegidosValorados = 0, elegidosSinCosto = 0, costoElegidos = 0, ingresoElegidos = 0
     let costoSaboresIdentificados = 0, planchasConCosto = 0
     const faltantesElegidos = new Map<string, number>()
@@ -116,8 +124,17 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
     const cantidadConMerma = (receta: typeof recetaElegidos[number]) => receta.cantidad / (1 - receta.merma / 100)
     for (const pedido of reporte.pedidosElegidos) {
         const paquetes = pedido.presentaciones.reduce((total, p) => total + p.paquetes, 0)
+        const claves = [...new Set(pedido.presentaciones.map(p => p.clave))]
+        const tipoUnico = claves.length === 1 ? datosTipoElegido(claves[0]) : null
+        if (pedido.periodo === 'actual' && !tipoUnico) {
+            for (const clave of claves) datosTipoElegido(clave).motivos.add('Pedido con varios tipos personalizados: costo no atribuible por tipo')
+        }
         if (!pedido.sabores) {
-            if (pedido.periodo === 'actual') { elegidosSinCosto += paquetes; registrarFalta('Sin sabores válidos en el Sheet', paquetes) }
+            if (pedido.periodo === 'actual') {
+                elegidosSinCosto += paquetes
+                registrarFalta('Sin sabores válidos en el Sheet', paquetes)
+                tipoUnico?.motivos.add('Sin sabores válidos en el Sheet')
+            }
             continue
         }
         const motivos = new Set<string>()
@@ -168,6 +185,7 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
             if (pedido.periodo === 'actual') {
                 elegidosSinCosto += paquetes
                 for (const motivo of motivos) registrarFalta(motivo, paquetes)
+                for (const motivo of motivos) tipoUnico?.motivos.add(motivo)
                 for (const item of insumosValidosDelPedido.values()) {
                     const acumulado = insumosSaboresPendientes.get(item.id) ?? { ...item, cantidad: 0, costoEstimado: 0 }
                     acumulado.cantidad += item.cantidad
@@ -192,6 +210,14 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
         ingresoElegidos += pedido.ingresoAtribuido
         costoEstimado += costoPedido
         if (pedido.precioValido) { ingresoConCosto += pedido.ingresoAtribuido; costoComparable += costoPedido }
+        if (tipoUnico) {
+            tipoUnico.paquetesConCosto += paquetes
+            tipoUnico.costo += costoPedido
+            if (pedido.precioValido) {
+                tipoUnico.ingresoComparable += pedido.ingresoAtribuido
+                tipoUnico.costoComparable += costoPedido
+            }
+        }
         paquetesValorados += paquetes
         paquetesSinCosto -= paquetes
         for (const x of cantidades.values()) {
@@ -234,7 +260,17 @@ export function calcularConsumoPedidos(reporte: ReportePedidosOnline, productos:
                 costoSaboresIdentificados, planchasConCosto,
                 faltantes: [...faltantesElegidos].map(([motivo, paquetes]) => ({ motivo, paquetes })) },
         },
-        porTipo: porTipo.sort((a, b) => b.paquetes - a.paquetes || a.clave.localeCompare(b.clave)),
+        porTipo: porTipo.map(tipo => {
+            if (tipo.motivo !== 'Costo según mezcla de sabores en el resumen') return tipo
+            const detalle = costosElegidosPorTipo.get(tipo.clave)
+            const valorados = detalle?.paquetesConCosto ?? 0
+            const motivos = [...(detalle?.motivos ?? [])].join('; ')
+            return { ...tipo, paquetesConCosto: valorados,
+                costoPorPaquete: valorados ? detalle!.costo / valorados : null,
+                costoEstimado: valorados ? detalle!.costo : null,
+                margenComparable: detalle?.ingresoComparable ? detalle.ingresoComparable - detalle.costoComparable : null,
+                motivo: valorados === tipo.paquetes ? 'Completa' : `${valorados}/${tipo.paquetes} con costo${motivos ? `; ${motivos}` : ''}` }
+        }).sort((a, b) => b.paquetes - a.paquetes || a.clave.localeCompare(b.clave)),
         porInsumo: [...insumos.values()].sort((a, b) => b.costoEstimado - a.costoEstimado),
         porInsumoIdentificado: [...insumosIdentificados.values()].sort((a, b) => b.costoEstimado - a.costoEstimado),
         porSaborCosto: [...porSaborCosto.values()].sort((a, b) => b.costoEstimado - a.costoEstimado || a.codigo.localeCompare(b.codigo)),
