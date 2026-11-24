@@ -37,8 +37,8 @@ export default function RecetaElegidosEditor({ productoId }: { productoId: strin
     const visibles = datos?.recetasElegidos.filter(linea => linea.alcance === alcance &&
         (alcance !== 'sabor' || linea.variante?.codigo === codigoSabor) &&
         (alcance !== 'empaque' || linea.presentacionId === presentacionId)) ?? []
-    const titulo = alcance === 'base' ? 'Base común por sándwich' : alcance === 'sabor' ? 'Ingredientes por plancha de 8' : 'Empaque por paquete'
-    const referencia = alcance === 'base' ? '1 sándwich' : alcance === 'sabor' ? '1 plancha de 8 sándwiches'
+    const titulo = alcance === 'base' ? 'Base común por plancha de 8' : alcance === 'sabor' ? 'Ingredientes por plancha de 8' : 'Empaque por paquete'
+    const referencia = alcance === 'base' || alcance === 'sabor' ? '1 plancha de 8 sándwiches'
         : `1 paquete x${datos?.presentaciones.find(p => p.id === presentacionId)?.cantidad ?? '—'}`
     const costo = (linea: Receta) => linea.cantidad / (1 - linea.merma / 100) * linea.insumo.precioUnitario
 

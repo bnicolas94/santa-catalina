@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { saboresSheetOnline } from '@/lib/pedidos-online-excel'
+import { cantidadParaGuardar, cantidadParaPlancha } from '@/lib/recetas-elegidos-unidades'
 
 export type AlcanceRecetaElegidos = 'base' | 'sabor' | 'empaque'
 
@@ -40,7 +41,9 @@ export async function obtenerRecetasElegidos(productoId: string) {
     if (!producto || producto.codigoInterno !== 'ELE') throw new Error('Este producto no es Elegidos.')
     const insumos = await prisma.insumo.findMany({ where: { activo: true },
         select: { id: true, nombre: true, unidadMedida: true, precioUnitario: true }, orderBy: { nombre: 'asc' } })
-    return { ...producto, sabores: saboresConfigurables, insumos }
+    return { ...producto, recetasElegidos: producto.recetasElegidos.map(linea => ({
+        ...linea, cantidad: cantidadParaPlancha(linea.alcance, linea.cantidad),
+    })), sabores: saboresConfigurables, insumos }
 }
 
 export async function guardarLineaElegidos(productoId: string, raw: unknown, id?: string) {
@@ -77,9 +80,11 @@ export async function guardarLineaElegidos(productoId: string, raw: unknown, id?
         const claveAlcance = input.alcance === 'base' ? 'base'
             : input.alcance === 'sabor' ? `sabor:${input.codigoSabor}` : `empaque:${input.presentacionId}`
         const data = { productoId, insumoId: input.insumoId, alcance: input.alcance, claveAlcance,
-            varianteId, presentacionId: input.presentacionId, cantidad: input.cantidad, merma: input.merma }
-        if (id) return tx.recetaElegidosInsumo.update({ where: { id }, data })
-        return tx.recetaElegidosInsumo.create({ data })
+            varianteId, presentacionId: input.presentacionId,
+            cantidad: cantidadParaGuardar(input.alcance, input.cantidad), merma: input.merma }
+        const linea = id ? await tx.recetaElegidosInsumo.update({ where: { id }, data })
+            : await tx.recetaElegidosInsumo.create({ data })
+        return { ...linea, cantidad: cantidadParaPlancha(linea.alcance, linea.cantidad) }
     })
 }
 
