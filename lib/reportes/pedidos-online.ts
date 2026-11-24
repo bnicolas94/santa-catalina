@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import { normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet } from '@/lib/google-sheets-caja'
-import { interpretarSaboresElegidos } from '@/lib/pedidos-online-excel'
+import { interpretarSaboresElegidos, saboresSheetOnline } from '@/lib/pedidos-online-excel'
 
 export type FiltrosPedidosOnline = {
     desde: string; hasta: string; fechaComparacion?: string; origen?: string; modalidad?: string; ubicacion?: string; ubicaciones?: string[]; estado?: string; buscar?: string; pagina?: number; todos?: boolean
@@ -19,8 +19,36 @@ export function validarFiltrosPedidosOnline(f: FiltrosPedidosOnline) {
 
 export type LineaPaquetePedido = { clave: string; nombre: string; presentacion: number; paquetes: number; sandwiches: number }
 
+const esVentaRapidaPersonalizada = (producto: string) => /^=+\s*sabores personalizados\s*=+/i.test(normalizarTexto(producto))
+
+export function interpretarSaboresVentaRapida(producto: string, cantidadEsperada: number): ReturnType<typeof interpretarSaboresElegidos> {
+    const seccion = normalizarTexto(producto).split(/=+\s*sabores personalizados\s*=+/)[1]
+    if (!seccion) return null
+    const lineas = [...seccion.matchAll(/•\s*([^:•]+?)\s*:\s*(\d+)\s*planchas?\s*\(\s*(\d+)\s*sandwich(?:es|s)?\s*\)/g)]
+    if (!lineas.length || lineas.length !== [...seccion.matchAll(/•/g)].length) return null
+    const sabores = new Map<string, { codigo: string; nombre: string; sandwiches: number }>()
+    let total = 0
+    for (const match of lineas) {
+        const codigo = saboresSheetOnline[match[1].trim()]
+        const planchas = Number(match[2])
+        const sandwiches = Number(match[3])
+        if (!codigo || !Number.isSafeInteger(planchas) || planchas < 1 || sandwiches !== planchas * 8) return null
+        const actual = sabores.get(codigo) ?? { codigo, nombre: match[1].trim().replace(/\b\w/g, letra => letra.toUpperCase()), sandwiches: 0 }
+        actual.sandwiches += sandwiches
+        sabores.set(codigo, actual)
+        total += sandwiches
+    }
+    return total === cantidadEsperada ? [...sabores.values()] : null
+}
+
 // Cantidad expresa sándwiches; Producto indica la presentación y el número de paquetes.
 export function interpretarLineasPaquetes(producto: string, cantidadTexto: string): LineaPaquetePedido[] | null {
+    if (esVentaRapidaPersonalizada(producto)) {
+        const cantidad = Number(cantidadTexto.trim())
+        if (![8, 16, 24, 32, 40, 48].includes(cantidad) || !interpretarSaboresVentaRapida(producto, cantidad)) return null
+        return [{ clave: `${cantidad}:surtidos elegidos`, nombre: 'Surtidos Elegidos',
+            presentacion: cantidad, paquetes: 1, sandwiches: cantidad }]
+    }
     const partes = producto.trim().split(/\s*\+\s*/)
     if (!partes.length || !cantidadTexto.trim()) return null
     const lineas: LineaPaquetePedido[] = []
@@ -131,7 +159,8 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         direccion: string; producto: string; observaciones: string; modalidad: string; ubicacion: string;
         estado: string; pago: string; precio: number | null; duplicado: boolean; conflicto: boolean; fila: number; cantidad: string; paquetes: number | null
     }>
-    const calidad = { duplicados: 0, conflictos: 0, sinFechaEntrega: 0, sinPrecio: 0, sinPaquetes: 0, sinSaboresElegidos: 0 }
+    const calidad = { duplicados: 0, conflictos: 0, sinFechaEntrega: 0, sinPrecio: 0,
+        sinPaquetes: 0, sinSaboresElegidos: 0, ventasRapidasPersonalizadas: 0 }
     let anteriorPedidos = 0, anteriorCentavos = 0
     const anteriorInicio = moverDia(f.desde, -dias)
     const porDia = new Map<string, { nombre: string; pedidos: number; centavos: number }>()
@@ -190,7 +219,10 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         const lineasElegidas = lineas?.filter(linea => ['surtidos elegidos', 'personalizado', 'elegidos'].includes(normalizarTexto(linea.nombre))) ?? []
         const sandwichesElegidos = lineasElegidas
             .reduce((total, linea) => total + linea.sandwiches, 0) ?? 0
-        const sabores = sandwichesElegidos ? interpretarSaboresElegidos(detalle?.observaciones ?? '', sandwichesElegidos) : null
+        const sabores = sandwichesElegidos ? esVentaRapidaPersonalizada(detalle?.producto ?? '')
+            ? interpretarSaboresVentaRapida(detalle?.producto ?? '', sandwichesElegidos)
+            : interpretarSaboresElegidos(detalle?.observaciones ?? '', sandwichesElegidos)
+                ?? interpretarSaboresVentaRapida(detalle?.observaciones ?? '', sandwichesElegidos) : null
         if (esEntregado && !duplicado && !conflicto && lineasElegidas.length && fecha >= anteriorInicio && fecha <= f.hasta) {
             const periodo = fecha < f.desde ? 'anterior' : 'actual'
             const importes = precioValido && lineas ? distribuirImportePaquetes(lineas, importe) : []
@@ -217,6 +249,10 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         if (!precioValido) calidad.sinPrecio++
         if (esEntregado && paquetes === null && !duplicado && !conflicto) calidad.sinPaquetes++
         if (esEntregado && sandwichesElegidos && !sabores && !duplicado && !conflicto) calidad.sinSaboresElegidos++
+        if (esEntregado && paquetes !== null && sabores && !duplicado && !conflicto &&
+            (esVentaRapidaPersonalizada(detalle?.producto ?? '') || /sabores personalizados/.test(normalizarTexto(detalle?.observaciones ?? '')))) {
+            calidad.ventasRapidasPersonalizadas++
+        }
         registros.push({ origen, id, fecha: fila.fechaTexto, fechaEntrega: detalle?.fechaEntrega ?? '', fechaEntregaDia: fecha, nombre: detalle?.nombre ?? '',
             apellido: detalle?.apellido ?? '', telefono: detalle?.telefono ?? '', direccion: detalle?.direccion ?? '',
             producto: detalle?.producto ?? '', observaciones: detalle?.observaciones ?? '', modalidad: detalle?.modalidad ?? '',

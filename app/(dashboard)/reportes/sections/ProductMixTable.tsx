@@ -7,7 +7,7 @@ type Mix = ReturnType<typeof calcularProductMix>
 const cantidad = (valor: number) => valor.toLocaleString('es-AR', { maximumFractionDigits: 5 })
 const dinero = (valor: number) => valor.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 
-export default function ProductMixTable({ mix }: { mix: Mix }) {
+export default function ProductMixTable({ mix, ventasRapidas }: { mix: Mix; ventasRapidas: number }) {
     const [modo, setModo] = useState<'lista' | 'matriz'>('lista')
     const [seleccion, setSeleccion] = useState('')
     const filaActiva = mix.filas.find(fila => fila.clave === seleccion) ?? mix.filas[0]
@@ -18,6 +18,7 @@ export default function ProductMixTable({ mix }: { mix: Mix }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 16 }}>
             <span><strong>{cantidad(mix.paquetes)}</strong> paquetes clasificados</span>
             <span><strong>{mix.filas.length}</strong> tipos de paquete</span>
+            <span><strong>{cantidad(ventasRapidas)}</strong> ventas rápidas personalizadas incluidas</span>
             <span><strong>{mix.filasIncompletas}</strong> tipos con datos pendientes</span>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>

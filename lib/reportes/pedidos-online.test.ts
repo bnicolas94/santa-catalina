@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { calcularReportePedidosFuentes, calcularReportePedidosOnline, contarPaquetesPedido, distribuirImportePaquetes, fechaEntregaIso, interpretarLineasPaquetes, validarFiltrosPedidosOnline } from './pedidos-online'
+import { calcularReportePedidosFuentes, calcularReportePedidosOnline, contarPaquetesPedido, distribuirImportePaquetes, fechaEntregaIso, interpretarLineasPaquetes, interpretarSaboresVentaRapida, validarFiltrosPedidosOnline } from './pedidos-online'
 
 const cabecera = 'ID,Fecha/Hora,Nombre,Apellido,Telefono,Direccion,Producto,Modalidad,Estado,Fecha Entrega,Observaciones,Precio,Pago,Ubicacion'
 const fila = (id: string, fecha: string, modalidad: string, estado: string, precio: string, ubicacion = 'Centro', fechaEntrega = '13/11/2026') =>
@@ -86,6 +86,41 @@ test('paquetes usa presentaciones del producto y valida los sándwiches del Shee
     assert.equal(contarPaquetesPedido('Personalizado x48 (6 planchas)', '48'), 1)
     assert.equal(contarPaquetesPedido('Personalizado x48 (3 planchas)', '48'), null)
     assert.equal(contarPaquetesPedido('Personalizado x72 (9 planchas)', '72'), null)
+})
+
+test('venta rápida con sabores en Producto cuenta planchas y usa Fecha Entrega', () => {
+    const producto = '=== SABORES PERSONALIZADOS ===\n• Jamón y Queso: 1 plancha (8 sandwiches)'
+    assert.deepEqual(interpretarLineasPaquetes(producto, '8'), [{ clave: '8:surtidos elegidos',
+        nombre: 'Surtidos Elegidos', presentacion: 8, paquetes: 1, sandwiches: 8 }])
+    assert.deepEqual(interpretarSaboresVentaRapida(producto, 8), [{ codigo: 'jyq', nombre: 'Jamon Y Queso', sandwiches: 8 }])
+    assert.equal(interpretarSaboresVentaRapida(producto, 16), null)
+    assert.equal(interpretarLineasPaquetes(producto, '16'), null)
+    const encabezados = `${cabecera},Cantidad`
+    const columna = (valor: string | number) => `"${String(valor).replace(/"/g, '""')}"`
+    const linea = (id: string, entrega: string) => [id, '20/11/2026 10:45', 'Venta rápida', 'Mostrador', '123', 'Mostrador',
+        producto, 'Retiro', 'Entregado', entrega, '', '12000', 'Efectivo', 'Centro', 8].map(columna).join(',')
+    const csv = [encabezados, linea('36137', '21/11/2026'), linea('anterior', '20/11/2026')].join('\n')
+    const r = calcularReportePedidosFuentes([{ origen: 'Pedidos_comunes', csv }], { desde: '2026-11-21', hasta: '2026-11-21' })
+    assert.equal(r.resumen.paquetesVendidos, 1)
+    assert.equal(r.calidad.ventasRapidasPersonalizadas, 1)
+    assert.equal(r.calidad.sinPaquetes, 0)
+    assert.equal(r.porTipoPaquete[0].paquetes, 1)
+    assert.equal(r.porSaborElegido.find(sabor => sabor.codigo === 'jyq')?.planchas, 1)
+    assert.equal(r.pedidosElegidos[0].origen, 'Pedidos_comunes')
+})
+
+test('Pedido Express anterior conserva sabores escritos en Observaciones', () => {
+    const observaciones = 'Turno: Tarde === SABORES PERSONALIZADOS === • Jamón y Queso: 1 plancha (8 sándwiches) • Aceitunas: 1 plancha (8 sándwiches) 🔗 PEDIDO COMBINADO'
+    assert.deepEqual(interpretarSaboresVentaRapida(observaciones, 16)?.map(sabor => sabor.codigo), ['jyq', 'ace'])
+    const columna = (valor: string | number) => `"${String(valor).replace(/"/g, '""')}"`
+    const csv = [`${cabecera},Cantidad`, [1, '20/11/2026 10:45', 'Venta rápida', 'Mostrador', '123', 'Mostrador',
+        'Personalizado x16 (2 planchas)', 'Retiro', 'Entregado', '21/11/2026', observaciones,
+        '12000', 'Efectivo', 'Centro', 16].map(columna).join(',')].join('\n')
+    const r = calcularReportePedidosFuentes([{ origen: 'Pedidos_comunes', csv }], { desde: '2026-11-21', hasta: '2026-11-21' })
+    assert.equal(r.resumen.paquetesVendidos, 1)
+    assert.equal(r.calidad.sinSaboresElegidos, 0)
+    assert.equal(r.calidad.ventasRapidasPersonalizadas, 1)
+    assert.equal(r.porSaborElegido.find(sabor => sabor.codigo === 'ace')?.planchas, 1)
 })
 
 test('compara paquetes del día elegido y dos ventanas consecutivas de siete días', () => {

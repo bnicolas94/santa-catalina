@@ -32,7 +32,7 @@ export type PedidoExcel = {
 
 export const saboresSheetOnline: Record<string, string> = {
     tomate: 'tom', lechuga: 'lechu', 'zanahoria y huevo': 'zyh',
-    'zanahoria y queso': 'zyq', huevo: 'hue', aceituna: 'ace',
+    'zanahoria y queso': 'zyq', huevo: 'hue', aceituna: 'ace', aceitunas: 'ace',
     'jamon y queso': 'jyq', choclo: 'cho', anana: 'anana', atun: 'atun',
     berenjena: 'beren', crudo: 'crudo', 'jamon crudo': 'crudo', roquefort: 'roque', panceta: 'panceta',
     pacenta: 'panceta', palmito: 'palmito', salame: 'salame',

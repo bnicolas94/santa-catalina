@@ -101,7 +101,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
         {cargando && <div className="empty-state"><div className="spinner" /><p>Calculando consumo de insumos...</p></div>}
         {!cargando && resultado?.error && <div className="card" style={{ padding: 20, color: 'var(--color-danger)' }}>{resultado.error}</div>}
         {data && <>
-            {vista === 'mix' && <ProductMixTable mix={data.productMix} />}
+            {vista === 'mix' && <ProductMixTable mix={data.productMix} ventasRapidas={data.calidad.ventasRapidasPersonalizadas} />}
             {vista === 'indicadores' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 18 }}>
                 {[
                     ['Ingreso esperado', dinero(data.resumen.ingresoEsperado)],
