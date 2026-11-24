@@ -123,6 +123,31 @@ test('Pedido Express anterior conserva sabores escritos en Observaciones', () =>
     assert.equal(r.porSaborElegido.find(sabor => sabor.codigo === 'ace')?.planchas, 1)
 })
 
+test('planchas por sabor suma Local y Online según Fecha Entrega y omite pendientes o sabores inválidos', () => {
+    const columna = (valor: string | number) => `"${String(valor).replace(/"/g, '""')}"`
+    const linea = (id: string, producto: string, cantidad: number, observaciones: string,
+        entrega: string, estado = 'Entregado', precio = '100') => [id, '20/11/2026 10:45', 'Ana', 'Test', '123', 'Calle',
+        producto, 'Retiro', estado, entrega, observaciones, precio, 'Efectivo', 'Centro', cantidad].map(columna).join(',')
+    const encabezados = `${cabecera},Cantidad`
+    const local = [encabezados,
+        linea('local-16', '16 Surtidos Elegidos', 16, 'Sabores (16): 8x Huevo + 8x Tomate', '21/11/2026', 'Entregado', ''),
+        linea('pendiente', '8 Surtidos Elegidos', 8, 'Sabores (8): 8x Tomate', '21/11/2026', 'Pendiente'),
+        linea('sin-sabor', '8 Surtidos Elegidos', 8, 'Sin sabores', '21/11/2026'),
+    ].join('\n')
+    const online = [encabezados,
+        linea('online-8', '8 Surtidos Elegidos', 8, 'Sabores (8): 8x Huevo', '21/11/2026'),
+        linea('anterior', '8 Surtidos Elegidos', 8, 'Sabores (8): 8x Huevo', '20/11/2026'),
+    ].join('\n')
+    const fuentes = [{ origen: 'Pedidos_comunes', csv: local }, { origen: 'Pedidos_online', csv: online }]
+    const actual = calcularReportePedidosFuentes(fuentes, { desde: '2026-11-21', hasta: '2026-11-21' })
+    assert.equal(actual.porSaborElegido.find(sabor => sabor.codigo === 'hue')?.planchas, 2)
+    assert.equal(actual.porSaborElegido.find(sabor => sabor.codigo === 'tom')?.planchas, 1)
+    assert.equal(actual.porSaborElegido.reduce((total, sabor) => total + sabor.planchas, 0), 3)
+    assert.equal(actual.calidad.sinSaboresElegidos, 1)
+    const anterior = calcularReportePedidosFuentes(fuentes, { desde: '2026-11-20', hasta: '2026-11-20' })
+    assert.equal(anterior.porSaborElegido.find(sabor => sabor.codigo === 'hue')?.planchas, 1)
+})
+
 test('compara paquetes del día elegido y dos ventanas consecutivas de siete días', () => {
     const csv = [`${cabecera},Cantidad`,
         `${fila('hoy', '13/11/2026 10:00', 'Delivery', 'Entregado', '100')},48`,

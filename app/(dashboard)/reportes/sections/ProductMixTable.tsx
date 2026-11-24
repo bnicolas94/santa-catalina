@@ -2,15 +2,18 @@
 
 import { useState } from 'react'
 import type { calcularProductMix } from '@/lib/reportes/product-mix'
+import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
 import ComparacionProductMix from './ComparacionProductMix'
+import PlanchasPorSabor from './PlanchasPorSabor'
 
 type Mix = ReturnType<typeof calcularProductMix>
 const cantidad = (valor: number) => valor.toLocaleString('es-AR', { maximumFractionDigits: 5 })
 const dinero = (valor: number) => valor.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 
-export type ModoProductMix = 'lista' | 'matriz' | 'comparacion'
+export type ModoProductMix = 'lista' | 'sabores' | 'matriz' | 'comparacion'
 
-export default function ProductMixTable({ mix, ventasRapidas, filtros, modo, setModo }: { mix: Mix; ventasRapidas: number;
+export default function ProductMixTable({ mix, sabores, sinDetalle, ventasRapidas, filtros, modo, setModo }: { mix: Mix;
+    sabores: ReportePedidosOnline['porSaborElegido']; sinDetalle: number; ventasRapidas: number;
     filtros: { desde: string; hasta: string; origen: string; modalidad: string; ubicacionId: string };
     modo: ModoProductMix; setModo: (modo: ModoProductMix) => void }) {
     const [seleccion, setSeleccion] = useState('')
@@ -21,15 +24,18 @@ export default function ProductMixTable({ mix, ventasRapidas, filtros, modo, set
         <p>Paquetes entregados y consumo teórico calculado con las fichas actuales. Los totales por insumo están al final.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginBottom: 16 }}>
             <span><strong>{cantidad(mix.paquetes)}</strong> paquetes clasificados</span>
+            <span><strong>{cantidad(sabores.reduce((total, sabor) => total + sabor.planchas, 0))}</strong> planchas por sabor identificado</span>
             <span><strong>{mix.filas.length}</strong> tipos de paquete</span>
             <span><strong>{cantidad(ventasRapidas)}</strong> ventas rápidas personalizadas incluidas</span>
             <span><strong>{mix.filasIncompletas}</strong> tipos con datos pendientes</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
             <button type="button" className={`btn btn-sm ${modo === 'lista' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('lista')}>Explorar productos</button>
+            <button type="button" className={`btn btn-sm ${modo === 'sabores' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('sabores')}>Planchas por sabor</button>
             <button type="button" className={`btn btn-sm ${modo === 'matriz' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('matriz')}>Matriz completa</button>
             <button type="button" className={`btn btn-sm ${modo === 'comparacion' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('comparacion')}>Comparar períodos</button>
         </div>
+        {modo === 'sabores' && <PlanchasPorSabor sabores={sabores} sinDetalle={sinDetalle} desde={filtros.desde} hasta={filtros.hasta} />}
         {modo === 'comparacion' && <ComparacionProductMix filtros={filtros} />}
         {modo === 'lista' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: 18, marginBottom: 20 }}>
             <div style={{ maxHeight: 440, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}>
@@ -72,7 +78,7 @@ export default function ProductMixTable({ mix, ventasRapidas, filtros, modo, set
                 </tr></tfoot>
             </table>
         </div>}
-        {modo !== 'comparacion' && <><h4 style={{ marginTop: 22 }}>Total utilizado por insumo</h4>
+        {(modo === 'lista' || modo === 'matriz') && <><h4 style={{ marginTop: 22 }}>Total utilizado por insumo</h4>
         <div style={{ maxHeight: 300, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}>
             <thead><tr><th>Insumo</th><th>Cantidad teórica</th><th>Unidad</th><th>Costo identificable</th></tr></thead>
             <tbody>{mix.totales.map(insumo => <tr key={insumo.id}><td>{insumo.nombre}</td><td>{cantidad(insumo.cantidad)}</td><td>{insumo.unidad}</td>
