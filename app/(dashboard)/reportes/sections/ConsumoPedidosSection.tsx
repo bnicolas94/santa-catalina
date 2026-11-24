@@ -9,7 +9,7 @@ import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
 import type { calcularProductMix } from '@/lib/reportes/product-mix'
 import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
 import type { calcularAuditoriaPedidos } from '@/lib/reportes/auditoria-pedidos'
-import ProductMixTable from './ProductMixTable'
+import ProductMixTable, { type ModoProductMix } from './ProductMixTable'
 import AuditoriaPedidosPanel from './AuditoriaPedidosPanel'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
@@ -38,6 +38,7 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
     const [revisionRecetas, setRevisionRecetas] = useState(0)
     const [saborDetalle, setSaborDetalle] = useState('')
     const [vista, setVista] = useState<'mix' | 'indicadores' | 'insumos' | 'calidad'>('mix')
+    const [modoMix, setModoMix] = useState<ModoProductMix>('lista')
     const params = new URLSearchParams({ desde: diaArgentina(rango.desde), hasta: diaArgentina(rango.hasta),
         origen, modalidad, ubicacionId })
     const clave = `${params}:${revision}:${revisionRecetas}`
@@ -104,7 +105,9 @@ export default function ConsumoPedidosSection({ rango, ubicacionId, origen, moda
         {cargando && <div className="empty-state"><div className="spinner" /><p>Calculando consumo de insumos...</p></div>}
         {!cargando && resultado?.error && <div className="card" style={{ padding: 20, color: 'var(--color-danger)' }}>{resultado.error}</div>}
         {data && <>
-            {vista === 'mix' && <ProductMixTable mix={data.productMix} ventasRapidas={data.calidad.ventasRapidasPersonalizadas} />}
+            {vista === 'mix' && <ProductMixTable mix={data.productMix} ventasRapidas={data.calidad.ventasRapidasPersonalizadas}
+                filtros={{ desde: diaArgentina(rango.desde), hasta: diaArgentina(rango.hasta), origen, modalidad, ubicacionId }}
+                modo={modoMix} setModo={setModoMix} />}
             {vista === 'indicadores' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 18 }}>
                 {[
                     ['Ingreso esperado', dinero(data.resumen.ingresoEsperado)],

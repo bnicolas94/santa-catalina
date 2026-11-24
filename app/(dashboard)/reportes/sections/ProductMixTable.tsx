@@ -2,13 +2,17 @@
 
 import { useState } from 'react'
 import type { calcularProductMix } from '@/lib/reportes/product-mix'
+import ComparacionProductMix from './ComparacionProductMix'
 
 type Mix = ReturnType<typeof calcularProductMix>
 const cantidad = (valor: number) => valor.toLocaleString('es-AR', { maximumFractionDigits: 5 })
 const dinero = (valor: number) => valor.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 
-export default function ProductMixTable({ mix, ventasRapidas }: { mix: Mix; ventasRapidas: number }) {
-    const [modo, setModo] = useState<'lista' | 'matriz'>('lista')
+export type ModoProductMix = 'lista' | 'matriz' | 'comparacion'
+
+export default function ProductMixTable({ mix, ventasRapidas, filtros, modo, setModo }: { mix: Mix; ventasRapidas: number;
+    filtros: { desde: string; hasta: string; origen: string; modalidad: string; ubicacionId: string };
+    modo: ModoProductMix; setModo: (modo: ModoProductMix) => void }) {
     const [seleccion, setSeleccion] = useState('')
     const filaActiva = mix.filas.find(fila => fila.clave === seleccion) ?? mix.filas[0]
     const totales = new Map(mix.totales.map(item => [item.id, item]))
@@ -21,10 +25,12 @@ export default function ProductMixTable({ mix, ventasRapidas }: { mix: Mix; vent
             <span><strong>{cantidad(ventasRapidas)}</strong> ventas rápidas personalizadas incluidas</span>
             <span><strong>{mix.filasIncompletas}</strong> tipos con datos pendientes</span>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
             <button type="button" className={`btn btn-sm ${modo === 'lista' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('lista')}>Explorar productos</button>
             <button type="button" className={`btn btn-sm ${modo === 'matriz' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('matriz')}>Matriz completa</button>
+            <button type="button" className={`btn btn-sm ${modo === 'comparacion' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setModo('comparacion')}>Comparar períodos</button>
         </div>
+        {modo === 'comparacion' && <ComparacionProductMix filtros={filtros} />}
         {modo === 'lista' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: 18, marginBottom: 20 }}>
             <div style={{ maxHeight: 440, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}>
                 <thead><tr><th>Producto vendido</th><th>Paquetes</th><th>Ingreso esperado</th></tr></thead>
@@ -66,11 +72,11 @@ export default function ProductMixTable({ mix, ventasRapidas }: { mix: Mix; vent
                 </tr></tfoot>
             </table>
         </div>}
-        <h4 style={{ marginTop: 22 }}>Total utilizado por insumo</h4>
+        {modo !== 'comparacion' && <><h4 style={{ marginTop: 22 }}>Total utilizado por insumo</h4>
         <div style={{ maxHeight: 300, overflow: 'auto' }}><table className="table" style={{ width: '100%' }}>
             <thead><tr><th>Insumo</th><th>Cantidad teórica</th><th>Unidad</th><th>Costo identificable</th></tr></thead>
             <tbody>{mix.totales.map(insumo => <tr key={insumo.id}><td>{insumo.nombre}</td><td>{cantidad(insumo.cantidad)}</td><td>{insumo.unidad}</td>
                 <td>{insumo.costoIdentificado === null ? 'Sin precio completo' : dinero(insumo.costoIdentificado)}</td></tr>)}</tbody>
-        </table></div>
+        </table></div></>}
     </div>
 }

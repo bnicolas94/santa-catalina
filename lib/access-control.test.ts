@@ -83,11 +83,12 @@ test('pedidos conjuntos exige permiso de Reportes en página y API', () => {
 })
 
 test('consumo de pedidos exige permiso de Reportes', () => {
-    const path = '/api/reportes/consumo-pedidos'
-    assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
-    assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
-    assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
-    assert.equal(canAccessPath(path, {}), false)
+    for (const path of ['/api/reportes/consumo-pedidos', '/api/reportes/product-mix-comparacion']) {
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoCaja: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
 })
 
 test('las recetas de Elegidos se reservan a Stock o Producción', () => {
