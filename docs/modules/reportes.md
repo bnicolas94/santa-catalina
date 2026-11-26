@@ -46,14 +46,14 @@ El módulo consta de **4 archivos** distribuidos entre el frontend y la capa de 
 | Archivo | Ruta | Responsabilidad |
 |---------|------|-----------------|
 | `page.tsx` | `app/(dashboard)/reportes/page.tsx` | Página principal del módulo. Orquesta la navegación por tabs (Económico/Producción), los selectores de periodo (mes/año), el fetching de datos y la visualización del reporte económico con Chart.js. |
-| `ProduccionReport.tsx` | `app/(dashboard)/reportes/ProduccionReport.tsx` | Componente hijo dedicado al reporte de producción. Recibe datos como props, muestra KPIs de volumen, gráfico de tendencia semanal y tabla de desglose por producto. |
+| `ProduccionSection.tsx` | `app/(dashboard)/reportes/sections/ProduccionSection.tsx` | Indicadores de producción, evolución del período y desglose por producto. |
 
 ### Backend (API Routes)
 
 | Archivo | Ruta | Responsabilidad |
 |---------|------|-----------------|
 | `route.ts` (rentabilidad) | `app/api/reportes/rentabilidad/route.ts` | Endpoint `GET` que calcula el estado de resultados mensual: ingresos por ventas, costo de mercadería vendida (CMV) vía fichas técnicas, gastos operativos por categoría, y el resultado neto (EBITDA). |
-| `route.ts` (producción) | `app/api/reportes/produccion/route.ts` | Endpoint `GET` que agrega estadísticas de producción mensual: totales de paquetes/planchas/sanguchitos, desglose por producto, y tendencia de las últimas 4 semanas. |
+| `route.ts` (producción) | `app/api/reportes/produccion/route.ts` | Endpoint `GET` para estadísticas de lotes de fábrica en el rango elegido, con comparación del período anterior. |
 
 ---
 
@@ -107,26 +107,11 @@ El módulo consta de **4 archivos** distribuidos entre el frontend y la capa de 
 
 ### 3.3 Flujo del Reporte de Producción
 
-**Paso 1 — Obtención de Lotes:**
-- Se consultan todos los `Lote` del mes con `estado ≠ 'en_produccion'` (solo lotes finalizados), incluyendo la relación `producto`.
+El servicio `lib/services/reportes-produccion.ts` lee lotes de fábrica en el rango de días locales seleccionado y en el período consecutivo anterior de igual duración. La fecha de producción se guarda a medianoche UTC para representar el día argentino. Sólo incluye lotes cerrados; excluye `en_produccion` y `cancelado`. El filtro puede abarcar hasta 366 días y el detalle de lotes usa la misma regla.
 
-**Paso 2 — Cálculo de Estadísticas Globales:**
-- Para cada lote se calcula:
-  - `planchas = unidadesProducidas × producto.planchasPorPaquete` (default: 6)
-  - `sanguchitos = planchas × 8`
-- Se acumulan totales globales: paquetes, planchas, sanguchitos, rechazados, cantidad de lotes.
+`lib/reportes/produccion.ts` calcula paquetes elaborados brutos, aptos, rechazados y tasa de rechazo; lotes, días activos, promedios por día activo y por lote, día pico y cantidad de productos. La comparación muestra variación de paquetes frente al período anterior. Identifica la presentación base por la primera entrada de `distribucion`, un movimiento de producto inequívoco o la única presentación; sus sándwiches se convierten a planchas con `SANGUCHITOS_POR_PLANCHA`. Si falta una presentación inequívoca, usa `producto.planchasPorPaquete` o el valor global e informa cuántos lotes quedaron estimados. Los lotes con cantidades incoherentes quedan fuera de los totales y se informan.
 
-**Paso 3 — Desglose por Producto:**
-- Se agrupan las estadísticas por `producto.id`, generando un ranking ordenado por paquetes producidos (descendente).
-
-**Paso 4 — Tendencia Semanal:**
-- Se ejecutan 4 queries `aggregate` sobre `Lote`, cada una cubriendo un rango de 7 días, contando retroactivamente desde el fin del mes.
-- Esto genera 4 puntos de datos (Sem -3, Sem -2, Sem -1, Sem -0) para el gráfico de tendencia.
-
-**Paso 5 — Visualización:**
-- 4 KPIs cards: Total Paquetes, Total Planchas, Total Sanguchitos, Merma/Rechazos.
-- Gráfico de barras "Tendencia de Producción" (últimas 4 semanas).
-- Tabla "Desglose por Producto" con columnas: Producto (nombre + código), Paquetes, Planchas, Sanguchitos.
+La evolución cubre todo el rango: diaria hasta 31 días y en tramos de siete días para períodos mayores. El desglose ordena productos por paquetes e incluye aptos, participación, período anterior y variación. El Excel exporta resumen, desglose, tendencia y días activos. Son volúmenes registrados en el ERP; no equivalen a ventas ni a insumos físicos medidos.
 
 ### 3.4 Casos Típicos de Uso
 
@@ -206,22 +191,16 @@ prisma.gastoOperativo.findMany({
 })
 ```
 
-**Query 3 — Lotes del mes (Producción):**
+**Query 3 — Lotes de producción del período y el anterior:**
 ```
 prisma.lote.findMany({
-  where: { fechaProduccion: { gte, lte }, estado: { not: 'en_produccion' } },
-  include: { producto: true }
+  where: { fechaProduccion: { gte: inicioAnterior, lt: finExclusivo },
+           estado: { notIn: ['en_produccion', 'cancelado'] }, ubicacion: { tipo: 'FABRICA' } },
+  select: { producto: true, distribucion: true, movimientosProducto: true }
 })
 ```
 
-**Query 4 — Tendencia semanal (Producción) × 4 ejecuciones:**
-```
-prisma.lote.aggregate({
-  where: { fechaProduccion: { gte, lte }, estado: { not: 'en_produccion' } },
-  _sum: { unidadesProducidas: true }
-})
-```
-> **Nota:** Se ejecuta 4 veces en un loop (`for i = 3 to 0`). Cada iteración calcula un rango de 7 días.
+La evolución se agrupa en memoria sobre esa lectura, por día o tramo de siete días según la duración del filtro.
 
 ---
 
@@ -336,7 +315,7 @@ prisma.lote.aggregate({
 
 2. **La exclusión de la categoría "Proveedores" en gastos es clave.** Si se cambia el nombre de esa categoría en la BD, todos los gastos de proveedores se sumarán duplicadamente (ya están en el CMV + aparecerán en gastos operativos), destruyendo la validez del reporte económico. La comparación es por string literal `"Proveedores"`.
 
-3. **El multiplicador `× 8` para sanguchitos está hardcodeado** en `app/api/reportes/produccion/route.ts` (línea 49). Si se cambia el formato de las planchas, este número debe actualizarse manualmente.
+3. **Los sándwiches por plancha** se leen de `ConfiguracionGlobal` (`SANGUCHITOS_POR_PLANCHA`), con respaldo de ocho.
 
 4. **La query de rentabilidad es la más pesada del sistema.** Con 4 niveles de `include`, trae una cantidad masiva de datos a memoria. Antes de agregar más `include` o procesamiento, medir el impacto. Considerar mover a SQL raw si supera los 2 segundos de respuesta.
 
@@ -344,14 +323,14 @@ prisma.lote.aggregate({
 
 6. **Los endpoints de API no validan autenticación propia.** Un usuario con sesión válida pero sin rol ADMIN podría consumir estos endpoints directamente si conoce la URL. Agregar verificación de rol dentro del handler.
 
-7. **El frontend maneja `produccionData` con tipo `any`.** Cualquier cambio en la estructura del response del backend no será detectado por TypeScript hasta que cause un error en runtime.
+7. **El reporte de producción usa el tipo compartido `ReporteProduccion`** para mantener alineados el cálculo y la pestaña.
 
 ### Dependencias Críticas
 
 - **`FichaTecnica` + `Insumo.precioUnitario`:** Si se modifica la estructura de fichas técnicas o se renombra `precioUnitario`, el cálculo de CMV se rompe silenciosamente (retornará 0 en vez de error).
 - **`Pedido.estado === 'entregado'`:** Si se renombra o normaliza el enum de estados, los ingresos del reporte serán $0.
 - **`CategoriaGasto.nombre === 'Proveedores'`:** Comparación por string literal, frágil ante renombramientos.
-- **`Lote.estado !== 'en_produccion'`:** Los lotes activos se excluyen. Si se agregan nuevos estados, verificar que la lógica de exclusión siga siendo correcta.
+- **Estados de `Lote`:** Se excluyen `en_produccion` y `cancelado`. Si se agregan nuevos estados, verificar qué significa un lote cerrado.
 
 ### Cosas que NO deberían romperse
 

@@ -13,6 +13,7 @@ import ReportSettingsModal from './components/ReportSettingsModal'
 
 import DashboardSection from './sections/DashboardSection'
 import ProduccionSection from './sections/ProduccionSection'
+import type { ReporteProduccion } from '@/lib/reportes/produccion'
 import VentasSection from './sections/VentasSection'
 import CostosSection from './sections/CostosSection'
 import DesperdicioSection from './sections/DesperdicioSection'
@@ -45,30 +46,6 @@ interface RentabilidadData {
     gastosPorCategoria: Record<string, number>
 }
 
-interface ProduccionData {
-    desde: string
-    hasta: string
-    globales: {
-        totalPaquetes: number
-        totalPlanchas: number
-        totalSanguchitos: number
-        totalRechazados: number
-        totalLotes: number
-    }
-    desglose: {
-        nombre: string
-        codigo: string
-        paquetes: number
-        planchas: number
-        sanguchitos: number
-        rechazados: number
-    }[]
-    tendencia: {
-        semana: string
-        paquetes: number
-    }[]
-}
-
 interface Metadata {
     ubicaciones: { id: string, nombre: string, tipo: string }[]
     years: string[]
@@ -82,7 +59,7 @@ export default function ReportesPage() {
     // --- State ---
     const [activeSection, setActiveSection] = useState<SeccionReporte>('pedidos')
     const [rentabilidadData, setRentabilidadData] = useState<RentabilidadData | null>(null)
-    const [produccionData, setProduccionData] = useState<ProduccionData | null>(null)
+    const [produccionData, setProduccionData] = useState<ReporteProduccion | null>(null)
     const [metadata, setMetadata] = useState<Metadata>({ ubicaciones: [], years: [], categoriasGasto: [] })
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)

@@ -3,6 +3,7 @@ import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
 import type { calcularProductMix } from '@/lib/reportes/product-mix'
 import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
 import type { calcularCostosProduccion } from '@/lib/reportes/costos-produccion'
+import type { ReporteProduccion } from '@/lib/reportes/produccion'
 
 /**
  * Exporta reportes a Excel con formato profesional.
@@ -21,7 +22,7 @@ export async function exportReportToExcel(
             exportEconomico(wb, data, mes, anio)
             break
         case 'produccion':
-            exportProduccion(wb, data, mes, anio)
+            exportProduccion(wb, data)
             break
         case 'costos-produccion':
             exportCostosProduccion(wb, data)
@@ -193,17 +194,30 @@ function exportEconomico(wb: XLSX.WorkBook, data: any, mes: string, anio: string
     XLSX.utils.book_append_sheet(wb, ws, 'Resumen Económico')
 }
 
-function exportProduccion(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {
+function exportProduccion(wb: XLSX.WorkBook, data: ReporteProduccion) {
     // Hoja 1: Resumen
     const resumen = [
-        ['Reporte de Producción — Santa Catalina', `${mes}/${anio}`],
+        ['Reporte de Producción — Santa Catalina', `${data.desde} al ${data.hasta}`],
         [''],
         ['Métrica', 'Valor'],
-        ['Total Paquetes', data.globales.totalPaquetes],
+        ['Paquetes elaborados', data.globales.totalPaquetes],
+        ['Paquetes aptos', data.globales.totalAptos],
         ['Total Planchas', data.globales.totalPlanchas],
         ['Total Sanguchitos', data.globales.totalSanguchitos],
         ['Total Rechazos', data.globales.totalRechazados],
+        ['Tasa de rechazo %', data.globales.tasaRechazo],
         ['Total Lotes', data.globales.totalLotes],
+        ['Días con producción', data.globales.diasActivos],
+        ['Días del período', data.globales.diasPeriodo],
+        ['Promedio por día activo', data.globales.promedioPorDiaActivo],
+        ['Promedio por lote', data.globales.promedioPorLote],
+        ['Productos elaborados', data.globales.productosDistintos],
+        ['Día de mayor producción', data.globales.diaPico?.fecha ?? ''],
+        ['Paquetes del día pico', data.globales.diaPico?.paquetes ?? 0],
+        ['Paquetes período anterior', data.globales.paquetesAnteriores],
+        ['Variación de paquetes %', data.globales.variacionPaquetes ?? 'Sin base anterior'],
+        ['Lotes con presentación estimada', data.globales.presentacionEstimada],
+        ['Lotes con cantidades incoherentes', data.globales.lotesInvalidos],
     ]
     const wsResumen = XLSX.utils.aoa_to_sheet(resumen)
     setColumnWidths(wsResumen, [30, 15])
@@ -211,20 +225,25 @@ function exportProduccion(wb: XLSX.WorkBook, data: any, mes: string, anio: strin
 
     // Hoja 2: Desglose
     const desglose = [
-        ['Producto', 'Código', 'Paquetes', 'Planchas', 'Sanguchitos', 'Rechazos'],
-        ...data.desglose.map((p: any) => [p.nombre, p.codigo, p.paquetes, p.planchas, p.sanguchitos, p.rechazados])
+        ['Producto', 'Código', 'Paquetes', 'Aptos', 'Planchas', 'Sanguchitos', 'Rechazos', 'Participación %', 'Período anterior', 'Variación %'],
+        ...data.desglose.map(p => [p.nombre, p.codigo, p.paquetes, p.aptos, p.planchas, p.sanguchitos,
+            p.rechazados, p.participacion, p.paquetesAnteriores, p.variacion ?? 'Sin base anterior'])
     ]
     const wsDesglose = XLSX.utils.aoa_to_sheet(desglose)
-    setColumnWidths(wsDesglose, [30, 12, 12, 12, 14, 12])
+    setColumnWidths(wsDesglose, [30, 12, 12, 12, 12, 14, 12, 18, 18, 16])
     XLSX.utils.book_append_sheet(wb, wsDesglose, 'Desglose')
 
     // Hoja 3: Tendencia
     const tendencia = [
-        ['Semana', 'Paquetes'],
-        ...data.tendencia.map((t: any) => [t.semana, t.paquetes])
+        ['Día o tramo', 'Paquetes', 'Rechazos'],
+        ...data.tendencia.map(t => [t.semana, t.paquetes, t.rechazados])
     ]
     const wsTendencia = XLSX.utils.aoa_to_sheet(tendencia)
     XLSX.utils.book_append_sheet(wb, wsTendencia, 'Tendencia')
+
+    const dias = [['Fecha', 'Paquetes', 'Aptos', 'Rechazos', 'Lotes'],
+        ...data.porDia.map(d => [d.fecha, d.paquetes, d.aptos, d.rechazados, d.lotes])]
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dias), 'Días activos')
 }
 
 function exportVentas(wb: XLSX.WorkBook, data: any, mes: string, anio: string) {

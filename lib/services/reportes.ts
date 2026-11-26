@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { obtenerReporteProduccion } from './reportes-produccion'
+import { rangoProduccionArgentina } from '@/lib/reportes/produccion'
 import { unstable_cache } from 'next/cache'
 import { getLiquidacionFetchRange, liquidacionBelongsToPeriod } from './reportes-costos'
 import { calcularCostoPaqueteReceta, calcularResultadoConMerma, getMermasPeriodo } from './mermas-costos'
@@ -206,104 +208,17 @@ export const getRentabilidadReport = unstable_cache(
 
 export const getProduccionReport = unstable_cache(
     async (desdeIso: string, hastaIso: string, ubicacionId?: string) => {
-        const startOfMonth = new Date(desdeIso)
-        const endOfMonth = new Date(hastaIso)
-
-        const whereLote: any = {
-            fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
-            estado: { not: 'en_produccion' }
-        }
-        if (ubicacionId) whereLote.ubicacionId = ubicacionId
-
-        const lotes = await prisma.lote.findMany({
-            where: whereLote,
-            include: { producto: true }
-        })
-
-        let statsGlobales = {
-            totalPaquetes: 0,
-            totalPlanchas: 0,
-            totalSanguchitos: 0,
-            totalRechazados: 0,
-            totalLotes: lotes.length
-        }
-
-        const porProducto: Record<string, any> = {}
-
-        const planchasPorPaqDefault = await getGlobalConfig('PLANCHAS_POR_PAQUETE_DEFAULT', 6)
-        const sanguchitosPorPlancha = await getGlobalConfig('SANGUCHITOS_POR_PLANCHA', 8)
-
-        for (const lote of lotes) {
-            const planchasPorPaq = lote.producto.planchasPorPaquete || planchasPorPaqDefault
-            const planchas = lote.unidadesProducidas * planchasPorPaq
-            const sanguchitos = planchas * sanguchitosPorPlancha
-
-            statsGlobales.totalPaquetes += lote.unidadesProducidas
-            statsGlobales.totalPlanchas += planchas
-            statsGlobales.totalSanguchitos += sanguchitos
-            statsGlobales.totalRechazados += lote.unidadesRechazadas
-
-            if (!porProducto[lote.producto.id]) {
-                porProducto[lote.producto.id] = {
-                    nombre: lote.producto.nombre,
-                    codigo: lote.producto.codigoInterno,
-                    paquetes: 0,
-                    planchas: 0,
-                    sanguchitos: 0,
-                    rechazados: 0
-                }
-            }
-
-            const p = porProducto[lote.producto.id]
-            p.paquetes += lote.unidadesProducidas
-            p.planchas += planchas
-            p.sanguchitos += sanguchitos
-            p.rechazados += lote.unidadesRechazadas
-        }
-
-        const cuatroSemanasAtras = new Date(endOfMonth)
-        cuatroSemanasAtras.setDate(cuatroSemanasAtras.getDate() - 27)
-        
-        const whereTendencia: any = {
-            fechaProduccion: { gte: cuatroSemanasAtras, lte: endOfMonth },
-            estado: { not: 'en_produccion' }
-        }
-        if (ubicacionId) whereTendencia.ubicacionId = ubicacionId
-
-        const lotesTendencia = await prisma.lote.findMany({
-            where: whereTendencia,
-            select: { fechaProduccion: true, unidadesProducidas: true }
-        })
-
-        const statsSemanales = []
-        for (let i = 3; i >= 0; i--) {
-            const start = new Date(endOfMonth)
-            start.setDate(start.getDate() - (i * 7 + 6))
-            start.setHours(0, 0, 0, 0)
-            const end = new Date(endOfMonth)
-            end.setDate(end.getDate() - (i * 7))
-            end.setHours(23, 59, 59, 999)
-            
-            const totalSemana = lotesTendencia
-                .filter(l => l.fechaProduccion >= start && l.fechaProduccion <= end)
-                .reduce((acc, l) => acc + l.unidadesProducidas, 0)
-            
-            statsSemanales.push({ semana: `Sem -${i}`, paquetes: totalSemana })
-        }
-
-        return {
-            desde: desdeIso,
-            hasta: hastaIso,
-            ubicacionId,
-            globales: statsGlobales,
-            desglose: Object.values(porProducto).sort((a: any, b: any) => b.paquetes - a.paquetes),
-            tendencia: statsSemanales
-        }
+        const [planchas, sanguchitos] = await Promise.all([
+            getGlobalConfig('PLANCHAS_POR_PAQUETE_DEFAULT', 6),
+            getGlobalConfig('SANGUCHITOS_POR_PLANCHA', 8),
+        ])
+        return obtenerReporteProduccion(desdeIso, hastaIso, ubicacionId,
+            Number.isInteger(sanguchitos) && sanguchitos > 0 ? sanguchitos : 8,
+            Number.isInteger(planchas) && planchas > 0 ? planchas : 6)
     },
-    ['reporte-produccion'],
-    { revalidate: 3600, tags: ['reportes'] }
+    ['reporte-produccion-v2'],
+    { revalidate: 120, tags: ['reportes'] }
 )
-
 export const getReporteDetalle = async (
     tipo: 'pedidos' | 'gastos' | 'lotes',
     desdeIso: string,
@@ -406,9 +321,11 @@ export const getReporteDetalle = async (
     }
 
     if (tipo === 'lotes') {
+        const rango = rangoProduccionArgentina(desdeIso, hastaIso)
         const where: any = {
-            fechaProduccion: { gte: startOfMonth, lte: endOfMonth },
-            estado: { not: 'en_produccion' }
+            fechaProduccion: { gte: rango.inicio, lt: rango.finExclusivo },
+            estado: { notIn: ['en_produccion', 'cancelado'] },
+            ubicacion: { tipo: 'FABRICA' }
         }
         if (ubicacionId) where.ubicacionId = ubicacionId
 
