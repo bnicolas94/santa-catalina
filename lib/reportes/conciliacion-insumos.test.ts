@@ -42,3 +42,15 @@ test('no presenta como uso excesivo un movimiento cuyo tipo no se puede interpre
     assert.equal(r.filas[0].movimientosNoReconocidos, 1)
     assert.equal(r.resumen.faltantes, 0)
 })
+
+test('suma personalizados al uso esperado sin duplicar el descuento de lotes', () => {
+    const r = calcularConciliacionInsumos(conteo('inicio', 100), conteo('fin', 70), [
+        movimiento('salida', 20, 'lote-1'),
+    ], [{ id: 'pan', cantidad: 10 }])
+    assert.equal(r.filas[0].usoRegistrado, 20)
+    assert.equal(r.filas[0].usoPersonalizados, 10)
+    assert.equal(r.filas[0].usoEsperado, 30)
+    assert.equal(r.filas[0].stockEsperado, 70)
+    assert.equal(r.filas[0].diferencia, 0)
+    assert.equal(r.filas[0].estado, 'coincide')
+})

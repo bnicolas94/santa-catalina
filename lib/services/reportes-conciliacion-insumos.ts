@@ -1,5 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { calcularConciliacionInsumos } from '@/lib/reportes/conciliacion-insumos'
+import { calcularProductMix } from '@/lib/reportes/product-mix'
+import { diasPersonalizadosEntreConteos, resumirPersonalizadosParaConteo } from '@/lib/reportes/conciliacion-personalizados'
+import { cargarProductosReceta } from '@/lib/services/reportes-consumo-pedidos'
+import { obtenerReportePedidosConjunto } from '@/lib/services/reportes-pedidos-conjunto'
 
 export async function listarConteosParaConciliacion(ubicacionId: string) {
     const sede = await prisma.ubicacion.findUnique({ where: { id: ubicacionId }, select: { id: true, nombre: true, tipo: true } })
@@ -32,6 +36,43 @@ export async function obtenerConciliacionInsumos(ubicacionId: string, inicioId: 
         select: { insumoId: true, tipo: true, cantidad: true, loteOrigenId: true,
             detalleConteo: { select: { id: true } } },
     }) : []
+    const periodoPersonalizados = diasPersonalizadosEntreConteos(inicial.fecha, final.fecha)
+    const fabricas = await prisma.ubicacion.count({ where: { tipo: 'FABRICA' } })
+    let personalizados: {
+        estado: 'incluidos' | 'parcial' | 'sin_dias_completos' | 'sin_asignacion' | 'sin_fuente'
+        desde: string | null; hasta: string | null; pedidos: number; paquetes: number;
+        filasPendientes: number; faltantes: string[]; sinConteo: string[];
+        insumos: { id: string; nombre: string; unidad: string; cantidad: number }[]
+    } = { estado: 'incluidos', desde: periodoPersonalizados?.desde ?? null,
+        hasta: periodoPersonalizados?.hasta ?? null, pedidos: 0, paquetes: 0,
+        filasPendientes: 0, faltantes: [], sinConteo: [], insumos: [] }
+    if (!periodoPersonalizados) {
+        personalizados.estado = 'sin_dias_completos'
+        personalizados.faltantes = ['Ambos conteos son del mismo día: el Sheet no indica a qué hora se preparó el pedido.']
+    } else if (fabricas !== 1) {
+        personalizados.estado = 'sin_asignacion'
+        personalizados.faltantes = ['Hay más de una fábrica o ninguna: el Sheet no identifica cuál elaboró cada personalizado.']
+    } else {
+        try {
+            const [reporte, productos] = await Promise.all([
+                obtenerReportePedidosConjunto({ desde: periodoPersonalizados.desde, hasta: periodoPersonalizados.hasta, todos: true }),
+                cargarProductosReceta(),
+            ])
+            const resumen = resumirPersonalizadosParaConteo(reporte, calcularProductMix(reporte, productos))
+            const faltantes = [...resumen.faltantes]
+            if (reporte.calidad.sinSaboresElegidos) faltantes.push(`${reporte.calidad.sinSaboresElegidos} pedidos personalizados sin sabores válidos`)
+            if (reporte.calidad.sinPaquetes) faltantes.push(`${reporte.calidad.sinPaquetes} pedidos entregados sin producto o cantidad clasificable`)
+            if (reporte.calidad.conflictos) faltantes.push(`${reporte.calidad.conflictos} IDs con datos contradictorios en el Sheet`)
+            personalizados = { ...resumen, desde: periodoPersonalizados.desde, hasta: periodoPersonalizados.hasta,
+                estado: faltantes.length ? 'parcial' : 'incluidos', faltantes,
+                sinConteo: resumen.insumos.filter(item => !ids.includes(item.id)).map(item => item.nombre) }
+        } catch (error) {
+            console.error('No se pudieron consultar personalizados para conciliación:', error)
+            personalizados.estado = 'sin_fuente'
+            personalizados.faltantes = ['No se pudieron consultar los pedidos personalizados del Sheet.']
+        }
+    }
     return { sede: inicial.ubicacion.nombre, inicio: { id: inicial.id, fecha: inicial.fecha },
-        fin: { id: final.id, fecha: final.fecha }, ...calcularConciliacionInsumos(inicial, final, movimientos) }
+        fin: { id: final.id, fecha: final.fecha }, personalizados,
+        ...calcularConciliacionInsumos(inicial, final, movimientos, personalizados.insumos) }
 }

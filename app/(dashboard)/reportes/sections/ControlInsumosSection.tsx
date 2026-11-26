@@ -6,6 +6,10 @@ import type { calcularConciliacionInsumos } from '@/lib/reportes/conciliacion-in
 
 type Resultado = ReturnType<typeof calcularConciliacionInsumos> & {
     sede: string; inicio: { id: string; fecha: string }; fin: { id: string; fecha: string }
+    personalizados: { estado: 'incluidos' | 'parcial' | 'sin_dias_completos' | 'sin_asignacion' | 'sin_fuente';
+        desde: string | null; hasta: string | null; pedidos: number; paquetes: number;
+        filasPendientes: number; faltantes: string[]; sinConteo: string[];
+        insumos: { id: string; nombre: string; unidad: string; cantidad: number }[] }
 }
 type Listado = { sede: { id: string; nombre: string }; conteos: { id: string; fecha: string; insumos: number }[] }
 type Estado = Resultado['filas'][number]['estado']
@@ -71,6 +75,7 @@ export default function ControlInsumosSection({ ubicacionId }: { ubicacionId: st
     }, [clave, ubicacionId, seleccion.inicioId, seleccion.finId, validos])
 
     const data = validos && consulta?.clave === clave ? consulta.data : null
+    const coberturaCompleta = data?.personalizados.estado === 'incluidos'
     const error = validos && consulta?.clave === clave ? consulta.error : ''
     const filas = useMemo(() => data?.filas.filter(fila =>
         (filtro === 'todos' || fila.estado === filtro) && fila.nombre.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es'))) ?? [],
@@ -82,9 +87,10 @@ export default function ControlInsumosSection({ ubicacionId }: { ubicacionId: st
 
     const descargar = () => {
         if (!data) return
-        const lineas = [['Insumo', 'Unidad', 'Stock inicial', 'Entradas', 'Otras salidas', 'Uso por lotes', 'Uso según conteos', 'Stock esperado', 'Stock contado', 'Diferencia', 'Estado', 'Costo faltante estimado'],
+        const lineas = [['Insumo', 'Unidad', 'Stock inicial', 'Entradas', 'Otras salidas', 'Uso por lotes', 'Uso personalizados', 'Uso esperado total', 'Uso según conteos', 'Stock esperado', 'Stock contado', 'Diferencia', 'Estado', 'Costo faltante estimado'],
             ...filas.map(f => [f.nombre, f.unidad, f.inicio, f.entradas, f.salidasOtras, f.usoRegistrado,
-                f.usoSegunConteo, f.stockEsperado, f.fin, f.diferencia, etiqueta[f.estado], f.costoDiferencia])]
+                f.usoPersonalizados, f.usoEsperado, f.usoSegunConteo, f.stockEsperado, f.fin, f.diferencia,
+                !coberturaCompleta && f.estado === 'coincide' ? 'Coincide con datos disponibles' : etiqueta[f.estado], f.costoDiferencia])]
         const contenido = '\uFEFF' + lineas.map(linea => linea.map(csv).join(';')).join('\r\n')
         const url = URL.createObjectURL(new Blob([contenido], { type: 'text/csv;charset=utf-8' }))
         const enlace = document.createElement('a')
@@ -97,7 +103,7 @@ export default function ControlInsumosSection({ ubicacionId }: { ubicacionId: st
     return <section className="fade-in">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 16, flexWrap: 'wrap' }}>
             <div><h2 style={{ margin: '0 0 6px' }}>Control de insumos</h2>
-                <p style={{ margin: 0, color: 'var(--color-gray-600)' }}>Elegí dos conteos físicos de la misma fábrica. Te mostramos qué insumos coinciden con la producción registrada y cuáles conviene revisar.</p></div>
+                <p style={{ margin: 0, color: 'var(--color-gray-600)' }}>Comparamos el consumo de paquetes producidos y personalizados entregados con lo que quedó en los conteos físicos.</p></div>
             <Link href="/conteos-insumos" className="btn btn-secondary btn-sm">Ver o cargar conteos</Link>
         </div>
         {!ubicacionId && <div className="card" style={{ padding: 22, marginTop: 20 }}>Elegí una fábrica en el selector de sede para empezar.</div>}
@@ -120,28 +126,34 @@ export default function ControlInsumosSection({ ubicacionId }: { ubicacionId: st
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 18 }}>
                 {[
                     ['Insumos comparados', String(data.resumen.comparables), '#15243b'],
-                    ['Coinciden', String(data.resumen.coinciden), '#047857'],
+                    [coberturaCompleta ? 'Coinciden' : 'Coinciden con datos disponibles', String(data.resumen.coinciden), '#047857'],
                     ['Faltantes por investigar', String(data.resumen.faltantes), '#b91c1c'],
                     ['Sobrantes por investigar', String(data.resumen.sobrantes), '#a16207'],
-                    ['Costo estimado del faltante', dinero(data.resumen.costoFaltanteIdentificado), '#15243b'],
+                    [coberturaCompleta ? 'Costo estimado del faltante' : 'Costo del faltante identificado', dinero(data.resumen.costoFaltanteIdentificado), '#15243b'],
                 ].map(([titulo, valor, tono]) => <div className="card" key={titulo} style={{ padding: 18, borderTop: `4px solid ${tono}` }}><small>{titulo}</small><strong style={{ display: 'block', marginTop: 6, fontSize: 26, color: tono }}>{valor}</strong></div>)}
             </div>
             {(data.resumen.revisar > 0 || data.resumen.faltantesSinPrecio > 0) && <p role="status" style={{ marginBottom: 18 }}>Hay {data.resumen.revisar} insumos con movimientos para revisar y {data.resumen.faltantesSinPrecio} faltantes sin precio actual. El costo mostrado incluye sólo faltantes con precio.</p>}
-            <div className="card" style={{ padding: 18, marginBottom: 18, background: '#f7faf9' }}><strong>¿Qué significa la diferencia?</strong><p style={{ margin: '8px 0 0' }}>Partimos de lo contado al inicio, sumamos entradas, restamos otras salidas y el consumo registrado por producción. Eso da el <strong>stock que debería quedar</strong>. Lo comparamos con el conteo final. Una diferencia es una señal para revisar; puede deberse a uso extra, movimientos faltantes o errores de carga.</p></div>
+            <div className="card" style={{ padding: 18, marginBottom: 18, borderLeft: `4px solid ${coberturaCompleta ? '#047857' : '#a16207'}` }}>
+                <strong>Personalizados del Sheet: {data.personalizados.paquetes} paquetes de {data.personalizados.pedidos} pedidos</strong>
+                <p style={{ margin: '8px 0 0' }}>Se incluyen los entregados desde {data.personalizados.desde ?? '—'} hasta {data.personalizados.hasta ?? '—'}, según Fecha Entrega. Sus sabores y empaques se calculan con las fichas actuales. No se suman los paquetes cerrados que ya figuran en producción.</p>
+                {!coberturaCompleta && <p role="status" style={{ marginBottom: 0, color: '#92400e' }}>Comparación parcial: {data.personalizados.faltantes.join('; ')}. Los insumos no identificados pueden cambiar las diferencias.</p>}
+                {data.personalizados.sinConteo.length > 0 && <p style={{ marginBottom: 0 }}>Sin ambos conteos físicos: {data.personalizados.sinConteo.join(', ')}.</p>}
+            </div>
+            <div className="card" style={{ padding: 18, marginBottom: 18, background: '#f7faf9' }}><strong>¿Qué significa la diferencia?</strong><p style={{ margin: '8px 0 0' }}>Partimos de lo contado al inicio, sumamos entradas y restamos otras salidas, el consumo por lotes y el estimado de personalizados. Eso da el <strong>stock que debería quedar</strong>. Lo comparamos con el conteo final. Una diferencia puede deberse a uso extra, movimientos faltantes o errores de carga.</p></div>
             <div className="card" style={{ padding: 20, marginBottom: 18 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}><div><h3 style={{ margin: 0 }}>2. Revisá los insumos</h3><small>{filas.length} resultados · 10 por página</small></div><button type="button" className="btn btn-secondary btn-sm" onClick={descargar}>Descargar CSV</button></div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '16px 0' }}><input aria-label="Buscar insumo" className="form-input" placeholder="Buscar insumo…" value={busqueda} onChange={e => { setBusqueda(e.target.value); setPagina(1) }} style={{ flex: '1 1 220px' }} />
                     <select aria-label="Filtrar resultado" className="form-select" value={filtro} onChange={e => { setFiltro(e.target.value as Estado | 'todos'); setPagina(1) }} style={{ flex: '0 1 240px' }}><option value="todos">Todos los resultados</option><option value="faltante">Faltantes</option><option value="sobrante">Sobrantes</option><option value="coincide">Coinciden</option><option value="revisar">Revisar movimientos</option></select></div>
-                <div style={{ overflowX: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Insumo</th><th>Uso por producción</th><th>Uso según conteos</th><th>Diferencia</th><th>Resultado</th><th></th></tr></thead><tbody>{visibles.map(f => <tr key={f.insumoId}><td><strong>{f.nombre}</strong><br/><small>{f.unidad}</small></td><td>{numero(f.usoRegistrado)} {f.unidad}</td><td>{numero(f.usoSegunConteo)} {f.unidad}</td><td style={{ color: color[f.estado], fontWeight: 700 }}>{f.diferencia > 0 ? '+' : ''}{numero(f.diferencia)} {f.unidad}</td><td><span style={{ color: color[f.estado], fontWeight: 700 }}>{etiqueta[f.estado]}</span></td><td><button type="button" className="btn btn-ghost btn-sm" onClick={() => setInsumoElegido(f.insumoId)}>Ver cálculo</button></td></tr>)}</tbody></table></div>
+                <div style={{ overflowX: 'auto' }}><table className="table" style={{ width: '100%' }}><thead><tr><th>Insumo</th><th>Paquetes de stock</th><th>Personalizados</th><th>Uso esperado</th><th>Uso según conteos</th><th>Diferencia</th><th>Resultado</th><th></th></tr></thead><tbody>{visibles.map(f => <tr key={f.insumoId}><td><strong>{f.nombre}</strong><br/><small>{f.unidad}</small></td><td>{numero(f.usoRegistrado)} {f.unidad}</td><td>{numero(f.usoPersonalizados)} {f.unidad}</td><td><strong>{numero(f.usoEsperado)} {f.unidad}</strong></td><td>{numero(f.usoSegunConteo)} {f.unidad}</td><td style={{ color: color[f.estado], fontWeight: 700 }}>{f.diferencia > 0 ? '+' : ''}{numero(f.diferencia)} {f.unidad}</td><td><span style={{ color: color[f.estado], fontWeight: 700 }}>{!coberturaCompleta && f.estado === 'coincide' ? 'Coincide con datos disponibles' : etiqueta[f.estado]}</span></td><td><button type="button" className="btn btn-ghost btn-sm" onClick={() => setInsumoElegido(f.insumoId)}>Ver cálculo</button></td></tr>)}</tbody></table></div>
                 {!filas.length && <p>No hay insumos para este filtro o no fueron contados en ambos extremos.</p>}
                 {totalPaginas > 1 && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'end', gap: 10, marginTop: 14 }}><button className="btn btn-secondary btn-sm" disabled={paginaActual === 1} onClick={() => setPagina(v => v - 1)}>Anterior</button><span>Página {paginaActual} de {totalPaginas}</span><button className="btn btn-secondary btn-sm" disabled={paginaActual === totalPaginas} onClick={() => setPagina(v => v + 1)}>Siguiente</button></div>}
             </div>
             {elegido && <div className="card" style={{ padding: 20, marginBottom: 18 }}><h3 style={{ marginTop: 0 }}>3. Así se calculó: {elegido.nombre}</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                {[[`Había al inicio`, elegido.inicio], ['Entradas registradas', elegido.entradas], ['Otras salidas', -elegido.salidasOtras], ['Uso por lotes', -elegido.usoRegistrado], ['Debería quedar', elegido.stockEsperado], ['Se contó al final', elegido.fin]].map(([titulo, valor]) => <div key={titulo} style={{ padding: 14, borderRadius: 10, background: 'var(--color-gray-50)' }}><small>{titulo}</small><strong style={{ display: 'block', marginTop: 5 }}>{numero(Number(valor))} {elegido.unidad}</strong></div>)}</div>
+                {[[`Había al inicio`, elegido.inicio], ['Entradas registradas', elegido.entradas], ['Otras salidas', -elegido.salidasOtras], ['Uso por lotes', -elegido.usoRegistrado], ['Uso por personalizados', -elegido.usoPersonalizados], ['Debería quedar', elegido.stockEsperado], ['Se contó al final', elegido.fin]].map(([titulo, valor]) => <div key={titulo} style={{ padding: 14, borderRadius: 10, background: 'var(--color-gray-50)' }}><small>{titulo}</small><strong style={{ display: 'block', marginTop: 5 }}>{numero(Number(valor))} {elegido.unidad}</strong></div>)}</div>
                 <p style={{ marginBottom: 0 }}>Diferencia: <strong style={{ color: color[elegido.estado] }}>{elegido.diferencia > 0 ? '+' : ''}{numero(elegido.diferencia)} {elegido.unidad}</strong>. {etiqueta[elegido.estado]}. {elegido.estado === 'faltante' && elegido.costoDiferencia !== null && `Valor estimado con precio actual: ${dinero(elegido.costoDiferencia)}.`} {elegido.movimientosNoReconocidos > 0 && `${elegido.movimientosNoReconocidos} movimientos requieren revisión de tipo o cantidad.`}</p>
             </div>}
             {data.sinPar.length > 0 && <div className="card" style={{ padding: 18, marginBottom: 18 }}><strong>Insumos sin comparación</strong><p style={{ marginBottom: 0 }}>No aparecen en ambos conteos: {data.sinPar.join(', ')}. Para compararlos, incluilos en el próximo conteo.</p></div>}
-            <p style={{ color: 'var(--color-gray-600)' }}>Se usan las fechas y horas exactas de los conteos y los movimientos registrados entre ellos. Los ajustes de conteo no se suman. El uso por lotes refleja lo descontado del stock en su momento; puede diferir del reporte teórico recalculado con fichas actuales. Ningún resultado modifica el stock.</p>
+            <p style={{ color: 'var(--color-gray-600)' }}>Los lotes usan movimientos con fecha y hora; los personalizados usan Fecha Entrega como aproximación del día de elaboración, desde el día siguiente al conteo inicial hasta el día del conteo final. El Sheet no aporta hora de elaboración, por lo que los pedidos de los días límite pueden no coincidir exactamente con la hora del conteo. Las cantidades de personalizados se recalculan con las fichas actuales. Ningún resultado modifica el stock.</p>
         </>}
     </section>
 }

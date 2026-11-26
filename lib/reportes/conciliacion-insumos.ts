@@ -20,9 +20,11 @@ export function calcularConciliacionInsumos(
     inicial: ConteoConciliacion,
     final: ConteoConciliacion,
     movimientos: MovimientoConciliacion[],
+    personalizados: { id: string; cantidad: number }[] = [],
 ) {
     const inicio = new Map(inicial.detalles.map(detalle => [detalle.insumoId, detalle]))
     const cierre = new Map(final.detalles.map(detalle => [detalle.insumoId, detalle]))
+    const consumoPersonalizados = new Map(personalizados.map(item => [item.id, item.cantidad]))
     const movimientosPorInsumo = new Map<string, MovimientoConciliacion[]>()
     for (const movimiento of movimientos) {
         if (movimiento.detalleConteo) continue
@@ -44,17 +46,21 @@ export function calcularConciliacionInsumos(
             else if (['salida', 'merma'].includes(movimiento.tipo)) salidasOtras += movimiento.cantidad
             else movimientosNoReconocidos++
         }
-        const stockEsperado = redondear(apertura.cantidadContada + entradas - salidasOtras - usoRegistrado)
+        const usoPersonalizados = consumoPersonalizados.get(id) ?? 0
+        const usoEsperado = redondear(usoRegistrado + usoPersonalizados)
+        const stockEsperado = redondear(apertura.cantidadContada + entradas - salidasOtras - usoEsperado)
         const usoSegunConteo = redondear(apertura.cantidadContada + entradas - salidasOtras - fin.cantidadContada)
-        const diferencia = redondear(usoSegunConteo - usoRegistrado)
+        const diferencia = redondear(usoSegunConteo - usoEsperado)
         const costoDiferencia = apertura.insumo.precioUnitario > 0
             ? redondear(Math.max(0, diferencia) * apertura.insumo.precioUnitario) : null
-        const estado = movimientosNoReconocidos || usoSegunConteo < -tolerancia || usoRegistrado < -tolerancia ? 'revisar'
+        const estado = movimientosNoReconocidos || usoSegunConteo < -tolerancia || usoRegistrado < -tolerancia
+            || !Number.isFinite(usoPersonalizados) || usoPersonalizados < 0 ? 'revisar'
             : diferencia > tolerancia ? 'faltante' : diferencia < -tolerancia ? 'sobrante' : 'coincide'
         return { insumoId: id, nombre: apertura.insumo.nombre, unidad: apertura.insumo.unidadMedida,
             precioActual: apertura.insumo.precioUnitario, inicio: apertura.cantidadContada,
             entradas: redondear(entradas), salidasOtras: redondear(salidasOtras),
-            usoRegistrado: redondear(usoRegistrado), usoSegunConteo, stockEsperado,
+            usoRegistrado: redondear(usoRegistrado), usoPersonalizados: redondear(usoPersonalizados),
+            usoEsperado, usoSegunConteo, stockEsperado,
             fin: fin.cantidadContada, diferencia, costoDiferencia, estado, movimientosNoReconocidos }
     }).sort((a, b) => {
         const orden: Record<string, number> = { revisar: 0, faltante: 1, sobrante: 2, coincide: 3 }
