@@ -12,7 +12,7 @@ const diasEntre = (desde: string, hasta: string) => {
     return (Date.UTC(anioHasta, mesHasta - 1, diaHasta) - Date.UTC(anioDesde, mesDesde - 1, diaDesde)) / 86_400_000 + 1
 }
 
-export type SeccionReporte = 'dashboard' | 'pedidos' | 'produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
+export type SeccionReporte = 'dashboard' | 'pedidos' | 'produccion' | 'costos-produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
 
 interface Ubicacion {
     id: string
@@ -43,6 +43,7 @@ const SECCIONES: { key: SeccionReporte; label: string; icon: string }[] = [
     { key: 'pedidos', label: 'Pedidos e insumos', icon: '📦' },
     { key: 'dashboard', label: 'Dashboard ERP', icon: '📊' },
     { key: 'produccion', label: 'Producción', icon: '🏭' },
+    { key: 'costos-produccion', label: 'Costos de producción', icon: '🧾' },
     { key: 'ventas', label: 'Ventas ERP', icon: '💰' },
     { key: 'costos', label: 'Costos ERP', icon: '📉' },
     { key: 'desperdicio', label: 'Desperdicio', icon: '🗑️' },
@@ -78,8 +79,8 @@ export default function PeriodoSelector({
     const [customHasta, setCustomHasta] = useState(fechaInput(rango.hasta))
     const errorRango = customDesde && customHasta && customDesde > customHasta
         ? 'La fecha Desde debe ser anterior o igual a Hasta.'
-        : activeSection === 'pedidos' && customDesde && customHasta && diasEntre(customDesde, customHasta) > 366
-            ? 'Pedidos e insumos admite períodos de hasta 366 días.' : ''
+        : (activeSection === 'pedidos' || activeSection === 'costos-produccion') && customDesde && customHasta && diasEntre(customDesde, customHasta) > 366
+            ? 'Este reporte admite períodos de hasta 366 días.' : ''
 
     const cambiarGranularidad = (valor: GranularidadTemporal) => {
         if (valor === 'rango' && granularidad !== 'rango') {
@@ -233,10 +234,10 @@ export default function PeriodoSelector({
                     Mostrando datos para: <strong>{rango.label}</strong>
                 </div>
 
-                {activeSection === 'pedidos' && granularidad !== 'rango' && <button type="button" className="btn btn-secondary btn-sm"
+                {(activeSection === 'pedidos' || activeSection === 'costos-produccion') && granularidad !== 'rango' && <button type="button" className="btn btn-secondary btn-sm"
                     onClick={() => cambiarGranularidad('rango')} disabled={loading}>Elegir rango de fechas</button>}
 
-                {activeSection !== 'pedidos' && <div style={{
+                {activeSection !== 'pedidos' && activeSection !== 'costos-produccion' && <div style={{
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: 'var(--space-2)',
@@ -269,9 +270,9 @@ export default function PeriodoSelector({
             </div>
 
             {granularidad === 'rango' && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                <label>Desde{activeSection === 'pedidos' ? ' (Fecha Entrega)' : ''}<input type="date" className="form-input"
+                <label>Desde{activeSection === 'pedidos' ? ' (Fecha Entrega)' : activeSection === 'costos-produccion' ? ' (Fecha de producción)' : ''}<input type="date" className="form-input"
                     value={customDesde} onChange={e => setCustomDesde(e.target.value)} disabled={loading} /></label>
-                <label>Hasta{activeSection === 'pedidos' ? ' (Fecha Entrega)' : ''}<input type="date" className="form-input"
+                <label>Hasta{activeSection === 'pedidos' ? ' (Fecha Entrega)' : activeSection === 'costos-produccion' ? ' (Fecha de producción)' : ''}<input type="date" className="form-input"
                     value={customHasta} onChange={e => setCustomHasta(e.target.value)} disabled={loading} min={customDesde || undefined} /></label>
                 {errorRango && <span role="alert" style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>{errorRango}</span>}
             </div>}

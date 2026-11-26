@@ -19,6 +19,7 @@ import DesperdicioSection from './sections/DesperdicioSection'
 import PerformanceSection from './sections/PerformanceSection'
 import CajaSection from './sections/CajaSection'
 import ConsumoPedidosSection from './sections/ConsumoPedidosSection'
+import CostosProduccionSection from './sections/CostosProduccionSection'
 
 import { exportReportToExcel } from './utils/exportUtils'
 import { useSession } from 'next-auth/react'
@@ -110,6 +111,7 @@ export default function ReportesPage() {
     const [pedidosOrigen, setPedidosOrigen] = useState('')
     const [pedidosModalidad, setPedidosModalidad] = useState('')
     const [pedidosRevision, setPedidosRevision] = useState(0)
+    const [costosProduccionRevision, setCostosProduccionRevision] = useState(0)
 
     const [drillDown, setDrillDown] = useState<{
         tipo: 'pedidos' | 'gastos' | 'lotes',
@@ -288,6 +290,13 @@ export default function ReportesPage() {
                 const res = await fetch(`/api/reportes/consumo-pedidos?${query}`)
                 if (res.ok) exportReportToExcel(await res.json(), 'pedidos-insumos', mesTag, anioTag)
             } catch (err) { console.error('Error exporting pedidos e insumos:', err) }
+        } else if (activeSection === 'costos-produccion') {
+            try {
+                const query = new URLSearchParams({ desde: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(rangoFechas.desde),
+                    hasta: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(rangoFechas.hasta), ubicacionId })
+                const res = await fetch(`/api/reportes/costos-produccion?${query}`)
+                if (res.ok) exportReportToExcel(await res.json(), 'costos-produccion', mesTag, anioTag)
+            } catch (err) { console.error('Error exporting costos de producción:', err) }
         } else if (activeSection === 'desperdicio') {
             try {
                 const res = await fetch(`/api/reportes/desperdicio?${params}`)
@@ -330,7 +339,7 @@ export default function ReportesPage() {
                 }}
                 onGranularidadChange={setGranularidad} onRangoChange={setRangoFechas}
                 onUbicacionChange={setUbicacionId} onSectionChange={setActiveSection}
-                onRefresh={() => activeSection === 'pedidos' ? setPedidosRevision(valor => valor + 1) : fetchData(true)} onExport={handleExport}
+                onRefresh={() => activeSection === 'pedidos' ? setPedidosRevision(valor => valor + 1) : activeSection === 'costos-produccion' ? setCostosProduccionRevision(valor => valor + 1) : fetchData(true)} onExport={handleExport}
                 onOpenSettings={() => setIsSettingsOpen(true)}
             />
 
@@ -355,6 +364,10 @@ export default function ReportesPage() {
                             userPrefs={userPrefs}
                             onDrillDown={handleDrillDown}
                         />
+                    )}
+
+                    {activeSection === 'costos-produccion' && (
+                        <CostosProduccionSection rango={rangoFechas} ubicacionId={ubicacionId} revision={costosProduccionRevision} />
                     )}
 
                     {activeSection === 'ventas' && (

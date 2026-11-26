@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import type { calcularConsumoPedidos } from '@/lib/reportes/consumo-pedidos'
 import type { calcularProductMix } from '@/lib/reportes/product-mix'
 import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
+import type { calcularCostosProduccion } from '@/lib/reportes/costos-produccion'
 
 /**
  * Exporta reportes a Excel con formato profesional.
@@ -9,7 +10,7 @@ import type { ReportePedidosOnline } from '@/lib/reportes/pedidos-online'
  */
 export async function exportReportToExcel(
     data: any,
-    tipo: 'economico' | 'produccion' | 'ventas' | 'costos' | 'pedidos-insumos' | 'desperdicio' | 'performance' | 'caja',
+    tipo: 'economico' | 'produccion' | 'costos-produccion' | 'ventas' | 'costos' | 'pedidos-insumos' | 'desperdicio' | 'performance' | 'caja',
     mes: string,
     anio: string
 ) {
@@ -21,6 +22,9 @@ export async function exportReportToExcel(
             break
         case 'produccion':
             exportProduccion(wb, data, mes, anio)
+            break
+        case 'costos-produccion':
+            exportCostosProduccion(wb, data)
             break
         case 'ventas':
             exportVentas(wb, data, mes, anio)
@@ -43,6 +47,56 @@ export async function exportReportToExcel(
     }
 
     XLSX.writeFile(wb, `Reporte_SantaCatalina_${tipo}_${mes}_${anio}.xlsx`)
+}
+
+function exportCostosProduccion(wb: XLSX.WorkBook, data: ReturnType<typeof calcularCostosProduccion> & { filtros: { desde: string; hasta: string } }) {
+    const r = data.resumen
+    const resumen = XLSX.utils.aoa_to_sheet([
+        ['Costos de producción', `${data.filtros.desde} a ${data.filtros.hasta}`],
+        ['Lotes confirmados', r.lotes], ['Lotes en producción o anulados', r.lotesExcluidos],
+        ['Paquetes producidos', r.paquetes], ['Paquetes buenos', r.buenos], ['Paquetes rechazados', r.rechazados],
+        ['Costo teórico identificado', r.costoIdentificado], ['Lotes pendientes', r.lotesPendientes],
+        ['Cobertura', r.costoCompleto ? 'Completa según fichas cargadas' : 'Parcial'],
+        ['Criterio', 'Fecha de producción; paquetes brutos incluidos rechazos; fichas, mermas y precios vigentes.'],
+        ['Alcance', 'Estimación, no representa compras, stock físico medido ni egresos de Caja.'],
+    ])
+    setColumnWidths(resumen, [36, 95])
+    XLSX.utils.book_append_sheet(wb, resumen, 'Resumen')
+    const paquetes = XLSX.utils.aoa_to_sheet([
+        ['Producto', 'Código', 'Presentación', 'Lotes', 'Producidos', 'Buenos', 'Rechazados', 'Costo identificado', 'Cobertura'],
+        ...data.porProducto.map(p => [p.producto, p.codigo, p.presentacion, p.lotes, p.paquetes,
+            p.buenos, p.rechazados, p.costoIdentificado, p.costoCompleto ? 'Completa' : 'Parcial']),
+    ])
+    setColumnWidths(paquetes, [35, 16, 17, 12, 14, 14, 14, 22, 18])
+    XLSX.utils.book_append_sheet(wb, paquetes, 'Paquetes')
+    const insumos = XLSX.utils.aoa_to_sheet([
+        ['Insumo', 'Cantidad teórica', 'Unidad', 'Precio actual', 'Costo identificado', 'Precio válido'],
+        ...data.porInsumo.map(i => [i.nombre, i.cantidad, i.unidad, i.precioValido ? i.precioUnitario : null,
+            i.costoIdentificado, i.precioValido ? 'Sí' : 'No']),
+    ])
+    setColumnWidths(insumos, [35, 23, 14, 18, 22, 16])
+    XLSX.utils.book_append_sheet(wb, insumos, 'Insumos')
+    const detalle = XLSX.utils.aoa_to_sheet([
+        ['Producto', 'Presentación', 'Paquetes', 'Insumo', 'Cantidad teórica', 'Unidad', 'Costo identificado', 'Cobertura'],
+        ...data.porProducto.flatMap(p => p.insumos.map(i => [p.producto, p.presentacion, p.paquetes,
+            i.nombre, i.cantidad, i.unidad, i.costoIdentificado, p.costoCompleto ? 'Completa' : 'Parcial'])),
+        ...data.porInsumo.map(i => ['TOTAL UTILIZADO', null, null, i.nombre, i.cantidad, i.unidad, i.costoIdentificado, null]),
+    ])
+    setColumnWidths(detalle, [35, 17, 14, 35, 22, 14, 22, 18])
+    XLSX.utils.book_append_sheet(wb, detalle, 'Detalle por paquete')
+    const dias = XLSX.utils.aoa_to_sheet([
+        ['Fecha de producción', 'Lotes', 'Producidos', 'Rechazados', 'Costo identificado', 'Cobertura'],
+        ...data.porDia.map(d => [d.fecha, d.lotes, d.paquetes, d.rechazados,
+            d.costoIdentificado, d.costoCompleto ? 'Completa' : 'Parcial']),
+    ])
+    setColumnWidths(dias, [23, 14, 16, 16, 24, 18])
+    XLSX.utils.book_append_sheet(wb, dias, 'Por fecha')
+    const pendientes = XLSX.utils.aoa_to_sheet([
+        ['Fecha', 'Lote', 'Producto', 'Paquetes', 'Motivos'],
+        ...data.pendientes.map(p => [p.fecha, p.loteId, p.producto, p.paquetes, p.motivos.join('; ')]),
+    ])
+    setColumnWidths(pendientes, [16, 30, 35, 14, 75])
+    XLSX.utils.book_append_sheet(wb, pendientes, 'Pendientes')
 }
 
 function exportPedidosInsumos(wb: XLSX.WorkBook, data: ReturnType<typeof calcularConsumoPedidos> & { filtros: { desde: string; hasta: string }; porSaborElegido: ReportePedidosOnline['porSaborElegido']; productMix: ReturnType<typeof calcularProductMix> }) {

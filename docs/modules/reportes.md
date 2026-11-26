@@ -364,3 +364,9 @@ prisma.lote.aggregate({
 
 *Última actualización: 2 de abril de 2026*
 *Módulo analizado por: Análisis técnico automatizado*
+
+# Costos teóricos de producción de fábrica
+
+La pestaña **Costos de producción** de `/reportes` consulta `GET /api/reportes/costos-produccion` con permiso `permisoReportes`. Filtra por rango inclusivo de `Lote.fechaProduccion` (día de producción guardado a medianoche UTC) y, opcionalmente, por fábrica. Una sede que no sea `FABRICA` se rechaza. El rango máximo es de 366 días. No lee el Sheet de pedidos: la fuente es el registro diario de lotes del ERP.
+
+Incluye lotes confirmados y excluye `en_produccion` y `cancelado`. Para estimar insumos cuenta `unidadesProducidas` brutas, incluidos los paquetes rechazados, conforme al cálculo de consumo de Producción. Informa por separado paquetes buenos y rechazados. Identifica la presentación base con la primera entrada de `distribucion`, o con un movimiento de producción inequívoco, o con la única presentación del producto; si no se puede identificar, marca el lote pendiente. Aplica las `FichaTecnica` vigentes de esa presentación con el mismo motor de cantidad neta, tipo de consumo y merma que Producción, multiplicado por los paquetes brutos; valora con `Insumo.precioUnitario` vigente. La vista y el Excel muestran producción por producto/presentación, detalle y total de cada insumo, evolución diaria y lotes pendientes. El costo se identifica parcialmente cuando falta receta, precio o dato válido, y se señala la cobertura. Este cálculo histórico cambia al editar fichas o precios; no es consumo físico medido, compra, asiento contable, egreso de Caja ni un descuento nuevo de stock.
