@@ -20,6 +20,7 @@ import PerformanceSection from './sections/PerformanceSection'
 import CajaSection from './sections/CajaSection'
 import ConsumoPedidosSection from './sections/ConsumoPedidosSection'
 import CostosProduccionSection from './sections/CostosProduccionSection'
+import ControlInsumosSection from './sections/ControlInsumosSection'
 
 import { exportReportToExcel } from './utils/exportUtils'
 import { useSession } from 'next-auth/react'
@@ -338,7 +339,12 @@ export default function ReportesPage() {
                     handleUpdatePrefs({ ...userPrefs, incluirTodo: val })
                 }}
                 onGranularidadChange={setGranularidad} onRangoChange={setRangoFechas}
-                onUbicacionChange={setUbicacionId} onSectionChange={setActiveSection}
+                onUbicacionChange={setUbicacionId} onSectionChange={section => {
+                    if (section === 'control-insumos' && !metadata.ubicaciones.some(u => u.id === ubicacionId && u.tipo === 'FABRICA')) {
+                        setUbicacionId(metadata.ubicaciones.find(u => u.tipo === 'FABRICA')?.id ?? '')
+                    }
+                    setActiveSection(section)
+                }}
                 onRefresh={() => activeSection === 'pedidos' ? setPedidosRevision(valor => valor + 1) : activeSection === 'costos-produccion' ? setCostosProduccionRevision(valor => valor + 1) : fetchData(true)} onExport={handleExport}
                 onOpenSettings={() => setIsSettingsOpen(true)}
             />
@@ -369,6 +375,8 @@ export default function ReportesPage() {
                     {activeSection === 'costos-produccion' && (
                         <CostosProduccionSection rango={rangoFechas} ubicacionId={ubicacionId} revision={costosProduccionRevision} />
                     )}
+
+                    {activeSection === 'control-insumos' && <ControlInsumosSection ubicacionId={ubicacionId} />}
 
                     {activeSection === 'ventas' && (
                         <VentasSection rango={rangoFechas} ubicacionId={ubicacionId} incluirTodo={incluirTodosLosEstados} />

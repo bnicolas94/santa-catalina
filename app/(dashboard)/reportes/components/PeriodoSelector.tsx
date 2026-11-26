@@ -12,7 +12,7 @@ const diasEntre = (desde: string, hasta: string) => {
     return (Date.UTC(anioHasta, mesHasta - 1, diaHasta) - Date.UTC(anioDesde, mesDesde - 1, diaDesde)) / 86_400_000 + 1
 }
 
-export type SeccionReporte = 'dashboard' | 'pedidos' | 'produccion' | 'costos-produccion' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
+export type SeccionReporte = 'dashboard' | 'pedidos' | 'produccion' | 'costos-produccion' | 'control-insumos' | 'ventas' | 'costos' | 'desperdicio' | 'performance' | 'caja'
 
 interface Ubicacion {
     id: string
@@ -44,6 +44,7 @@ const SECCIONES: { key: SeccionReporte; label: string; icon: string }[] = [
     { key: 'dashboard', label: 'Dashboard ERP', icon: '📊' },
     { key: 'produccion', label: 'Producción', icon: '🏭' },
     { key: 'costos-produccion', label: 'Costos de producción', icon: '🧾' },
+    { key: 'control-insumos', label: 'Control de insumos', icon: '⚖️' },
     { key: 'ventas', label: 'Ventas ERP', icon: '💰' },
     { key: 'costos', label: 'Costos ERP', icon: '📉' },
     { key: 'desperdicio', label: 'Desperdicio', icon: '🗑️' },
@@ -127,11 +128,11 @@ export default function PeriodoSelector({
                         style={{ width: 140 }}
                         disabled={loading}
                     >
-                        <option value="">Todas las Sedes</option>
-                        {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                        {activeSection !== 'control-insumos' && <option value="">Todas las Sedes</option>}
+                        {ubicaciones.filter(u => activeSection !== 'control-insumos' || u.tipo === 'FABRICA').map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                     </select>
 
-                    <select
+                    {activeSection !== 'control-insumos' && <select
                         className="form-select"
                         value={granularidad}
                         onChange={e => cambiarGranularidad(e.target.value as GranularidadTemporal)}
@@ -142,9 +143,9 @@ export default function PeriodoSelector({
                         <option value="semana">Por Semana</option>
                         <option value="mes">Por Mes</option>
                         <option value="rango">Rango de fechas</option>
-                    </select>
+                    </select>}
 
-                    {granularidad === 'mes' && (
+                    {activeSection !== 'control-insumos' && granularidad === 'mes' && (
                         <>
                             <select
                                 className="form-select"
@@ -167,7 +168,7 @@ export default function PeriodoSelector({
                         </>
                     )}
 
-                    {granularidad === 'dia' && (
+                    {activeSection !== 'control-insumos' && granularidad === 'dia' && (
                         <input 
                             type="date"
                             className="form-input"
@@ -178,7 +179,7 @@ export default function PeriodoSelector({
                         />
                     )}
 
-                    {granularidad === 'semana' && (
+                    {activeSection !== 'control-insumos' && granularidad === 'semana' && (
                         <input 
                             type="date"
                             className="form-input"
@@ -190,7 +191,7 @@ export default function PeriodoSelector({
                         />
                     )}
 
-                    <button
+                    {activeSection !== 'control-insumos' && <button
                         className="btn btn-ghost btn-sm"
                         onClick={onRefresh}
                         disabled={loading}
@@ -198,18 +199,18 @@ export default function PeriodoSelector({
                         style={{ padding: '4px 8px', fontSize: '18px' }}
                     >
                         🔄
-                    </button>
+                    </button>}
 
-                    <button
+                    {activeSection !== 'control-insumos' && <button
                         className="btn btn-ghost btn-sm"
                         onClick={onOpenSettings}
                         title="Configurar"
                         style={{ padding: '4px 8px', fontSize: '18px' }}
                     >
                         ⚙️
-                    </button>
+                    </button>}
 
-                    <button
+                    {activeSection !== 'control-insumos' && <button
                         className="btn btn-secondary btn-sm"
                         onClick={onExport}
                         disabled={loading}
@@ -217,7 +218,7 @@ export default function PeriodoSelector({
                         style={{ padding: '4px 12px' }}
                     >
                         📤 Excel
-                    </button>
+                    </button>}
                 </div>
             </div>
 
@@ -231,13 +232,13 @@ export default function PeriodoSelector({
                 flexWrap: 'wrap'
             }}>
                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)', fontStyle: 'italic' }}>
-                    Mostrando datos para: <strong>{rango.label}</strong>
+                    {activeSection === 'control-insumos' ? 'El período se define con los dos conteos físicos elegidos abajo.' : <>Mostrando datos para: <strong>{rango.label}</strong></>}
                 </div>
 
                 {(activeSection === 'pedidos' || activeSection === 'costos-produccion') && granularidad !== 'rango' && <button type="button" className="btn btn-secondary btn-sm"
                     onClick={() => cambiarGranularidad('rango')} disabled={loading}>Elegir rango de fechas</button>}
 
-                {activeSection !== 'pedidos' && activeSection !== 'costos-produccion' && <div style={{
+                {activeSection !== 'pedidos' && activeSection !== 'costos-produccion' && activeSection !== 'control-insumos' && <div style={{
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: 'var(--space-2)',
@@ -269,7 +270,7 @@ export default function PeriodoSelector({
                 </div>}
             </div>
 
-            {granularidad === 'rango' && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+            {activeSection !== 'control-insumos' && granularidad === 'rango' && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
                 <label>Desde{activeSection === 'pedidos' ? ' (Fecha Entrega)' : activeSection === 'costos-produccion' ? ' (Fecha de producción)' : ''}<input type="date" className="form-input"
                     value={customDesde} onChange={e => setCustomDesde(e.target.value)} disabled={loading} /></label>
                 <label>Hasta{activeSection === 'pedidos' ? ' (Fecha Entrega)' : activeSection === 'costos-produccion' ? ' (Fecha de producción)' : ''}<input type="date" className="form-input"
@@ -315,9 +316,9 @@ export default function PeriodoSelector({
             </div>
             
             {/* Range Label Feedback */}
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
+            {activeSection !== 'control-insumos' && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gray-600)', marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
                 Mostrando datos para: <strong>{rango.label}</strong>
-            </div>
+            </div>}
         </div>
     )
 }

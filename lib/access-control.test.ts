@@ -99,6 +99,14 @@ test('costos de producción exige permiso de Reportes', () => {
     assert.equal(canAccessPath(path, {}), false)
 })
 
+test('control de insumos exige permiso de Reportes', () => {
+    const path = '/api/reportes/conciliacion-insumos'
+    assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+    assert.equal(canAccessPath(path, { permisos: { permisoReportes: true } }), true)
+    assert.equal(canAccessPath(path, { permisos: { permisoStock: true } }), false)
+    assert.equal(canAccessPath(path, {}), false)
+})
+
 test('las recetas de Elegidos se reservan a Stock o Producción', () => {
     const path = '/api/productos/ele/recetas-elegidos'
     assert.equal(canAccessPath(path, { permisos: { permisoStock: true } }), true)
