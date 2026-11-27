@@ -230,6 +230,7 @@ model Proveedor {
   movimientosStock MovimientoStock[]
   compras          Compra[]
   insumosAsociados InsumoProveedor[]
+  ordenesCompra    OrdenCompra[]
 
   @@map("proveedores")
 }
@@ -333,6 +334,7 @@ model Insumo {
   detallesConteo          ConteoInsumoDetalle[]
   detallesReporteSucursal ReporteStockSucursalDetalle[]
   proveedores             InsumoProveedor[]
+  ordenesCompra            OrdenCompraDetalle[]
 
   @@map("insumos")
 }
@@ -438,6 +440,7 @@ model Ubicacion {
   conteosInsumo         ConteoInsumo[]
   reportesStockSucursal ReporteStockSucursal[]
   compras               Compra[]
+  ordenesCompra         OrdenCompra[]
   cajas                 SaldoCaja[]
   integracionesSheet    IntegracionSheetSucursal[]
   movimientosSheetStock MovimientoSheetStock[]
@@ -552,6 +555,44 @@ model Compra {
   @@index([estadoPago])
   @@index([proveedorId, numeroFactura])
   @@map("compras")
+}
+
+model OrdenCompra {
+  id                 String               @id @default(uuid())
+  numero             Int                  @unique @default(autoincrement())
+  fechaLocal         String               @map("fecha_local")
+  proveedorId        String?              @map("id_proveedor")
+  proveedorNombre    String               @map("proveedor_nombre")
+  proveedorContacto  String?              @map("proveedor_contacto")
+  proveedorTelefono  String?              @map("proveedor_telefono")
+  ubicacionId        String?              @map("id_ubicacion")
+  ubicacionNombre    String?              @map("ubicacion_nombre")
+  observaciones      String?
+  creadoPorNombre     String               @map("creado_por_nombre")
+  createdAt          DateTime             @default(now())
+  proveedor          Proveedor?           @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  ubicacion          Ubicacion?           @relation(fields: [ubicacionId], references: [id], onDelete: SetNull)
+  detalles           OrdenCompraDetalle[]
+
+  @@index([fechaLocal])
+  @@index([proveedorId, fechaLocal])
+  @@map("ordenes_compra")
+}
+
+model OrdenCompraDetalle {
+  id            String      @id @default(uuid())
+  ordenId       String      @map("id_orden")
+  insumoId      String?     @map("id_insumo")
+  insumoNombre  String      @map("insumo_nombre")
+  unidadMedida  String      @map("unidad_medida")
+  cantidad      Float
+  observaciones String?
+  posicion      Int
+  orden         OrdenCompra @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  insumo        Insumo?     @relation(fields: [insumoId], references: [id], onDelete: SetNull)
+
+  @@unique([ordenId, posicion])
+  @@map("ordenes_compra_detalles")
 }
 
 model StockInsumo {

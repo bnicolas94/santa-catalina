@@ -92,6 +92,13 @@ const menuItems: MenuItem[] = [
         permissionKey: 'permisoCompras',
     },
     {
+        label: 'Órdenes de compra',
+        href: '/compras/ordenes',
+        icon: '📝',
+        roles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'],
+        permissionKey: 'permisoCompras',
+    },
+    {
         label: 'Proveedores',
         href: '/proveedores',
         icon: '🚛',

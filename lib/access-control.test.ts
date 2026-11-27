@@ -254,6 +254,11 @@ test('permisoCompras habilita compras y proveedores sin abrir Caja', () => {
     const token = { rol: 'COMPRAS', permisos: { permisoCompras: true } }
     assert.equal(canAccessPath('/compras', token), true)
     assert.equal(canAccessPath('/api/compras/cuenta-corriente', token), true)
+    for (const path of ['/compras/ordenes', '/compras/ordenes/orden-1', '/api/compras/ordenes', '/api/compras/ordenes/catalogo', '/api/compras/ordenes/orden-1']) {
+        assert.equal(canAccessPath(path, token), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoStock: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
     assert.equal(canAccessPath('/proveedores', token), true)
     assert.equal(canAccessPath('/api/proveedores', token), true)
     for (const path of ['/proveedores/proveedor-1', '/api/proveedores/proveedor-1']) {

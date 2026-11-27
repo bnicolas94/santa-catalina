@@ -1,5 +1,20 @@
 # Módulo de Compras
 
+## Órdenes de compra
+
+`/compras/ordenes` permite emitir una lista de insumos por proveedor, con cantidades
+positivas (también decimales), sede de destino y observaciones. Los insumos asociados
+al proveedor aparecen como opciones predeterminadas; se puede mostrar todo el catálogo activo.
+La API `/api/compras/ordenes` valida proveedor e insumos activos y guarda cabecera y
+renglones de forma atómica. Asigna un número correlativo y la fecha local argentina.
+El historial es paginado y se puede filtrar por proveedor. La vista individual se
+puede imprimir. Cada orden conserva copias de los nombres del proveedor y los
+insumos, sus unidades y datos de contacto, incluso si se edita el catálogo después.
+Las órdenes emitidas no se editan ni se eliminan. No generan movimientos de stock,
+compras, gastos ni pagos; la factura efectiva se registra en el flujo habitual.
+Requieren `permisoCompras` o ADMIN en página y API. La migración
+`20261127120000_ordenes_compra` crea las dos tablas sin alterar compras anteriores.
+
 ## Modelo
 
 `Compra` es la cabecera de una operación con proveedor. Conserva el total, lo

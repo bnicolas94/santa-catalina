@@ -1,0 +1,42 @@
+.page { max-width: 1200px; margin: 0 auto; }
+.card { background: var(--color-white, white); border: 1px solid #dce1e7; border-radius: 12px; padding: 24px; margin: 20px 0; }
+.card h2 { margin: 0 0 18px; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.fields label, .row label, .notes, .historyHeader label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.check { display: flex; align-items: center; gap: 8px; margin: 16px 0; }
+.rows { display: grid; gap: 12px; margin: 18px 0; }
+.row { display: grid; grid-template-columns: minmax(220px, 2fr) minmax(100px, .7fr) minmax(180px, 1.5fr) auto; gap: 12px; align-items: end; }
+.notes { margin-top: 18px; }
+.actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.historyHeader { display: flex; justify-content: space-between; gap: 16px; align-items: end; }
+.historyRow { display: flex; justify-content: space-between; gap: 16px; align-items: center; border-top: 1px solid #e6e8eb; padding: 14px 0; }
+.historyRow div { display: flex; flex-direction: column; gap: 4px; }
+.historyRow span { color: #5b6470; font-size: .9rem; }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 16px; padding-top: 14px; }
+.error { color: #a01818; background: #fff1f1; padding: 12px; border-radius: 8px; }
+.printPage { max-width: 900px; margin: 0 auto; }
+.printActions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.sheet { color: #17212b; background: white; border: 1px solid #dce1e7; padding: 36px; min-height: 850px; }
+.sheetHeader { display: flex; justify-content: space-between; border-bottom: 3px solid #17212b; padding-bottom: 22px; }
+.sheetHeader h1 { margin: 0 0 4px; font-size: 2rem; }
+.sheetNumber { font-size: 2rem; font-weight: 700; text-align: right; }
+.sheetNumber small { display: block; font-size: .95rem; font-weight: 400; }
+.sheetMeta { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 24px 0; }
+.sheetMeta div { display: flex; flex-direction: column; gap: 3px; }
+.sheetMeta span { text-transform: uppercase; font-size: .75rem; letter-spacing: .08em; color: #596473; }
+.sheetMeta p { margin: 2px 0; }
+.table { border-collapse: collapse; width: 100%; }
+.table th, .table td { padding: 11px 9px; border: 1px solid #aeb6bf; text-align: left; vertical-align: top; }
+.table th { background: #e9edf1; }
+.table td:nth-child(3) { text-align: right; }
+.sheetNotes { margin-top: 24px; white-space: pre-wrap; }
+.signature { display: flex; justify-content: space-between; gap: 45px; margin-top: 100px; }
+.signature span { border-top: 1px solid #17212b; padding-top: 8px; min-width: 180px; }
+@media (max-width: 750px) { .fields, .row, .sheetMeta { grid-template-columns: 1fr; } .historyRow, .historyHeader { flex-direction: column; align-items: stretch; } .sheet { padding: 18px; overflow-x: auto; } }
+@media print {
+    .printActions { display: none; }
+    .printPage { max-width: none; margin: 0; }
+    .sheet { border: 0; padding: 0; min-height: 0; }
+    .table th { print-color-adjust: exact; }
+    .table tr { break-inside: avoid; }
+}

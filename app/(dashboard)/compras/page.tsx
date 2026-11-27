@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, Fragment } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { calcularFacturaConIva, cantidadGastoOpcional, detectarVariacionPrecio, IVA_GENERAL_PORCENTAJE, validarDescuentoFactura } from '@/lib/compras/validacion'
 import { filtrarFacturasGasto, paginaFacturasGasto } from '@/lib/compras/listado-gastos'
 
@@ -757,7 +758,7 @@ function ComprasContent() {
     return (
         <div>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1>🛒 Gestión de Compras</h1>
+                <div><h1>🛒 Gestión de Compras</h1><Link href="/compras/ordenes">Órdenes de compra →</Link></div>
                 <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
                     <input
                         type="date"

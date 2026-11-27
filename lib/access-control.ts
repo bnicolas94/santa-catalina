@@ -86,6 +86,7 @@ const accessRules: AccessRule[] = [
     // Catálogo, compras y stock.
     { path: '/api/stock-sucursales/central', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
     { path: '/api/stock-sucursales', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
+    { path: '/api/compras/ordenes', permissions: ['permisoCompras'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/compras', permissions: ['permisoCompras'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/familias-insumo', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
@@ -147,6 +148,7 @@ const accessRules: AccessRule[] = [
     { path: '/conteos-insumos', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/stock-sucursales/central', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
     { path: '/stock-sucursales', permissions: ['permisoStock', 'permisoCompras'], legacyRoles: ['ADMIN'] },
+    { path: '/compras/ordenes', permissions: ['permisoCompras'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/compras', permissions: ['permisoCompras'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/stock', permissions: ['permisoStock'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/caja', permissions: ['permisoCaja'], legacyRoles: ['ADMIN'] },
