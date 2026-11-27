@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { usaVistaOperativaProduccion } from './vistaProduccion'
+import { esRolGestionProduccion, usaVistaOperativaProduccion } from './vistaProduccion'
+
+test('identifica los roles que pueden consultar la conciliación administrativa', () => {
+    assert.equal(esRolGestionProduccion('ADMIN'), true)
+    assert.equal(esRolGestionProduccion('admin_ops'), true)
+    assert.equal(esRolGestionProduccion('COORD_PROD'), true)
+    assert.equal(esRolGestionProduccion('OPERARIO'), false)
+})
 
 test('ADMIN_OPS conserva la vista de gestión aunque también tenga Producción', () => {
     assert.equal(usaVistaOperativaProduccion('ADMIN_OPS', 'FABRICA'), false)

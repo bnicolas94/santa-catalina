@@ -1,5 +1,9 @@
 const rolesDeGestion = new Set(['ADMIN', 'ADMIN_OPS', 'COORD_PROD'])
 
+export function esRolGestionProduccion(rol: string | null | undefined) {
+    return rolesDeGestion.has(String(rol || '').toUpperCase())
+}
+
 export function usaVistaOperativaProduccion(
     rol: string | null | undefined,
     ubicacionTipo: string | null | undefined,
@@ -8,7 +12,7 @@ export function usaVistaOperativaProduccion(
     const ubicacionNormalizada = String(ubicacionTipo || '').toUpperCase()
 
     if (ubicacionNormalizada !== 'FABRICA') return false
-    if (rolesDeGestion.has(rolNormalizado)) return false
+    if (esRolGestionProduccion(rolNormalizado)) return false
 
     // La interfaz es una decisión operativa por sede y tipo de usuario. Los
     // permisos determinan a qué módulos accede, pero no deben convertir la

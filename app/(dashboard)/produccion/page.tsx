@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useProduccionData } from '@/components/produccion/hooks/useProduccionData'
 import { OperatorProductionView } from '@/components/produccion/operator/OperatorProductionView'
+import { ProductionStockReconciliation } from '@/components/produccion/admin/ProductionStockReconciliation'
 import { usaVistaOperativaProduccion } from '@/lib/produccion/vistaProduccion'
 
 interface Producto {
@@ -1183,6 +1184,8 @@ export default function ProduccionPage() {
                     </div>
                 </div>
             )}
+
+            <ProductionStockReconciliation date={filterFecha || getLocalDateString()} />
 
             {/* Stock Producto Terminado */}
             <div className="card" style={{ marginBottom: 'var(--space-6)', overflow: 'visible' }}>
