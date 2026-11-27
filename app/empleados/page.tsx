@@ -36,6 +36,7 @@ import { normalizarCodigoReloj, origenRelojDesdeFuente } from '@/lib/rrhh/reloje
 import { imprimirCaratulaLegajo, imprimirCaratulasLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
 import { nombreEmpleadoApellidoPrimero, ordenarEmpleadosPorApellido } from '@/lib/rrhh/nombres-empleados'
 import { empleadoIncluidoEnNomina } from '@/lib/payroll/elegibilidadNomina'
+import type { PermissionKey } from '@/lib/access-control'
 
 type EmpleadoConRelojes = Empleado & { codigosReloj?: Array<{ origen: string; codigo: string }> }
 
@@ -50,6 +51,12 @@ export default function EmpleadosPage() {
 function EmpleadosContent() {
     const { data: session } = useSession()
     const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
+    const permisos = (session?.user as { permisos?: Partial<Record<PermissionKey, boolean>> } | undefined)?.permisos
+    const puede = (permiso: PermissionKey) => esAdmin || permisos?.[permiso] === true
+    const puedeLegajos = puede('permisoPersonalLegajos')
+    const puedeAsistencia = puede('permisoPersonalAsistencia')
+    const puedeLiquidaciones = puede('permisoPersonalLiquidaciones')
+    const puedeSanciones = puede('permisoPersonalSanciones')
     const searchParams = useSearchParams()
     const router = useRouter()
     const openParam = searchParams.get('open')
@@ -134,26 +141,26 @@ function EmpleadosContent() {
             router.replace('/empleados/liquidacion-semanal')
             return
         }
-        if (openParam === 'horas-adeudadas') setHorasAdeudadasOpen(true)
-        if (openParam === 'feriados-adeudados') setFeriadosAdeudadosOpen(true)
-        if (openParam === 'cierres-mensuales') setCierresMensualesOpen(true)
-        if (openParam === 'vacaciones') setVacacionesSacOpen(true)
-        if (openParam === 'mass') setMassLiquidationOpen(true)
-        if (openParam === 'recibos') setShowReportePagos(true)
-        if (openParam === 'historial') setShowReporteVacaciones(true)
-        if (openParam === 'historial-salarial') setShowHistorialSalarial(true)
-        if (openParam === 'roles') setShowRolesModal(true)
-        if (openParam === 'feriados') setShowFeriadosModal(true)
-        if (openParam === 'turnos') setShowTurnosModal(true)
-        if (openParam === 'conceptos') setShowConceptosModal(true)
-        if (openParam === 'licencias') setShowLicenciasModal(true)
-        if (openParam === 'inasistencias') setShowInasistenciasModal(true)
-        if (openParam === 'sanciones') setShowSancionesModal(true)
-        if (openParam === 'liquidacion-final') setShowLiquidacionFinalModal(true)
-        if (openParam === 'uniformes') setShowUniformesModal(true)
-        if (openParam === 'new') handleOpenDialog()
-        if (openParam === 'import') handleImportarClic()
-    }, [openParam])
+        if (openParam === 'horas-adeudadas' && puedeLiquidaciones) setHorasAdeudadasOpen(true)
+        if (openParam === 'feriados-adeudados' && puedeLiquidaciones) setFeriadosAdeudadosOpen(true)
+        if (openParam === 'cierres-mensuales' && puedeLiquidaciones) setCierresMensualesOpen(true)
+        if (openParam === 'vacaciones' && puedeLiquidaciones) setVacacionesSacOpen(true)
+        if (openParam === 'mass' && puedeLiquidaciones) setMassLiquidationOpen(true)
+        if (openParam === 'recibos' && puedeLiquidaciones) setShowReportePagos(true)
+        if (openParam === 'historial' && puedeLiquidaciones) setShowReporteVacaciones(true)
+        if (openParam === 'historial-salarial' && puedeLiquidaciones) setShowHistorialSalarial(true)
+        if (openParam === 'roles' && esAdmin) setShowRolesModal(true)
+        if (openParam === 'feriados' && puedeLiquidaciones) setShowFeriadosModal(true)
+        if (openParam === 'turnos' && puedeAsistencia) setShowTurnosModal(true)
+        if (openParam === 'conceptos' && puedeLiquidaciones) setShowConceptosModal(true)
+        if (openParam === 'licencias' && puedeAsistencia) setShowLicenciasModal(true)
+        if (openParam === 'inasistencias' && puedeAsistencia) setShowInasistenciasModal(true)
+        if (openParam === 'sanciones' && puedeSanciones) setShowSancionesModal(true)
+        if (openParam === 'liquidacion-final' && puedeLiquidaciones) setShowLiquidacionFinalModal(true)
+        if (openParam === 'uniformes' && esAdmin) setShowUniformesModal(true)
+        if (openParam === 'new' && puedeLegajos) handleOpenDialog()
+        if (openParam === 'import' && puedeAsistencia) handleImportarClic()
+    }, [openParam, esAdmin, permisos])
 
     const closeModal = () => {
         // Limpiar parámetros de URL al cerrar cualquier modal
@@ -450,7 +457,7 @@ function EmpleadosContent() {
             {/* Toolbar Secundaria */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', minHeight: 36 }}>
-                    {empleadosCaratulaSeleccionados.size > 0 && <>
+                    {puedeLegajos && empleadosCaratulaSeleccionados.size > 0 && <>
                         <button type="button" className="btn btn-primary btn-sm" disabled={imprimiendoCaratulaId === 'varios'} onClick={() => void imprimirCaratulasSeleccionadas()}>
                             {imprimiendoCaratulaId === 'varios' ? 'Preparando…' : `🖨 Imprimir carátulas (${empleadosCaratulaSeleccionados.size})`}
                         </button>
@@ -492,12 +499,12 @@ function EmpleadosContent() {
                     <table className="table">
                         <thead>
                             <tr>
-                                <th><label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: filteredEmpleados.length ? 'pointer' : 'default' }}><input type="checkbox" aria-label="Seleccionar empleados visibles" disabled={filteredEmpleados.length === 0} checked={todosVisiblesSeleccionados} onChange={alternarEmpleadosVisibles} /> Empleado</label></th>
+                                <th>{puedeLegajos ? <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: filteredEmpleados.length ? 'pointer' : 'default' }}><input type="checkbox" aria-label="Seleccionar empleados visibles" disabled={filteredEmpleados.length === 0} checked={todosVisiblesSeleccionados} onChange={alternarEmpleadosVisibles} /> Empleado</label> : 'Empleado'}</th>
                                 <th>Rol / Puesto</th>
                                 <th>Contacto</th>
-                                <th>Sueldo / Ciclo</th>
+                                {puedeLiquidaciones && <th>Sueldo / Ciclo</th>}
                                 <th>Ubicación</th>
-                                <th>Hoy</th>
+                                {puedeAsistencia && <th>Hoy</th>}
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -507,7 +514,7 @@ function EmpleadosContent() {
                                 <tr key={emp.id} style={{ opacity: emp.activo ? 1 : 0.6 }}>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                                            <input type="checkbox" aria-label={`Seleccionar carátula de ${nombreEmpleadoApellidoPrimero(emp)}`} checked={empleadosCaratulaSeleccionados.has(emp.id)} onChange={() => alternarEmpleadoCaratula(emp.id)} />
+                                            {puedeLegajos && <input type="checkbox" aria-label={`Seleccionar carátula de ${nombreEmpleadoApellidoPrimero(emp)}`} checked={empleadosCaratulaSeleccionados.has(emp.id)} onChange={() => alternarEmpleadoCaratula(emp.id)} />}
                                             <div style={{
                                                 width: 40, height: 40, borderRadius: '50%',
                                                 backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)',
@@ -546,7 +553,7 @@ function EmpleadosContent() {
                                         <div>{emp.email}</div>
                                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{emp.telefono || '—'}</div>
                                     </td>
-                                    <td>
+                                    {puedeLiquidaciones && <td>
                                         <div style={{ fontWeight: 600 }}>{(emp as any).cicloPago || 'SEMANAL'}</div>
                                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
                                             ${(emp as any).sueldoBaseMensual?.toLocaleString() || '0'}
@@ -556,10 +563,10 @@ function EmpleadosContent() {
                                                 Mensual mixta
                                             </span>
                                         )}
-                                    </td>
+                                    </td>}
                                     <td>
                                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                            <select
+                                            {puedeLegajos ? <select
                                                 value={emp.ubicacionId || ''}
                                                 onChange={(e) => handleQuickUpdateLocation(emp.id, e.target.value)}
                                                 disabled={updatingId === emp.id}
@@ -583,7 +590,7 @@ function EmpleadosContent() {
                                                         {u.tipo === 'FABRICA' ? '🏭' : '🏪'} {u.nombre}
                                                     </option>
                                                 ))}
-                                            </select>
+                                            </select> : <span>{ubicaciones.find(u => u.id === emp.ubicacionId)?.nombre || 'Sin asignar'}</span>}
                                             <div style={{
                                                 position: 'absolute',
                                                 right: '8px',
@@ -591,15 +598,15 @@ function EmpleadosContent() {
                                                 color: 'var(--color-gray-400)',
                                                 display: 'flex'
                                             }}>
-                                                {updatingId === emp.id ? (
+                                                {puedeLegajos && (updatingId === emp.id ? (
                                                     <div className="spinner-xs"></div>
                                                 ) : (
                                                     <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                                                )}
+                                                ))}
                                             </div>
                                         </div>
                                     </td>
-                                    <td>
+                                    {puedeAsistencia && <td>
                                         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                                             <div 
                                                 title={ (emp as any).asistenciaHoy?.tieneEntrada ? 'Entrada registrada' : 'Sin entrada' }
@@ -619,7 +626,7 @@ function EmpleadosContent() {
                                                 <span style={{ fontSize: '9px', color: 'var(--color-danger)', fontWeight: 800 }}>TARDE</span>
                                             )}
                                         </div>
-                                    </td>
+                                    </td>}
                                     <td>
                                         {!emp.activo ? <span className="badge badge-neutral">Inactivo</span>
                                             : emp.incluidoNomina === false
@@ -628,22 +635,22 @@ function EmpleadosContent() {
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                                            <button
+                                            {puedeLegajos && <button
                                                 className="btn btn-ghost btn-icon"
                                                 onClick={() => void handleImprimirCaratula(emp)}
                                                 disabled={imprimiendoCaratulaId === emp.id}
                                                 title="Imprimir carátula A4"
                                             >
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-12-5h12v9H6v-9z" /></svg>
-                                            </button>
-                                            <button
+                                            </button>}
+                                            {puedeLegajos && <button
                                                 className="btn btn-ghost btn-icon"
                                                 onClick={() => handleOpenDialog(emp)}
                                                 title="Editar"
                                             >
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                            </button>
-                                            <button
+                                            </button>}
+                                            {puedeLiquidaciones && <button
                                                 className="btn btn-ghost btn-icon"
                                                 onClick={() => { setSelectedEmpleado(emp); setExpressLiquidationOpen(true); }}
                                                 disabled={!empleadoIncluidoEnNomina(emp)}
@@ -651,8 +658,8 @@ function EmpleadosContent() {
                                                 style={{ color: 'var(--color-success)' }}
                                             >
                                                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            </button>
-                                            {emp.activo ? (
+                                            </button>}
+                                            {puedeLegajos && (emp.activo ? (
                                                 <button
                                                     className="btn btn-ghost btn-icon"
                                                     style={{ color: 'var(--color-danger)' }}
@@ -670,7 +677,7 @@ function EmpleadosContent() {
                                                 >
                                                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                 </button>
-                                            )}
+                                            ))}
                                         </div>
                                     </td>
                                 </tr>

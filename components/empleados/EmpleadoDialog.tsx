@@ -6,7 +6,7 @@ import EvaluacionesTab from './EvaluacionesTab'
 import LiquidacionFinalModal from './LiquidacionFinalModal'
 import styles from './EmpleadoDialog.module.css'
 import { ETIQUETAS_RELOJ, ORIGENES_RELOJ, type OrigenReloj } from '@/lib/rrhh/relojes'
-import { PERMISOS_MODULO, type EstadoPermisoEmpleado } from '@/lib/auth/permisosEmpleado'
+import { PERMISOS_MODULO, PERMISOS_PRINCIPALES, SUBPERMISOS_PERSONAL, type EstadoPermisoEmpleado } from '@/lib/auth/permisosEmpleado'
 import type { PermissionKey } from '@/lib/access-control'
 
 interface EmployeeRole {
@@ -112,7 +112,7 @@ interface AreaOption { id: string; nombre: string; activo: boolean }
 interface PositionOption { id: string; nombre: string }
 interface ShiftOption { id: string; nombre: string; horaInicio: string; horaFin: string; activo: boolean }
 
-const ROLE_PERMISSIONS = PERMISOS_MODULO.map(({ clave, nombre }) => ({ key: clave, label: nombre }))
+const ROLE_PERMISSIONS = PERMISOS_PRINCIPALES.map(({ clave, nombre }) => ({ key: clave, label: nombre }))
 
 interface EmpleadoDialogProps {
     empleado?: EmployeeDialogEmployee | null
@@ -227,7 +227,7 @@ export function EmpleadoDialog({ empleado, esAdmin = false, onSave, onClose }: E
         (Number(empleado?.sueldoBaseMensual || 0) > 0 || Number(empleado?.jornal || 0) > 0) ? 'CUSTOM' : 'ROLE'
     ))
     const selectedRole = useMemo(() => roles.find(role => role.id === formData.rolId) || null, [roles, formData.rolId])
-    const permisosDelRol = selectedRole ? ROLE_PERMISSIONS.filter(permission => selectedRole[permission.key] === true) : []
+    const permisosDelRol = selectedRole ? ROLE_PERMISSIONS.filter(permission => selectedRole[permission.key as keyof EmployeeRole] === true) : []
     const usaBaseDelRol = Boolean(selectedRole) && salarySource === 'ROLE'
     const ubicacionSeleccionada = ubicaciones.find(ubicacion => ubicacion.id === formData.ubicacionId)
     const esCuentaAdmin = (selectedRole?.nombre || formData.rol).toUpperCase() === 'ADMIN'
@@ -247,6 +247,25 @@ export function EmpleadoDialog({ empleado, esAdmin = false, onSave, onClose }: E
                 ...actual,
                 permisosIndividuales: [...otros, { clave, permitido: estado === 'PERMITIR' }],
             }
+        })
+    }
+
+    const estadoPermisoIndividual = (clave: PermissionKey): EstadoPermisoEmpleado => {
+        const individual = formData.permisosIndividuales.find(item => item.clave === clave)
+        return individual ? (individual.permitido ? 'PERMITIR' : 'DENEGAR') : 'HEREDAR'
+    }
+
+    const permisoHeredado = (clave: PermissionKey) => {
+        if (SUBPERMISOS_PERSONAL.some(permiso => permiso.clave === clave)) return selectedRole?.permisoPersonal === true
+        return selectedRole?.[clave as keyof EmployeeRole] === true
+    }
+
+    const accesoPersonalEfectivo = () => {
+        const excepcionGeneral = formData.permisosIndividuales.find(item => item.clave === 'permisoPersonal')
+        const base = excepcionGeneral?.permitido ?? (selectedRole?.permisoPersonal === true)
+        return SUBPERMISOS_PERSONAL.some(permiso => {
+            const excepcion = formData.permisosIndividuales.find(item => item.clave === permiso.clave)
+            return excepcion?.permitido ?? base
         })
     }
 
@@ -897,14 +916,16 @@ export function EmpleadoDialog({ empleado, esAdmin = false, onSave, onClose }: E
                                 {esCuentaAdmin && <div className={styles.accessNotice}>La cuenta ADMIN conserva acceso total. Las excepciones no pueden restringir a un administrador.</div>}
 
                                 <div className={styles.accessGrid}>
-                                    {PERMISOS_MODULO.map(permiso => {
+                                    {PERMISOS_PRINCIPALES.map(permiso => {
                                         const individual = formData.permisosIndividuales.find(item => item.clave === permiso.clave)
-                                        const heredado = selectedRole?.[permiso.clave] === true
+                                        const heredado = permisoHeredado(permiso.clave)
                                         const obligatorioPorSede = permiso.clave === 'permisoCaja' && ubicacionSeleccionada?.tipo?.toUpperCase() === 'LOCAL'
                                         const estado: EstadoPermisoEmpleado = individual ? (individual.permitido ? 'PERMITIR' : 'DENEGAR') : 'HEREDAR'
-                                        const efectivo = esCuentaAdmin || obligatorioPorSede || individual?.permitido === true || (!individual && heredado)
+                                        const efectivo = esCuentaAdmin || obligatorioPorSede || (permiso.clave === 'permisoPersonal'
+                                            ? accesoPersonalEfectivo()
+                                            : individual?.permitido === true || (!individual && heredado))
 
-                                        return <article key={permiso.clave} className={`${styles.accessCard} ${efectivo ? styles.accessGranted : styles.accessDenied}`}>
+                                        return <article key={permiso.clave} className={`${styles.accessCard} ${permiso.clave === 'permisoPersonal' ? styles.accessCardWide : ''} ${efectivo ? styles.accessGranted : styles.accessDenied}`}>
                                             <div className={styles.accessCardHeader}>
                                                 <div><strong>{permiso.nombre}</strong><p>{permiso.descripcion}</p></div>
                                                 <span className={efectivo ? styles.effectiveGranted : styles.effectiveDenied}>{efectivo ? 'Con acceso' : 'Sin acceso'}</span>
@@ -923,6 +944,40 @@ export function EmpleadoDialog({ empleado, esAdmin = false, onSave, onClose }: E
                                                     <option value="DENEGAR">Denegar</option>
                                                 </select>
                                             </div>
+                                            {permiso.clave === 'permisoPersonal' && (
+                                                <div className={styles.personalPermissions}>
+                                                    <div className={styles.personalPermissionsHeading}>
+                                                        <strong>Módulos internos de RR. HH.</strong>
+                                                        <span>Podés ajustar cada función sin cambiar el resto de Personal.</span>
+                                                    </div>
+                                                    {SUBPERMISOS_PERSONAL.map(subpermiso => {
+                                                        const subEstado = estadoPermisoIndividual(subpermiso.clave)
+                                                        const subIndividual = formData.permisosIndividuales.find(item => item.clave === subpermiso.clave)
+                                                        const personalIndividual = formData.permisosIndividuales.find(item => item.clave === 'permisoPersonal')
+                                                        const subHeredado = personalIndividual?.permitido ?? heredado
+                                                        const subEfectivo = esCuentaAdmin || subIndividual?.permitido === true || (!subIndividual && subHeredado)
+                                                        return <label key={subpermiso.clave} className={styles.personalPermissionRow}>
+                                                            <span>
+                                                                <strong>{subpermiso.nombre}</strong>
+                                                                <small>{subpermiso.descripcion}</small>
+                                                            </span>
+                                                            <span className={subEfectivo ? styles.effectiveGranted : styles.effectiveDenied}>{subEfectivo ? 'Con acceso' : 'Sin acceso'}</span>
+                                                            <select
+                                                                className="form-select"
+                                                                aria-label={`Acceso individual a ${subpermiso.nombre}`}
+                                                                value={subEstado}
+                                                                disabled={esCuentaAdmin}
+                                                                onChange={event => cambiarPermisoIndividual(subpermiso.clave, event.target.value as EstadoPermisoEmpleado)}
+                                                            >
+                                                                <option value="HEREDAR">Heredar Personal</option>
+                                                                <option value="PERMITIR">Permitir</option>
+                                                                <option value="DENEGAR">Denegar</option>
+                                                            </select>
+                                                        </label>
+                                                    })}
+                                                    <p className={styles.personalPermissionNote}>Ropa de trabajo conserva acceso exclusivo de ADMIN por control de stock y constancias.</p>
+                                                </div>
+                                            )}
                                         </article>
                                     })}
                                 </div>

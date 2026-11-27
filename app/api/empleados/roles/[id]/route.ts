@@ -88,6 +88,10 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
     try {
+        const session = await getServerSession(authOptions)
+        if ((session?.user as { rol?: string } | undefined)?.rol !== 'ADMIN') {
+            return NextResponse.json({ error: 'Sólo ADMIN puede eliminar tipos de empleado.' }, { status: 403 })
+        }
         const { id } = await context.params
 
         // Verificar si hay empleados con este rol

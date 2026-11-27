@@ -4,11 +4,18 @@ export type RolConPermisos = Partial<Record<PermissionKey, boolean>> | null | un
 
 export function permisosDesdeRol(rol: RolConPermisos): Record<PermissionKey, boolean> | null {
     if (!rol) return null
+    const permisoPersonal = rol.permisoPersonal === true
     return {
         permisoDashboard: rol.permisoDashboard === true,
         permisoStock: rol.permisoStock === true,
         permisoCaja: rol.permisoCaja === true,
-        permisoPersonal: rol.permisoPersonal === true,
+        permisoPersonal,
+        permisoPersonalLegajos: permisoPersonal,
+        permisoPersonalAsistencia: permisoPersonal,
+        permisoPersonalLiquidaciones: permisoPersonal,
+        permisoPersonalPrestamos: permisoPersonal,
+        permisoPersonalSanciones: permisoPersonal,
+        permisoPersonalSeleccion: permisoPersonal,
         permisoProduccion: rol.permisoProduccion === true,
         permisoPantallaProduccion: rol.permisoPantallaProduccion === true,
         permisoCostos: rol.permisoCostos === true,
@@ -29,22 +36,5 @@ export function aplicarAccesosOperativos(
     ubicacionTipo: unknown,
 ): Record<PermissionKey, boolean> | null {
     if (String(ubicacionTipo || '').toUpperCase() !== 'LOCAL') return permisos
-    return {
-        permisoDashboard: permisos?.permisoDashboard === true,
-        permisoStock: permisos?.permisoStock === true,
-        permisoCaja: true,
-        permisoPersonal: permisos?.permisoPersonal === true,
-        permisoProduccion: permisos?.permisoProduccion === true,
-        permisoPantallaProduccion: permisos?.permisoPantallaProduccion === true,
-        permisoCostos: permisos?.permisoCostos === true,
-        permisoCompras: permisos?.permisoCompras === true,
-        permisoClientes: permisos?.permisoClientes === true,
-        permisoPedidos: permisos?.permisoPedidos === true,
-        permisoLogistica: permisos?.permisoLogistica === true,
-        permisoFlota: permisos?.permisoFlota === true,
-        permisoReportes: permisos?.permisoReportes === true,
-        permisoDiarioErrores: permisos?.permisoDiarioErrores === true,
-        permisoAtencion: permisos?.permisoAtencion === true,
-        permisoAtencionAdmin: permisos?.permisoAtencionAdmin === true,
-    }
+    return { ...(permisos || permisosDesdeRol({})!), permisoCaja: true }
 }

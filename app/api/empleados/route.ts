@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { EmpleadoService, EmpleadoValidationError } from '@/lib/services/empleado.service'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { tienePermisoEnSesion } from '@/lib/auth/permisosSesion'
 
 // GET /api/empleados — Lista todos los empleados
 export async function GET() {
@@ -15,6 +18,10 @@ export async function GET() {
 // POST /api/empleados — Crear nuevo empleado
 export async function POST(request: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        if (!tienePermisoEnSesion(session, 'permisoPersonalLegajos')) {
+            return NextResponse.json({ error: 'No tenés permiso para administrar legajos.' }, { status: 403 })
+        }
         const body = await request.json()
         const empleado = await EmpleadoService.create(body)
         return NextResponse.json(empleado, { status: 201 })

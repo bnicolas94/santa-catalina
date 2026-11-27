@@ -214,9 +214,28 @@ test('una sesión sin permisoPersonal no puede invocar RR. HH.', () => {
     assert.equal(canAccessPath('/api/uniformes/stock', token), false)
 })
 
-test('sólo ADMIN puede administrar roles, incluso con permisoPersonal', () => {
+test('los módulos internos de Personal quedan aislados entre sí', () => {
+    const liquidaciones = { permisos: {
+        permisoPersonal: true,
+        permisoPersonalLegajos: false,
+        permisoPersonalAsistencia: false,
+        permisoPersonalLiquidaciones: true,
+        permisoPersonalPrestamos: false,
+        permisoPersonalSanciones: false,
+        permisoPersonalSeleccion: false,
+    } }
+    assert.equal(canAccessPath('/empleados', liquidaciones), true)
+    assert.equal(canAccessPath('/empleados/liquidacion-semanal', liquidaciones), true)
+    assert.equal(canAccessPath('/api/liquidaciones', liquidaciones), true)
+    assert.equal(canAccessPath('/api/fichadas', liquidaciones), false)
+    assert.equal(canAccessPath('/api/empleados/abc/prestamos', liquidaciones), false)
+    assert.equal(canAccessPath('/api/empleados/sanciones', liquidaciones), false)
+})
+
+test('Legajos puede consultar roles y sus escrituras siguen validadas dentro de la API', () => {
     const token = { rol: 'ADMIN_OPS', permisos: { permisoPersonal: true } }
-    assert.equal(canAccessPath('/api/empleados/roles', token), false)
+    assert.equal(canAccessPath('/api/empleados/roles', token), true)
+    assert.equal(canAccessPath('/api/empleados/roles', { permisos: { permisoPersonalLegajos: false } }), false)
 })
 
 test('las APIs internas del CRM exigen permisos de Atención', () => {

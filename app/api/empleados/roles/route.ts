@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizarRolEmpleado, RolEmpleadoValidationError } from '@/lib/empleados/roles'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function GET() {
     try {
@@ -43,6 +45,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
+        const session = await getServerSession(authOptions)
+        if ((session?.user as { rol?: string } | undefined)?.rol !== 'ADMIN') {
+            return NextResponse.json({ error: 'Sólo ADMIN puede crear tipos de empleado.' }, { status: 403 })
+        }
         const data = normalizarRolEmpleado(await req.json())
 
         const nuevoRol = await prisma.rolEmpleado.create({

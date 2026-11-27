@@ -72,7 +72,7 @@ El fichado de home office se habilita por empleado desde la pestaña Reloj de su
 ### Tablas Involucradas
 
 * **`Empleado`**: Datos maestros, configuración salarial y relaciones jerárquicas.
-* **`PermisoEmpleado`**: Excepciones de acceso por usuario. Guarda módulo, decisión permitir/denegar, fecha y administrador que realizó el cambio; la ausencia de registro significa heredar del rol.
+* **`PermisoEmpleado`**: Excepciones de acceso por usuario. Guarda módulo, decisión permitir/denegar, fecha y administrador que realizó el cambio; la ausencia de registro significa heredar del rol. El acceso general a Personal puede refinarse en Legajos, Asistencia y horarios, Liquidaciones y recibos, Préstamos, Sanciones y Selección de personal. El permiso general heredado habilita todos los submódulos; una excepción interna modifica sólo su función. Ropa de trabajo conserva acceso exclusivo de ADMIN.
 * **`FichadaEmpleado`**: Logs de entrada/salida (`reloj` vs `manual`).
 * **`Inasistencia`**: Registro de ausencias, tardanzas y licencias.
 * **`Sancion`**: Documento disciplinario emitido exclusivamente de forma manual. `alertaId` permanece sólo para identificar registros automáticos históricos.

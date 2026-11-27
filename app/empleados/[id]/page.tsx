@@ -11,10 +11,17 @@ import { PrestamosTab } from '@/components/empleados/PrestamosTab'
 import { LiquidacionesTab } from '@/components/empleados/LiquidacionesTab'
 import { UniformesTab } from '@/components/empleados/UniformesTab'
 import { imprimirCaratulaLegajo } from '@/components/empleados/imprimirCaratulaLegajo'
+import type { PermissionKey } from '@/lib/access-control'
 
 export default function EmpleadoDetailPage() {
     const { data: session } = useSession()
     const esAdmin = (session?.user as { rol?: string } | undefined)?.rol === 'ADMIN'
+    const permisos = (session?.user as { permisos?: Partial<Record<PermissionKey, boolean>> } | undefined)?.permisos
+    const puede = (permiso: PermissionKey) => esAdmin || permisos?.[permiso] === true
+    const puedeLegajos = puede('permisoPersonalLegajos')
+    const puedeAsistencia = puede('permisoPersonalAsistencia')
+    const puedePrestamos = puede('permisoPersonalPrestamos')
+    const puedeLiquidaciones = puede('permisoPersonalLiquidaciones')
     const params = useParams()
     const [empleado, setEmpleado] = useState<any>(null)
     const [loading, setLoading] = useState(true)
@@ -26,6 +33,19 @@ export default function EmpleadoDetailPage() {
             fetchEmpleado()
         }
     }, [params.id])
+
+    useEffect(() => {
+        const permitido = activeTab === 'resumen' ? puedeLegajos
+            : activeTab === 'fichadas' ? puedeAsistencia
+                : activeTab === 'prestamos' ? puedePrestamos
+                    : activeTab === 'liquidaciones' ? puedeLiquidaciones
+                        : esAdmin
+        if (permitido) return
+        if (puedeLegajos) setActiveTab('resumen')
+        else if (puedeAsistencia) setActiveTab('fichadas')
+        else if (puedePrestamos) setActiveTab('prestamos')
+        else if (puedeLiquidaciones) setActiveTab('liquidaciones')
+    }, [activeTab, esAdmin, permisos])
 
     const fetchEmpleado = async () => {
         try {
@@ -93,9 +113,9 @@ export default function EmpleadoDetailPage() {
                         <Link href="/empleados" className="btn btn-ghost btn-sm" style={{ fontWeight: 600 }}>
                             ← Volver a Lista
                         </Link>
-                        <button type="button" className="btn btn-outline btn-sm" disabled={imprimiendoCaratula} onClick={() => void handleImprimirCaratula()}>
+                        {puedeLegajos && <button type="button" className="btn btn-outline btn-sm" disabled={imprimiendoCaratula} onClick={() => void handleImprimirCaratula()}>
                             {imprimiendoCaratula ? 'Preparando…' : '🖨 Imprimir carátula A4'}
-                        </button>
+                        </button>}
                         <span className={`badge ${empleado.activo ? 'badge-success' : 'badge-neutral'}`}>
                             {empleado.activo ? 'Activo' : 'Inactivo'}
                         </span>
@@ -105,7 +125,7 @@ export default function EmpleadoDetailPage() {
 
             {/* Navegación de Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--color-gray-200)', marginBottom: 'var(--space-6)' }}>
-                <button
+                {puedeLegajos && <button
                     onClick={() => setActiveTab('resumen')}
                     style={{
                         padding: 'var(--space-3) var(--space-6)',
@@ -121,8 +141,8 @@ export default function EmpleadoDetailPage() {
                     }}
                 >
                     Resumen
-                </button>
-                <button
+                </button>}
+                {puedeAsistencia && <button
                     onClick={() => setActiveTab('fichadas')}
                     style={{
                         padding: 'var(--space-3) var(--space-6)',
@@ -138,8 +158,8 @@ export default function EmpleadoDetailPage() {
                     }}
                 >
                     Fichadas
-                </button>
-                <button
+                </button>}
+                {puedePrestamos && <button
                     onClick={() => setActiveTab('prestamos')}
                     style={{
                         padding: 'var(--space-3) var(--space-6)',
@@ -155,8 +175,8 @@ export default function EmpleadoDetailPage() {
                     }}
                 >
                     Préstamos
-                </button>
-                <button
+                </button>}
+                {puedeLiquidaciones && <button
                     onClick={() => setActiveTab('liquidaciones')}
                     style={{
                         padding: 'var(--space-3) var(--space-6)',
@@ -172,7 +192,7 @@ export default function EmpleadoDetailPage() {
                     }}
                 >
                     Recibos de Sueldo
-                </button>
+                </button>}
                 {esAdmin && <button
                     onClick={() => setActiveTab('uniformes')}
                     style={{
@@ -195,7 +215,7 @@ export default function EmpleadoDetailPage() {
             {/* Contenido de Tabs */}
             <div className="card" style={{ minHeight: '400px' }}>
                 <div className="card-body">
-                    {activeTab === 'resumen' && (
+                    {puedeLegajos && activeTab === 'resumen' && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
                             <div style={{ backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-gray-200)' }}>
                                 <h3 style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-2)' }}>Configuración Salarial</h3>
@@ -235,15 +255,15 @@ export default function EmpleadoDetailPage() {
                         </div>
                     )}
 
-                    {activeTab === 'fichadas' && (
+                    {puedeAsistencia && activeTab === 'fichadas' && (
                         <FichadasTab empleadoId={empleado.id} empleado={empleado} />
                     )}
 
-                    {activeTab === 'prestamos' && (
+                    {puedePrestamos && activeTab === 'prestamos' && (
                         <PrestamosTab empleadoId={empleado.id} empleado={empleado} />
                     )}
 
-                    {activeTab === 'liquidaciones' && (
+                    {puedeLiquidaciones && activeTab === 'liquidaciones' && (
                         <LiquidacionesTab empleadoId={empleado.id} empleadoDatos={empleado} />
                     )}
 

@@ -3,6 +3,12 @@ export type PermissionKey =
     | 'permisoStock'
     | 'permisoCaja'
     | 'permisoPersonal'
+    | 'permisoPersonalLegajos'
+    | 'permisoPersonalAsistencia'
+    | 'permisoPersonalLiquidaciones'
+    | 'permisoPersonalPrestamos'
+    | 'permisoPersonalSanciones'
+    | 'permisoPersonalSeleccion'
     | 'permisoProduccion'
     | 'permisoPantallaProduccion'
     | 'permisoCostos'
@@ -22,6 +28,15 @@ export type AccessToken = {
     permisos?: Partial<Record<PermissionKey, boolean>> | null
 }
 
+const permisosInternosPersonal = new Set<PermissionKey>([
+    'permisoPersonalLegajos',
+    'permisoPersonalAsistencia',
+    'permisoPersonalLiquidaciones',
+    'permisoPersonalPrestamos',
+    'permisoPersonalSanciones',
+    'permisoPersonalSeleccion',
+])
+
 type AccessRule = {
     path: string
     permissions?: PermissionKey[]
@@ -33,10 +48,10 @@ const accessRules: AccessRule[] = [
     // El acceso personal requiere sesión; la API verifica identidad y habilitación en la base.
     { path: '/api/mi-fichado' },
     { path: '/mi-fichado' },
-    { path: '/evaluaciones-candidatos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/evaluaciones-candidatos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/postulaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/evaluaciones-candidatos', permissions: ['permisoPersonalSeleccion'], legacyRoles: ['ADMIN'] },
+    { path: '/api/evaluaciones-candidatos', permissions: ['permisoPersonalSeleccion'], legacyRoles: ['ADMIN'] },
+    { path: '/postulaciones', permissions: ['permisoPersonalSeleccion'], legacyRoles: ['ADMIN'] },
+    { path: '/api/postulaciones', permissions: ['permisoPersonalSeleccion'], legacyRoles: ['ADMIN'] },
     { path: '/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/diario-errores', permissions: ['permisoDiarioErrores'], legacyRoles: ['ADMIN'] },
     { path: '/api/caja/google-sheets', legacyRoles: ['ADMIN'] },
@@ -47,8 +62,8 @@ const accessRules: AccessRule[] = [
     { path: '/sedes', legacyRoles: ['ADMIN'] },
     { path: '/api/sedes', legacyRoles: ['ADMIN'] },
     // La administración de roles puede escalar privilegios y queda reservada a ADMIN.
-    { path: '/api/empleados/roles', legacyRoles: ['ADMIN'] },
-    { path: '/api/empleados/remotos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/roles', permissions: ['permisoPersonalLegajos'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/remotos', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
     { path: '/api/admin', legacyRoles: ['ADMIN'] },
     { path: '/api/internal/crm', permissions: ['permisoAtencion', 'permisoAtencionAdmin'], legacyRoles: ['ADMIN'] },
     { path: '/api/pedidos/entregar-masivo', legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
@@ -103,7 +118,7 @@ const accessRules: AccessRule[] = [
     { path: '/api/dashboard', permissions: ['permisoDashboard'], legacyRoles: ['ADMIN', 'COORD_PROD', 'ADMIN_OPS'] },
     { path: '/api/reportes/caja', permissions: ['permisoCaja', 'permisoReportes'], legacyRoles: ['ADMIN'] },
     { path: '/api/reportes/costos', permissions: ['permisoCostos', 'permisoReportes'], legacyRoles: ['ADMIN'] },
-    { path: '/api/reportes/rrhh', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/reportes/rrhh', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
     { path: '/api/reportes/whatsapp/conexiones', legacyRoles: ['ADMIN'] },
     { path: '/api/reportes', permissions: ['permisoReportes'], legacyRoles: ['ADMIN'] },
 
@@ -123,22 +138,35 @@ const accessRules: AccessRule[] = [
     { path: '/api/entregas', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
 
     // API de Personal/RR. HH. Estas rutas antes sólo requerían una sesión válida.
-    { path: '/api/documentos-empleado', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/conceptos-salariales', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/liquidaciones-finales', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/documentos-empleado', permissions: ['permisoPersonalLegajos'], legacyRoles: ['ADMIN'] },
+    { path: '/api/conceptos-salariales', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/liquidaciones-finales', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/sanciones', permissions: ['permisoPersonalSanciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/horarios', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/inasistencias', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/asistencia-diaria', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/cierres-mensuales', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/feriados-adeudados', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/horas-extras-pendientes', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/historial-salarial', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/seguimientos-semanales', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/cajas-pago', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/empleados/movimientos-caja', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
     { path: '/api/empleados', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/evaluaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/fichadas', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/feriados', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/licencias', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/liquidaciones', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/prestamos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/puestos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
-    { path: '/api/turnos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/api/evaluaciones', permissions: ['permisoPersonalLegajos'], legacyRoles: ['ADMIN'] },
+    { path: '/api/fichadas', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
+    { path: '/api/feriados', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/licencias', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
+    { path: '/api/liquidaciones', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/api/prestamos', permissions: ['permisoPersonalPrestamos'], legacyRoles: ['ADMIN'] },
+    { path: '/api/puestos', permissions: ['permisoPersonalLegajos'], legacyRoles: ['ADMIN'] },
+    { path: '/api/turnos', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
     { path: '/api/uniformes', legacyRoles: ['ADMIN'] },
 
     // Páginas protegidas existentes.
-    { path: '/empleados/remotos', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
+    { path: '/empleados/liquidacion-semanal', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/empleados/analytics', permissions: ['permisoPersonalLiquidaciones'], legacyRoles: ['ADMIN'] },
+    { path: '/empleados/remotos', permissions: ['permisoPersonalAsistencia'], legacyRoles: ['ADMIN'] },
     { path: '/empleados', permissions: ['permisoPersonal'], legacyRoles: ['ADMIN'] },
     { path: '/produccion-v2', permissions: ['permisoProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO'] },
     { path: '/produccion/pantalla', permissions: ['permisoPantallaProduccion'], legacyRoles: ['ADMIN', 'COORD_PROD', 'OPERARIO', 'PRODUCCION', 'ADMIN_OPS'] },
@@ -177,6 +205,9 @@ export function getAccessRule(pathname: string): AccessRule | undefined {
     if (/^\/empleados\/[^/]+\/uniformes(?:\/|$)/.test(pathname)) {
         return { path: pathname, legacyRoles: ['ADMIN'] }
     }
+    if (/^\/api\/empleados\/[^/]+\/prestamos(?:\/|$)/.test(pathname)) {
+        return { path: pathname, permissions: ['permisoPersonalPrestamos'], legacyRoles: ['ADMIN'] }
+    }
     return accessRules.find((rule) => isPathWithin(pathname, rule.path))
 }
 
@@ -201,6 +232,11 @@ export function canAccessPath(pathname: string, token: AccessToken): boolean {
     if (!rule) return true
 
     if (rule.permissions?.some((permission) => token.permisos?.[permission] === true)) return true
+    if (rule.permissions?.some(permission =>
+        permisosInternosPersonal.has(permission)
+        && token.permisos?.[permission] === undefined
+        && token.permisos?.permisoPersonal === true
+    )) return true
 
     // Los nombres históricos sólo son un respaldo para cuentas que todavía no
     // están vinculadas a un RolEmpleado. Cuando existe un mapa de permisos, las

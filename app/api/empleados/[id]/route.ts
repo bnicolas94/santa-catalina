@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { EmpleadoService, EmpleadoValidationError } from '@/lib/services/empleado.service'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { tienePermisoEnSesion } from '@/lib/auth/permisosSesion'
 
 // PUT /api/empleados/:id — Actualizar empleado
 export async function PUT(
@@ -16,6 +17,9 @@ export async function PUT(
         const session = await getServerSession(authOptions)
         const usuario = session?.user as { id?: string; rol?: string } | undefined
         if (!usuario?.id) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
+        if (!tienePermisoEnSesion(session, 'permisoPersonalLegajos')) {
+            return NextResponse.json({ error: 'No tenés permiso para administrar legajos.' }, { status: 403 })
+        }
         if (Object.prototype.hasOwnProperty.call(body, 'permisosIndividuales') && usuario.rol !== 'ADMIN') {
             return NextResponse.json({ error: 'Sólo ADMIN puede modificar permisos individuales.' }, { status: 403 })
         }
@@ -54,6 +58,10 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const session = await getServerSession(authOptions)
+        if (!tienePermisoEnSesion(session, 'permisoPersonalLegajos')) {
+            return NextResponse.json({ error: 'No tenés permiso para administrar legajos.' }, { status: 403 })
+        }
         const { id } = await params
         await EmpleadoService.softDelete(id)
         return NextResponse.json({ success: true })
