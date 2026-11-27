@@ -14,8 +14,11 @@ export async function PUT(
         employeeId = id;
         const body = await request.json()
         const session = await getServerSession(authOptions)
-        const usuario = session?.user as { id?: string } | undefined
+        const usuario = session?.user as { id?: string; rol?: string } | undefined
         if (!usuario?.id) return NextResponse.json({ error: 'No autenticado.' }, { status: 401 })
+        if (Object.prototype.hasOwnProperty.call(body, 'permisosIndividuales') && usuario.rol !== 'ADMIN') {
+            return NextResponse.json({ error: 'Sólo ADMIN puede modificar permisos individuales.' }, { status: 403 })
+        }
         
         console.log(`[EMPLEADOS API] Intentando actualizar empleado ${id}:`, {
             ...body,

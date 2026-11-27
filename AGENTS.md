@@ -81,7 +81,7 @@ La navegación visible del ERP se define en `components/layout/Sidebar.tsx`. Ant
 - En producción la sesión se comparte entre `app.santacatalina.online` y `empleados.santacatalina.online`; mantener alineadas las cookies de `lib/auth.ts`, `lib/auth/cookies.ts` y `middleware.ts`.
 - El middleware protege páginas y API. Una API sin sesión debe responder JSON `401`, no HTML; sin permiso debe responder `403`.
 - `ADMIN` conserva acceso total. Los demás accesos combinan permisos configurables, roles heredados y reglas operativas por ubicación.
-- Los permisos de `RolEmpleado` son la fuente de verdad por módulo (incluidos Compras, Clientes, Pedidos, Logística, Flota y Reportes). El nombre histórico del rol sólo actúa como respaldo para cuentas aún no vinculadas a un registro de rol.
+- Los permisos de `RolEmpleado` son la base por módulo (incluidos Compras, Clientes, Pedidos, Logística, Flota y Reportes). `PermisoEmpleado` permite a ADMIN definir excepciones individuales de permitir o denegar; sin registro se hereda el rol. La resolución efectiva es rol → excepción individual → regla operativa obligatoria por ubicación. `ADMIN` conserva acceso total y una sede `LOCAL` conserva Caja. El nombre histórico del rol sólo actúa como respaldo para cuentas aún no vinculadas a un registro de rol.
 - Toda ruta sensible nueva debe evaluarse en `lib/access-control.ts` y cubrirse con sus pruebas.
 
 ### Sedes

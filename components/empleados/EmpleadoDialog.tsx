@@ -6,6 +6,8 @@ import EvaluacionesTab from './EvaluacionesTab'
 import LiquidacionFinalModal from './LiquidacionFinalModal'
 import styles from './EmpleadoDialog.module.css'
 import { ETIQUETAS_RELOJ, ORIGENES_RELOJ, type OrigenReloj } from '@/lib/rrhh/relojes'
+import { PERMISOS_MODULO, type EstadoPermisoEmpleado } from '@/lib/auth/permisosEmpleado'
+import type { PermissionKey } from '@/lib/access-control'
 
 interface EmployeeRole {
     id: string
@@ -64,6 +66,12 @@ interface EmployeeDialogEmployee {
     codigosReloj?: Array<{ origen: string; codigo: string }>
     incluidoNomina?: boolean
     fichadoRemotoHabilitado?: boolean
+    permisosIndividuales?: Array<{
+        clave: string
+        permitido: boolean
+        updatedAt?: string | Date
+        actualizadoPor?: { id: string; nombre: string; apellido?: string | null } | null
+    }>
 }
 
 interface EmployeeFormData {
@@ -96,6 +104,7 @@ interface EmployeeFormData {
     codigosReloj: Array<{ origen: OrigenReloj; codigo: string }>
     incluidoNomina: boolean
     fichadoRemotoHabilitado: boolean
+    permisosIndividuales: Array<{ clave: PermissionKey; permitido: boolean }>
 }
 
 interface LocationOption { id: string; nombre: string; tipo: string }
@@ -103,32 +112,16 @@ interface AreaOption { id: string; nombre: string; activo: boolean }
 interface PositionOption { id: string; nombre: string }
 interface ShiftOption { id: string; nombre: string; horaInicio: string; horaFin: string; activo: boolean }
 
-const ROLE_PERMISSIONS: Array<{ key: keyof EmployeeRole; label: string }> = [
-    { key: 'permisoDashboard', label: 'Dashboard' },
-    { key: 'permisoStock', label: 'Stock' },
-    { key: 'permisoCompras', label: 'Compras' },
-    { key: 'permisoClientes', label: 'Clientes' },
-    { key: 'permisoPedidos', label: 'Pedidos' },
-    { key: 'permisoLogistica', label: 'Logística' },
-    { key: 'permisoFlota', label: 'Flota' },
-    { key: 'permisoCaja', label: 'Caja' },
-    { key: 'permisoPersonal', label: 'Personal' },
-    { key: 'permisoProduccion', label: 'Producción' },
-    { key: 'permisoPantallaProduccion', label: 'Pantalla de stock' },
-    { key: 'permisoCostos', label: 'Costos' },
-    { key: 'permisoReportes', label: 'Reportes' },
-    { key: 'permisoDiarioErrores', label: 'Diario de errores' },
-    { key: 'permisoAtencion', label: 'Atención' },
-    { key: 'permisoAtencionAdmin', label: 'Supervisión de atención' },
-]
+const ROLE_PERMISSIONS = PERMISOS_MODULO.map(({ clave, nombre }) => ({ key: clave, label: nombre }))
 
 interface EmpleadoDialogProps {
     empleado?: EmployeeDialogEmployee | null
+    esAdmin?: boolean
     onSave: (data: EmployeeFormData) => Promise<void>
     onClose: () => void
 }
 
-export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProps) {
+export function EmpleadoDialog({ empleado, esAdmin = false, onSave, onClose }: EmpleadoDialogProps) {
     const isEdit = !!empleado
     const [loading, setLoading] = useState(false)
     const [tab, setTab] = useState('personal')
@@ -173,6 +166,9 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         })),
         incluidoNomina: empleado?.incluidoNomina !== false,
         fichadoRemotoHabilitado: empleado?.fichadoRemotoHabilitado === true,
+        permisosIndividuales: (empleado?.permisosIndividuales || [])
+            .filter(permiso => PERMISOS_MODULO.some(definicion => definicion.clave === permiso.clave))
+            .map(permiso => ({ clave: permiso.clave as PermissionKey, permitido: permiso.permitido })),
     })
 
     useEffect(() => {
@@ -233,6 +229,26 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
     const selectedRole = useMemo(() => roles.find(role => role.id === formData.rolId) || null, [roles, formData.rolId])
     const permisosDelRol = selectedRole ? ROLE_PERMISSIONS.filter(permission => selectedRole[permission.key] === true) : []
     const usaBaseDelRol = Boolean(selectedRole) && salarySource === 'ROLE'
+    const ubicacionSeleccionada = ubicaciones.find(ubicacion => ubicacion.id === formData.ubicacionId)
+    const esCuentaAdmin = (selectedRole?.nombre || formData.rol).toUpperCase() === 'ADMIN'
+    const ultimoCambioPermisos = useMemo(() => {
+        return (empleado?.permisosIndividuales || []).reduce<(NonNullable<EmployeeDialogEmployee['permisosIndividuales']>[number]) | null>((ultimo, permiso) => {
+            const fecha = new Date(permiso.updatedAt || 0).getTime()
+            const fechaUltima = ultimo ? new Date(ultimo.updatedAt || 0).getTime() : -1
+            return fecha > fechaUltima ? permiso : ultimo
+        }, null)
+    }, [empleado?.permisosIndividuales])
+
+    const cambiarPermisoIndividual = (clave: PermissionKey, estado: EstadoPermisoEmpleado) => {
+        setFormData(actual => {
+            const otros = actual.permisosIndividuales.filter(permiso => permiso.clave !== clave)
+            if (estado === 'HEREDAR') return { ...actual, permisosIndividuales: otros }
+            return {
+                ...actual,
+                permisosIndividuales: [...otros, { clave, permitido: estado === 'PERMITIR' }],
+            }
+        })
+    }
 
     const personalizarBaseSalarial = () => {
         if (!selectedRole) return
@@ -341,7 +357,9 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
         e.preventDefault()
         setLoading(true)
         try {
-            await onSave(formData)
+            const payload = { ...formData }
+            if (!isEdit || !esAdmin) delete (payload as Partial<EmployeeFormData>).permisosIndividuales
+            await onSave(payload)
             onClose()
         } catch (error: unknown) {
             console.error(error)
@@ -436,7 +454,17 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                 
                 {isEdit && (
                     <>
+                    {esAdmin && (
+                        <button
+                            type="button"
+                            className={tab === 'accesos' ? styles.activeTab : styles.tabButton}
+                            onClick={() => setTab('accesos')}
+                        >
+                            🔐 Accesos individuales
+                        </button>
+                    )}
                     <button
+                        type="button"
                         style={{
                             padding: 'var(--space-3) var(--space-4)',
                             fontSize: 'var(--text-sm)',
@@ -454,6 +482,7 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                         📄 Documentos
                     </button>
                     <button
+                        type="button"
                         style={{
                             padding: 'var(--space-3) var(--space-4)',
                             fontSize: 'var(--text-sm)',
@@ -849,6 +878,60 @@ export function EmpleadoDialog({ empleado, onSave, onClose }: EmpleadoDialogProp
                                     Un mismo empleado puede tener números distintos. El mismo número también puede existir en relojes diferentes sin generar cruces.
                                 </div>
                             </div>
+                        )}
+
+                        {tab === 'accesos' && isEdit && esAdmin && (
+                            <section className={styles.accessSection}>
+                                <div className={styles.accessIntro}>
+                                    <div>
+                                        <span className={styles.accessEyebrow}>Excepciones por usuario</span>
+                                        <h3>Accesos individuales</h3>
+                                        <p>Heredar mantiene lo definido en el tipo de empleado. Permitir o denegar afecta únicamente a esta persona.</p>
+                                    </div>
+                                    <div className={styles.accessSummary}>
+                                        <strong>{formData.permisosIndividuales.length}</strong>
+                                        <span>personalizados</span>
+                                    </div>
+                                </div>
+
+                                {esCuentaAdmin && <div className={styles.accessNotice}>La cuenta ADMIN conserva acceso total. Las excepciones no pueden restringir a un administrador.</div>}
+
+                                <div className={styles.accessGrid}>
+                                    {PERMISOS_MODULO.map(permiso => {
+                                        const individual = formData.permisosIndividuales.find(item => item.clave === permiso.clave)
+                                        const heredado = selectedRole?.[permiso.clave] === true
+                                        const obligatorioPorSede = permiso.clave === 'permisoCaja' && ubicacionSeleccionada?.tipo?.toUpperCase() === 'LOCAL'
+                                        const estado: EstadoPermisoEmpleado = individual ? (individual.permitido ? 'PERMITIR' : 'DENEGAR') : 'HEREDAR'
+                                        const efectivo = esCuentaAdmin || obligatorioPorSede || individual?.permitido === true || (!individual && heredado)
+
+                                        return <article key={permiso.clave} className={`${styles.accessCard} ${efectivo ? styles.accessGranted : styles.accessDenied}`}>
+                                            <div className={styles.accessCardHeader}>
+                                                <div><strong>{permiso.nombre}</strong><p>{permiso.descripcion}</p></div>
+                                                <span className={efectivo ? styles.effectiveGranted : styles.effectiveDenied}>{efectivo ? 'Con acceso' : 'Sin acceso'}</span>
+                                            </div>
+                                            <div className={styles.accessCardFooter}>
+                                                <span>{obligatorioPorSede ? 'Obligatorio por sede Local' : esCuentaAdmin ? 'Acceso total de ADMIN' : `Rol: ${heredado ? 'permitido' : 'denegado'}`}</span>
+                                                <select
+                                                    aria-label={`Acceso individual a ${permiso.nombre}`}
+                                                    className="form-select"
+                                                    value={estado}
+                                                    disabled={esCuentaAdmin || obligatorioPorSede}
+                                                    onChange={event => cambiarPermisoIndividual(permiso.clave, event.target.value as EstadoPermisoEmpleado)}
+                                                >
+                                                    <option value="HEREDAR">Heredar del rol</option>
+                                                    <option value="PERMITIR">Permitir</option>
+                                                    <option value="DENEGAR">Denegar</option>
+                                                </select>
+                                            </div>
+                                        </article>
+                                    })}
+                                </div>
+
+                                {ultimoCambioPermisos ? <p className={styles.accessAudit}>
+                                    Última configuración guardada: {new Date(ultimoCambioPermisos.updatedAt || 0).toLocaleString('es-AR')}
+                                    {ultimoCambioPermisos.actualizadoPor ? ` por ${ultimoCambioPermisos.actualizadoPor.nombre} ${ultimoCambioPermisos.actualizadoPor.apellido || ''}`.trimEnd() : ''}.
+                                </p> : null}
+                            </section>
                         )}
 
                         {/* Tab 5: Documentos */}

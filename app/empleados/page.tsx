@@ -717,6 +717,7 @@ function EmpleadosContent() {
             {dialogOpen && (
                 <EmpleadoDialog
                     empleado={selectedEmpleado}
+                    esAdmin={esAdmin}
                     onClose={closeModal}
                     onSave={handleSave}
                 />

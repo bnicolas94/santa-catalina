@@ -3,6 +3,7 @@ import { eventBus } from '@/lib/events'
 import bcrypt from 'bcryptjs'
 import { cambioSalarialRelevante, configuracionSalarialEfectiva } from '@/lib/rrhh/historialSalarial'
 import { normalizarCodigoReloj, ORIGENES_RELOJ, type OrigenReloj } from '@/lib/rrhh/relojes'
+import { normalizarPermisosIndividuales, type PermisoEmpleadoPersistido } from '@/lib/auth/permisosEmpleado'
 
 export interface CodigoRelojInput { origen: OrigenReloj; codigo: string }
 
@@ -71,6 +72,7 @@ export interface UpdateEmpleadoInput {
     incluidoNomina?: boolean
     fichadoRemotoHabilitado?: boolean
     codigosReloj?: CodigoRelojInput[]
+    permisosIndividuales?: PermisoEmpleadoPersistido[]
 }
 
 export interface EmpleadoFilters {
@@ -132,6 +134,15 @@ const EMPLEADO_SELECT = {
     puesto: { select: { id: true, nombre: true } },
     turno: { select: { id: true, nombre: true, horaInicio: true, horaFin: true, toleranciaMinutos: true } },
     codigosReloj: { select: { id: true, origen: true, codigo: true }, orderBy: { origen: 'asc' as const } },
+    permisosIndividuales: {
+        select: {
+            clave: true,
+            permitido: true,
+            updatedAt: true,
+            actualizadoPor: { select: { id: true, nombre: true, apellido: true } },
+        },
+        orderBy: { clave: 'asc' as const },
+    },
 } as const
 
 // ─── Servicio ────────────────────────────────────────────────────────────────
@@ -315,6 +326,14 @@ export class EmpleadoService {
      */
     static async update(id: string, input: UpdateEmpleadoInput, registradoPorId?: string | null) {
         const codigosReloj = validarCodigosReloj(input.codigosReloj)
+        let permisosIndividuales: ReturnType<typeof normalizarPermisosIndividuales> | undefined
+        if (input.permisosIndividuales !== undefined) {
+            try {
+                permisosIndividuales = normalizarPermisosIndividuales(input.permisosIndividuales)
+            } catch (error) {
+                throw new EmpleadoValidationError(error instanceof Error ? error.message : 'Los permisos individuales no son válidos.')
+            }
+        }
         // Robustecimiento de fecha de ingreso
         let validatedFechaIngreso = undefined as Date | null | undefined
         if (input.fechaIngreso !== undefined) {
@@ -405,6 +424,20 @@ export class EmpleadoService {
                 }
             }
 
+            if (permisosIndividuales !== undefined) {
+                await tx.permisoEmpleado.deleteMany({ where: { empleadoId: id } })
+                if (permisosIndividuales.length) {
+                    await tx.permisoEmpleado.createMany({
+                        data: permisosIndividuales.map(permiso => ({
+                            empleadoId: id,
+                            clave: permiso.clave,
+                            permitido: permiso.permitido,
+                            actualizadoPorId: registradoPorId || null,
+                        })),
+                    })
+                }
+            }
+
             const configuracionAnterior = configuracionSalarialEfectiva(anterior)
             const configuracionNueva = configuracionSalarialEfectiva(actualizado)
             if (cambioSalarialRelevante(configuracionAnterior, configuracionNueva)) {
@@ -426,7 +459,7 @@ export class EmpleadoService {
                 })
             }
 
-            return codigosReloj === undefined
+            return codigosReloj === undefined && permisosIndividuales === undefined
                 ? actualizado
                 : tx.empleado.findUniqueOrThrow({ where: { id }, select: EMPLEADO_SELECT })
         })

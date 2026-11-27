@@ -35,7 +35,7 @@ El módulo está estructurado en una arquitectura de servicios desacoplados:
 1. Se crea el empleado asignándole un **Rol** y un **Turno**.
 2. La configuración salarial sigue una **cascada de prioridad**:
    `Empleado (Config Específica) -> Rol (Valores por Defecto) -> Saldo Base Global`.
-3. El rol también define accesos independientes por módulo. La sesión hereda esas casillas y el middleware aplica el mismo permiso tanto a la página como a sus APIs; `ADMIN` conserva acceso total.
+3. El rol define accesos independientes por módulo. `ADMIN` puede configurar excepciones por empleado desde **Accesos individuales** con tres estados: heredar, permitir o denegar. La sesión resuelve rol → excepción individual → regla operativa obligatoria y aplica el resultado tanto a la página como a sus APIs. `ADMIN` conserva acceso total y el personal de una sede `LOCAL` conserva Caja aunque exista una denegación individual.
 4. El rol guarda una jornada diaria esperada como plantilla. Desde Tipos de empleado, `ADMIN` puede aplicarla masivamente a todas las fichas vinculadas; la operación no modifica liquidaciones ya pagadas y las altas futuras toman ese valor al elegir el rol.
 5. La lista y la ficha individual permiten imprimir una carátula A4 del legajo con identificación, asignación laboral, control documental y observaciones. Desde la lista se pueden seleccionar varios empleados y emitir una tanda con una hoja por persona. La carátula omite importes salariales.
 
@@ -72,6 +72,7 @@ El fichado de home office se habilita por empleado desde la pestaña Reloj de su
 ### Tablas Involucradas
 
 * **`Empleado`**: Datos maestros, configuración salarial y relaciones jerárquicas.
+* **`PermisoEmpleado`**: Excepciones de acceso por usuario. Guarda módulo, decisión permitir/denegar, fecha y administrador que realizó el cambio; la ausencia de registro significa heredar del rol.
 * **`FichadaEmpleado`**: Logs de entrada/salida (`reloj` vs `manual`).
 * **`Inasistencia`**: Registro de ausencias, tardanzas y licencias.
 * **`Sancion`**: Documento disciplinario emitido exclusivamente de forma manual. `alertaId` permanece sólo para identificar registros automáticos históricos.

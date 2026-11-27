@@ -4,6 +4,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import { aplicarAccesosOperativos, permisosDesdeRol } from './auth/permisosRol'
+import { aplicarPermisosIndividuales, type PermisoEmpleadoPersistido } from './auth/permisosEmpleado'
 import { COOKIE_SESION_PRODUCCION, DOMINIO_COOKIE_PRODUCCION } from './auth/cookies'
 
 const esProduccion = process.env.NODE_ENV === 'production'
@@ -34,6 +35,19 @@ async function resolverRolAsignado(
             },
         },
     })
+}
+
+function resolverPermisosEfectivos(
+    rolAsignado: RolEmpleado | null,
+    rolLegado: string,
+    permisosIndividuales: PermisoEmpleadoPersistido[],
+    ubicacionTipo: string | null | undefined,
+) {
+    const permisosRol = permisosDesdeRol(rolAsignado)
+    const conExcepciones = (rolAsignado?.nombre || rolLegado).toUpperCase() === 'ADMIN'
+        ? permisosRol
+        : aplicarPermisosIndividuales(permisosRol, permisosIndividuales)
+    return aplicarAccesosOperativos(conExcepciones, ubicacionTipo)
 }
 
 export const authOptions: NextAuthOptions = {
@@ -71,7 +85,8 @@ export const authOptions: NextAuthOptions = {
                     where: { email: credentials.email },
                     include: { 
                         rolRel: true,
-                        ubicacion: true
+                        ubicacion: true,
+                        permisosIndividuales: { select: { clave: true, permitido: true } },
                     }
                 })
 
@@ -102,8 +117,10 @@ export const authOptions: NextAuthOptions = {
                     ubicacionId: empleado.ubicacionId,
                     ubicacionTipo: empleado.ubicacion?.tipo || null,
                     fichadoRemotoHabilitado: empleado.fichadoRemotoHabilitado,
-                    permisos: aplicarAccesosOperativos(
-                        permisosDesdeRol(rolAsignado),
+                    permisos: resolverPermisosEfectivos(
+                        rolAsignado,
+                        empleado.rol,
+                        empleado.permisosIndividuales,
                         empleado.ubicacion?.tipo,
                     ),
                 }
@@ -134,6 +151,7 @@ export const authOptions: NextAuthOptions = {
                             ubicacionId: true,
                             ubicacion: { select: { tipo: true } },
                             rolRel: true,
+                            permisosIndividuales: { select: { clave: true, permitido: true } },
                         },
                     })
                     if (empleadoActual?.activo) {
@@ -145,8 +163,10 @@ export const authOptions: NextAuthOptions = {
                         token.fichadoRemotoHabilitado = empleadoActual.fichadoRemotoHabilitado
                         token.ubicacionId = empleadoActual.ubicacionId
                         token.ubicacionTipo = empleadoActual.ubicacion?.tipo || null
-                        token.permisos = aplicarAccesosOperativos(
-                            permisosDesdeRol(rolAsignado),
+                        token.permisos = resolverPermisosEfectivos(
+                            rolAsignado,
+                            empleadoActual.rol,
+                            empleadoActual.permisosIndividuales,
                             empleadoActual.ubicacion?.tipo,
                         )
                     }

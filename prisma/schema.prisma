@@ -19,7 +19,7 @@ model Empleado {
   telefono                     String?
   activo                       Boolean                    @default(true)
   incluidoNomina               Boolean                    @default(true) @map("incluido_nomina")
-  fichadoRemotoHabilitado       Boolean                    @default(false) @map("fichado_remoto_habilitado")
+  fichadoRemotoHabilitado      Boolean                    @default(false) @map("fichado_remoto_habilitado")
   fechaIngreso                 DateTime?                  @map("fecha_ingreso")
   createdAt                    DateTime                   @default(now())
   updatedAt                    DateTime                   @updatedAt
@@ -91,6 +91,8 @@ model Empleado {
   plantillasHorario            PlantillaHorarioEmpleado[]
   excepcionesHorario           ExcepcionHorarioEmpleado[]
   codigosReloj                 CodigoRelojEmpleado[]
+  permisosIndividuales         PermisoEmpleado[]          @relation("PermisosIndividualesEmpleado")
+  permisosIndividualesEditados PermisoEmpleado[]          @relation("PermisosIndividualesEditadosPor")
 
   @@map("empleados")
 }
@@ -261,15 +263,15 @@ model Producto {
 }
 
 model VarianteProducto {
-  id         String   @id @default(uuid())
-  codigo     String
-  nombre     String
-  activo     Boolean  @default(true)
-  orden      Int      @default(0)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-  productoId String   @map("id_producto")
-  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  id              String                 @id @default(uuid())
+  codigo          String
+  nombre          String
+  activo          Boolean                @default(true)
+  orden           Int                    @default(0)
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  productoId      String                 @map("id_producto")
+  producto        Producto               @relation(fields: [productoId], references: [id], onDelete: Cascade)
   recetasElegidos RecetaElegidosInsumo[]
 
   @@unique([productoId, codigo])
@@ -278,20 +280,20 @@ model VarianteProducto {
 }
 
 model Presentacion {
-  id             String                    @id @default(uuid())
-  cantidad       Int
-  precioVenta    Float                     @map("precio_venta")
-  stockMinimo    Int                       @default(0) @map("stock_minimo")
-  activo         Boolean                   @default(true)
-  createdAt      DateTime                  @default(now())
-  updatedAt      DateTime                  @updatedAt
-  productoId     String                    @map("id_producto")
-  detallePedidos DetallePedido[]
-  movimientos    MovimientoProducto[]
-  producto       Producto                  @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  requerimientos RequerimientoProduccion[]
-  stocks         StockProducto[]
-  fichasTecnicas FichaTecnica[]
+  id              String                    @id @default(uuid())
+  cantidad        Int
+  precioVenta     Float                     @map("precio_venta")
+  stockMinimo     Int                       @default(0) @map("stock_minimo")
+  activo          Boolean                   @default(true)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  productoId      String                    @map("id_producto")
+  detallePedidos  DetallePedido[]
+  movimientos     MovimientoProducto[]
+  producto        Producto                  @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  requerimientos  RequerimientoProduccion[]
+  stocks          StockProducto[]
+  fichasTecnicas  FichaTecnica[]
   recetasElegidos RecetaElegidosInsumo[]
 
   @@unique([productoId, cantidad])
@@ -334,7 +336,7 @@ model Insumo {
   detallesConteo          ConteoInsumoDetalle[]
   detallesReporteSucursal ReporteStockSucursalDetalle[]
   proveedores             InsumoProveedor[]
-  ordenesCompra            OrdenCompraDetalle[]
+  ordenesCompra           OrdenCompraDetalle[]
 
   @@map("insumos")
 }
@@ -372,21 +374,21 @@ model FichaTecnica {
 }
 
 model RecetaElegidosInsumo {
-  id             String           @id @default(uuid())
-  productoId     String           @map("id_producto")
-  varianteId     String?          @map("id_variante")
-  presentacionId String?          @map("id_presentacion")
-  insumoId       String           @map("id_insumo")
+  id             String            @id @default(uuid())
+  productoId     String            @map("id_producto")
+  varianteId     String?           @map("id_variante")
+  presentacionId String?           @map("id_presentacion")
+  insumoId       String            @map("id_insumo")
   alcance        String
-  claveAlcance   String           @map("clave_alcance")
+  claveAlcance   String            @map("clave_alcance")
   cantidad       Float
-  merma          Float            @default(0)
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  producto       Producto         @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  merma          Float             @default(0)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  producto       Producto          @relation(fields: [productoId], references: [id], onDelete: Cascade)
   variante       VarianteProducto? @relation(fields: [varianteId], references: [id], onDelete: Restrict)
-  presentacion   Presentacion?    @relation(fields: [presentacionId], references: [id], onDelete: Restrict)
-  insumo         Insumo           @relation(fields: [insumoId], references: [id], onDelete: Restrict)
+  presentacion   Presentacion?     @relation(fields: [presentacionId], references: [id], onDelete: Restrict)
+  insumo         Insumo            @relation(fields: [insumoId], references: [id], onDelete: Restrict)
 
   @@unique([productoId, insumoId, claveAlcance])
   @@index([productoId, alcance, varianteId, presentacionId])
@@ -558,21 +560,21 @@ model Compra {
 }
 
 model OrdenCompra {
-  id                 String               @id @default(uuid())
-  numero             Int                  @unique @default(autoincrement())
-  fechaLocal         String               @map("fecha_local")
-  proveedorId        String?              @map("id_proveedor")
-  proveedorNombre    String               @map("proveedor_nombre")
-  proveedorContacto  String?              @map("proveedor_contacto")
-  proveedorTelefono  String?              @map("proveedor_telefono")
-  ubicacionId        String?              @map("id_ubicacion")
-  ubicacionNombre    String?              @map("ubicacion_nombre")
-  observaciones      String?
-  creadoPorNombre     String               @map("creado_por_nombre")
-  createdAt          DateTime             @default(now())
-  proveedor          Proveedor?           @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
-  ubicacion          Ubicacion?           @relation(fields: [ubicacionId], references: [id], onDelete: SetNull)
-  detalles           OrdenCompraDetalle[]
+  id                String               @id @default(uuid())
+  numero            Int                  @unique @default(autoincrement())
+  fechaLocal        String               @map("fecha_local")
+  proveedorId       String?              @map("id_proveedor")
+  proveedorNombre   String               @map("proveedor_nombre")
+  proveedorContacto String?              @map("proveedor_contacto")
+  proveedorTelefono String?              @map("proveedor_telefono")
+  ubicacionId       String?              @map("id_ubicacion")
+  ubicacionNombre   String?              @map("ubicacion_nombre")
+  observaciones     String?
+  creadoPorNombre   String               @map("creado_por_nombre")
+  createdAt         DateTime             @default(now())
+  proveedor         Proveedor?           @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  ubicacion         Ubicacion?           @relation(fields: [ubicacionId], references: [id], onDelete: SetNull)
+  detalles          OrdenCompraDetalle[]
 
   @@index([fechaLocal])
   @@index([proveedorId, fechaLocal])
@@ -1030,22 +1032,22 @@ model RendicionChofer {
 }
 
 model SaldoCaja {
-  id                         String                       @id @default(uuid())
-  tipo                       String                       @unique
-  saldo                      Float                        @default(0)
-  updatedAt                  DateTime                     @updatedAt
-  nombre                     String?
-  activo                     Boolean                      @default(true)
-  sistema                    Boolean                      @default(false)
-  ubicacionId                String?                      @map("id_ubicacion")
-  ubicacion                  Ubicacion?                   @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
-  recibeDepositos            Boolean                      @default(false) @map("recibe_depositos")
-  conceptoDeposito           String                       @default("Depósito diario") @map("concepto_deposito")
-  auditorias                 AuditoriaConfiguracionCaja[]
-  integracionesEfectivo      IntegracionSheetSucursal[]   @relation("CajaSheetEfectivo")
-  integracionesTransferencia IntegracionSheetSucursal[]   @relation("CajaSheetTransferencia")
-  integracionesDeliveryEfectivo IntegracionSheetSucursal[] @relation("CajaSheetDeliveryEfectivo")
-  integracionesDeliveryTransferencia IntegracionSheetSucursal[] @relation("CajaSheetDeliveryTransferencia")
+  id                                 String                       @id @default(uuid())
+  tipo                               String                       @unique
+  saldo                              Float                        @default(0)
+  updatedAt                          DateTime                     @updatedAt
+  nombre                             String?
+  activo                             Boolean                      @default(true)
+  sistema                            Boolean                      @default(false)
+  ubicacionId                        String?                      @map("id_ubicacion")
+  ubicacion                          Ubicacion?                   @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  recibeDepositos                    Boolean                      @default(false) @map("recibe_depositos")
+  conceptoDeposito                   String                       @default("Depósito diario") @map("concepto_deposito")
+  auditorias                         AuditoriaConfiguracionCaja[]
+  integracionesEfectivo              IntegracionSheetSucursal[]   @relation("CajaSheetEfectivo")
+  integracionesTransferencia         IntegracionSheetSucursal[]   @relation("CajaSheetTransferencia")
+  integracionesDeliveryEfectivo      IntegracionSheetSucursal[]   @relation("CajaSheetDeliveryEfectivo")
+  integracionesDeliveryTransferencia IntegracionSheetSucursal[]   @relation("CajaSheetDeliveryTransferencia")
 
   @@index([ubicacionId, activo])
   @@map("saldos_caja")
@@ -1105,23 +1107,23 @@ model CodigoRelojEmpleado {
 }
 
 model IntegracionSheetSucursal {
-  id                  String     @id @default(uuid())
-  ubicacionTexto      String     @map("ubicacion_texto")
-  ubicacionClave      String     @unique @map("ubicacion_clave")
-  activo              Boolean    @default(true)
-  ubicacionId         String     @map("id_ubicacion")
-  cajaEfectivoId      String?    @map("id_caja_efectivo")
-  cajaTransferenciaId String?    @map("id_caja_transferencia")
-  cajaDeliveryEfectivoId String? @map("id_caja_delivery_efectivo")
-  cajaDeliveryTransferenciaId String? @map("id_caja_delivery_transferencia")
-  actualizadoPorId    String     @map("id_actualizado_por")
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
-  ubicacion           Ubicacion  @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
-  cajaEfectivo        SaldoCaja? @relation("CajaSheetEfectivo", fields: [cajaEfectivoId], references: [id], onDelete: Restrict)
-  cajaTransferencia   SaldoCaja? @relation("CajaSheetTransferencia", fields: [cajaTransferenciaId], references: [id], onDelete: Restrict)
-  cajaDeliveryEfectivo SaldoCaja? @relation("CajaSheetDeliveryEfectivo", fields: [cajaDeliveryEfectivoId], references: [id], onDelete: Restrict)
-  cajaDeliveryTransferencia SaldoCaja? @relation("CajaSheetDeliveryTransferencia", fields: [cajaDeliveryTransferenciaId], references: [id], onDelete: Restrict)
+  id                          String     @id @default(uuid())
+  ubicacionTexto              String     @map("ubicacion_texto")
+  ubicacionClave              String     @unique @map("ubicacion_clave")
+  activo                      Boolean    @default(true)
+  ubicacionId                 String     @map("id_ubicacion")
+  cajaEfectivoId              String?    @map("id_caja_efectivo")
+  cajaTransferenciaId         String?    @map("id_caja_transferencia")
+  cajaDeliveryEfectivoId      String?    @map("id_caja_delivery_efectivo")
+  cajaDeliveryTransferenciaId String?    @map("id_caja_delivery_transferencia")
+  actualizadoPorId            String     @map("id_actualizado_por")
+  createdAt                   DateTime   @default(now())
+  updatedAt                   DateTime   @updatedAt
+  ubicacion                   Ubicacion  @relation(fields: [ubicacionId], references: [id], onDelete: Restrict)
+  cajaEfectivo                SaldoCaja? @relation("CajaSheetEfectivo", fields: [cajaEfectivoId], references: [id], onDelete: Restrict)
+  cajaTransferencia           SaldoCaja? @relation("CajaSheetTransferencia", fields: [cajaTransferenciaId], references: [id], onDelete: Restrict)
+  cajaDeliveryEfectivo        SaldoCaja? @relation("CajaSheetDeliveryEfectivo", fields: [cajaDeliveryEfectivoId], references: [id], onDelete: Restrict)
+  cajaDeliveryTransferencia   SaldoCaja? @relation("CajaSheetDeliveryTransferencia", fields: [cajaDeliveryTransferenciaId], references: [id], onDelete: Restrict)
 
   @@index([ubicacionId, activo])
   @@map("integraciones_sheet_sucursal")
@@ -1488,6 +1490,22 @@ model RolEmpleado {
   historialSalarial         HistorialSalarial[]
 
   @@map("roles_empleado")
+}
+
+model PermisoEmpleado {
+  id               String    @id @default(uuid())
+  empleadoId       String    @map("id_empleado")
+  clave            String
+  permitido        Boolean
+  actualizadoPorId String?   @map("id_actualizado_por")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  empleado         Empleado  @relation("PermisosIndividualesEmpleado", fields: [empleadoId], references: [id], onDelete: Cascade)
+  actualizadoPor   Empleado? @relation("PermisosIndividualesEditadosPor", fields: [actualizadoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([empleadoId, clave])
+  @@index([actualizadoPorId])
+  @@map("permisos_empleado")
 }
 
 model HistorialSalarial {
