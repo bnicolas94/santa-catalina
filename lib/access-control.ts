@@ -116,6 +116,7 @@ const accessRules: AccessRule[] = [
     // preceder al prefijo general /logistica.
     { path: '/api/logistica/flota', permissions: ['permisoFlota'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
     { path: '/api/flota', permissions: ['permisoFlota', 'permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
+    { path: '/api/logistica/repartos', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
     { path: '/api/logistica', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
     { path: '/api/rutas', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
     { path: '/api/entregas', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
@@ -155,6 +156,7 @@ const accessRules: AccessRule[] = [
     { path: '/pedidos', permissions: ['permisoPedidos'], legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
     { path: '/importar', permissions: ['permisoPedidos'], legacyRoles: ['ADMIN', 'ADMIN_OPS'] },
     { path: '/logistica/flota', permissions: ['permisoFlota'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
+    { path: '/logistica/repartos', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
     { path: '/logistica', permissions: ['permisoLogistica'], legacyRoles: ['ADMIN', 'LOGISTICA'] },
     { path: '/reportes', permissions: ['permisoReportes'], legacyRoles: ['ADMIN'] },
 ]

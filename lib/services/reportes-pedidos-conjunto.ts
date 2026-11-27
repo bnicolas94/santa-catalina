@@ -4,7 +4,7 @@ import { obtenerConfiguracionPedidosOnlineExcel } from '@/lib/services/pedidos-o
 
 let cache: { clave: string; vence: number; datos: Promise<{ fuentes: { origen: string; csv: string }[]; actualizado: string }> } | undefined
 
-export async function obtenerReportePedidosConjunto(filtros: FiltrosPedidosOnline): Promise<ReportePedidosOnline> {
+export async function obtenerFuentesPedidosConjunto() {
     const [configCaja, configOnline] = await Promise.all([obtenerConfiguracionSheetCaja(), obtenerConfiguracionPedidosOnlineExcel()])
     const hojaLocal = configCaja.hojas.find(h => h.nombre === 'Pedidos_comunes')
     if (!hojaLocal) throw new Error('Configurá Pedidos_comunes en la integración de Caja.')
@@ -20,5 +20,10 @@ export async function obtenerReportePedidosConjunto(filtros: FiltrosPedidosOnlin
         void datos.catch(() => { if (cache === entrada) cache = undefined })
     }
     const { fuentes, actualizado } = await cache.datos
+    return { fuentes, actualizado }
+}
+
+export async function obtenerReportePedidosConjunto(filtros: FiltrosPedidosOnline): Promise<ReportePedidosOnline> {
+    const { fuentes, actualizado } = await obtenerFuentesPedidosConjunto()
     return { ...calcularReportePedidosFuentes(fuentes, filtros), actualizado }
 }

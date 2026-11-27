@@ -82,6 +82,16 @@ test('pedidos conjuntos exige permiso de Reportes en página y API', () => {
     }
 })
 
+test('repartos del Sheet exige permiso de Logística en página y API', () => {
+    for (const path of ['/logistica/repartos', '/api/logistica/repartos']) {
+        assert.equal(getAccessRule(path)?.path, path)
+        assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoLogistica: true } }), true)
+        assert.equal(canAccessPath(path, { permisos: { permisoFlota: true } }), false)
+        assert.equal(canAccessPath(path, {}), false)
+    }
+})
+
 test('consumo de pedidos exige permiso de Reportes', () => {
     for (const path of ['/api/reportes/consumo-pedidos', '/api/reportes/product-mix-comparacion']) {
         assert.equal(canAccessPath(path, { rol: 'ADMIN' }), true)

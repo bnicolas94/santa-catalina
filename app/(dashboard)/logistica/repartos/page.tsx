@@ -1,393 +1,83 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
-import useSWR, { useSWRConfig } from 'swr'
+import { useState } from 'react'
+import useSWR from 'swr'
 
-interface Cliente { id: string; nombreComercial: string; direccion: string; zona: string; latitud?: number; longitud?: number }
-interface Pedido { 
-    id: string; totalUnidades: number; totalImporte: number; estado: string; 
-    medioPago: string | null; abonado: boolean;
-    detalles: { 
-        cantidad: number; 
-        observaciones: string | null;
-        presentacion: { cantidad: number; producto: { codigoInterno: string } } 
-    }[] 
-}
-interface Entrega {
-    id: string; horaEntrega: string | null; tempEntrega: number | null
-    unidadesRechazadas: number; motivoRechazo: string | null; observaciones: string | null
-    cliente: Cliente; pedido: Pedido
-}
-interface Ruta { id: string; fecha: string; zona: string; entregas: Entrega[] }
+type Filtros = { desde: string; hasta: string; chofer: string; turno: string; pago: string; origen: string; buscar: string }
+type Registro = { origen: string; id: string; fecha: string; turno: string; chofer: string; nombre: string; direccion: string; ubicacion: string; pago: string; importe: number }
+type Grupo = { fecha: string; turno: string; chofer: string; pedidos: number; ingresoEsperado: number; efectivo: number; transferencia: number }
+type TotalChofer = Omit<Grupo, 'fecha' | 'turno'>
+type Reporte = { actualizado: string; tieneColumnaChofer: boolean; calidad: { sinChofer: number; sinTurno: number; sinFechaEntrega: number; sinPrecio: number; duplicados: number; conflictos: number; noEntregados: number }; totalPedidos: number;
+    ingresoAsignado: number; ingresoSinChofer: number; opciones: { choferes: string[]; turnos: string[]; pagos: string[]; origenes: string[] }; porChofer: TotalChofer[]; porChoferDiaTurno: Grupo[]; registros: Registro[] }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const moneda = (valor: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(valor)
+function hoyArgentina() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) }
+function inicioMes(fecha: string) { return `${fecha.slice(0, 7)}-01` }
+const fetcher = async (url: string): Promise<Reporte> => {
+    const res = await fetch(url)
+    const datos = await res.json()
+    if (!res.ok) throw new Error(datos.error || 'No se pudo cargar el reporte.')
+    return datos
+}
 
 export default function RepartosPage() {
-    const { data: session } = useSession()
-    const userId = (session?.user as { id?: string })?.id
+    const [filtros, setFiltros] = useState<Filtros>(() => { const hoy = hoyArgentina(); return { desde: inicioMes(hoy), hasta: hoy, chofer: '', turno: '', pago: '', origen: '', buscar: '' } })
+    const [aplicados, setAplicados] = useState<Filtros>(filtros)
+    const parametros = new URLSearchParams(aplicados).toString()
+    const { data: reporte, error, isLoading: cargando } = useSWR<Reporte>(`/api/logistica/repartos?${parametros}`, fetcher)
 
-    const { mutate } = useSWRConfig()
-
-    const today = new Date().toISOString().split('T')[0]
-    const cacheKey = userId ? `/api/rutas?choferId=${userId}&fecha=${today}` : null
-    const { data: rutasData, error: swrError, isLoading } = useSWR<Ruta[]>(
-        cacheKey,
-        fetcher,
-        { refreshInterval: 30000 } // Aumentamos el polling ya que tenemos SSE
+    const cambiar = (campo: keyof Filtros, valor: string) => setFiltros(actual => ({ ...actual, [campo]: valor }))
+    const selector = (campo: 'chofer' | 'turno' | 'pago' | 'origen', titulo: string, opciones: string[]) => (
+        <label className="form-group">{titulo}<select className="form-select" value={filtros[campo]} onChange={e => cambiar(campo, e.target.value)}>
+            <option value="">Todos</option>{opciones.map(x => <option key={x} value={x}>{x}</option>)}
+        </select></label>
     )
 
-    // Real-time updates via SSE
-    useEffect(() => {
-        const eventSource = new EventSource('/api/realtime/events');
-        
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'ORDER_UPDATED') {
-                    console.log('Real-time update received:', data);
-                    mutate(cacheKey);
-                }
-            } catch (e) {
-                console.error('Error parsing SSE message', e);
-            }
-        };
-
-        return () => {
-            eventSource.close();
-        };
-    }, [cacheKey, mutate]);
-
-    const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null)
-    const [formEntrega, setFormEntrega] = useState({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
-    const [error, setError] = useState('')
-    const [success, setSuccess] = useState('')
-    const [isEntregandoTodos, setIsEntregandoTodos] = useState(false)
-    const [isSubmitting, setIsSubmitting] = useState(false)
-
-    const rutas = Array.isArray(rutasData) ? rutasData : []
-
-    const handleConfirmarEntrega = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!selectedEntrega) return
-        setIsSubmitting(true)
-        setError('')
-        try {
-            const res = await fetch(`/api/entregas/${selectedEntrega.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...formEntrega,
-                    tempEntrega: formEntrega.tempEntrega === '' ? null : formEntrega.tempEntrega
-                }),
-            })
-            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
-            setSuccess('Entrega registrada con éxito')
-            mutate(cacheKey)
-            setSelectedEntrega(null)
-            setTimeout(() => setSuccess(''), 3000)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Error al registrar la entrega')
-        } finally { setIsSubmitting(false) }
-    }
-
-    const handleRechazarTotal = async (entregaId: string, totalUnidades: number) => {
-        if (!confirm('¿Seguro que querés marcar este pedido como RECHAZADO (no entregado)?')) return
-        setError('')
-        try {
-            const res = await fetch(`/api/entregas/${entregaId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tempEntrega: null,
-                    unidadesRechazadas: totalUnidades,
-                    motivoRechazo: 'Rechazado en destino',
-                    observaciones: 'Marcado como No Entregado por el chofer'
-                })
-            })
-            if (!res.ok) { const data = await res.json(); throw new Error(data.error) }
-            setSuccess('Entrega marcada como no entregada (Rechazo)')
-            mutate(cacheKey)
-            setTimeout(() => setSuccess(''), 3000)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Error al rechazar entrega')
-        }
-    }
-
-    const handleEntregarTodos = async (entregasPendientes: Entrega[]) => {
-        if (!window.confirm('¿Estás seguro de marcar TODOS los pedidos pendientes como entregados?')) return;
-        setIsEntregandoTodos(true)
-        setError('')
-        try {
-            for (const entrega of entregasPendientes) {
-                const res = await fetch(`/api/entregas/${entrega.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tempEntrega: null, unidadesRechazadas: 0, motivoRechazo: '', observaciones: '' })
-                })
-                if (!res.ok) {
-                    const data = await res.json()
-                    throw new Error(`Error en ${entrega.cliente.nombreComercial}: ${data.error}`)
-                }
-            }
-            setSuccess('Todos los pedidos marcados como entregados')
-            mutate(cacheKey)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Error al entregar todos')
-        } finally {
-            setIsEntregandoTodos(false)
-        }
-    }
-
-    if (!session) return null
-    if (isLoading && !rutasData) return <div className="empty-state"><div className="spinner" /><p>Cargando ruta de hoy...</p></div>
-
-    return (
-        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <div className="page-header" style={{ marginBottom: 'var(--space-4)' }}>
-                <h1>📍 Mis Repartos</h1>
+    return <div>
+        <div className="page-header"><div><h1>Repartos del Google Sheet</h1><p>Pedidos Delivery por fecha de entrega. Los importes son ingresos esperados, no rendiciones confirmadas.</p></div></div>
+        <form className="card" onSubmit={e => { e.preventDefault(); setAplicados({ ...filtros }) }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 'var(--space-3)' }}>
+                <label className="form-group">Desde<input className="form-input" type="date" value={filtros.desde} onChange={e => cambiar('desde', e.target.value)} required /></label>
+                <label className="form-group">Hasta<input className="form-input" type="date" value={filtros.hasta} onChange={e => cambiar('hasta', e.target.value)} required /></label>
+                {selector('chofer', 'Chofer', reporte?.opciones.choferes ?? [])}
+                {selector('turno', 'Turno', reporte?.opciones.turnos ?? [])}
+                {selector('pago', 'Pago', reporte?.opciones.pagos ?? [])}
+                {selector('origen', 'Hoja', reporte?.opciones.origenes ?? [])}
+                <label className="form-group">Buscar ID, cliente o dirección<input className="form-input" value={filtros.buscar} onChange={e => cambiar('buscar', e.target.value)} maxLength={100} /></label>
             </div>
-
-            {success && <div className="toast toast-success">{success}</div>}
-            {(error || swrError) && <div className="toast toast-error">{error || 'Error de conexión'}</div>}
-
-            {rutas.length === 0 ? (
-                <div className="empty-state" style={{ padding: 'var(--space-6) 0' }}>
-                    <p style={{ fontSize: '48px', margin: 0 }}>🏍️</p>
-                    <p>No tenés rutas asignadas para hoy.</p>
-                </div>
-            ) : rutas.map(rutaDeHoy => {
-                const entregasSorted = [...rutaDeHoy.entregas]
-                const completadas = entregasSorted.filter(e => !!e.horaEntrega).length
-
-                const getMapQuery = (cliente: Cliente) => {
-                    if (cliente.latitud && cliente.longitud) return `${cliente.latitud},${cliente.longitud}`
-                    return encodeURIComponent((cliente.direccion || '') + ' ' + (cliente.zona || ''))
-                }
-
-                return (
-                    <div key={rutaDeHoy.id} style={{ marginBottom: 'var(--space-6)' }}>
-                        <div style={{ backgroundColor: 'var(--color-primary-50)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', border: '1px solid var(--color-primary-200)' }}>
-                            <h2 style={{ fontSize: 'var(--text-lg)', margin: '0 0 var(--space-1) 0', color: 'var(--color-primary)' }}>Ruta en progreso</h2>
-                            <span style={{ fontSize: 'var(--text-sm)' }}>
-                                {completadas} de {entregasSorted.length} entregas completadas
-                            </span>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-                                <div>
-                                    <h2 style={{ fontSize: '1.5rem', margin: '0 0 var(--space-2)' }}>
-                                        Ruta {new Date(rutaDeHoy.fecha).toLocaleDateString('es-AR')}
-                                    </h2>
-                                    <div style={{ color: 'var(--color-gray-500)' }}>
-                                        📍 Zona: {rutaDeHoy.zona || 'Sin zona especificada'}
-                                        {' · '} 📦 {rutaDeHoy.entregas.length} pedidos
-                                    </div>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-                                        {completadas} / {rutaDeHoy.entregas.length}
-                                    </div>
-                                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>entregados</div>
-                                </div>
-                            </div>
-
-                            {rutaDeHoy.entregas.length > 0 && completadas < rutaDeHoy.entregas.length && (() => {
-                                const companyCoords = "-34.8237468,-58.1873516"
-                                const pendingWaypoints = entregasSorted
-                                    .filter(e => !e.horaEntrega)
-                                    .map(e => {
-                                        if (e.cliente.latitud && e.cliente.longitud) return `${e.cliente.latitud},${e.cliente.longitud}`
-                                        return encodeURIComponent(e.cliente.direccion || '')
-                                    })
-                                    .join('|')
-                                
-                                return (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-                                        <a
-                                            href={`https://www.google.com/maps/dir/?api=1&origin=${companyCoords}&destination=${companyCoords}&waypoints=${pendingWaypoints}&travelmode=driving`}
-                                            target="_blank" rel="noreferrer"
-                                            className="btn"
-                                            style={{ width: '100%', backgroundColor: '#4285F4', color: 'white', fontWeight: 600, fontSize: '1.1rem', height: '48px' }}
-                                        >
-                                            🗺️ Iniciar Recorrido Completo
-                                        </a>
-                                        <button
-                                            className="btn btn-outline"
-                                            style={{ width: '100%', borderColor: 'var(--color-primary)', color: 'var(--color-primary)', fontWeight: 600, fontSize: '1rem', height: '48px' }}
-                                            onClick={() => handleEntregarTodos(entregasSorted.filter(e => !e.horaEntrega))}
-                                            disabled={isEntregandoTodos}
-                                        >
-                                            {isEntregandoTodos ? 'Procesando...' : '✅ Entregar todos los pendientes'}
-                                        </button>
-                                    </div>
-                                )
-                            })()}
-
-                            {entregasSorted.map((entrega, i) => {
-                                const estaEntregado = !!entrega.horaEntrega
-                                const esAbonado = entrega.pedido.abonado
-                                return (
-                                    <div key={entrega.id} className="card" style={{ padding: 'var(--space-4)', opacity: estaEntregado ? 0.7 : 1 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-2)' }}>
-                                            <div>
-                                                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)', fontWeight: 600, marginBottom: '2px' }}>
-                                                    PARADA #{i + 1}
-                                                </div>
-                                                <h3 style={{
-                                                    fontSize: 'var(--text-lg)', margin: 0,
-                                                    textDecoration: estaEntregado && entrega.pedido.estado === 'rechazado' ? 'line-through' : 'none',
-                                                    color: estaEntregado ? 'var(--color-gray-600)' : 'inherit'
-                                                }}>
-                                                    {entrega.cliente.nombreComercial}
-                                                </h3>
-                                            </div>
-                                            {estaEntregado ? (
-                                                <span className="badge badge-success" style={{ fontWeight: 600 }}>{entrega.pedido.estado === 'rechazado' ? 'Rechazado' : 'Entregado'}</span>
-                                            ) : (
-                                                <span className="badge badge-warning">En camino</span>
-                                            )}
-                                        </div>
-                                        <p style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--text-md)', color: 'var(--color-gray-600)' }}>
-                                            📍 {entrega.cliente.direccion || 'Sin dirección registrada'}
-                                        </p>
-
-                                        {/* ESTADO DE PAGO (VISTA CHOFER) */}
-                                        <div style={{ 
-                                            marginBottom: 'var(--space-3)', 
-                                            padding: 'var(--space-3)', 
-                                            borderRadius: 'var(--radius-md)',
-                                            backgroundColor: esAbonado ? '#27AE6015' : '#E67E2215',
-                                            border: `2px solid ${esAbonado ? '#27AE60' : '#E67E22'}`
-                                        }}>
-                                            {esAbonado ? (
-                                                <div style={{ color: '#27AE60', fontWeight: 800, textAlign: 'center', fontSize: 'var(--text-lg)' }}>
-                                                    ✅ YA FUE PAGADO
-                                                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-gray-600)' }}>No cobrar dinero</div>
-                                                </div>
-                                            ) : (
-                                                <div style={{ color: '#E67E22', fontWeight: 800, textAlign: 'center', fontSize: 'var(--text-lg)' }}>
-                                                    💵 COBRAR ${entrega.pedido.totalImporte.toLocaleString('es-AR')}
-                                                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-gray-600)' }}>Recibir efectivo</div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div style={{ backgroundColor: 'var(--color-gray-50)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-3)' }}>
-                                            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: '4px' }}>
-                                                📦 Pedido: {entrega.pedido.totalUnidades} sándwiches
-                                            </div>
-                                            {entrega.pedido.detalles.map((d, idx) => {
-                                                const pres = d.presentacion
-                                                return (
-                                                    <div key={idx} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-600)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        <span>- {d.cantidad} un. de x{pres?.cantidad ?? '?'} {pres?.producto?.codigoInterno ?? ''}</span>
-                                                        {d.observaciones && (
-                                                            <span style={{ fontStyle: 'italic', color: 'var(--color-primary)', fontWeight: 600 }}>({d.observaciones.toUpperCase()})</span>
-                                                        )}
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-
-                                        {!estaEntregado ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                                                <a href={`https://www.google.com/maps/search/?api=1&query=${getMapQuery(entrega.cliente)}`}
-                                                    target="_blank" rel="noreferrer"
-                                                    className="btn btn-outline" style={{ textAlign: 'center', color: 'var(--color-primary)' }}>
-                                                    🗺️ Navegar
-                                                </a>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
-                                                    <button className="btn btn-outline" style={{ borderColor: '#E74C3C', color: '#E74C3C' }} onClick={() => handleRechazarTotal(entrega.id, entrega.pedido.totalUnidades)}>
-                                                        ✗ No entregado
-                                                    </button>
-                                                    <button className="btn btn-primary" onClick={() => {
-                                                        setSelectedEntrega(entrega)
-                                                        setFormEntrega({ tempEntrega: '', unidadesRechazadas: '0', motivoRechazo: '', observaciones: '' })
-                                                    }}>
-                                                        ✓ Entregar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>
-                                                ✓ Entregado a las {new Date(entrega.horaEntrega!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                                                {entrega.tempEntrega && ` · Temp: ${entrega.tempEntrega}°C`}
-                                            </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                )
-            })}
-
-            {selectedEntrega && (
-                <div className="modal-overlay" style={{ alignItems: 'flex-end' }} onClick={() => setSelectedEntrega(null)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()} style={{
-                        margin: 0, maxWidth: '100%', width: '100%', borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
-                        animation: 'slideUp 0.3s ease-out forwards'
-                    }}>
-                        <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
-                        <div className="modal-header">
-                            <div>
-                                <h2 style={{ fontSize: 'var(--text-lg)', margin: 0 }}>Completar Entrega</h2>
-                                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gray-500)' }}>{selectedEntrega.cliente.nombreComercial}</span>
-                            </div>
-                            <button className="btn btn-ghost btn-icon" onClick={() => setSelectedEntrega(null)}>✕</button>
-                        </div>
-                        <form onSubmit={handleConfirmarEntrega}>
-                            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                                <div className="form-group">
-                                    <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        Temperatura de entrega (°C)
-                                        <span style={{ fontWeight: 400, color: 'var(--color-gray-500)' }}>(Máx. 8°C)</span>
-                                    </label>
-                                    <input type="number" step="0.1" className="form-input"
-                                        style={{ fontSize: '18px', padding: 'var(--space-3)' }}
-                                        value={formEntrega.tempEntrega}
-                                        onChange={e => setFormEntrega({ ...formEntrega, tempEntrega: e.target.value })}
-                                        placeholder="Ej: 4.5"
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Unidades rechazadas (opcional)</label>
-                                    <input type="number" min="0" className="form-input"
-                                        style={{ fontSize: '18px', padding: 'var(--space-3)' }}
-                                        value={formEntrega.unidadesRechazadas}
-                                        onChange={e => setFormEntrega({ ...formEntrega, unidadesRechazadas: e.target.value })}
-                                        placeholder="0"
-                                    />
-                                </div>
-                                {parseInt(formEntrega.unidadesRechazadas) > 0 && (
-                                    <div className="form-group">
-                                        <label className="form-label">Motivo de rechazo</label>
-                                        <select className="form-select" style={{ fontSize: '16px', padding: 'var(--space-3)' }} value={formEntrega.motivoRechazo} onChange={e => setFormEntrega({ ...formEntrega, motivoRechazo: e.target.value })} required>
-                                            <option value="">Seleccionar motivo...</option>
-                                            <option value="temp_alta">Cadena de frío (Temperatura alta)</option>
-                                            <option value="calidad">Problema de calidad visual</option>
-                                            <option value="fecha_venc">Fecha de vencimiento próxima</option>
-                                            <option value="sobrante">Sobrante del pedido anterior</option>
-                                            <option value="otro">Otro</option>
-                                        </select>
-                                    </div>
-                                )}
-                                <div className="form-group">
-                                    <label className="form-label">Observaciones (opcional)</label>
-                                    <textarea className="form-input" rows={2} value={formEntrega.observaciones} onChange={e => setFormEntrega({ ...formEntrega, observaciones: e.target.value })} placeholder="Local cerrado, no estaba la encargada, etc." />
-                                </div>
-                            </div>
-                            <div className="modal-footer" style={{ padding: 'var(--space-4)', borderTop: '1px solid var(--color-gray-200)' }}>
-                                <button type="submit" className="btn btn-primary" style={{ width: '100%', height: '56px', fontSize: 'var(--text-lg)' }}>
-                                    Confirmar {parseInt(formEntrega.unidadesRechazadas) > 0 ? '(con rechazos)' : 'Entrega'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
+            <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}><button type="submit" className="btn btn-primary">Aplicar filtros</button>
+                <a className="btn btn-outline" href={`/api/logistica/repartos?${parametros}&formato=csv`}>Exportar CSV</a></div>
+        </form>
+        {error && <div className="toast toast-error">{error.message}</div>}
+        {cargando && <p>Cargando repartos…</p>}
+        {reporte && <>
+            {!reporte.tieneColumnaChofer && <div className="card" style={{ marginTop: 'var(--space-4)', borderColor: 'var(--color-warning)' }}>
+                El Sheet todavía no tiene una columna <strong>Chofer</strong>. Los importes figuran sin asignar; al agregarla y completar los pedidos, aparecerá el desglose por persona.
+            </div>}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+                <div className="card"><strong>Pedidos entregados</strong><div style={{ fontSize: '1.5rem' }}>{reporte.totalPedidos}</div></div>
+                <div className="card"><strong>Ingreso esperado asignado</strong><div style={{ fontSize: '1.5rem' }}>{moneda(reporte.ingresoAsignado)}</div></div>
+                <div className="card"><strong>Ingreso sin chofer</strong><div style={{ fontSize: '1.5rem' }}>{moneda(reporte.ingresoSinChofer)}</div></div>
+            </div>
+            <p style={{ marginTop: 'var(--space-3)' }}>Cobertura: {reporte.calidad.sinChofer} sin chofer, {reporte.calidad.sinTurno} sin turno, {reporte.calidad.sinFechaEntrega} sin fecha de entrega, {reporte.calidad.sinPrecio} sin precio, {reporte.calidad.conflictos} IDs en conflicto. Actualizado: {new Date(reporte.actualizado).toLocaleString('es-AR')}.</p>
+            <section className="card" style={{ marginTop: 'var(--space-4)', overflowX: 'auto' }}><h2>Total por chofer</h2>
+                <table className="table"><thead><tr><th>Chofer</th><th>Pedidos</th><th>Ingreso esperado</th><th>Efectivo</th><th>Transferencia</th></tr></thead><tbody>
+                    {reporte.porChofer.map(g => <tr key={g.chofer}><td>{g.chofer}</td><td>{g.pedidos}</td><td>{moneda(g.ingresoEsperado)}</td><td>{moneda(g.efectivo)}</td><td>{moneda(g.transferencia)}</td></tr>)}
+                    {!reporte.porChofer.length && <tr><td colSpan={5}>No hay repartos para estos filtros.</td></tr>}
+                </tbody></table>
+            </section>
+            <section className="card" style={{ marginTop: 'var(--space-4)', overflowX: 'auto' }}><h2>Por chofer, día y turno</h2>
+                <table className="table"><thead><tr><th>Fecha</th><th>Turno</th><th>Chofer</th><th>Pedidos</th><th>Ingreso esperado</th><th>Efectivo</th><th>Transferencia</th></tr></thead><tbody>
+                    {reporte.porChoferDiaTurno.map(g => <tr key={`${g.fecha}:${g.turno}:${g.chofer}`}><td>{g.fecha}</td><td>{g.turno}</td><td>{g.chofer}</td><td>{g.pedidos}</td><td>{moneda(g.ingresoEsperado)}</td><td>{moneda(g.efectivo)}</td><td>{moneda(g.transferencia)}</td></tr>)}
+                    {!reporte.porChoferDiaTurno.length && <tr><td colSpan={7}>No hay repartos para estos filtros.</td></tr>}
+                </tbody></table>
+            </section>
+            <section className="card" style={{ marginTop: 'var(--space-4)', overflowX: 'auto' }}><h2>Detalle de pedidos</h2>
+                <table className="table"><thead><tr><th>Fecha</th><th>Turno</th><th>Chofer</th><th>ID</th><th>Cliente</th><th>Dirección</th><th>Ubicación</th><th>Pago</th><th>Importe</th></tr></thead><tbody>
+                    {reporte.registros.slice(0, 100).map(r => <tr key={`${r.origen}:${r.id}`}><td>{r.fecha}</td><td>{r.turno}</td><td>{r.chofer}</td><td>{r.id}</td><td>{r.nombre}</td><td>{r.direccion}</td><td>{r.ubicacion}</td><td>{r.pago}</td><td>{moneda(r.importe)}</td></tr>)}
+                </tbody></table>
+                {reporte.registros.length > 100 && <p>Se muestran 100 de {reporte.registros.length} pedidos. El CSV incluye todos los filtrados.</p>}
+            </section>
+        </>}
+    </div>
 }
