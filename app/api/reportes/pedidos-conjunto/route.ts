@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     if (!tienePermisoEnSesion(session, 'permisoReportes')) return NextResponse.json({ error: 'No tenés permiso para consultar reportes.' }, { status: 403 })
     const params = new URL(request.url).searchParams
     const filtros = {
-        desde: params.get('desde') ?? '', hasta: params.get('hasta') ?? '', fechaComparacion: params.get('fechaComparacion') ?? '', origen: params.get('origen') ?? '',
+        desde: params.get('desde') ?? '', hasta: params.get('hasta') ?? '', fechaComparacion: params.get('fechaComparacion') ?? '', fechaReferencia: params.get('fechaReferencia') ?? undefined, origen: params.get('origen') ?? '',
         modalidad: params.get('modalidad') ?? '', ubicacion: params.get('ubicacion') ?? '',
         estado: params.get('estado') ?? '', buscar: params.get('buscar') ?? '',
         pagina: Number(params.get('pagina') ?? 1),

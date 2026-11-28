@@ -3,7 +3,7 @@ import { normalizarTexto, parsearCsvSheetCaja, rangoDiaArgentinaSheet } from '@/
 import { interpretarSaboresElegidos, saboresSheetOnline } from '@/lib/pedidos-online-excel'
 
 export type FiltrosPedidosOnline = {
-    desde: string; hasta: string; fechaComparacion?: string; origen?: string; modalidad?: string; ubicacion?: string; ubicaciones?: string[]; estado?: string; buscar?: string; pagina?: number; todos?: boolean; auditar?: boolean
+    desde: string; hasta: string; fechaComparacion?: string; fechaReferencia?: string; origen?: string; modalidad?: string; ubicacion?: string; ubicaciones?: string[]; estado?: string; buscar?: string; pagina?: number; todos?: boolean; auditar?: boolean
 }
 
 export function validarFiltrosPedidosOnline(f: FiltrosPedidosOnline) {
@@ -14,6 +14,7 @@ export function validarFiltrosPedidosOnline(f: FiltrosPedidosOnline) {
     if (f.buscar && f.buscar.length > 100) throw new Error('La búsqueda es demasiado larga.')
     if (f.pagina !== undefined && (!Number.isSafeInteger(f.pagina) || f.pagina < 1)) throw new Error('La página no es válida.')
     if (f.fechaComparacion) rangoDiaArgentinaSheet(f.fechaComparacion)
+    if (f.fechaReferencia !== undefined) rangoDiaArgentinaSheet(f.fechaReferencia)
     return { inicio, fin, dias }
 }
 
@@ -172,6 +173,7 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
     const porPago = new Map<string, { nombre: string; pedidos: number; centavos: number }>()
     const porOrigen = new Map<string, { nombre: string; pedidos: number; centavos: number }>()
     const paquetesPorFecha = new Map<string, { paquetes: number; sinClasificar: number }>()
+    const ingresosPorFecha = new Map<string, { centavos: number; pedidos: number; sinPrecio: number }>()
     const saboresElegidos = new Map<string, { codigo: string; nombre: string; sandwiches: number }>()
     const pedidosElegidos: Array<{ periodo: 'actual' | 'anterior'; origen: string; id: string;
         presentaciones: { clave: string; cantidad: number; paquetes: number }[];
@@ -245,6 +247,11 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
             if (paquetes === null) volumen.sinClasificar++
             else volumen.paquetes += paquetes
             paquetesPorFecha.set(fecha, volumen)
+            const ingresoDia = ingresosPorFecha.get(fecha) ?? { centavos: 0, pedidos: 0, sinPrecio: 0 }
+            ingresoDia.pedidos++
+            if (precioValido) ingresoDia.centavos += importe
+            else ingresoDia.sinPrecio++
+            ingresosPorFecha.set(fecha, ingresoDia)
         }
         if (fecha >= anteriorInicio && fecha < f.desde && !conflicto && !duplicado && esEntregado) {
             anteriorPedidos++
@@ -299,6 +306,20 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
         .sort((a, b) => b.pedidos - a.pedidos)
     const fechaComparacion = f.fechaComparacion || f.hasta
     const fechaSemanaAnterior = moverDia(fechaComparacion, -7)
+    const fechaReferencia = f.fechaReferencia || fechaSemanaAnterior
+    const resumenFecha = (fecha: string) => ({
+        ingresoEsperado: (ingresosPorFecha.get(fecha)?.centavos ?? 0) / 100,
+        pedidos: ingresosPorFecha.get(fecha)?.pedidos ?? 0,
+        sinPrecio: ingresosPorFecha.get(fecha)?.sinPrecio ?? 0,
+        paquetes: paquetesPorFecha.get(fecha)?.paquetes ?? 0,
+        sinClasificar: paquetesPorFecha.get(fecha)?.sinClasificar ?? 0,
+    })
+    const diaActual = resumenFecha(fechaComparacion)
+    const diaReferencia = resumenFecha(fechaReferencia)
+    const ingresoActualCentavos = ingresosPorFecha.get(fechaComparacion)?.centavos ?? 0
+    const ingresoReferenciaCentavos = ingresosPorFecha.get(fechaReferencia)?.centavos ?? 0
+    const variacionPorcentaje = (actual: number, referencia: number) => referencia > 0
+        ? (actual - referencia) / referencia * 100 : null
     const sumarSemana = (fechaFinal: string) => Array.from({ length: 7 }, (_, i) => paquetesPorFecha.get(moverDia(fechaFinal, -i)) ?? { paquetes: 0, sinClasificar: 0 })
         .reduce((total, dia) => ({ paquetes: total.paquetes + dia.paquetes, sinClasificar: total.sinClasificar + dia.sinClasificar }), { paquetes: 0, sinClasificar: 0 })
     const porDiaCompleto = Array.from({ length: dias }, (_, i) => {
@@ -326,8 +347,16 @@ export function calcularReportePedidosFuentes(fuentes: Fuente[], f: FiltrosPedid
             paquetesVendidos, conPaquetes,
             ingresoAtribuidoPaquetes: ingresoAtribuidoCentavos / 100,
             ingresoSinAsignarPaquetes: (centavos - ingresoAtribuidoCentavos) / 100,
-            anterior: { pedidos: anteriorPedidos, ingresoEsperado: anteriorCentavos / 100 } },
+            anterior: { desde: anteriorInicio, hasta: moverDia(f.desde, -1),
+                pedidos: anteriorPedidos, ingresoEsperado: anteriorCentavos / 100 } },
         porDia: porDiaCompleto,
+        comparacionFechas: {
+            fechaActual: fechaComparacion, fechaReferencia, actual: diaActual, referencia: diaReferencia,
+            diferenciaIngreso: (ingresoActualCentavos - ingresoReferenciaCentavos) / 100,
+            variacionIngresoPct: variacionPorcentaje(ingresoActualCentavos, ingresoReferenciaCentavos),
+            diferenciaPaquetes: diaActual.paquetes - diaReferencia.paquetes,
+            variacionPaquetesPct: variacionPorcentaje(diaActual.paquetes, diaReferencia.paquetes),
+        },
         comparacionPaquetes: {
             fecha: fechaComparacion, actual: paquetesPorFecha.get(fechaComparacion) ?? { paquetes: 0, sinClasificar: 0 },
             fechaSemanaAnterior, semanaAnterior: paquetesPorFecha.get(fechaSemanaAnterior) ?? { paquetes: 0, sinClasificar: 0 },

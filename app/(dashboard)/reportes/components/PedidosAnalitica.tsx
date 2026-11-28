@@ -15,6 +15,7 @@ export default function PedidosAnalitica({ conjunto = false }: { conjunto?: bool
     const [desde, setDesde] = useState(() => diaArgentina(new Date(Date.now() - 29 * 86_400_000)))
     const [hasta, setHasta] = useState(() => diaArgentina(new Date()))
     const [fechaComparacion, setFechaComparacion] = useState(() => diaArgentina(new Date()))
+    const [fechaReferencia, setFechaReferencia] = useState(() => diaArgentina(new Date(Date.now() - 7 * 86_400_000)))
     const [modalidad, setModalidad] = useState('')
     const [origen, setOrigen] = useState('')
     const [ubicacion, setUbicacion] = useState('')
@@ -25,7 +26,7 @@ export default function PedidosAnalitica({ conjunto = false }: { conjunto?: bool
     const [resultado, setResultado] = useState<{ clave: string; data: ReportePedidosOnline | null; error: string } | null>(null)
     const [opciones, setOpciones] = useState({ origenes: [] as string[], modalidades: [] as string[], ubicaciones: [] as string[], estados: [] as string[] })
     const endpoint = conjunto ? 'pedidos-conjunto' : 'pedidos-online'
-    const params = new URLSearchParams({ desde, hasta, fechaComparacion, origen, modalidad, ubicacion, estado, buscar, pagina: String(pagina) })
+    const params = new URLSearchParams({ desde, hasta, fechaComparacion, fechaReferencia, origen, modalidad, ubicacion, estado, buscar, pagina: String(pagina) })
     const consulta = params.toString()
     const clave = `${consulta}:${revision}`
     const cargando = resultado?.clave !== clave
@@ -51,36 +52,61 @@ export default function PedidosAnalitica({ conjunto = false }: { conjunto?: bool
         <p style={{ color: 'var(--color-gray-600)' }}>{conjunto ? 'Análisis conjunto de Pedidos_comunes y Pedidos_online.' : 'Análisis de la hoja Pedidos_online.'} Los filtros y gráficos usan la columna Fecha Entrega.</p>
         <div className="card" style={{ padding: 20, margin: '20px 0', display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'end' }}>
             <label>Entrega desde<input className="form-input" type="date" value={desde} onChange={e => { setDesde(e.target.value); reset() }} /></label>
-            <label>Entrega hasta<input className="form-input" type="date" value={hasta} onChange={e => { setHasta(e.target.value); setFechaComparacion(e.target.value); reset() }} /></label>
-            <label>Comparar entrega del día<input className="form-input" type="date" value={fechaComparacion} onChange={e => setFechaComparacion(e.target.value)} /></label>
+            <label>Entrega hasta<input className="form-input" type="date" value={hasta} onChange={e => { setHasta(e.target.value); reset() }} /></label>
             {conjunto && <label>Origen<select className="form-select" value={origen} onChange={e => { setOrigen(e.target.value); reset() }}><option value="">Ambas hojas</option>{opciones.origenes.map(x => <option key={x} value={x}>{x === 'Pedidos_comunes' ? 'Local' : 'Online'}</option>)}</select></label>}
             <label>Modalidad<select className="form-select" value={modalidad} onChange={e => { setModalidad(e.target.value); reset() }}><option value="">Todas</option>{opciones.modalidades.map(x => <option key={x}>{x}</option>)}</select></label>
             <label>Ubicación<select className="form-select" value={ubicacion} onChange={e => { setUbicacion(e.target.value); reset() }}><option value="">Todas</option>{opciones.ubicaciones.map(x => <option key={x}>{x}</option>)}</select></label>
             <label>Estado<select className="form-select" value={estado} onChange={e => { setEstado(e.target.value); reset() }}><option value="">Todos</option>{opciones.estados.map(x => <option key={x}>{x}</option>)}</select></label>
             <label>Buscar ID, cliente o producto<input className="form-input" value={buscar} onChange={e => { setBuscar(e.target.value); reset() }} maxLength={100} /></label>
             <button className="btn btn-secondary" onClick={() => setRevision(x => x + 1)}>Actualizar</button>
-            <a className="btn btn-secondary" href={`/api/reportes/${endpoint}?${new URLSearchParams({ desde, hasta, fechaComparacion, origen, modalidad, ubicacion, estado, buscar, formato: 'csv' })}`}>Descargar CSV</a>
+            <a className="btn btn-secondary" href={`/api/reportes/${endpoint}?${new URLSearchParams({ desde, hasta, fechaComparacion, fechaReferencia, origen, modalidad, ubicacion, estado, buscar, formato: 'csv' })}`}>Descargar CSV</a>
+            <div style={{ width: '100%', borderTop: '1px solid var(--color-gray-200)', paddingTop: 16 }}>
+                <strong style={{ display: 'block', marginBottom: 4 }}>Comparar dos días de entrega</strong>
+                <small style={{ color: 'var(--color-gray-600)' }}>Estas fechas son independientes del rango del reporte. Los filtros de origen, modalidad, ubicación y estado se aplican a ambas.</small>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 12 }}>
+                    <label>Fecha principal<input className="form-input" type="date" value={fechaComparacion} onChange={e => setFechaComparacion(e.target.value)} /></label>
+                    <label>Comparar contra<input className="form-input" type="date" value={fechaReferencia} onChange={e => setFechaReferencia(e.target.value)} /></label>
+                </div>
+            </div>
         </div>
         {cargando ? <p role="status">Leyendo pedidos…</p> : resultado?.error ? <p role="alert" style={{ color: 'var(--color-danger)' }}>{resultado.error}</p> : data && <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                 {[
-                    ['Ingreso esperado', moneda(data.resumen.ingresoEsperado), `${variacion(data.resumen.ingresoEsperado, data.resumen.anterior.ingresoEsperado)} frente al período anterior`],
-                    ['Entregados', data.resumen.entregados.toLocaleString('es-AR'), `${variacion(data.resumen.entregados, data.resumen.anterior.pedidos)} frente al período anterior`],
+                    ['Ingreso esperado', moneda(data.resumen.ingresoEsperado), `${variacion(data.resumen.ingresoEsperado, data.resumen.anterior.ingresoEsperado)} vs. ${data.resumen.anterior.desde} al ${data.resumen.anterior.hasta}`],
+                    ['Entregados', data.resumen.entregados.toLocaleString('es-AR'), `${variacion(data.resumen.entregados, data.resumen.anterior.pedidos)} vs. ${data.resumen.anterior.desde} al ${data.resumen.anterior.hasta}`],
                     ['Ticket promedio', moneda(data.resumen.ticketPromedio), `${data.resumen.conPrecio} entregados con precio válido`],
                     ['Paquetes vendidos', data.resumen.paquetesVendidos.toLocaleString('es-AR'), `${data.resumen.conPaquetes} entregados con cantidad verificable`],
                     ['Pendientes', data.resumen.pendientes.toLocaleString('es-AR'), `${moneda(data.resumen.ingresoPotencial)} potencial`],
                     ['Cancelados', data.resumen.cancelados.toLocaleString('es-AR'), 'Excluidos del ingreso esperado'],
                 ].map(([titulo, valor, detalle]) => <div key={titulo} className="card" style={{ padding: 18 }}><div style={{ color: 'var(--color-gray-600)' }}>{titulo}</div><strong style={{ display: 'block', fontSize: 24, margin: '8px 0' }}>{valor}</strong><small>{detalle}</small></div>)}
             </div>
-            <p style={{ fontSize: 13, color: 'var(--color-gray-600)', margin: '14px 0 22px' }}>Ingreso esperado = suma de Precio de pedidos con Estado «Entregado», sin IDs duplicados o contradictorios. Es una estimación de pedidos y no acredita cobros en Caja. El período anterior tiene la misma cantidad de días.</p>
+            <p style={{ fontSize: 13, color: 'var(--color-gray-600)', margin: '14px 0 22px' }}>Estos indicadores resumen «Entrega desde/hasta» y lo comparan con el rango consecutivo anterior de igual duración. La comparación entre las dos fechas elegidas aparece debajo. Ingreso esperado = Precio de pedidos entregados con ID único y válido; no acredita cobros en Caja.</p>
             <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18 }}>Comparación de paquetes</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-                    <div><span>{data.comparacionPaquetes.fecha}</span><strong style={{ display: 'block', fontSize: 28 }}>{data.comparacionPaquetes.actual.paquetes.toLocaleString('es-AR')} paquetes</strong><small>{data.comparacionPaquetes.actual.sinClasificar} pedidos sin paquetes calculables</small></div>
-                    <div><span>Mismo día de la semana anterior · {data.comparacionPaquetes.fechaSemanaAnterior}</span><strong style={{ display: 'block', fontSize: 28 }}>{data.comparacionPaquetes.semanaAnterior.paquetes.toLocaleString('es-AR')} paquetes</strong><small>{variacion(data.comparacionPaquetes.actual.paquetes, data.comparacionPaquetes.semanaAnterior.paquetes)} de variación diaria · {data.comparacionPaquetes.semanaAnterior.sinClasificar} sin calcular</small></div>
-                    <div><span>7 días hasta {data.comparacionPaquetes.fecha}</span><strong style={{ display: 'block', fontSize: 28 }}>{data.comparacionPaquetes.ultimos7.paquetes.toLocaleString('es-AR')} paquetes</strong><small>{variacion(data.comparacionPaquetes.ultimos7.paquetes, data.comparacionPaquetes.sietePrevios.paquetes)} frente a los 7 días anteriores ({data.comparacionPaquetes.sietePrevios.paquetes.toLocaleString('es-AR')}). Sin calcular: {data.comparacionPaquetes.ultimos7.sinClasificar} y {data.comparacionPaquetes.sietePrevios.sinClasificar}.</small></div>
+                <h2 style={{ fontSize: 18 }}>Comparación entre dos fechas de entrega</h2>
+                <p style={{ color: 'var(--color-gray-600)', fontSize: 13 }}>Fecha principal: <strong>{data.comparacionFechas.fechaActual}</strong> · Contra: <strong>{data.comparacionFechas.fechaReferencia}</strong>. Podés elegir días fuera del rango «Entrega desde/hasta»; los demás filtros se aplican a ambas fechas.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+                    <div className="card" style={{ padding: 18 }}>
+                        <span>Ingreso esperado</span>
+                        <strong style={{ display: 'block', fontSize: 28 }}>{moneda(data.comparacionFechas.actual.ingresoEsperado)}</strong>
+                        <small>Contra {moneda(data.comparacionFechas.referencia.ingresoEsperado)}</small>
+                        <p style={{ margin: '10px 0 0', fontWeight: 700, color: data.comparacionFechas.diferenciaIngreso >= 0 ? '#047857' : '#b91c1c' }}>
+                            {data.comparacionFechas.variacionIngresoPct === null ? 'Sin base anterior' : `${data.comparacionFechas.variacionIngresoPct > 0 ? '+' : ''}${data.comparacionFechas.variacionIngresoPct.toFixed(1)} %`}
+                            {' · '}{data.comparacionFechas.diferenciaIngreso > 0 ? '+' : ''}{moneda(data.comparacionFechas.diferenciaIngreso)}
+                        </p>
+                        <small>Sin precio válido: {data.comparacionFechas.actual.sinPrecio} en la principal · {data.comparacionFechas.referencia.sinPrecio} en la referencia</small>
+                    </div>
+                    <div className="card" style={{ padding: 18 }}>
+                        <span>Paquetes vendidos</span>
+                        <strong style={{ display: 'block', fontSize: 28 }}>{data.comparacionFechas.actual.paquetes.toLocaleString('es-AR')}</strong>
+                        <small>Contra {data.comparacionFechas.referencia.paquetes.toLocaleString('es-AR')} paquetes</small>
+                        <p style={{ margin: '10px 0 0', fontWeight: 700, color: data.comparacionFechas.diferenciaPaquetes >= 0 ? '#047857' : '#b91c1c' }}>
+                            {data.comparacionFechas.variacionPaquetesPct === null ? 'Sin base anterior' : `${data.comparacionFechas.variacionPaquetesPct > 0 ? '+' : ''}${data.comparacionFechas.variacionPaquetesPct.toFixed(1)} %`}
+                            {' · '}{data.comparacionFechas.diferenciaPaquetes > 0 ? '+' : ''}{data.comparacionFechas.diferenciaPaquetes.toLocaleString('es-AR')} paquetes
+                        </p>
+                        <small>Sin paquetes calculables: {data.comparacionFechas.actual.sinClasificar} en la principal · {data.comparacionFechas.referencia.sinClasificar} en la referencia</small>
+                    </div>
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--color-gray-600)', marginTop: 12 }}>Se cuentan sólo pedidos con Estado «Entregado» y Producto y Cantidad concordantes. Todas las fechas de esta comparación provienen de «Fecha Entrega»; el día actual puede estar incompleto.</p>
+                <p style={{ fontSize: 13, color: 'var(--color-gray-600)', marginTop: 12 }}>Se cuentan sólo pedidos entregados con ID único. El dinero requiere Precio válido y los paquetes, Producto y Cantidad concordantes. La fecha es «Fecha Entrega»; el día actual puede estar incompleto. Si la referencia vale cero, no hay porcentaje calculable.</p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
                 {conjunto && <div className="card" style={{ padding: 20 }}><h2 style={{ fontSize: 18 }}>Ingreso esperado por origen</h2><div style={{ height: 280 }}><Bar data={{ labels: data.porOrigen.map(x => x.nombre === 'Pedidos_comunes' ? 'Local' : 'Online'), datasets: [{ label: 'Ingreso esperado', data: data.porOrigen.map(x => x.importeEsperado), backgroundColor: '#818cf8' }] }} options={chartOptions} /></div></div>}

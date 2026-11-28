@@ -34,6 +34,31 @@ test('ingreso esperado usa sólo entregados válidos y compara el mismo período
 test('período y página inválidos se rechazan', () => {
     assert.throws(() => validarFiltrosPedidosOnline({ desde: '2026-11-14', hasta: '2026-11-13' }))
     assert.throws(() => validarFiltrosPedidosOnline({ desde: '2026-11-13', hasta: '2026-11-13', pagina: 0 }))
+    assert.throws(() => validarFiltrosPedidosOnline({ desde: '2026-11-13', hasta: '2026-11-13', fechaReferencia: '2026-02-30' }))
+    assert.throws(() => validarFiltrosPedidosOnline({ desde: '2026-11-13', hasta: '2026-11-13', fechaReferencia: '' }))
+})
+
+test('compara ingreso y paquetes entre dos fechas elegidas, aunque la referencia quede fuera del rango', () => {
+    const csv = [`${cabecera},Cantidad`,
+        `${fila('actual', '27/11/2026 10:00', 'Delivery', 'Entregado', '3000', 'Centro', '27/11/2026').replace('48 Jamon y Queso', '2x 48 Jamon y Queso')},96`,
+        `${fila('referencia', '20/11/2026 10:00', 'Delivery', 'Entregado', '1000', 'Centro', '20/11/2026')},48`,
+        `${fila('pendiente', '27/11/2026 11:00', 'Delivery', 'Pendiente', '5000', 'Centro', '27/11/2026')},48`,
+        `${fila('sin-precio', '27/11/2026 12:00', 'Delivery', 'Entregado', '', 'Centro', '27/11/2026')},48`,
+    ].join('\n')
+    const r = calcularReportePedidosOnline(csv, { desde: '2026-11-27', hasta: '2026-11-27',
+        fechaComparacion: '2026-11-27', fechaReferencia: '2026-11-20' })
+    assert.equal(r.comparacionFechas.actual.ingresoEsperado, 3000)
+    assert.equal(r.comparacionFechas.referencia.ingresoEsperado, 1000)
+    assert.equal(r.comparacionFechas.diferenciaIngreso, 2000)
+    assert.equal(r.comparacionFechas.variacionIngresoPct, 200)
+    assert.equal(r.comparacionFechas.actual.paquetes, 3)
+    assert.equal(r.comparacionFechas.referencia.paquetes, 1)
+    assert.equal(r.comparacionFechas.variacionPaquetesPct, 200)
+    assert.equal(r.comparacionFechas.actual.sinPrecio, 1)
+    const sinBase = calcularReportePedidosOnline(csv, { desde: '2026-11-27', hasta: '2026-11-27',
+        fechaComparacion: '2026-11-27', fechaReferencia: '2026-11-19' })
+    assert.equal(sinBase.comparacionFechas.variacionIngresoPct, null)
+    assert.equal(sinBase.comparacionFechas.variacionPaquetesPct, null)
 })
 
 test('IDs contradictorios y fechas imposibles no inflan el ingreso', () => {
